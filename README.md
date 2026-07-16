@@ -55,8 +55,9 @@ environment recipe (headers, toolchain, base files, exact commands) lives in
 - **Byte-exact decomp check:** `make check` rebuilds `SLUS_004.47` and md5-compares it to the
   original.
 
-A benign NULL-deref currently requires `make setcap` (`CAP_SYS_RAWIO`) after each relink; this
-workaround is removed by the memory-safety work on the roadmap.
+The build runs as a normal unprivileged process — no `setcap`/root needed (a portable fault handler
+takes the place of the old privileged NULL-page mapping). Runtime options (window scale, audio,
+diagnostics) and build flags are documented in [`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md).
 
 ## Repository layout
 
