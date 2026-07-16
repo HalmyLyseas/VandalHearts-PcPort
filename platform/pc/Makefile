@@ -177,6 +177,16 @@ $(BUILD_DIR)/src/object.o: GAME_C_FLAGS += -DPC_DEBUG_SPRITE_LOG
 endif
 $(BUILD_DIR)/src/object.o: FORCE
 
+# Debug (AI targeting study): AI_LOG=1 instruments the AI spell-target scorer (ai.c func_800569A0) to
+# log every candidate target's score breakdown -- incl. the gAdvantage type-matchup term (your
+# mage->armor doctrine) -- to vh_ai_log.txt (when VH_AI_LOG env is set). Highest score = the target
+# the caster picks. For diagnosing "why did that caster choose that target". Matching build never
+# defines this (PC_DEBUG_AI_LOG only added under AI_LOG=1), so byte-exact is unaffected.
+ifeq ($(AI_LOG),1)
+$(BUILD_DIR)/src/ai.o: GAME_C_FLAGS += -DPC_DEBUG_AI_LOG
+endif
+$(BUILD_DIR)/src/ai.o: FORCE
+
 # Debug (otz-overflow / black-terrain study): TERRAIN_LOG=1 instruments RenderMapTile /
 # RenderEdgeMapTile (graphics.c) to accumulate per-frame terrain otz stats + black-tile counts
 # into vh_terrain_otz_pc.csv (when VH_TERRAIN_LOG env is set). Matching build never defines this.

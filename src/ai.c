@@ -498,6 +498,19 @@ void func_800569A0(UnitStatus *unit) {
                sVar4 -= (otherUnit->hpFrac / 125);
                sVar4 -= gAdvantage[unit->advantage][otherUnit->advantage];
                sVar4 -= gTerrainPreference[OBJ_TERRAIN(sprite).s.terrain] / 100;
+#ifdef PC_DEBUG_AI_LOG
+               { extern void PC_DebugAiTargetLog(int, int, int, int, int, int, int, int,
+                                                 int, int, int, int, int, int);
+                 PC_DebugAiTargetLog(unit->name, unit->advantage, unit->level,
+                                     otherUnit->name, otherUnit->class, otherUnit->advantage,
+                                     otherUnit->level, otherUnit->hpFrac,
+                                     (unit->level - otherUnit->level) * 10,
+                                     -(otherUnit->hpFrac / 125),
+                                     -gAdvantage[unit->advantage][otherUnit->advantage],
+                                     gAdvantage[unit->advantage][otherUnit->advantage],
+                                     -(gTerrainPreference[OBJ_TERRAIN(sprite).s.terrain] / 100),
+                                     sVar4); }
+#endif
             }
             break;
 

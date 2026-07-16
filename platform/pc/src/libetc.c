@@ -105,6 +105,31 @@ void PC_DebugSpriteLog(int tileX, int tileZ, int winX, int winZ, int mapSX, int 
     fflush(s_spriteFateFile);
 }
 
+/* AI spell-target scoring log (build with AI_LOG=1, enable at runtime with VH_AI_LOG). One line per
+ * candidate target a caster's AI scored in func_800569A0; the highest SCORE is the target it picks.
+ * Shows the term breakdown so a "wrong" choice is explainable -- especially the type-matchup term
+ * ADV = -gAdvantage[caster.advantage][target.advantage] (your mage->armor / ranged->flyer doctrine).
+ * A high raw gAdvantage means a poor matchup, so it SUBTRACTS from the score (less-preferred). */
+static FILE *s_aiLogFile = NULL;
+void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
+                         int tgtName, int tgtClass, int tgtAdv, int tgtLvl, int tgtHpFrac,
+                         int lvlTerm, int hpTerm, int advTerm, int advRaw, int terrTerm, int score) {
+    static int enabled = -1;
+    if (enabled < 0) enabled = (getenv("VH_AI_LOG") != NULL) ? 1 : 0;
+    if (!enabled) return;
+    if (s_aiLogFile == NULL) {
+        s_aiLogFile = fopen("vh_ai_log.txt", "w");
+        if (s_aiLogFile == NULL) { enabled = 0; return; }
+    }
+    fprintf(s_aiLogFile,
+            "f=%ld caster[name=%d adv=%d lvl=%d] -> target[name=%d class=%d adv=%d lvl=%d hpFrac=%d]"
+            "  terms: base=+280 lvl=%+d hp=%+d ADV=%+d(gAdv=%d) terr=%+d  = SCORE %d\n",
+            s_vblankCount, casterName, casterAdv, casterLvl,
+            tgtName, tgtClass, tgtAdv, tgtLvl, tgtHpFrac,
+            lvlTerm, hpTerm, advTerm, advRaw, terrTerm, score);
+    fflush(s_aiLogFile);
+}
+
 /* Dumps the game state-machine fields for freeze diagnosis (called from the SIGUSR1 handler in
  * pc_bootstrap.c). A "freeze" where the frame loop keeps ticking = a state stuck waiting on a
  * condition; these fields say which state/scene/map it's stuck in so we know where to look. */
