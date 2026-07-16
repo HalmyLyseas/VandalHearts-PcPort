@@ -1,0 +1,41 @@
+# splat extraction / build output
+/asm/
+/assets/
+/build/
+
+# staging/communication layer — not part of the project's committed content
+/exchange/
+/context.txt
+
+# proprietary Sony PsyQ SDK headers (from sozud/psy-q, unclear redistribution rights) —
+# local build use only, must never be committed/pushed. See exchange/00-progress-checkpoint.md.
+/include/PsyQ/
+
+# maspsx vendored via local symlink, not a real part of this repo's tree
+/tools/maspsx
+
+# the copyrighted base game executable — from the user's own legally-owned copy, never commit
+/SLUS_004.47
+
+# splat-generated build inputs (linker scripts, undefined-symbol lists) from make extract
+/SLUS_004.47.ld
+/undefined_syms_auto.txt
+/undefined_funcs_auto.txt
+/symbols.csv
+
+# symlink so "#include \"assets/X.inc\"" resolves via the existing -Iinclude search path
+# (assets/ itself is already covered by the /assets/ rule above)
+/include/assets
+
+# Phase C PC-port build output (source under platform/pc/ is real, tracked content).
+# build*/ also catches build_asan/ (sanitizer build) and any future variant build dirs.
+/platform/pc/build*/
+
+# PC-port runtime output: save files + unit-test scratch audio
+/platform/pc/saves/
+/platform/pc/test_vag1.wav
+
+# env-gated PC-port debug dumps (per-frame CSVs / logs) written to cwd or platform/pc/;
+# these are diagnostics, never committed (VH_XA_CSV, VH_XA_LOG, SPRITE_LOG, etc.)
+vh_*.csv
+vh_*.txt
