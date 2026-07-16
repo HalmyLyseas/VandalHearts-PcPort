@@ -1286,6 +1286,13 @@ void RenderMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
             gte_ldv0(&tileModel->vertices[pFaceVerts[3]]);
             gte_rtps();
             gte_stsxy(&poly->x2);
+#ifdef PC_DEBUG_TERRAIN_LOG
+            { extern void PC_DebugTerrainProjLog(int, int, int, int, int, int, int, int, int, int, int, int);
+              SVECTOR *pv0 = &tileModel->vertices[pFaceVerts[0]], *pv1 = &tileModel->vertices[pFaceVerts[1]];
+              SVECTOR *pv2 = &tileModel->vertices[pFaceVerts[2]], *pv3 = &tileModel->vertices[pFaceVerts[3]];
+              PC_DebugTerrainProjLog(pv0->vx, pv0->vy, pv0->vz, pv1->vx, pv1->vy, pv1->vz,
+                                     pv2->vx, pv2->vy, pv2->vz, pv3->vx, pv3->vy, pv3->vz); }
+#endif
             gte_avsz4();
             gte_stotz(&otz);
             if (otz < 5) {
@@ -1343,6 +1350,10 @@ void RenderMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
             }
 
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_TERRAIN_LOG
+            { extern void PC_DebugTerrainTile(int, int, int, int);
+              PC_DebugTerrainTile(otz, poly->r0, poly->g0, poly->b0); }
+#endif
             AddPrim(ot + OT_SIZE - otz, poly);
             poly = &gGraphicsPtr->quads[++gQuadIndex];
          }
@@ -1433,6 +1444,10 @@ void RenderEdgeMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
          }
 
          poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_TERRAIN_LOG
+         { extern void PC_DebugTerrainTile(int, int, int, int);
+           PC_DebugTerrainTile(otz, poly->r0, poly->g0, poly->b0); }
+#endif
          AddPrim(ot + OT_SIZE - otz, poly);
          poly = &gGraphicsPtr->quads[++gQuadIndex];
       }

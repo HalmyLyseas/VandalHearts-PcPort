@@ -419,6 +419,10 @@ void AddObjPrim4(u32 *ot, Object *obj) {
       otz = RotAverage4(&quad[0], &quad[1], &quad[2], &quad[3], &poly->x0, &poly->x1, &poly->x2,
                         &poly->x3, &p, &flag);
       otIdx = OT_SIZE - otz + obj->d.sprite.otOfs;
+#ifdef PC_DEBUG_SPRITE_LOG
+      { extern void PC_DebugObjPrim4Log(int gfx, int otz, int otIdx, int sx, int sy, int otOfs);
+        PC_DebugObjPrim4Log(gfx, otz, (int)otIdx, poly->x0, poly->y0, obj->d.sprite.otOfs); }
+#endif
 
       if (otIdx - 1 < OT_SIZE - 1) {
          setRGB0(poly, 0x80, 0x80, 0x80);
@@ -722,6 +726,12 @@ void RenderUnitSprite(u32 *ot, Object *sprite, s32 useMapElevation) {
    s16 szOfs = 0;
 
    if (IsSpriteOutsideVisibleRange(sprite)) {
+#ifdef PC_DEBUG_SPRITE_LOG
+      { extern void PC_DebugSpriteLog(int, int, int, int, int, int, int, int, int, int, int, int);
+        PC_DebugSpriteLog(sprite->x1.s.hi, sprite->z1.s.hi, D_80122E28, D_80122E2C,
+                          gMapSizeX, gMapSizeZ, 1, sprite->d.sprite.gfxIdx,
+                          -9999, -9999, -9999, -9999); }
+#endif
       return;
    }
 
@@ -828,6 +838,12 @@ void RenderUnitSprite(u32 *ot, Object *sprite, s32 useMapElevation) {
       otIdx = OT_SIZE - otz + 5;
    }
 
+#ifdef PC_DEBUG_SPRITE_LOG
+   { extern void PC_DebugSpriteLog(int, int, int, int, int, int, int, int, int, int, int, int);
+     PC_DebugSpriteLog(sprite->x1.s.hi, sprite->z1.s.hi, D_80122E28, D_80122E2C,
+                       gMapSizeX, gMapSizeZ, 0, sprite->d.sprite.gfxIdx,
+                       poly->x0, poly->y0, otz, (int)otIdx); }
+#endif
    if (otIdx - 1 < OT_SIZE - 1) {
       SetRotMatrix(matrix);
       SetTransMatrix(matrix);
@@ -944,6 +960,18 @@ void RenderUnitSprite(u32 *ot, Object *sprite, s32 useMapElevation) {
       quadp = gSpriteBoxQuads[sprite->d.sprite.boxIdx];
       RotTransPers4(&(*quadp)[0], &(*quadp)[1], &(*quadp)[2], &(*quadp)[3], &poly->x0, &poly->x1,
                     &poly->x2, &poly->x3, &p, &flag);
+#ifdef PC_DEBUG_SPRITE_LOG
+      /* full projected quad (all 4 corners) for the flip-vs-occlusion question: is the crop a
+       * well-formed quad occluded by terrain, or a malformed/mirrored quad; does the flip = a
+       * corner-X-order reversal; do crop+flip trip at the same SZ3(=otz) threshold. */
+      { extern void PC_DebugSpriteQuadLog(int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int);
+        PC_DebugSpriteQuadLog(sprite->d.sprite.gfxIdx, otz, (int)otIdx, sprite->d.sprite.facingLeft,
+                              sprite->d.sprite.direction, sprite->d.sprite.coords[0].z,
+                              sprite->d.sprite.facingFront,
+                              poly->x0, poly->y0, poly->x1, poly->y1,
+                              poly->x2, poly->y2, poly->x3, poly->y3,
+                              sprite->x1.s.hi, sprite->z1.s.hi); }
+#endif
 
       if (gState.primary == STATE_4 && gState.preciseSprites) {
          PopMatrix();

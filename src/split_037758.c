@@ -70,6 +70,18 @@ void State_Movie(void) {
          gState.secondary =
              (movies[s_movieIdx_8012327c].skip == 2) ? 12 : movies[s_movieIdx_8012327c].transition;
       }
+#ifdef PERMUTER
+      /* PC-port QoL (PERMUTER is defined only by the platform/pc build, so the matching build is
+       * byte-identical): player-1 START skips ANY movie straight to its transition -- the game
+       * itself already does exactly this for debug (the gPad2/gState.debug branch just below), we
+       * just expose it on player-1 START without needing debug mode. Makes long story movies
+       * (1BU_WS etc.) skippable like the intro logos, speeding up debug iteration a lot. */
+      if (gPadStateNewPresses & PAD_START) {
+         SsSetSerialVol(SS_SERIAL_A, 0, 0);
+         Movie_Finish();
+         gState.secondary = movies[s_movieIdx_8012327c].transition;
+      }
+#endif
       if (gState.debug && (gPad2StateNewPresses & PAD_START)) {
          SsSetSerialVol(SS_SERIAL_A, 0, 0);
          Movie_Finish();
@@ -181,6 +193,14 @@ void ClearScreen(s32 is24bit) {
                  (is24bit ? SCREEN_WIDTH * 3 / 2 : SCREEN_WIDTH), SCREEN_HEIGHT);
    SetDefDrawEnv(&gGraphicBuffers[1].drawEnv, 0, 272,
                  (is24bit ? SCREEN_WIDTH * 3 / 2 : SCREEN_WIDTH), SCREEN_HEIGHT);
+#ifdef PERMUTER
+   /* PC port (matching build unaffected): a finished movie keeps its last decoded frame on the
+    * fullscreen overlay through any wait-for-button end, so the screen shows the final image
+    * instead of going black (which looked like a freeze). ClearScreen means the game is redrawing
+    * the next scene, so drop the overlay now and let normal VRAM rendering resume. */
+   { extern void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h);
+     PC_GpuSetMovieOverlay((const unsigned short *)0, 0, 0); }
+#endif
 }
 
 void State_ChapterComplete(void) {

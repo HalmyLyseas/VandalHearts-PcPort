@@ -829,7 +829,16 @@ void LoadCdFile(s32 cdfIdx, s32 showLoadingScreen) {
    gCdLoader.sectorsToRead = gCdFiles[cdfIdx].sectorCt;
    gCdLoader.sector = gCdFiles[cdfIdx].startingSector;
 
+#ifdef PC_DEBUG_NO_LOADING
+   /* Debug-only (exchange/feedback-10 follow-up): force the loading screen off so the field
+    * becomes visible from the field-enable frame (pitch 128) instead of being covered by
+    * "Now Loading" -- lets us compare our raw first rendered frame against real hardware's
+    * (also loading-suppressed via 30-disable-fade-bizhawk.lua) at identical camera pose.
+    * Compiled out of the matching build; enabled only via `make link NO_LOADING=1`. */
+   if (1) {
+#else
    if (gState.suppressLoadingScreen || !showLoadingScreen) {
+#endif
       while (GetCdFileLoadStatus() != 0) {
          ContinueLoadingCdFile();
          VSync(0);
@@ -1400,7 +1409,9 @@ void Movie_Start(CdlLOC *location) {
 
       // fallthrough
       case 6:
-         if (CdRead2(CdlModeStream | CdlModeSpeed | CdlModeRT) != 0) {
+         // CdlModeStream | CdlModeSpeed | CdlModeRT computes 0x1e0, but the original binary
+         // uses 0x1c0 here — matched to the literal value; true flag breakdown TBD
+         if (CdRead2(0x1c0) != 0) {
             // 1: Success
             return;
          }
