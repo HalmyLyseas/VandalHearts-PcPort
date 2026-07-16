@@ -276,6 +276,49 @@ static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
     }
 }
 
+#if defined(__i386__)
+static int PC_IsWriteFault(void *ucv) {   /* x86 page-fault error code bit 1 == write */
+    return (((ucontext_t *)ucv)->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
+}
+
+/* Lazily make the page containing `addr` writable, to satisfy a write to the executable's read-only
+ * .rodata -- the game mutates string literals in place (e.g. ShowExpDialog writing the EXP digits
+ * into "You got     "), harmless on PSX where all RAM is writable, a SIGSEGV on a host. This replaces
+ * the old startup PC_MakeRodataWritable() that parsed /proc/self/maps and remapped ALL rodata RW:
+ * this is portable (no /proc), on-demand (only pages actually written), and logs each site. Returns
+ * 1 if the page is now writable (retry the store) or 0 if mprotect refused it (a genuine wild write
+ * -> crash). Dedups by page, which also guards against an infinite retry loop. */
+static int PC_MakePageWritable(uintptr_t addr) {
+    static uintptr_t seen[128];
+    static int seenCount = 0;
+    long ps = sysconf(_SC_PAGESIZE);
+    if (ps <= 0) ps = 4096;
+    uintptr_t page = addr & ~((uintptr_t)ps - 1);
+    int i;
+    for (i = 0; i < seenCount; i++)
+        if (seen[i] == page) return 0;         /* remapped once already yet still faulting -> give up */
+    if (mprotect((void *)page, (size_t)ps, PROT_READ | PROT_WRITE) != 0) return 0;  /* not our page */
+    if (seenCount < 128) seen[seenCount++] = page;
+    {   /* log the site once */
+        static int logFd = -2;
+        if (logFd == -2) logFd = open("vh_null_reads.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        char buf[160];
+        int n = snprintf(buf, sizeof(buf),
+                         "\n--- read-only-DATA write  fault=0x%08lx  (page 0x%08lx -> writable) ---\n",
+                         (unsigned long)addr, (unsigned long)page);
+        if (n > 0) {
+            if (logFd >= 0) { ssize_t w = write(logFd, buf, (size_t)n); (void)w; }
+            ssize_t w2 = write(2, buf, (size_t)n); (void)w2;
+            void *frames[24];
+            int fn = backtrace(frames, 24);
+            if (logFd >= 0) backtrace_symbols_fd(frames, fn, logFd);
+            backtrace_symbols_fd(frames, fn, 2);
+        }
+    }
+    return 1;
+}
+#endif /* __i386__ */
+
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
 #if defined(__i386__)
@@ -299,42 +342,24 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
         }
         PC_DumpDiag("\n*** NULL-region fault but UNDECODABLE instruction -- extend VhDecodeMemAccess ***\n");
     }
+    /* Write to the executable's read-only .rodata (in-place string-literal mutation): make the page
+     * writable and retry the store -- no instruction decode needed, and no /proc (see above). */
+    if (ucv && fault >= PSX_NULL_MIRROR_SIZE && PC_IsWriteFault(ucv) && PC_MakePageWritable(fault)) {
+        return;                                    /* page now writable -> retry the faulting store */
+    }
 #endif
     PC_DumpDiag("\n*** CRASH: fatal signal, call stack ***\n");
     signal(sig, SIG_DFL); raise(sig);   /* restore default + re-raise so it dies for real (core, etc.) */
 }
 
-/* Make the executable's read-only data segment writable. The decompiled game freely mutates string
- * literals in place (e.g. ShowExpDialog writes the EXP digits into "You got     "; more sites like
- * it exist) -- harmless on the PSX where all RAM is writable, but a SIGSEGV on Linux where literals
- * live in read-only .rodata. Remapping .rodata RW at startup makes PC memory behave like PSX RAM and
- * fixes the whole class at once (backend-only; no decompiled-source edits). Only the main
- * executable's own r--p mappings are touched, not shared libraries'. */
-static void PC_MakeRodataWritable(void) {
-    char exe[PATH_MAX];
-    ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-    if (n <= 0) return;
-    exe[n] = '\0';
-    FILE *f = fopen("/proc/self/maps", "r");
-    if (!f) return;
-    char line[1024];
-    int fixed = 0;
-    while (fgets(line, sizeof(line), f)) {
-        unsigned long lo, hi;
-        char perms[8];
-        if (sscanf(line, "%lx-%lx %7s", &lo, &hi, perms) != 3) continue;
-        if (perms[0] == 'r' && perms[1] == '-' && perms[2] == '-' && strstr(line, exe)) {
-            if (mprotect((void *)lo, hi - lo, PROT_READ | PROT_WRITE) == 0) fixed++;
-        }
-    }
-    fclose(f);
-    fprintf(stderr, "PC_Bootstrap: remapped %d read-only data region(s) writable "
-                    "(PSX-style writable literals)\n", fixed);
-}
+/* NOTE: the game mutates read-only string literals in place (e.g. ShowExpDialog writes the EXP digits
+ * into "You got     "), harmless on PSX where all RAM is writable. This used to be handled by a
+ * startup remap of ALL .rodata to writable via /proc/self/maps; that /proc dependency (unavailable on
+ * Windows/macOS) was replaced by the on-demand PC_MakePageWritable path in PC_SigCrash -- a write to a
+ * read-only page now makes just that page writable and retries. No startup action needed. */
 
 __attribute__((constructor))
 static void PC_Bootstrap(void) {
-    PC_MakeRodataWritable();            /* PSX-style writable string literals (see above) */
     signal(SIGUSR1, PC_SigUsr1);        /* kill -USR1 <pid> -> stack dump (freeze diagnosis) */
     /* SIGSEGV/SIGBUS via sigaction+SA_SIGINFO so the handler gets the faulting address (si_addr) and
      * CPU context (for the NULL-read fixup). SA_NODEFER lets a genuine re-fault inside the handler
