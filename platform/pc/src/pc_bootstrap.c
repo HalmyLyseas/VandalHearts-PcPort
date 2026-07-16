@@ -11,6 +11,7 @@
  * initializers -- constructors run before main() with zero changes to any
  * real project file.
  */
+#define _GNU_SOURCE           /* REG_EIP/REG_EAX greg indices in <ucontext.h> (see NULL-read fixup) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +20,9 @@
 #include <limits.h>
 #include <signal.h>
 #include <execinfo.h>
+#include <ucontext.h>         /* ucontext_t, greg_t, REG_* -- for the NULL-read fixup handler */
+#include <fcntl.h>            /* open() for the null-read log */
+#include <stdint.h>
 
 #include "pc_platform.h"
 
@@ -111,16 +115,22 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
     return 1;
 }
 
+static int VhNullFixupEnabled(void);   /* defined below with the NULL-read fixup handler */
+
 __attribute__((constructor))
 static void PC_ReservePsxRam(void) {
     ReservePsxMemory(PSX_RAM_BASE, PSX_RAM_SIZE, "PSX RAM range");
     ReservePsxMemory(PSX_SCRATCHPAD_BASE, PSX_SCRATCHPAD_SIZE, "PSX Scratchpad RAM");
-    if (!ReservePsxMemory(PSX_NULL_MIRROR_BASE, PSX_NULL_MIRROR_SIZE, "PSX RAM's KUSEG NULL-mirror range")) {
-        fprintf(stderr, "  (this needs CAP_SYS_RAWIO on this binary -- run `make setcap` in "
-                        "platform/pc/ once, then relaunch. Without it, the game runs fine until "
-                        "a real code path transiently dereferences a NULL pointer -- e.g. the "
-                        "title screen's demo battle -- which will then crash instead of the "
-                        "harmless no-op it is on real hardware.)\n");
+    /* The KUSEG NULL-mirror (address 0) is only needed to absorb transient NULL/low-address reads.
+     * By default the NULL-read fixup handler (see PC_SigCrash) now handles those portably without
+     * privilege, so DON'T map address 0 -- letting the accesses fault is exactly what lets the
+     * handler log each site. Only fall back to the privileged low-page mapping if the fixup is
+     * explicitly disabled (VH_NULL_FIXUP=0). */
+    if (!VhNullFixupEnabled() &&
+        !ReservePsxMemory(PSX_NULL_MIRROR_BASE, PSX_NULL_MIRROR_SIZE, "PSX RAM's KUSEG NULL-mirror range")) {
+        fprintf(stderr, "  (VH_NULL_FIXUP=0 selected the legacy low-page mapping, which needs "
+                        "CAP_SYS_RAWIO -- run `make setcap`. Leave VH_NULL_FIXUP unset to use the "
+                        "portable fixup handler instead, which needs no privilege.)\n");
     }
 }
 
@@ -162,7 +172,134 @@ static void PC_DumpDiag(const char *tag) {
     { extern void PC_DumpGameState(int fd); PC_DumpGameState(2); }   /* which state/scene/map */
 }
 static void PC_SigUsr1(int sig) { (void)sig; PC_DumpDiag("\n*** SIGUSR1: call stack (frozen?) ***\n"); }
-static void PC_SigCrash(int sig) {
+
+/* ---- NULL-read fixup (Stage 2.2): make a transient PSX-style NULL/low-address access survive on a
+ * native host, portably, instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
+ * (KUSEG) is real 2MB RAM, so game code that transiently dereferences a not-yet-assigned pointer
+ * just reads garbage for a frame; on a host, address 0 faults. Rather than map address 0 (privileged,
+ * and impossible on Windows/macOS), we catch the fault, emulate the access as reading 0 (identical to
+ * what the old MAP_ANONYMOUS zero page returned) or discarding the store, step over the instruction,
+ * log the site once, and continue. Un-guarded sites therefore no longer crash -- they surface in
+ * vh_null_reads.log so they can be given an explicit source-level guard later. Set VH_NULL_FIXUP=0 to
+ * disable (falls back to the old null-mirror mapping + hard crash). Currently x86-32 (-m32) only. */
+static int VhNullFixupEnabled(void) {
+    static int v = -1;
+    if (v < 0) { const char *e = getenv("VH_NULL_FIXUP"); v = (e && e[0] == '0') ? 0 : 1; }
+    return v;
+}
+
+#if defined(__i386__)
+/* Decode the memory-access instruction at `ip` (the faulting one). Returns its length and, for a
+ * load, the destination greg index + width to zero; for a store, isWrite=1 (nothing to zero, just
+ * skip). Returns 0 for forms we don't handle yet (caller then crashes with diagnostics so this can be
+ * extended). Covers what gcc -O0 emits for struct-field loads/stores: mov / movzx / movsx, with the
+ * operand-size prefix and full ModRM/SIB/disp addressing. */
+static int VhDecodeMemAccess(const unsigned char *ip, int *outIsWrite, int *outGreg, int *outBytes, int *outHigh) {
+    int i = 0, opsize = 4, has0F = 0;
+    for (;;) {                                   /* prefixes */
+        unsigned char b = ip[i];
+        if (b == 0x66) { opsize = 2; i++; continue; }
+        if (b == 0x67) return 0;                 /* 16-bit addressing: bail (not emitted at -O0) */
+        if (b == 0xF0 || b == 0xF2 || b == 0xF3) { i++; continue; }
+        if (b == 0x2E || b == 0x36 || b == 0x3E || b == 0x26 || b == 0x64 || b == 0x65) { i++; continue; }
+        break;
+    }
+    unsigned char op = ip[i++], op2 = 0;
+    if (op == 0x0F) { has0F = 1; op2 = ip[i++]; }
+
+    int isWrite, bytes, immBytes = 0;
+    if (!has0F) {
+        switch (op) {
+            case 0x8B: isWrite = 0; bytes = opsize; break;                  /* mov r,   r/m   */
+            case 0x8A: isWrite = 0; bytes = 1;      break;                  /* mov r8,  r/m8  */
+            case 0x89: isWrite = 1; bytes = opsize; break;                  /* mov r/m, r     */
+            case 0x88: isWrite = 1; bytes = 1;      break;                  /* mov r/m8,r8    */
+            case 0xC7: isWrite = 1; bytes = opsize; immBytes = opsize; break;/* mov r/m, imm  */
+            case 0xC6: isWrite = 1; bytes = 1;      immBytes = 1;      break;/* mov r/m8,imm8 */
+            default: return 0;
+        }
+    } else {
+        switch (op2) {
+            case 0xB6: case 0xB7: case 0xBE: case 0xBF: isWrite = 0; bytes = 4; break; /* movzx/movsx r32 */
+            default: return 0;
+        }
+    }
+
+    unsigned char modrm = ip[i++];
+    int mod = modrm >> 6, reg = (modrm >> 3) & 7, rm = modrm & 7;
+    if (mod == 3) return 0;                        /* register operand -> not the faulting memory op */
+    int sibBase = -1;
+    if (rm == 4) { unsigned char sib = ip[i++]; sibBase = sib & 7; }     /* SIB */
+    if (mod == 1) i += 1;                          /* disp8  */
+    else if (mod == 2) i += 4;                     /* disp32 */
+    else if (rm == 5 && sibBase < 0) i += 4;       /* mod0, rm5    -> disp32 */
+    else if (sibBase == 5) i += 4;                 /* mod0, sib b5 -> disp32 */
+    i += immBytes;
+
+    *outIsWrite = isWrite;
+    if (!isWrite) {
+        if (bytes == 1) {                          /* 8-bit reg: 0-3 low byte, 4-7 high byte, of A/C/D/B */
+            if (reg < 4) { *outGreg = REG_EAX - reg;       *outHigh = 0; }
+            else         { *outGreg = REG_EAX - (reg - 4); *outHigh = 1; }
+            *outBytes = 1;
+        } else {
+            *outGreg = REG_EAX - reg;              /* modrm.reg 0..7 = EAX..EDI = greg REG_EAX-reg */
+            *outBytes = bytes;
+            *outHigh = 0;
+        }
+    }
+    return i;
+}
+#endif /* __i386__ */
+
+/* Log a fixed-up NULL-region access once per unique instruction pointer (async-signal-safe-ish:
+ * open/write/backtrace_symbols_fd, no malloc-heavy fprintf). */
+static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
+    static void *seen[512];
+    static int seenCount = 0;
+    static int logFd = -2;
+    int k;
+    for (k = 0; k < seenCount; k++) if (seen[k] == ip) return;   /* already reported this site */
+    if (seenCount < 512) seen[seenCount++] = ip;
+    if (logFd == -2) logFd = open("vh_null_reads.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    char buf[192];
+    int n = snprintf(buf, sizeof(buf),
+                     "\n--- NULL-region %s  fault=0x%08lx  eip=%p  (distinct site #%d) ---\n",
+                     isWrite ? "WRITE" : "read", (unsigned long)fault, ip, seenCount);
+    if (n > 0) {
+        if (logFd >= 0) { ssize_t w = write(logFd, buf, (size_t)n); (void)w; }
+        ssize_t w2 = write(2, buf, (size_t)n); (void)w2;
+        void *frames[24];
+        int fn = backtrace(frames, 24);
+        if (logFd >= 0) backtrace_symbols_fd(frames, fn, logFd);
+        backtrace_symbols_fd(frames, fn, 2);
+    }
+}
+
+static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
+    uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
+#if defined(__i386__)
+    /* PSX NULL-region (< 2MB main-RAM size) access: emulate reading 0 / discarding the store and
+     * carry on, instead of dying (see VhNullFixupEnabled above). */
+    if (VhNullFixupEnabled() && ucv && fault < PSX_NULL_MIRROR_SIZE) {
+        ucontext_t *uc = (ucontext_t *)ucv;
+        greg_t *g = uc->uc_mcontext.gregs;
+        unsigned char *ip = (unsigned char *)(uintptr_t)g[REG_EIP];
+        int isWrite = 0, greg = 0, bytes = 0, high = 0;
+        int len = VhDecodeMemAccess(ip, &isWrite, &greg, &bytes, &high);
+        if (len > 0) {
+            if (!isWrite) {
+                if (bytes == 1)      { if (high) g[greg] &= ~0xff00L; else g[greg] &= ~0xffL; }
+                else if (bytes == 2) g[greg] &= ~0xffffL;
+                else                 g[greg] = 0;
+            }
+            g[REG_EIP] = (greg_t)((uintptr_t)ip + len);
+            PC_LogNullRead(ip, fault, isWrite);
+            return;                                /* resume the game */
+        }
+        PC_DumpDiag("\n*** NULL-region fault but UNDECODABLE instruction -- extend VhDecodeMemAccess ***\n");
+    }
+#endif
     PC_DumpDiag("\n*** CRASH: fatal signal, call stack ***\n");
     signal(sig, SIG_DFL); raise(sig);   /* restore default + re-raise so it dies for real (core, etc.) */
 }
@@ -199,8 +336,18 @@ __attribute__((constructor))
 static void PC_Bootstrap(void) {
     PC_MakeRodataWritable();            /* PSX-style writable string literals (see above) */
     signal(SIGUSR1, PC_SigUsr1);        /* kill -USR1 <pid> -> stack dump (freeze diagnosis) */
-    signal(SIGSEGV, PC_SigCrash);       /* dump stack+state on a real crash before dying */
-    signal(SIGBUS,  PC_SigCrash);
+    /* SIGSEGV/SIGBUS via sigaction+SA_SIGINFO so the handler gets the faulting address (si_addr) and
+     * CPU context (for the NULL-read fixup). SA_NODEFER lets a genuine re-fault inside the handler
+     * still terminate rather than deadlock. */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_sigaction = PC_SigCrash;
+        sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGSEGV, &sa, NULL);
+        sigaction(SIGBUS,  &sa, NULL);
+    }
     const char *discPath = getenv("VH_DISC_IMAGE");
     if (!discPath) discPath = DefaultDiscPath();
 

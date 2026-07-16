@@ -72,7 +72,7 @@ GAME_C_FLAGS   := $(M32) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -D'asm(x)=' \
                    -I$(STAGE_DIR) -Iinclude -I../.. \
                    -include pc_forward_decls.h -g
 
-.PHONY: default stage clean sweep gen-data link setcap link-cap
+.PHONY: default stage clean sweep gen-data link setcap link-cap crash-trace
 default: $(GAME_O_FILES) $(BACKEND_OBJS)
 
 # Generates build/generated_data.c -- real definitions for the global
@@ -285,9 +285,24 @@ clean:
 setcap:
 	sudo setcap cap_sys_rawio+ep $(BUILD_DIR)/vandalhearts_pc
 
-# Rebuild AND re-apply CAP_SYS_RAWIO in one step. `make link` writes a fresh binary file, which WIPES
-# the file capability every time -- and without it the demo battle's (normally harmless) NULL-deref
-# SIGSEGVs instead of no-op'ing (PC_Bootstrap can't reserve the KUSEG NULL-mirror page). So after ANY
-# relink you must re-setcap. Use this instead of bare `make link`:
-#   make link-cap NO_FADE=1 SPRITE_LOG=1
+# LEGACY (rarely needed now). The portable NULL-read fixup handler (pc_bootstrap.c) makes a plain
+# `make link` run cap-less -- transient PSX NULL/low-address reads are caught, emulated as reading 0,
+# logged (vh_null_reads.log), and stepped over, so no CAP_SYS_RAWIO / low-page mapping is required.
+# `setcap`/`link-cap` are only for the fallback path `VH_NULL_FIXUP=0` (which restores the old
+# privileged KUSEG NULL-mirror mapping + hard crash). Prefer bare `make link`.
 link-cap: link setcap
+
+# Resolve the game-code sites in vh_null_reads.log (the NULL-read fixup handler's list) to file:line.
+# Run the game cap-less, hit some battles, then: `make crash-trace`. Each logged site is `SYMBOL+0xOFF`;
+# we look SYMBOL up in the (link-time, addr2line-compatible) symbol table and add the offset.
+crash-trace:
+	@test -f vh_null_reads.log || { echo "no vh_null_reads.log yet (run the game first)"; exit 0; }
+	@grep -oE '[A-Za-z_][A-Za-z0-9_]*\+0x[0-9a-f]+' vh_null_reads.log | sort -u | \
+	  grep -vE '^(PC_SigCrash|PC_LogNullRead|PC_DumpDiag)\+' | \
+	  while IFS='+' read sym off; do \
+	    base=$$(nm $(BUILD_DIR)/vandalhearts_pc 2>/dev/null | awk -v s="$$sym" '$$3==s {print $$1; exit}'); \
+	    if [ -n "$$base" ]; then \
+	      addr=$$(printf '0x%x' $$((0x$$base + $$off))); \
+	      printf '%-32s -> ' "$$sym+$$off"; addr2line -e $(BUILD_DIR)/vandalhearts_pc $$addr; \
+	    else printf '%-32s -> (symbol not found)\n' "$$sym+$$off"; fi; \
+	  done
