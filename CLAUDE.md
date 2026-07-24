@@ -26,9 +26,12 @@ complete**; a third (gameplay/QoL) is the next phase.
    (SDL2 + OpenGL + OpenAL, chosen after evaluating Vulkan). The **full game runs end-to-end** from
    the real disc, validated by full playthroughs on **Windows and Linux** including the endgame and
    credits. Details below and in [`docs/`](docs/).
-3. **Stage 3 — gameplay/QoL (planned, not started).** PC-only quality-of-life and balance work,
-   scoped to stay out of the matching source (a separate PC-only module, zero `src/` edits). Not
-   yet designed — do not begin Stage 3 changes without an explicit decision.
+3. **Stage 3 — gameplay/QoL (planned, not started).** PC-only quality-of-life and balance work
+   (controls, an in-game overlay, an enemy threat overlay, an opt-in balance mode). Public roadmap in
+   [`docs/roadmap.md`](docs/roadmap.md); the working plan with implementation risks is the gitignored
+   `exchange/61-stage3-roadmap.md`. Note: the "zero `src/` edits" ideal was the *balance-package* rule
+   — other Stage-3 features will need gated `src/` hooks. Not yet designed — do not begin Stage 3
+   changes without an explicit decision.
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates
@@ -92,9 +95,14 @@ job is byte-exact matching, not readability or portability; all port-side change
   pinned Debian 12 container (the build box sets the glibc floor — 2.34, broadly portable). Both have
   drop-in disc auto-detect, a fatal wrong-disc guard, and `vandalhearts.ini` config. **macOS is
   scaffolded but not pursued.** Full recipe in [`docs/cross-platform.md`](docs/cross-platform.md).
-- **Repo:** private GitHub `HalmyLyseas/VandalHearts-PcPort` (`origin`); `upstream` =
+- **Repo:** **public** GitHub `HalmyLyseas/VandalHearts-PcPort` (`origin`); `upstream` =
   `github.com/shao113/vh` (the original decomp, reference only). `upstream-master` is the pristine
-  byte-exact base.
+  byte-exact base. Commit identity is the GitHub noreply address (no PII). Since it's public, keep
+  committed files self-contained — reference only tracked paths, never `exchange/` or local notes.
+- **Releases:** **v1.0.0 published** (Windows zip + Linux AppImage). Built and published *locally* by
+  `platform/pc/packaging/make-release.sh <tag>` — never CI, because the data-segment generator needs
+  the byte-exact `SLUS_004.47` + `KROMDAT.BIN` at build time (copyrighted, can't live on runners).
+  Release binaries embed a portion of game-derived data; this is disclosed in `NOTICE`/`DISCLAIMER`.
 
 ## Byte-exact discipline — the one rule that must not break
 
