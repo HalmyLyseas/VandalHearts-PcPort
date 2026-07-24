@@ -39,12 +39,12 @@ casing, follow this pattern rather than changing global flags.
 | Dependency | Purpose | Status as of 2026-07-10 |
 |---|---|---|
 | `splat` (Python pkg) | disassembly/extraction (`make extract`) | **done 2026-07-10** — system package `python-splat64` (0.41.0, upstream `ethteck/splat`) installed. Ran directly against `SLUS_004.47.yaml`: full config parsed with zero schema errors, got exactly to opening the (absent) base binary before failing — correct/expected failure point, confirms compatibility. |
-| `tools/sortSymbols.py` (+ its `symbols.csv` input) | sorts `symbol_addrs.txt` before splat runs (`SORT_SYM` step) | **missing from repo, and not found anywhere else either** (checked `mkst/ctr`, `mkst/esa`, `sozud/psy-q-decomp` 2026-07-10 — none have it). Likely a bespoke script + personal spreadsheet the vh author never committed. Try `make extract` with the `SORT_SYM` step skipped/commented first — `symbol_addrs.txt` already exists and may be sufficient alone, making this possibly a non-blocker. |
+| `tools/sortSymbols.py` (+ its `symbols.csv` input) | sorts `symbol_addrs.txt` before splat runs (`SORT_SYM` step) | **missing from the repo** (a bespoke script + personal spreadsheet the original author never committed). It is **skippable**: `symbol_addrs.txt` as committed is already sorted sufficiently — run `splat` directly instead of via `make extract`, which unconditionally invokes the missing script. |
 | `tools/maspsx/maspsx.py` | post-process GCC output for PSX `as` | **done 2026-07-10** — user cloned `https://github.com/mkst/maspsx` to `vandalHearts_decomp/maspsx/`; symlinked `vh/tools/maspsx -> ../../maspsx`. Verified it runs through the symlink. |
 | `cc1_v263_decompals`, `cc1_v257_decompals` | old GCC 2.x compiler frontends | **done 2026-07-10** — no Docker in this environment, so downloaded prebuilt release tarballs directly from `decompals/old-gcc`'s Releases page (tag `0.17`: `gcc-2.6.3-psx.tar.gz`, `gcc-2.5.7-psx.tar.gz`) rather than building via their Dockerfiles. Extracted `cc1` binaries into `vandalHearts_decomp/old-gcc/build-gcc-{2.6.3,2.5.7}-psx/`, verified executable, symlinked into `vandalHearts_decomp/toolchain/bin/` under the exact names the Makefile expects. **Must be on `PATH`** when running `make` — see "Wiring up cc1" below. |
 | `{as,ld,objcopy}` for MIPS r3000 | cross binutils | **done 2026-07-10** — system `mipsel-linux-gnu-binutils` (2.46.1) works; use `make CROSS=mipsel-linux-gnu- ...` instead of editing the Makefile's hardcoded `mips-suse-linux-` prefix. See "Toolchain vendor triple" below. |
 | `python3.11` | required interpreter version (pinned in Makefile) | **not installed** (found 2026-07-10) — only `python3.14` is present, which is what `python-splat64` targets. Use `make PYTHON=python3 ...` rather than editing the Makefile. |
-| `include/PsyQ/*.h` (libgpu.h, libgte.h, libcd.h, libpress.h, …) | headers the app code includes directly | **done 2026-07-10** — real Sony PsyQ v3.3 SDK headers from `sozud/psy-q` (user's informed call given the provenance flag; see "Sourcing the PsyQ headers" below), populated into `vh/include/PsyQ/`, gitignored. Validated by actually compiling `src/graphics.c` through the full real pipeline — see below. `OpenDriver2/PsyCross` was tried first and empirically ruled out. |
+| `include/PsyQ/*.h` (libgpu.h, libgte.h, libcd.h, libpress.h, …) | headers the app code includes directly | **user-supplied**, gitignored — real Sony PsyQ **v3.3** SDK `INCLUDE/` headers at `vh/include/PsyQ/` (lowercase). Proprietary, never committed. Validate a candidate set by compiling `src/graphics.c` through the full pipeline. A modern hosted header set does NOT work. See "PsyQ SDK headers" below. |
 | `SLUS_004.47` (original exe), `LIB34.ZIP` (PsyQ v3.4 lib objects), full ISO | base game files, needed for extraction + asset/audio data | **`SLUS_004.47` done 2026-07-10** — extracted from the user's own CHD via `chdman`+`bchunk`+`7z`, MD5-verified exact match. See "Getting the base game files" below. `LIB34.ZIP` not needed by the current pipeline (see there); full ISO/BIN kept in `vandalHearts_decomp/game/` for later asset/audio extraction (Phase D) if needed. |
 
 Before trusting this table, re-verify — it reflects a single point-in-time check, not a
@@ -101,107 +101,44 @@ Both binaries are 32-bit x86 ELF, statically linked — verified they execute on
 host (kernel has ia32 support) and produce real compiler output (tested via direct invocation
 and via a full `cpp -P` → `cc1` pipeline run against `src/graphics.c`, see below).
 
-## Sourcing the PsyQ headers (resolved 2026-07-10)
+## PsyQ SDK headers (required, user-supplied, never committed)
 
-Not written into the repo (proprietary Sony SDK, can't be redistributed) — and now also
-excluded via `.gitignore` (`/include/PsyQ/`) even though populated locally, since the source
-is legally uncertain and the user's explicit intent was local-only, non-distributed use. If
-that `.gitignore` entry is ever missing, restore it before committing anything — don't let
-this material end up in the repo's git history.
+The build needs the real **Sony PsyQ v3.3** SDK `INCLUDE/` headers (`libgpu.h`, `libgte.h`,
+`libcd.h`, `libpress.h`, `libsnd.h`, `stdio.h`, `memory.h`, a `sys/` folder, …) placed at
+`vh/include/PsyQ/` (lowercase filenames). These are **proprietary Sony material**: they are
+**gitignored (`/include/PsyQ/`) and must never enter the repo or be redistributed** — supply
+your own legally-obtained copy. If that `.gitignore` entry is ever missing, restore it before
+committing anything.
 
-**Current state: `vh/include/PsyQ/` is populated with the real Sony PsyQ v3.3 SDK headers**,
-sourced from `sozud/psy-q`'s `3.3/PSX/INCLUDE/` (see below for the full trail), and
-**validated empirically** — see "Verifying a build works" below for the full pipeline test
-that proved these work. If `include/PsyQ/` is ever missing/empty in a fresh session, this is
-what needs restoring; the steps are: clone `sozud/psy-q`, copy `3.3/PSX/INCLUDE/*.H` →
-`include/PsyQ/*.h` (lowercased) and `3.3/PSX/INCLUDE/SYS/*.H` → `include/PsyQ/sys/*.h`
-(lowercased).
+Do **not** substitute a modern, hosted PsyQ-style header set (e.g. a PSX homebrew SDK's
+headers) — this was tried and hard-fails. This build is **freestanding (`-nostdinc`)** and
+uses the **real old GCC 2.6.3 `cc1`**: hosted headers assume a modern libc (they don't provide
+`common.h`'s `sys/types.h`/`stdio.h`/`memory.h`/`libsnd.h`), and the old `cc1` throws parse
+errors on modern constructs (`uint`/`uintptr_t`, `stdint.h`, precision-GTE `#include`s baked
+into `libgpu.h`/`libgte.h`). It is a fundamentally different target (hosted/modern vs.
+freestanding/1990s), not a "needs more patching" situation. Use an actual v3.3 SDK header set.
 
-**Gotcha found repeatedly during Phase C work: these files are DOS-era text with CRLF line
-endings** (`file include/PsyQ/libcd.h` reports "Non-ISO extended-ASCII text, with CRLF line
-terminators"). Plain `grep -n "symbol" include/PsyQ/whatever.h` can silently report **zero
-matches even when the symbol is genuinely present** — grep's binary-file heuristic trips on
-these files and skips them without a warning. Always use `grep -a` against anything under
-`include/PsyQ/`. This has caused real, time-costing false negatives twice: once concluding
-`CdlModeStream` wasn't defined anywhere (it was, in `libcd.h`) during Phase B bisection, and
-again concluding `struct DIRENTRY` wasn't defined anywhere (it was, in `kernel.h`) while
-building the Phase C Kernel backend.
+**Gotcha — these are DOS-era text with CRLF line endings** (`file include/PsyQ/libcd.h` →
+"…with CRLF line terminators"). Plain `grep -n "symbol" include/PsyQ/whatever.h` can silently
+report **zero matches even when the symbol is present** — grep's binary-file heuristic skips
+them without warning. **Always `grep -a`** against anything under `include/PsyQ/`. This caused
+time-costing false negatives twice (`CdlModeStream` in `libcd.h`, `struct DIRENTRY` in
+`kernel.h`).
 
-**Checked 2026-07-10: `mkst/ctr` and `mkst/esa` (credited in `README.md`) do NOT have a
-usable set.** Actually inspected their trees (via GitHub's git-trees API, recursive) —
-`mkst/ctr`'s `include/psy` (symlinked to `include/psyq4.3`) contains exactly **one** header
-(`LIBSPU.H`), and its `tools/psyq/psyq4.x/` folders contain original DOS-era PsyQ SDK
-*compiler executables* (ASPSX.EXE, CC1PSX.EXE, etc. — versions 4.0/4.1/4.3/4.6, wrong version
-family anyway), not a C header set. Not a source for this.
+**Validate the header set, don't copy-and-hope:** run the actual pipeline — `cpp -P` (real
+`CPP_FLAGS`, `-nostdinc`) → real `cc1_v263_decompals` → `maspsx` → `mipsel-linux-gnu-as` —
+against `src/graphics.c` (the heaviest GTE/GPU header user). A correct set preprocesses and
+compiles cleanly (only normal old-C89 implicit-declaration/type warnings, zero parse errors)
+to a valid MIPS-I ELF object. That proves the pipeline works mechanically; byte-exact output
+is only proven by `make check`'s `md5sum`, which additionally needs the base game files.
 
-**Two real candidates found 2026-07-10, neither vetted/vendored yet — stage in `exchange/`
-first per the usual rule (license/version check before anything lands in `include/PsyQ/`):**
-
-1. **`OpenDriver2/PsyCross`**, `include/psx/*.h` — **empirically ruled out 2026-07-10, do
-   not retry without a different plan.** User cloned it; the full header set was staged into
-   `vh/include/PsyQ/` and run through the *actual* pipeline: `cpp -P` with this project's
-   real `CPP_FLAGS` (including `-nostdinc`), then the real `cc1_v263_decompals`, against
-   `src/graphics.c`. Two independent, hard failures:
-   - `common.h` (included by nearly every file) needs `sys/types.h`, `stdio.h`, `memory.h`,
-     `libsnd.h`, `sys/file.h` — **PsyCross provides none of these**, because it assumes a
-     modern hosted libc rather than this project's freestanding `-nostdinc` build.
-   - Stubbing those just to see further, the real old `cc1` (2.6.3 — the actual version this
-     game was built with) throws parse errors immediately on `uint`/`uintptr_t`/`ushort`
-     (needs `stdint.h`, unavailable under `-nostdinc`) and on `PGXP_EmitCacheData`/
-     `PGXP_GetIndex` — PsyCross's own precision-GTE extension, `#include`d directly inside
-     `libgpu.h`/`libgte.h` unconditionally. This isn't stock PsyQ API surface at all, and the
-     old compiler can't parse it regardless.
-   Verdict: not a viable header source for stage-1 byte-exact matching, full stop — this
-   isn't a "needs more patching" situation, it's a fundamentally different target
-   (hosted/modern vs. freestanding/1990s). **PsyCross the framework is still a fine Phase C
-   lead** (see the checkpoint doc) — only ruled out as a *header* source.
-2. **`sozud/psy-q`** (a submodule of `sozud/psy-q-decomp`), path `3.3/PSX/INCLUDE/` — an
-   exact match to the real Sony PsyQ **v3.3** SDK directory layout (BIN/DOC/INCLUDE/KANJI/
-   LIB/SAMPLE), same version cited in this project's own `README.md`. Contains the literal
-   original `LIBGPU.H`/`LIBGTE.H`/`LIBCD.H`/`LIBPRESS.H`/etc. — and, unlike PsyCross, this
-   listing also includes `STDIO.H`, `MEMORY.H`, `LIBSND.H`, and a `SYS/` folder, i.e. the
-   exact set PsyCross was missing. **Flagged as looking like an unlicensed, undocumented
-   public mirror of Sony's proprietary SDK** (no README, no license, 0 stars, 1 watcher) —
-   raised explicitly to the user 2026-07-10; **they made an informed decision to use it for
-   local, non-distributed build use only** (explicitly not for redistribution/pushing
-   anywhere). Cloned to `vandalHearts_decomp/psy-q/` (sibling to `vh/`, outside git). **This
-   is now what's actually in `vh/include/PsyQ/`** — see the "resolved" note above. If sourcing
-   this again in a future session, the same standard applies as the base ROM: this was a
-   one-time informed call by the user given the specific circumstances, not a blanket green
-   light — don't assume future similar decisions without asking again.
-
-**Validation, not just copy-and-hope:** ran the actual pipeline —
-`cpp -P` (real `CPP_FLAGS`, `-nostdinc`) → real `cc1_v263_decompals` → `maspsx` →
-`mipsel-linux-gnu-as` — against `src/graphics.c` (heaviest GTE/GPU header usage in the
-project, and the exact file that failed completely under PsyCross). Result: clean preprocess
-(one harmless `#endif` warning), clean compile (17,953 lines of `.s`, only normal old-C89-era
-warnings — implicit declarations / type mismatches from forward references, zero parse
-errors), clean `maspsx` pass, valid final ELF object out of the assembler
-(`MIPS-I, with debug_info`). Full mechanical pipeline confirmed working end-to-end on a real,
-GTE/GPU-heavy file. Still not proof of *byte-exact* output — that needs `make check`'s
-`md5sum`, which needs the base game files.
-
-**Checked 2026-07-10: `lab313ru/ghidra_psx_ldr` (already credited in `README.md`'s Tools
-list) is also NOT a header/toolchain source.** It's a Ghidra loader extension; its
-`data/psyq` submodule (`lab313ru/psx_psyq_signatures`) is binary FLIRT-style signature data
-for auto-identifying PsyQ functions across SDK versions 2.60–4.70 in a disassembled binary —
-useful later for confirming the exact PsyQ SDK version and auto-labeling library functions
-once `SLUS_004.47` is loaded into Ghidra, but no compilable headers, no old-GCC frontend, no
-maspsx, no sortSymbols.py.
-
-**Checked 2026-07-10: pcsx-redux (github.com/grumpycoders/pcsx-redux) is NOT a header
-source.** Verified directly (fetched repo tree + `src/mips/psyq/README.md` +
-`src/mips/psyq/include/` listing) — their `psyq/include/` folder contains exactly one file
-(`inline_n.h`, a small compat shim), not the actual libgpu.h/libgte.h/libcd.h/libpress.h API
-headers. What pcsx-redux *does* provide is `psyq-obj-parser`, a tool that converts original
-PsyQ `.OBJ`/`.LIB` files (i.e. `LIB34.ZIP`, if/once obtained) into modern-linkable objects —
-useful for library conversion, not for headers. `vh/tools/old/psyq-obj-parser/` is already a
-copy of exactly this tool (its local README credits pcsx-redux), currently unused by the
-current Makefile pipeline (which extracts PsyQ code as raw disassembly straight from the
-original binary via splat rather than relinking `LIB34.ZIP`). Don't install the full
-pcsx-redux app for this — the one relevant piece is already in the repo. Also confirmed
-absent from pcsx-redux: `cc1_v263_decompals`/`cc1_v257_decompals`, `maspsx`,
-`sortSymbols.py` — none of Phase A's other gaps are solved by it either.
+**Not header sources (don't chase these):** `mkst/ctr`/`mkst/esa` (wrong PsyQ version family,
+no usable header set); `lab313ru/ghidra_psx_ldr` (a Ghidra loader + FLIRT signature data —
+useful for identifying PsyQ functions in a disassembly, not for compilable headers);
+`pcsx-redux` (ships only a small `inline_n.h` shim). pcsx-redux's `psyq-obj-parser` *does*
+convert original PsyQ `.OBJ`/`.LIB` objects to modern-linkable form — but this pipeline extracts
+PsyQ code as raw disassembly via splat and never relinks `LIB34.ZIP`, so it isn't needed (a
+copy already sits unused at `vh/tools/old/psyq-obj-parser/`).
 
 ## Getting the base game files (done 2026-07-10)
 
@@ -333,7 +270,7 @@ loop, repeated until `cmp` reports no differences:
 
 ### What was actually wrong (all four fixed 2026-07-10, `make check` now byte-exact)
 
-Full detail and rationale in `exchange/00-progress-checkpoint.md`'s Phase B section. Summary:
+The four mismatches that had to be fixed to reach byte-exact:
 
 1. `text.c` was missing 888 bytes of `.rodata` (a string pool of world-map/job-class names +
    two pointer tables) — caused a uniform 888-byte shift through the entire rest of the file.
