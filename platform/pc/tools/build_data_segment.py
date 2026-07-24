@@ -37,8 +37,12 @@ os.chdir(ROOT)
 PROJECT_ROOT = os.path.join(ROOT, '..', '..')
 ELF = os.path.join(PROJECT_ROOT, 'build', 'SLUS_004.47.elf')
 SYMBOL_ADDRS = os.path.join(PROJECT_ROOT, 'symbol_addrs.txt')
-STAGE_DIR = 'build/include_stage'
-WORK_DIR = 'build/data_segment_work'
+# Stage 2.3: BUILD_DIR is settable so 32- and 64-bit trees can be generated side by side
+# (the safest way to A/B the -m64 flip). Defaults to 'build', i.e. unchanged behaviour.
+BUILD_DIR = os.environ.get('VH_BUILD_DIR', 'build')
+STAGE_DIR = f'{BUILD_DIR}/include_stage'
+WORK_DIR = f'{BUILD_DIR}/data_segment_work'
+OUT_C = f'{BUILD_DIR}/generated_data.c'
 
 KNOWN_SAFE_TYPES = {'RECT', 'SVECTOR', 'VECTOR', 'CVECTOR', 'MATRIX', 'CdlLOC', 'CdlFILTER',
                      'POLY_F4', 'SPRT', 'TILE', 'DR_MODE', 's8', 's16', 's32', 'u8', 'u16', 'u32'}
@@ -137,19 +141,96 @@ def strip_comments(text):
     return re.sub(r'//[^\n]*', '', text)
 
 
-M32 = ['-m32']  # see the Makefile's own M32 comment (exchange/12-phase-c-bootstrap.md)
-PKG_CONFIG_32_ENV = {**os.environ, 'PKG_CONFIG_LIBDIR': '/usr/lib32/pkgconfig', 'PKG_CONFIG_PATH': ''}
+# ---- TARGET WIDTH -----------------------------------------------------------------------
+# ⚠️ This MUST match the width the real build uses. The sizeof() probe further down measures
+# struct sizes in order to slice the data segment out of the ELF, and EVERY struct containing a
+# pointer changes size between -m32 and -m64. Probing at the wrong width does not fail loudly --
+# it produces a generated_data.c whose objects are the wrong size, i.e. silent data corruption.
+# So the Makefile passes its own $(M32) through VH_TARGET_MARCH rather than this file guessing.
+# Default '-m32' keeps today's behaviour byte-for-byte.
+# (see the Makefile's own M32 comment / exchange/12-phase-c-bootstrap.md)
+# VH_TARGET_MARCH: '-m32' / '-m64' / etc. An EMPTY value means "no -m flag" (native width, e.g. the
+# CMake 64-bit build) -- must become an empty list, NOT [''], or the empty string is passed to the
+# compiler as a bogus input filename and the probe link fails before any undefined ref is seen.
+# Default is now '' (native width, no -m flag) rather than '-m32'. The Makefile always sets
+# VH_TARGET_MARCH explicitly so it is unaffected; CMake omits it entirely (passing an empty
+# `VH_TARGET_MARCH=` through `cmake -E env` makes it treat the next token as the command -> a
+# "permission denied" that silently stopped the generator from ever running under CMake).
+_march = os.environ.get('VH_TARGET_MARCH', '')
+M32 = [_march] if _march else []
+_TARGET_IS_32 = (M32 == ['-m32'])
+
+# Build-system-agnostic hooks (Stage 2.4 CMake / cross-compile). All optional; when unset the
+# Makefile's original glob/pkg-config/gcc behaviour is preserved exactly.
+#   VH_CC        - host compiler for the probe links (default 'gcc'); MinGW/clang override it.
+#   VH_OBJ_FILES - explicit newline/space-separated object list for the undefined-symbol probe.
+#                  CMake passes $<TARGET_OBJECTS:...> here because its object layout
+#                  (CMakeFiles/*.dir/....c.o) does not match the Makefile's build/src/*.o glob.
+#   VH_LINK_LIBS - explicit link libraries for the probe (e.g. from CMake's find_package); when
+#                  unset, pkg-config sdl2+openal + -lGL -lm as before.
+#   VH_EXTRA_CFLAGS - extra flags for the sizeof-PROBE compile (below). Windows uses it to
+#                  -include the MinGW compat shim (pc_win_compat.h) so the staged PsyQ headers
+#                  compile in the probe the same way they do in the real build.
+#   VH_HOST_CC   - compiler for the sizeof PROBE specifically. The probe is compiled AND RUN to read
+#                  sizeof() values, so under cross-compilation it must target the build HOST, not
+#                  VH_CC's target -- a Windows/ARM probe binary cannot execute on the Linux host.
+#                  "safe" symbols (the only ones probed) are pointer-free, and on x86-64 host vs
+#                  target differ only in `long` (mapped to int in the PC layer) -- so host sizeof ==
+#                  target sizeof for them; a worst-case mismatch only over-reserves storage, never
+#                  under. Defaults to VH_CC when unset, so native builds are byte-for-byte unchanged.
+CC_CMD = os.environ.get('VH_CC', 'gcc').split()
+OBJ_FILES_ENV = os.environ.get('VH_OBJ_FILES', '').split()
+LINK_LIBS_ENV = os.environ.get('VH_LINK_LIBS', '').split()
+EXTRA_CFLAGS = os.environ.get('VH_EXTRA_CFLAGS', '').split()
+HOST_CC = os.environ.get('VH_HOST_CC', '').split() or CC_CMD
+
+# Sanitizer flags, forwarded from the Makefile's $(SAN). find_undefined_symbols() below LINKS the
+# real build's objects; if those were compiled with -fsanitize=... the link fails on undefined
+# __asan_* symbols unless the same flag is passed here. That failure is not obvious from the
+# output -- link_ok goes False and the generator falls back to its slower path -- so forward it.
+# The sizeof() probe further down does NOT need it (it compiles its own standalone TU) but gets
+# it anyway for consistency; sanitizers do not change struct layout.
+SAN = os.environ.get('VH_SAN', '').split()
+
+# pkg-config must resolve libraries for the same width. The 32-bit path needs the explicit
+# lib32 pkgconfig dir; for any other width the system default is already correct.
+PKG_CONFIG_32_ENV = ({**os.environ, 'PKG_CONFIG_LIBDIR': '/usr/lib32/pkgconfig', 'PKG_CONFIG_PATH': ''}
+                     if _TARGET_IS_32 else dict(os.environ))
 
 
 def find_undefined_symbols():
-    game_objs = glob.glob('build/src/*.o')
-    backend_objs = ['build/libetc.o', 'build/libcd.o', 'build/libsnd.o', 'build/libspu.o',
-                     'build/libkernel.o', 'build/libgte.o', 'build/libgpu.o',
-                     'build/pc_gpu_window.o', 'build/libsn.o']
-    sdl2_libs = sh(['pkg-config', '--libs', 'sdl2'], env=PKG_CONFIG_32_ENV).stdout.split()
-    openal_libs = sh(['pkg-config', '--libs', 'openal'], env=PKG_CONFIG_32_ENV).stdout.split()
-    r = sh(['gcc', *M32, *game_objs, *backend_objs, *sdl2_libs, *openal_libs, '-lGL', '-lm',
-            '-o', 'build/vandalhearts_pc'])
+    # WORK_DIR must exist BEFORE the probe link below, which writes -o {WORK_DIR}/symprobe.
+    # It used to be created only in the later sizeof-probe step, which meant that on a genuinely
+    # fresh BUILD_DIR the link failed with "No such file or directory" -- and since that error
+    # carries no "undefined reference" lines, the regex below matched nothing and the generator
+    # cheerfully emitted an EMPTY generated_data.c (909 bytes), producing a link full of undefined
+    # references to symbols it is supposed to define. It never surfaced because build/ and build32/
+    # had long since had the directory created; `rm -rf build_asan` was the first truly clean run.
+    os.makedirs(WORK_DIR, exist_ok=True)
+    # BUILD_DIR-relative, NOT hardcoded 'build/'. When this was hardcoded, a
+    # `make link M32=-m32 BUILD_DIR=build32` linked the 64-bit objects out of build/ with -m32
+    # flags: the link failed on the arch mismatch AND gcc truncated its -o target, silently
+    # deleting the working 64-bit binary. The symbol discovery still "worked" only because
+    # undefined-symbol NAMES do not depend on width.
+    if OBJ_FILES_ENV:
+        # CMake (or any non-Makefile driver) passed the object list explicitly.
+        objs = OBJ_FILES_ENV
+    else:
+        # Makefile layout: game objs by glob, backend objs by fixed name.
+        objs = glob.glob(f'{BUILD_DIR}/src/*.o') + [
+            f'{BUILD_DIR}/{o}' for o in
+            ('libetc.o', 'libcd.o', 'libsnd.o', 'libspu.o', 'libkernel.o',
+             'libgte.o', 'libgpu.o', 'pc_gpu_window.o', 'libsn.o')]
+    if LINK_LIBS_ENV:
+        libs = LINK_LIBS_ENV
+    else:
+        libs = (sh(['pkg-config', '--libs', 'sdl2'], env=PKG_CONFIG_32_ENV).stdout.split()
+                + sh(['pkg-config', '--libs', 'openal'], env=PKG_CONFIG_32_ENV).stdout.split()
+                + ['-lGL', '-lm'])
+    # Only the undefined-symbol NAMES matter here (they don't depend on the link succeeding), so a
+    # missing lib just leaves more names undefined -- harmless for discovery.
+    r = sh([*CC_CMD, *M32, *SAN, *objs, *libs,
+            '-o', f'{WORK_DIR}/symprobe'])   # scratch target -- never the real binary
     names = set()
     for m in re.finditer(r"undefined reference to [`']([A-Za-z_]\w*)'", r.stderr):
         names.add(m.group(1))
@@ -282,7 +363,7 @@ def run_sizeof_probe(results):
     probe_bin = f'{WORK_DIR}/probe'
     for _ in range(15):
         syms = gen_probe(probe_c)
-        r = sh(['gcc', *M32, '-std=gnu89', '-DPERMUTER', f'-I{STAGE_DIR}', '-Iinclude', '-I../..',
+        r = sh([*HOST_CC, *M32, *SAN, *EXTRA_CFLAGS, '-std=gnu89', '-DPERMUTER', f'-I{STAGE_DIR}', '-Iinclude', '-I../..',
                 '-include', 'pc_forward_decls.h', probe_c, '-o', probe_bin])
         errors = [l for l in r.stderr.splitlines() if ': error:' in l]
         if not errors:
@@ -293,7 +374,10 @@ def run_sizeof_probe(results):
             m = re.match(r'[^:]+:(\d+):', e)
             if not m:
                 continue
-            line = probe_lines[int(m.group(1)) - 1]
+            ln = int(m.group(1)) - 1
+            if ln < 0 or ln >= len(probe_lines):
+                continue    # error reported in an included header, not probe.c -- not a symbol line
+            line = probe_lines[ln]
             sm = re.search(r'printf\("([A-Za-z_]\w*)\|', line) or re.search(r'extern\s+[^;]*?\b([A-Za-z_]\w*)\s*(\[[^\]]*\])?\s*;', line)
             if sm:
                 newly.add(sm.group(1))
@@ -441,7 +525,7 @@ def generate(results, sizes, unresolved_by_probe):
     out += ctor_lines
     out.append('')
 
-    with open('build/generated_data.c', 'w') as f:
+    with open(OUT_C, 'w') as f:
         f.write('\n'.join(out) + '\n')
     return stats
 
@@ -469,7 +553,7 @@ def main():
     sizes, unresolved = run_sizeof_probe(results)
     print(f"   resolved {len(sizes)} sizes via compiler probe, {len(unresolved)} need overrides/fallback")
 
-    print("5. Extracting real bytes and generating build/generated_data.c...")
+    print(f"5. Extracting real bytes and generating {OUT_C}...")
     stats = generate(results, sizes, unresolved)
     print(f"   {stats}")
 

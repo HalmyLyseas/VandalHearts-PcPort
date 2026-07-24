@@ -13,6 +13,7 @@
 
 static SDL_Window *s_window;
 static SDL_GLContext s_glCtx;
+static int s_winW, s_winH, s_winScale;   /* actual (scaled) window size + the VH_SCALE factor used */
 static unsigned char *s_rgbaScratch;
 static int s_scratchCap;
 
@@ -97,25 +98,26 @@ static void osdDrawText(int w, int h, int sx, int sy, int scale, const char *tex
 }
 
 int PC_GpuInit(int width, int height, const char *title) {
+#if defined(_WIN32)
+    /* The Windows build defines SDL_MAIN_HANDLED (the real entry point is the game's own main(),
+     * not SDL_main), so SDL's normal startup hook never runs -- tell SDL we've handled main before
+     * the first init, or SDL_Init warns and skips some Windows-specific setup. Idempotent/harmless
+     * if the window is re-opened. */
+    SDL_SetMainReady();
+#endif
     if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
-        /* Force X11 (via XWayland on a Wayland session), not SDL2's native
-         * Wayland backend. Found via a real, reproducible crash: once
-         * pc_bootstrap.c's PSX_NULL_MIRROR_BASE reservation actually
-         * succeeds (see that file's comment -- PS1 has no memory
-         * protection, so real, already-decompiled game code transiently
-         * dereferences NULL and needs address 0 to be valid RAM), SDL2's
-         * Wayland backend fails during EGL setup ("Proxy and queue point to
-         * different wl_displays" -- a wl_proxy validation error inside
-         * libwayland-client itself, not Mesa/EGL/OpenGL). Confirmed via a
-         * direct A/B test that forcing X11 instead avoids it completely,
-         * with the exact same NULL-mirror mapping active -- so the conflict
-         * is specific to SDL2's Wayland backend, not EGL/software-rendering
-         * more broadly. X11-via-XWayland is available on effectively every
-         * Linux desktop, so this isn't a fragile workaround -- see
-         * exchange/12-phase-c-bootstrap.md for the full derivation.
-         * SDL_HINT_OVERRIDE so this wins even if the environment already
-         * sets SDL_VIDEODRIVER to something else. */
-        SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "x11", SDL_HINT_OVERRIDE);
+        /* No forced video driver -- SDL auto-picks (Wayland on a Wayland session, X11 on X11,
+         * "windows"/"cocoa" elsewhere). An explicit SDL_VIDEODRIVER env var still overrides.
+         *
+         * HISTORY (removed Stage 2.4, 2026-07-23): early in the project we force-set "x11" because
+         * SDL2's native Wayland backend crashed during EGL setup ("Proxy and queue point to
+         * different wl_displays") -- but ONLY while pc_bootstrap.c mapped page 0
+         * (PSX_NULL_MIRROR_BASE) to absorb transient NULL reads. Stage 2.2/2.3 removed that mapping
+         * (NULL reads are handled by per-site PC_PORT guards + the fault handler, no page-0 mapping),
+         * so the trigger is gone: verified by running native Wayland with the current build, full
+         * speed, no crash. The one case that could still hit it is the legacy VH_NULL_FIXUP=0 path
+         * (which re-maps page 0 and needs setcap) -- such a user on Wayland can set
+         * SDL_VIDEODRIVER=x11 themselves. See exchange/12-phase-c-bootstrap.md for the old derivation. */
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return 0;
     }
     /* Display-resolution scaling: the game renders a native 320x240 framebuffer;
@@ -132,10 +134,12 @@ int PC_GpuInit(int width, int height, const char *title) {
         if (env) { scale = atoi(env); if (scale < 1) scale = 1; if (scale > 8) scale = 8; }
         width  *= scale;
         height *= scale;
+        s_winScale = scale;
     }
     s_window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                  width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!s_window) return 0;
+    s_winW = width; s_winH = height;   /* the real (scaled) window size, for PC_GpuGetWindowSize */
     s_glCtx = SDL_GL_CreateContext(s_window);
     if (!s_glCtx) { SDL_DestroyWindow(s_window); s_window = NULL; return 0; }
     /* Explicitly OFF, not on. The game's own VSync() (src/libetc.c) already
@@ -154,6 +158,15 @@ int PC_GpuInit(int width, int height, const char *title) {
     SDL_GL_SetSwapInterval(0);
     glViewport(0, 0, width, height);
     return 1;
+}
+
+/* Report the actual window size (native 320x240 * VH_SCALE) and the scale factor used, so callers
+ * (e.g. the bootstrap log) don't have to re-derive VH_SCALE or duplicate its clamping. Any out-ptr
+ * may be NULL. Valid only after a successful PC_GpuInit; zero-initialised otherwise. */
+void PC_GpuGetWindowSize(int *w, int *h, int *scale) {
+    if (w)     *w = s_winW;
+    if (h)     *h = s_winH;
+    if (scale) *scale = s_winScale;
 }
 
 /* Fullscreen movie (MDEC/FMV) overlay. When a .STR movie is playing, libcd decodes each frame

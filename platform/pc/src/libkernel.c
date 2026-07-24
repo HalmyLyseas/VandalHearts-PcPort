@@ -23,6 +23,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#if defined(_WIN32)
+#include <direct.h>          /* _mkdir (MinGW mkdir is 1-arg, no mode) */
+#endif
 #include "PsyQ/kernel.h"
 #include "PsyQ/sys/file.h"
 
@@ -107,7 +110,7 @@ static void SignalCardEvent(s32 spec) {
  *     (not just during AI turns), and is NOT bottlenecked on a modern CPU --
  *     it already finishes well within its budget. Scaling the counter
  *     multiplies how fast that window closes in real time, starving the
- *     decoder long before it does its share of work.
+ *     decoder int before it does its share of work.
  * A single global multiplier applied in GetRCnt can't satisfy both: 7x
  * (calibrated for IsLagging()) starves the sprite decoder -- confirmed via
  * exchange/videos/analysis_newExtract_02 (corrupted/half-drawn geometry
@@ -269,7 +272,7 @@ extern s16 gMapMinX, gMapMinZ, gMapMaxX, gMapMaxZ;
 
 typedef struct {
     void *start;
-    unsigned long size;
+    unsigned int size;
 } AddrRange;
 
 /* Sizes taken from `nm -S build/src/ai.o` against the current src/ai.c --
@@ -294,7 +297,7 @@ static const AddrRange s_aiThrottleRanges[] = {
  * CALIBRATE option-2 per-function costs: cost_per_visit = 450*HW_target_frames / visits_per_scan.
  * Diff these across an AI phase (bracket by the AI-chain log's frames) to get visits_per_scan.
  * Exposed for the ai-chain CSV; the increment is trivial so it stays always-on. */
-long g_aiVisitCount[NUM_AI_THROTTLE_RANGES] = {0};
+int g_aiVisitCount[NUM_AI_THROTTLE_RANGES] = {0};
 
 /* (Retired 2026-07-14: the per-checkpoint `s_checkpointAddrs[]` table of hardcoded LINK-TIME return
  * addresses + `DirectCheckpointCost()` — they never matched under PIE and are replaced by the
@@ -305,7 +308,7 @@ long g_aiVisitCount[NUM_AI_THROTTLE_RANGES] = {0};
 static int AiThrottleRangeIndex(void *retAddr) {
     unsigned i;
     for (i = 0; i < NUM_AI_THROTTLE_RANGES; i++) {
-        unsigned long off = (unsigned long)retAddr - (unsigned long)s_aiThrottleRanges[i].start;
+        unsigned int off = (unsigned int)retAddr - (unsigned int)s_aiThrottleRanges[i].start;
         if (off < s_aiThrottleRanges[i].size) {
             return (int)i;
         }
@@ -360,9 +363,70 @@ static const double s_aiThrottleTicks[NUM_AI_THROTTLE_RANGES] = {
 
 static double s_aiSyntheticTicks[2];
 
+/* ---- RCnt1 frame normalization (opt-in: VH_RCNT1_NORMALIZE=1) --------------------------
+ *
+ * OFF BY DEFAULT. The honest wall-clock counter below is the calibrated behaviour and stays
+ * the default so the AI/timing work (exchange/42) is untouched.
+ *
+ * The problem this exists for: src/graphics.c's incremental sprite decoder gates itself with
+ * `if (!gIsEnemyTurn || GetRCnt(RCntCNT1) <= 470)`. RCnt1 is the HBlank counter and 470 ticks
+ * at RCNT1_HZ is ~30 ms, so on real hardware -- where a frame IS 16.7 ms -- the gate can never
+ * trip: the counter only reaches ~262 by end of frame. The game code is written assuming that.
+ * Our wall-clock implementation makes it host-speed-dependent instead: at ~12 FPS (an 83 ms
+ * frame, which is what the 32-bit ASAN build gets in a battle scene) the counter passes 470
+ * thirty milliseconds in, so during an enemy turn the decoder is gated off EVERY frame,
+ * gDecodingSprites never clears, and the enemy turn never begins -- the camera pans forever.
+ * Confirmed 2026-07-21 by SIGUSR1 sampling a stuck ASAN run: the render loop was alive and
+ * moving (DrawOTag / RenderMapTile / VSync) while gState was frozen bit-identical across 30 s.
+ * This is the same failure the long comment at the top of this file records from the 7x-GetRCnt
+ * experiment ("the demo looping forever ... gDecodingSprites never clearing"), reached by a
+ * different route: real slowness rather than a synthetic multiplier.
+ *
+ * The fix, when enabled: scale elapsed time by (nominal frame / PREVIOUS frame duration), so the
+ * counter sweeps the same 0..~262 range per frame regardless of how long the frame really took --
+ * i.e. frame-relative, which is what RCnt1 physically is on hardware (a position within the
+ * frame). ResetRCnt(RCntCNT1) is called exactly once per frame (src/engine.c:76), so the gap
+ * between consecutive resets IS the previous frame duration: this is self-tuning, with no
+ * host-specific factor to guess.
+ *
+ * Clamped to <= 1.0 so it can only ever compensate for a host running SLOWER than 60 FPS; at or
+ * above target the scale is 1.0 and this is a no-op. The counter still advances monotonically
+ * within a frame, which matters: the decode burst loop is `while (GetRCnt(RCntCNT1) <= maxTicks)`
+ * and would never terminate if the counter were simply clamped to a constant. */
+#define RCNT1_NOMINAL_FRAME_SEC (1.0 / 59.94)
+#define RCNT1_MIN_SCALE 0.05 /* cap compensation at 20x, so a pathological stall stays bounded */
+
+static int RCnt1NormalizeEnabled(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        const char *e = getenv("VH_RCNT1_NORMALIZE");
+        cached = (e && *e && *e != '0') ? 1 : 0;
+        if (cached)
+            fprintf(stderr, "libkernel: VH_RCNT1_NORMALIZE=1 -- RCnt1 is frame-relative "
+                            "(sprite-decoder budget will not starve on a slow host)\n");
+    }
+    return cached;
+}
+
+static double s_rcnt1Scale = 1.0;
+
 u32 ResetRCnt(s32 which) {
     int idx = which & 1;
-    clock_gettime(CLOCK_MONOTONIC, &s_rcntStart[idx]);
+    struct timespec now;
+
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (idx == 1 && RCnt1NormalizeEnabled()) {
+        /* Interval since the previous reset = the frame that just ended. */
+        double prev = (double)(now.tv_sec - s_rcntStart[idx].tv_sec) +
+                      (double)(now.tv_nsec - s_rcntStart[idx].tv_nsec) / 1e9;
+        if (prev > RCNT1_NOMINAL_FRAME_SEC && prev < 10.0) {
+            s_rcnt1Scale = RCNT1_NOMINAL_FRAME_SEC / prev;
+            if (s_rcnt1Scale < RCNT1_MIN_SCALE) s_rcnt1Scale = RCNT1_MIN_SCALE;
+        } else {
+            s_rcnt1Scale = 1.0;
+        }
+    }
+    s_rcntStart[idx] = now;
     s_aiSyntheticTicks[idx] = 0.0;
     return 0;
 }
@@ -380,10 +444,12 @@ u32 GetRCnt(s32 which) {
         return (u32)s_aiSyntheticTicks[idx];
     }
 
-    /* Non-AI callers (sprite decoder, debug FntPrint): honest unscaled wall-clock. */
+    /* Non-AI callers (sprite decoder, debug FntPrint): honest unscaled wall-clock, unless
+     * VH_RCNT1_NORMALIZE makes it frame-relative -- see the comment on ResetRCnt above. */
     clock_gettime(CLOCK_MONOTONIC, &now);
     elapsed = (double)(now.tv_sec - s_rcntStart[idx].tv_sec) +
               (double)(now.tv_nsec - s_rcntStart[idx].tv_nsec) / 1e9;
+    if (idx == 1 && RCnt1NormalizeEnabled()) elapsed *= s_rcnt1Scale;
     return (u32)(elapsed * RCNT1_HZ);
 }
 
@@ -415,7 +481,11 @@ s32 _card_clear(s32 port) { (void)port; SignalCardEvent(EvSpIOE); return 0; }
 
 void InitCard(s32 padEnable) {
     (void)padEnable;
+#if defined(_WIN32)
+    _mkdir(SAVE_DIR);            /* MinGW mkdir takes no mode argument */
+#else
     mkdir(SAVE_DIR, 0755);
+#endif
 }
 
 s32 StartCard(void) {
@@ -507,7 +577,7 @@ struct DIRENTRY *nextfile(struct DIRENTRY *entry) {
         if (stat(path, &st) != 0) continue;
         strncpy(entry->name, de->d_name, sizeof(entry->name) - 1);
         entry->name[sizeof(entry->name) - 1] = '\0';
-        entry->size = (long)st.st_size;
+        entry->size = (int)st.st_size;
         entry->attr = 0;
         entry->next = NULL;
         entry->head = 0;
@@ -530,6 +600,8 @@ extern const unsigned char pc_kanji_charset2[6270];
 static s32 sjis_to_krom_glyph(u32 sjis) {
     if (sjis == 0x8140) return 0;                                 /* space  */
     if (sjis == 0x8144) return 4;                                 /* period */
+    if (sjis == 0x817b) return 59;                                /* + (full-width plus, kuten 1-60)  */
+    if (sjis == 0x817c) return 60;                                /* - (full-width minus, kuten 1-61) */
     if (sjis == 0x8194) return 65;                                /* #      */
     if (sjis >= 0x824f && sjis <= 0x8258) return 147 + (sjis - 0x824f); /* 0-9 */
     if (sjis >= 0x8260 && sjis <= 0x8279) return 157 + (sjis - 0x8260); /* A-Z */
@@ -537,17 +609,23 @@ static s32 sjis_to_krom_glyph(u32 sjis) {
     return -1;
 }
 
-/* Emulates BIOS call B(51h) Krom2RawAdd: returns a pointer (as s32, matching
- * the -m32 pointer width) to the 30-byte glyph bitmap for a Shift-JIS code, or
- * -1 on error -- exactly what src/text.c's DrawSjisGlyph() expects. Without
- * this every DrawSjisText() (TURN counter, PLAYER/ENEMY TURN banner, item
- * names, gold, party lists) rendered nothing on the PC port. */
-s32 Krom2RawAdd(s32 sjisCode) {
+/* Emulates BIOS call B(51h) Krom2RawAdd: returns a pointer to the 30-byte glyph bitmap for a
+ * Shift-JIS code, or -1 on error -- exactly what src/text.c's DrawSjisGlyph() expects. Without
+ * this every DrawSjisText() (TURN counter, PLAYER/ENEMY TURN banner, item names, gold, party
+ * lists) rendered nothing on the PC port.
+ *
+ * Stage 2.3: the return type was `s32` "matching the -m32 pointer width", which truncated the
+ * address to 32 bits under -m64. Both callers immediately dereference it
+ * (`u8 *p = Krom2RawAdd(...)`), so the 64-bit build crashed in DrawSjisGlyph the first time a
+ * battle menu was drawn. Returning `void *` is correct at both widths and needs no src/ change:
+ * the cast in text.c and the implicit assign in window.c both still work, as does their
+ * `== -1` sentinel test. */
+void *Krom2RawAdd(s32 sjisCode) {
     s32 idx = sjis_to_krom_glyph((u32)sjisCode & 0xffff);
     if (idx < 0) {
-        return -1;
+        return (void *)(intptr_t)-1;
     }
-    return (s32)(intptr_t)&pc_kanji_charset2[idx * 30];
+    return (void *)&pc_kanji_charset2[idx * 30];
 }
 
 /* rand() is declared in common.h as a plain extern, matching how the
