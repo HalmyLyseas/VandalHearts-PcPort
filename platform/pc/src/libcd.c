@@ -81,9 +81,9 @@
  * shape, arbitrary fixed seed -- correctness here isn't about matching a real sequence, since
  * there's no real sequence to match; it's cosmetic simulated jitter nobody observes precisely,
  * so a fixed seed just keeps repeated debug runs consistent). */
-static u_long s_seekJitterSeed = 12345U;
+static unsigned int s_seekJitterSeed = 12345U;
 
-static u_long SeekJitterRand(void) {
+static unsigned int SeekJitterRand(void) {
     s_seekJitterSeed = s_seekJitterSeed * 0x41c64e6dU + 0x3039U;
     return (s_seekJitterSeed >> 16) & 0x7fffU;
 }
@@ -106,22 +106,23 @@ static u_long SeekJitterRand(void) {
  * MovieRenderFrame definition below). */
 static void MovieRenderFrame(int frameNo);
 static int  s_movieActive    = 0;
-static long s_movieBaseLBA   = 0;
-static long s_movieScanLBA   = 0;   /* forward demux cursor (frames are stored in order) */
+static int s_movieBaseLBA   = 0;
+static int s_movieScanLBA   = 0;   /* forward demux cursor (frames are stored in order) */
 static int  s_movieScanFrame = 0;   /* highest frame the cursor has passed */
 static unsigned short s_movieFb[320 * 240];
 static unsigned char  s_movieBs[32 * 1024];   /* one frame's BS (<= 9 sectors * 0x7E0 ~= 18KB) */
 
 static FILE *s_disc = NULL;
-static long s_headLBA = 0;   /* where the simulated laser head physically is */
-static long s_targetLBA = 0; /* where CdlSetloc last pointed it */
+static int s_headLBA = 0;   /* where the simulated laser head physically is */
+static int s_targetLBA = 0; /* where CdlSetloc last pointed it */
 static unsigned char s_mode = 0;
 
 /* ---- XA-ADPCM streaming (intro-movie audio + streamed spell SFX), see pc_xa.c ---- */
 static int  s_xaFile = -1, s_xaChan = -1;  /* active CdlSetfilter selection    */
 static int  s_xaStreaming = 0;
-static long s_xaBaseLBA = -1;              /* current track's start LBA        */
-static long s_xaCursorLBA = 0;             /* next sector to feed the decoder  */
+static int s_xaBaseLBA = -1;              /* current track's start LBA        */
+static int s_xaCursorLBA = 0;             /* next sector to feed the decoder  */
+static int  s_xaMatchedYet = 0;            /* got >=1 matching sector this track (see PC_CdXaUpdate) */
 static int s_lastReadResult = 0; /* 0 = idle/complete, -1 = error */
 static int s_motorStarted = 0;   /* set after the first-ever CdRead this process */
 static Uint32 s_pendingReadUntilMs = 0; /* 0 = no read pending; else SDL_GetTicks() target */
@@ -131,8 +132,8 @@ static double s_pendingPerSectorMs = 0.0; /* for CdReadSync()'s remaining-sector
  * psx/cdc.cpp, ~line 1687) -- see the file header comment for the porting
  * notes (ms instead of cycles, no motor-off/pause bonuses beyond a one-time
  * startup cost handled by the caller). */
-static double CalcSeekTimeMs(long fromLBA, long toLBA) {
-    long absDiff = labs(fromLBA - toLBA);
+static double CalcSeekTimeMs(int fromLBA, int toLBA) {
+    int absDiff = abs(fromLBA - toLBA);
     int speed = (s_mode & CdlModeSpeed) ? 2 : 1;
     double ms;
 
@@ -159,6 +160,28 @@ static int fromBCD(unsigned char v) {
     return ((v >> 4) * 10) + (v & 0x0f);
 }
 
+/* Cheap wrong-disc guard (Stage 2.4 QoL): Vandal Hearts (USA)'s boot executable SLUS_004.47 begins
+ * with the "PS-X EXE" magic at LBA 23 (see the file-layout note at the top of this file). A raw
+ * 2352-byte sector carries its 2048 data bytes at offset 24. Catches the common mistakes -- a
+ * different game (its exe won't be at LBA 23), the wrong region, a .cue/.iso/.mp3 chosen by mistake,
+ * or a truncated image -- for the price of one sector read. The caller (pc_bootstrap.c) treats a
+ * failure as fatal and tells the user to supply the right image, rather than booting into garbage.
+ * (Region-EXACT verification would MD5 the boot exe from LBA 23 against 596bb082...; not done here
+ * to keep mount instant and avoid rejecting valid alternate dumps -- this magic check passes for any
+ * genuine Vandal Hearts (USA) .bin, since the ISO layout fixes SLUS_004.47 at LBA 23.) */
+#define SLUS_BOOT_LBA 23
+
+/* Public: does the currently-mounted image carry Vandal Hearts (USA)'s SLUS_004.47 boot signature at
+ * LBA 23? 1 = yes, 0 = no / no disc mounted / read failed. */
+int PC_CdDiscSignatureOk(void) {
+    unsigned char sec[SECTOR_RAW_SIZE];
+    long off = (long)SLUS_BOOT_LBA * SECTOR_RAW_SIZE;
+    if (!s_disc) return 0;
+    if (fseek(s_disc, off, SEEK_SET) != 0) return 0;
+    if (fread(sec, 1, SECTOR_RAW_SIZE, s_disc) != (size_t)SECTOR_RAW_SIZE) return 0;
+    return memcmp(sec + SECTOR_DATA_OFFSET, "PS-X EXE", 8) == 0;   /* same data offset as CdRead */
+}
+
 int PC_CdMount(const char *discImagePath) {
     if (s_disc) {
         fclose(s_disc);
@@ -168,7 +191,7 @@ int PC_CdMount(const char *discImagePath) {
     s_targetLBA = 0;
     s_motorStarted = 0;
     s_pendingReadUntilMs = 0;
-    return s_disc != NULL;
+    return s_disc != NULL;   /* whether the file opened; content is validated via PC_CdDiscSignatureOk */
 }
 
 int CdInit(void) {
@@ -176,7 +199,7 @@ int CdInit(void) {
 }
 
 CdlLOC *CdIntToPos(int i, CdlLOC *p) {
-    long frames = (long)i + MSF_PREGAP_SECTORS;
+    int frames = (int)i + MSF_PREGAP_SECTORS;
     p->minute = toBCD((int)(frames / (60 * 75)));
     p->second = toBCD((int)((frames / 75) % 60));
     p->sector = toBCD((int)(frames % 75));
@@ -184,8 +207,8 @@ CdlLOC *CdIntToPos(int i, CdlLOC *p) {
     return p;
 }
 
-static long CdPosToLBA(const CdlLOC *p) {
-    long frames = (long)fromBCD(p->minute) * 60 * 75 + (long)fromBCD(p->second) * 75 + fromBCD(p->sector);
+static int CdPosToLBA(const CdlLOC *p) {
+    int frames = (int)fromBCD(p->minute) * 60 * 75 + (int)fromBCD(p->second) * 75 + fromBCD(p->sector);
     return frames - MSF_PREGAP_SECTORS;
 }
 
@@ -211,7 +234,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
              * here caused a reset storm -> constant underrun -> silence. Just stop feeding new
              * sectors and keep the source, its ~0.6s of queued audio, the base LBA and the
              * ADPCM history, so the same-track resume (CdlSeekL/CdlReadN below) continues
-             * seamlessly. A genuinely long pause simply drains the queue and goes quiet. */
+             * seamlessly. A genuinely int pause simply drains the queue and goes quiet. */
             s_xaStreaming = 0;
             /* Movie_Finish (src/cd.c) issues CdlPause at movie end -> stop decoding new movie
              * frames, but LEAVE the last decoded frame on the overlay so a wait-for-button movie
@@ -271,6 +294,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
                      * old stream + ADPCM history. */
                     PC_XaReset();
                     s_xaBaseLBA = s_targetLBA;
+                    s_xaMatchedYet = 0;   /* haven't seen this track's (file,chan) sectors yet */
                 }
                 if (com == CdlSeekL) {
                     /* SEEKING: reposition the cursor and DO NOT feed audio yet. On real hardware a
@@ -313,8 +337,19 @@ int CdControl(u_char com, u_char *param, u_char *result) {
 
 /* Stop reading after this many consecutive sectors with no matching-channel audio -> the track's
  * interleaved data has ended (the CD would EOF/loop here). Well above the ~8-sector 1/8 interleave
- * gap so we don't cut a live track. Setting base=-1 lets the game's next (loop/new-track) seek restart. */
+ * gap so we don't cut a live track. Setting base=-1 lets the game's next (loop/new-track) seek restart.
+ * IMPORTANT: only applied AFTER the first matching sector (s_xaMatchedYet). A track whose (file,chan)
+ * stream begins deep inside a shared multi-song interleave (e.g. the epilogue ocarina, XA 187: its
+ * (9,5) sectors don't start until ~400 sectors past its seek LBA -- everything before is other files'
+ * audio) would otherwise hit this limit and give up BEFORE its data begins. Real hardware reads
+ * through non-matching sectors until the filter matches; mirror that -- read through until we've seen
+ * at least one matching sector, only then treat a int miss run as end-of-track. See bugreport-04. */
 #define XA_END_MISS_LIMIT 150
+/* Bounded search for the FIRST matching sector after a seek (before streaming has started). Real
+ * hardware reads through non-matching sectors indefinitely, but we cap it so a genuinely bad
+ * filter/LBA can't scan the whole disc forever. ~400 is the largest real lead-in seen (XA 187);
+ * this leaves a wide margin yet ends within ~a dozen frames if nothing ever matches. */
+#define XA_PREMATCH_SCAN_LIMIT 4500
 void PC_CdXaUpdate(void) {
     static int s_miss = 0;               /* consecutive non-matching sectors -> track end        */
     if (s_xaStreaming && s_disc) {
@@ -322,7 +357,7 @@ void PC_CdXaUpdate(void) {
         int guard = 0;
         while (PC_XaQueuedBuffers() < target && guard++ < XA_MAX_SECTORS_PER_PUMP) {
             unsigned char raw[SECTOR_RAW_SIZE];
-            long off = s_xaCursorLBA * (long)SECTOR_RAW_SIZE;
+            int off = s_xaCursorLBA * (int)SECTOR_RAW_SIZE;
             if (fseek(s_disc, off, SEEK_SET) != 0 ||
                 fread(raw, 1, SECTOR_RAW_SIZE, s_disc) != (size_t)SECTOR_RAW_SIZE) {
                 s_xaStreaming = 0; s_xaBaseLBA = -1;   /* end of disc */
@@ -330,8 +365,9 @@ void PC_CdXaUpdate(void) {
                 break;
             }
             int queued = PC_XaSubmitSector(raw, s_xaFile, s_xaChan);
+            if (queued) s_xaMatchedYet = 1;
             s_miss = queued ? 0 : (s_miss + 1);
-            if (s_miss >= XA_END_MISS_LIMIT) {
+            if (s_miss >= (s_xaMatchedYet ? XA_END_MISS_LIMIT : XA_PREMATCH_SCAN_LIMIT)) {
                 /* track's interleaved data ended -- stop reading (let queued audio finish);
                  * base=-1 so the game's next seek (loop or new track) restarts cleanly. Tell pc_xa the
                  * stream ENDED (vs a momentary underrun) so PC_XaService stops re-issuing alSourcePlay
@@ -397,7 +433,7 @@ int CdSync(int mode, u_char *result) {
     return CdlComplete;
 }
 
-int CdRead(int sectors, u_long *buf, int mode) {
+int CdRead(int sectors, unsigned int *buf, int mode) {
     (void)mode;
     if (!s_disc || sectors <= 0) {
         s_lastReadResult = -1;
@@ -412,7 +448,7 @@ int CdRead(int sectors, u_long *buf, int mode) {
      * match real hardware's pacing. */
     unsigned char *out = (unsigned char *)buf;
     for (int i = 0; i < sectors; i++) {
-        long offset = (s_targetLBA + i) * (long)SECTOR_RAW_SIZE + SECTOR_DATA_OFFSET;
+        int offset = (s_targetLBA + i) * (int)SECTOR_RAW_SIZE + SECTOR_DATA_OFFSET;
         if (fseek(s_disc, offset, SEEK_SET) != 0 ||
             fread(out + (size_t)i * SECTOR_DATA_SIZE, 1, SECTOR_DATA_SIZE, s_disc) != SECTOR_DATA_SIZE) {
             s_lastReadResult = -1;
@@ -457,7 +493,7 @@ int CdReadSync(int mode, u_char *result) {
     return s_lastReadResult;
 }
 
-int CdRead2(long mode) {
+int CdRead2(int mode) {
     s_mode = (unsigned char)mode;
     /* Real MDEC frame decode is still deferred (movies render black), but CdRead2 in
      * Stream|RT mode is also what STARTS a movie's interleaved XA-ADPCM audio on real
@@ -496,7 +532,7 @@ int CdRead2(long mode) {
     return 0;
 }
 
-u_long CdReadyCallback(void (*func)()) {
+unsigned int CdReadyCallback(void (*func)()) {
     (void)func;
     return 0; /* no async callback delivery -- CdRead already completed by the time it returns */
 }
@@ -510,18 +546,18 @@ void DecDCTReset(int mode) {
     (void)mode;
 }
 
-int DecDCTvlc(u_long *bs, u_long *buf) {
+int DecDCTvlc(unsigned int *bs, unsigned int *buf) {
     (void)bs;
     (void)buf;
     return 0;
 }
 
-void DecDCTin(u_long *buf, int mode) {
+void DecDCTin(unsigned int *buf, int mode) {
     (void)buf;
     (void)mode;
 }
 
-void DecDCTout(u_long *buf, int size) {
+void DecDCTout(unsigned int *buf, int size) {
     /* Real MDEC video decode is deferred (a real video codec undertaking,
      * out of scope -- see the file header comment). Doing nothing here
      * left the movie's on-screen region showing whatever was already in
@@ -531,10 +567,10 @@ void DecDCTout(u_long *buf, int size) {
      * unimplemented video frame. Zeroing it instead shows a clean black
      * region for the movie's duration -- still not real video, but an
      * honest "nothing rendered here" instead of misleading garbage. */
-    if (buf) memset(buf, 0, (size_t)size * sizeof(u_long));
+    if (buf) memset(buf, 0, (size_t)size * sizeof(unsigned int));
 }
 
-u_long DecDCToutCallback(void (*func)()) {
+unsigned int DecDCToutCallback(void (*func)()) {
     (void)func;
     return 0;
 }
@@ -600,10 +636,10 @@ u_long DecDCToutCallback(void (*func)()) {
  * tolerance. */
 #define CALLS_PER_MOVIE_FRAME 4
 
-static u_long s_movieFrameCounter = 0;
+static unsigned int s_movieFrameCounter = 0;
 static int s_movieCallsSinceFrame = 0;
 static StHEADER s_fakeMovieHeader;
-static u_long s_fakeMovieSectorData[2];
+static unsigned int s_fakeMovieSectorData[2];
 
 /* ---- MDEC movie VIDEO decode (real FMV, 2026-07-15) ------------------------------------------
  * The frame PACING above is faked (StGetNext just advances a counter); this decodes the ACTUAL
@@ -618,11 +654,11 @@ static void MovieRenderFrame(int frameNo) {
     if (frameNo < s_movieScanFrame) {           /* looped/restarted -> rewind cursor */
         s_movieScanLBA = s_movieBaseLBA; s_movieScanFrame = 0;
     }
-    long lba = s_movieScanLBA;
+    int lba = s_movieScanLBA;
     int bsLen = 0, w = 320, h = 240, got = 0, ssize = 9, guard = 0;
     unsigned char sec[SECTOR_RAW_SIZE];
     while (guard++ < 6000) {
-        if (fseek(s_disc, lba * (long)SECTOR_RAW_SIZE, SEEK_SET) != 0) break;
+        if (fseek(s_disc, lba * (int)SECTOR_RAW_SIZE, SEEK_SET) != 0) break;
         if (fread(sec, 1, SECTOR_RAW_SIZE, s_disc) != SECTOR_RAW_SIZE) break;
         lba++;
         if (sec[16 + 2] & 0x04) continue;                       /* audio sector -> skip */
@@ -646,19 +682,19 @@ static void MovieRenderFrame(int frameNo) {
     }
 }
 
-void StSetRing(u_long *ring_addr, u_long ring_size) {
+void StSetRing(unsigned int *ring_addr, unsigned int ring_size) {
     (void)ring_addr;
     (void)ring_size;
 }
 
 void StUnSetRing(void) {}
 
-u_long StFreeRing(u_long *base) {
+unsigned int StFreeRing(unsigned int *base) {
     (void)base;
     return 0;
 }
 
-void StSetStream(u_long mode, u_long start_frame, u_long end_frame, int (*func1)(), int (*func2)()) {
+void StSetStream(unsigned int mode, unsigned int start_frame, unsigned int end_frame, int (*func1)(), int (*func2)()) {
     (void)mode;
     (void)start_frame;
     (void)end_frame;
@@ -671,7 +707,7 @@ void StSetStream(u_long mode, u_long start_frame, u_long end_frame, int (*func1)
     s_movieCallsSinceFrame = 0;
 }
 
-u_long StGetNext(u_long **addr, u_long **header) {
+unsigned int StGetNext(unsigned int **addr, unsigned int **header) {
     /* Always succeeds immediately (see the comment above for why) -- only the reported
      * frameCount is paced, advancing once every CALLS_PER_MOVIE_FRAME calls. cd.c's own
      * Movie_GetNextFrame() then correctly compares that against the real s_totalFrames_80123268
@@ -693,7 +729,7 @@ u_long StGetNext(u_long **addr, u_long **header) {
     s_fakeMovieSectorData[1] = 0;
 
     *addr = s_fakeMovieSectorData;
-    *header = (u_long *)&s_fakeMovieHeader;
+    *header = (unsigned int *)&s_fakeMovieHeader;
     return 0;
 }
 

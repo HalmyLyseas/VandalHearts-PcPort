@@ -15,14 +15,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <stdint.h>
+#include <dirent.h>           /* opendir/readdir -- disc-image auto-detect (portable; MinGW provides it) */
+
+#if defined(_WIN32)
+/* Windows (MinGW-w64, Stage 2.4): Win32 replaces the POSIX facilities used below -- VirtualAlloc for
+ * the fixed PSX RAM ranges, VirtualProtect (over the PE sections) for the .rodata remap. There is no
+ * POSIX signal/backtrace/mmap path here: the 64-bit build absorbs transient PSX NULL reads with
+ * source-level PC_PORT guards, not a fault handler, so Windows needs no signal machinery to run. */
+#include <windows.h>          /* VirtualAlloc, VirtualProtect, GetModuleHandle, PE headers, GetModuleFileNameA */
+#else
 #include <unistd.h>
 #include <sys/mman.h>
-#include <limits.h>
 #include <signal.h>
 #include <execinfo.h>
 #include <ucontext.h>         /* ucontext_t, greg_t, REG_* -- for the NULL-read fixup handler */
 #include <fcntl.h>            /* open() for the null-read log */
-#include <stdint.h>
+#endif
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>      /* _NSGetExecutablePath */
+#endif
 
 #include "pc_platform.h"
 
@@ -93,6 +107,23 @@
 #define PSX_NULL_MIRROR_SIZE PSX_RAM_SIZE
 
 static int ReservePsxMemory(void *base, size_t size, const char *label) {
+#if defined(_WIN32)
+    /* Win32 has no mmap: VirtualAlloc the fixed low address directly. On Win64 these PSX ranges
+     * (0x1f800000, 0x80000000) sit in the low 2GB of a 128TB user space and are normally free; if
+     * one is taken, VirtualAlloc returns a different/NULL address and we warn + continue, matching
+     * the POSIX branch's non-fatal behaviour. */
+    void *p = VirtualAlloc(base, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (p == NULL || p != base) {
+        fprintf(stderr, "PC_Bootstrap: could not reserve %s at %p (%s) -- "
+                        "hardcoded scratch-buffer addresses in already-decompiled code "
+                        "will crash if used\n",
+                label, base, p == NULL ? "VirtualAlloc failed" : "got a different address");
+        if (p) VirtualFree(p, 0, MEM_RELEASE);
+        return 0;
+    }
+    fprintf(stderr, "PC_Bootstrap: reserved %s at %p (%zu bytes)\n", label, p, size);
+    return 1;
+#else
     void *p = mmap(base, size, PROT_READ | PROT_WRITE,
                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
     if (p == MAP_FAILED || p != base) {
@@ -113,6 +144,7 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
     __asan_unpoison_memory_region(p, size);
 #endif
     return 1;
+#endif /* _WIN32 */
 }
 
 static int VhNullFixupEnabled(void);   /* defined below with the NULL-read fixup handler */
@@ -144,17 +176,149 @@ static void PC_ReservePsxRam(void) {
  * executable's own real location regardless of the caller's cwd, so the
  * default is anchored to that instead: build/vandalhearts_pc's own
  * directory, four levels up to the repo layout's game/ sibling. */
+/* Stage 2.4: the running executable's absolute path, per-OS. Returns 1 on success. Forward slashes
+ * in the CONSTRUCTED path below work on all three (Win32 accepts '/'), but the RETURNED exe path may
+ * use '\' on Windows, so the caller strips either separator. */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+static int PC_GetExePath(char *out, size_t outSize) {
+#if defined(_WIN32)
+    DWORD n = GetModuleFileNameA(NULL, out, (DWORD)outSize);
+    return (n > 0 && (size_t)n < outSize);
+#elif defined(__APPLE__)
+    uint32_t sz = (uint32_t)outSize;
+    return _NSGetExecutablePath(out, &sz) == 0;   /* fails (sz set to needed) if buffer too small */
+#else /* Linux + other /proc systems */
+    ssize_t len = readlink("/proc/self/exe", out, outSize - 1);
+    if (len <= 0) return 0;
+    out[len] = '\0';
+    return 1;
+#endif
+}
+
+/* The executable's own directory (dirname of PC_GetExePath), stripping either separator. Returns 1
+ * on success. Shared by the disc auto-detect and the .ini loader. */
+static int PC_GetExeDir(char *out, size_t outSize) {
+    char *sep, *bslash;
+    if (!PC_GetExePath(out, outSize)) return 0;
+    sep = strrchr(out, '/');
+    bslash = strrchr(out, '\\');                    /* Windows separator */
+    if (bslash && (!sep || bslash > sep)) sep = bslash;
+    if (!sep) return 0;
+    *sep = '\0';
+    return 1;
+}
+
+/* The directory where the *end user's* files live (disc image, vandalhearts.ini). Normally this is
+ * just the executable's own directory (PC_GetExeDir). But under an AppImage the executable runs from
+ * a read-only squashfs mounted at /tmp/.mount_XXXX/usr/bin -- the user can't drop their disc there.
+ * The AppImage runtime exports $APPIMAGE = the absolute path of the .AppImage file itself, so its
+ * dirname is where the user actually keeps things. Prefer that when present; otherwise fall back to
+ * the exe dir. Harmless on Windows/native Linux (env var simply unset). Returns 1 on success. */
+static int PC_GetDeployDir(char *out, size_t outSize) {
+    const char *appimage = getenv("APPIMAGE");   /* set only when running as an AppImage */
+    if (appimage && *appimage) {
+        char *sep;
+        snprintf(out, outSize, "%s", appimage);
+        sep = strrchr(out, '/');
+        if (sep) { *sep = '\0'; return 1; }
+    }
+    return PC_GetExeDir(out, outSize);
+}
+
+/* Portable "set env var" -- MinGW spells setenv() _putenv_s(). */
+#if defined(_WIN32)
+#define PC_Setenv(k, v) _putenv_s((k), (v))
+#else
+#define PC_Setenv(k, v) setenv((k), (v), 1)
+#endif
+
+/* Stage 2.4 QoL: load <exedir>/vandalhearts.ini so end users configure the game by editing a file
+ * instead of setting environment variables. Format is plain `KEY=VALUE`, one per line; INI
+ * [section] headers and ';' / '#' comment lines are ignored (sections are cosmetic -- keys are the
+ * VH_* names directly). Precedence is env var > .ini > built-in default: a KEY already present in
+ * the real environment is NOT overridden, so scripts/power users still win, and the file only fills
+ * in what's unset. Runs at constructor priority 101 -- before PC_ReservePsxRam (VH_NULL_FIXUP) and
+ * the window/audio init (VH_SCALE, ...) read anything. Absent file => silently all-defaults. */
+__attribute__((constructor(101)))
+static void PC_LoadIniConfig(void) {
+    char dir[PATH_MAX], iniPath[PATH_MAX], line[512];
+    FILE *f;
+    if (!PC_GetDeployDir(dir, sizeof(dir))) return;   /* AppImage: next to the .AppImage, not the mount */
+    snprintf(iniPath, sizeof(iniPath), "%s/vandalhearts.ini", dir);
+    f = fopen(iniPath, "r");
+    if (!f) return;
+    while (fgets(line, sizeof(line), f)) {
+        char *p = line, *eq, *key, *val, *end;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == ';' || *p == '#' || *p == '[' || *p == '\0' || *p == '\n' || *p == '\r') continue;
+        eq = strchr(p, '=');
+        if (!eq) continue;
+        *eq = '\0';
+        key = p;
+        val = eq + 1;
+        end = key + strlen(key);                    /* trim trailing ws on key */
+        while (end > key && (end[-1] == ' ' || end[-1] == '\t')) *--end = '\0';
+        while (*val == ' ' || *val == '\t') val++;   /* trim leading ws on value */
+        end = val + strlen(val);                     /* trim trailing ws/newline on value */
+        while (end > val && (end[-1]=='\n'||end[-1]=='\r'||end[-1]==' '||end[-1]=='\t')) *--end = '\0';
+        if (strncmp(key, "VH_", 3) != 0) continue;   /* only our own keys */
+        if (*val == '\0' || getenv(key) != NULL) continue;  /* env var wins; skip empty */
+        PC_Setenv(key, val);
+        fprintf(stderr, "PC_Config: %s=%s (from vandalhearts.ini)\n", key, val);
+    }
+    fclose(f);
+}
+
+/* Case-insensitive ".bin" suffix test (no strcasecmp dependency -- MinGW spells it _stricmp). */
+static int HasBinExt(const char *name) {
+    size_t n = strlen(name);
+    const char *e;
+    if (n < 4) return 0;
+    e = name + n - 4;
+    return e[0] == '.' && (e[1]|0x20) == 'b' && (e[2]|0x20) == 'i' && (e[3]|0x20) == 'n';
+}
+
+/* Return (into out) the first "*.bin" found directly inside `dir`, or 0 if none / dir unreadable.
+ * Forward slash in the joined path is fine on all three OSes (Win32 accepts '/'). */
+static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
+    DIR *d = opendir(dir);
+    struct dirent *ent;
+    if (!d) return 0;
+    while ((ent = readdir(d)) != NULL) {
+        if (HasBinExt(ent->d_name)) {
+            snprintf(out, outSize, "%s/%s", dir, ent->d_name);
+            closedir(d);
+            return 1;
+        }
+    }
+    closedir(d);
+    return 0;
+}
+
+/* Locate the disc image with NO configuration needed for the common cases (Stage 2.4 QoL). Anchored
+ * to the executable's own directory (via PC_GetExePath, cwd-independent), tried in order:
+ *   1. a `game/` folder next to the .exe holding a *.bin  -- the recommended portable-binary layout;
+ *   2. a *.bin sitting directly beside the .exe;
+ *   3. the dev repo layout (game/ four levels up from platform/pc/build*).
+ * VH_DISC_IMAGE (checked by the caller) still overrides all of this. Whatever this returns, a failed
+ * mount prints the path + a hint, so a wrong guess is self-explanatory rather than silent. */
 static const char *DefaultDiscPath(void) {
     static char path[PATH_MAX];
-    char exePath[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-    char *lastSlash;
-    if (len <= 0) return "../../../game/Vandal Hearts (USA).bin"; /* /proc unavailable: fall back to the old behavior */
-    exePath[len] = '\0';
-    lastSlash = strrchr(exePath, '/');
-    if (!lastSlash) return "../../../game/Vandal Hearts (USA).bin";
-    *lastSlash = '\0'; /* exePath is now the executable's directory, e.g. .../platform/pc/build */
-    snprintf(path, sizeof(path), "%s/../../../../game/Vandal Hearts (USA).bin", exePath);
+    char deployDir[PATH_MAX], exeDir[PATH_MAX], cand[PATH_MAX];
+    /* Where the user keeps their disc: next to the .AppImage when packaged, else the exe dir. */
+    if (PC_GetDeployDir(deployDir, sizeof(deployDir))) {
+        /* 1. `game/` subfolder there */
+        snprintf(cand, sizeof(cand), "%s/game", deployDir);
+        if (FirstBinInDir(cand, path, sizeof(path))) return path;
+        /* 2. a .bin sitting directly there */
+        if (FirstBinInDir(deployDir, path, sizeof(path))) return path;
+    }
+    if (!PC_GetExeDir(exeDir, sizeof(exeDir)))
+        return "../../../game/Vandal Hearts (USA).bin"; /* exe path unavailable: old cwd-relative fallback */
+    /* 3. dev build layout: repo game/ four levels up from platform/pc/build */
+    snprintf(path, sizeof(path), "%s/../../../../game/Vandal Hearts (USA).bin", exeDir);
     return path;
 }
 
@@ -163,7 +327,9 @@ static const char *DefaultDiscPath(void) {
  *     binary makes those awkward), then keep running -- for "freeze" (state-stall) diagnosis.
  *   - SIGSEGV/SIGBUS: dump on a real crash before dying, so the window doesn't just vanish -- the
  *     backtrace (+ symbol names, linked -rdynamic) + gState point at where it crashed.
- * addr2line -e the binary on any bare addresses. */
+ * addr2line -e the binary on any bare addresses. (POSIX-only: backtrace()/signals. Windows relies on
+ * source-level PC_PORT guards + the debugger, so this diagnostics path is compiled out there.) */
+#if !defined(_WIN32)
 static void PC_DumpDiag(const char *tag) {
     void *frames[64];
     int n = backtrace(frames, 64);
@@ -172,6 +338,7 @@ static void PC_DumpDiag(const char *tag) {
     { extern void PC_DumpGameState(int fd); PC_DumpGameState(2); }   /* which state/scene/map */
 }
 static void PC_SigUsr1(int sig) { (void)sig; PC_DumpDiag("\n*** SIGUSR1: call stack (frozen?) ***\n"); }
+#endif /* !_WIN32 */
 
 /* ---- NULL-read fixup (Stage 2.2): make a transient PSX-style NULL/low-address access survive on a
  * native host, portably, instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
@@ -188,7 +355,7 @@ static int VhNullFixupEnabled(void) {
     return v;
 }
 
-#if defined(__i386__)
+#if defined(__i386__) && !defined(_WIN32)
 /* Decode the memory-access instruction at `ip` (the faulting one). Returns its length and, for a
  * load, the destination greg index + width to zero; for a store, isWrite=1 (nothing to zero, just
  * skip). Returns 0 for forms we don't handle yet (caller then crashes with diagnostics so this can be
@@ -250,8 +417,9 @@ static int VhDecodeMemAccess(const unsigned char *ip, int *outIsWrite, int *outG
     }
     return i;
 }
-#endif /* __i386__ */
+#endif /* __i386__ && !_WIN32 */
 
+#if !defined(_WIN32)
 /* Log a fixed-up NULL-region access once per unique instruction pointer (async-signal-safe-ish:
  * open/write/backtrace_symbols_fd, no malloc-heavy fprintf). */
 static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
@@ -276,7 +444,14 @@ static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
     }
 }
 
-#if defined(__i386__)
+/* Stage 2.3: available on x86-64 as well as x86-32. `REG_ERR` and the page-fault error-code
+ * layout are identical on both -- bit 1 set means the access was a write. This must NOT be
+ * gated to __i386__ along with the NULL instruction decoder: the .rodata fixup below depends
+ * on it and is still required under -m64 (the game mutates string literals in place). Windows is
+ * excluded: it has no ucontext_t/mprotect fault path -- the startup PE-section remap (below)
+ * makes .rodata writable there without any on-fault handler. */
+#if defined(__i386__) || defined(__x86_64__)
+#define PC_HAVE_WRITE_FAULT_INFO 1
 static int PC_IsWriteFault(void *ucv) {   /* x86 page-fault error code bit 1 == write */
     return (((ucontext_t *)ucv)->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
 }
@@ -317,7 +492,7 @@ static int PC_MakePageWritable(uintptr_t addr) {
     }
     return 1;
 }
-#endif /* __i386__ */
+#endif /* __i386__ || __x86_64__ */
 
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
@@ -342,8 +517,17 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
         }
         PC_DumpDiag("\n*** NULL-region fault but UNDECODABLE instruction -- extend VhDecodeMemAccess ***\n");
     }
+#endif /* __i386__ -- NULL instruction-decode fixup ends here */
+
     /* Write to the executable's read-only .rodata (in-place string-literal mutation): make the page
-     * writable and retry the store -- no instruction decode needed, and no /proc (see above). */
+     * writable and retry the store -- no instruction decode needed, and no /proc (see above).
+     *
+     * Stage 2.3: this is OUTSIDE the __i386__ gate on purpose. It used to sit inside it, which
+     * meant the -m64 build would have silently lost the .rodata fixup and hard-crashed on the
+     * first string-literal mutation (ShowExpDialog writing EXP digits into a literal -- the one
+     * fault still present in vh_null_reads.log after the Step-A guard pass). Unlike the NULL
+     * decoder, nothing here is 32-bit-specific: si_addr + the x86 write bit + mprotect. */
+#if defined(PC_HAVE_WRITE_FAULT_INFO)
     if (ucv && fault >= PSX_NULL_MIRROR_SIZE && PC_IsWriteFault(ucv) && PC_MakePageWritable(fault)) {
         return;                                    /* page now writable -> retry the faulting store */
     }
@@ -351,15 +535,99 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     PC_DumpDiag("\n*** CRASH: fatal signal, call stack ***\n");
     signal(sig, SIG_DFL); raise(sig);   /* restore default + re-raise so it dies for real (core, etc.) */
 }
+#endif /* !_WIN32 -- POSIX diagnostics + NULL/rodata on-fault handlers */
 
-/* NOTE: the game mutates read-only string literals in place (e.g. ShowExpDialog writes the EXP digits
- * into "You got     "), harmless on PSX where all RAM is writable. This used to be handled by a
- * startup remap of ALL .rodata to writable via /proc/self/maps; that /proc dependency (unavailable on
- * Windows/macOS) was replaced by the on-demand PC_MakePageWritable path in PC_SigCrash -- a write to a
- * read-only page now makes just that page writable and retries. No startup action needed. */
+/* ---- startup .rodata RW remap (Stage 2.4, cross-platform) -------------------------------------
+ *
+ * The game mutates read-only string literals in place (e.g. ShowExpDialog writes the EXP digits
+ * into "You got     "), harmless on PSX where all RAM is writable. Two mechanisms have existed:
+ * an old startup remap that parsed /proc/self/maps (Linux-only), and the on-demand
+ * PC_MakePageWritable() fault path above. The fault path is not portable: it needs a POSIX SIGSEGV
+ * handler (not Windows) and the x86 page-fault write bit (not ARM/Apple Silicon).
+ *
+ * So the running path is made signal/arch-free again, portably this time: at startup, make the
+ * executable's read-only DATA segments writable. No /proc, no signals, no instruction decode. The
+ * on-fault path stays as an x86 safety net for anything a platform's remap misses. Per-platform:
+ *   - Linux: dl_iterate_phdr -> mprotect each PF_R-only PT_LOAD of the main program.
+ *   - Windows (MinGW): PE section walk of the main module -> VirtualProtect each read-only,
+ *     non-executable initialized-data section (.rdata) to PAGE_READWRITE.
+ *   - macOS (Apple Silicon): dyld segment walk + mprotect  -- TODO, its 2.4 phase.
+ * Best-effort: failures are non-fatal (the on-fault path or a later crash will surface a real
+ * problem); success just means string-literal writes never fault. */
+#if defined(__linux__)
+#include <link.h>   /* dl_iterate_phdr, ElfW, PT_LOAD, PF_* */
+static int PC_RodataPhdrCb(struct dl_phdr_info *info, size_t size, void *unused) {
+    (void)size; (void)unused;
+    /* Main program only (listed first); shared-lib rodata needn't be touched. */
+    static int done = 0;
+    if (done) return 1;
+    done = 1;
+    long ps = sysconf(_SC_PAGESIZE);
+    if (ps <= 0) ps = 4096;
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr) *p = &info->dlpi_phdr[i];
+        if (p->p_type != PT_LOAD) continue;
+        if (p->p_flags & (PF_W | PF_X)) continue;   /* already writable, or code (leave RX) */
+        uintptr_t start = (uintptr_t)info->dlpi_addr + p->p_vaddr;
+        uintptr_t end   = start + p->p_memsz;
+        uintptr_t pstart = start & ~((uintptr_t)ps - 1);
+        uintptr_t pend   = (end + (uintptr_t)ps - 1) & ~((uintptr_t)ps - 1);
+        mprotect((void *)pstart, (size_t)(pend - pstart), PROT_READ | PROT_WRITE);
+    }
+    return 1;
+}
+static void PC_MakeRodataWritable(void) { dl_iterate_phdr(PC_RodataPhdrCb, NULL); }
+#elif defined(_WIN32)
+/* Windows (MinGW): walk the main module's PE section table and make every read-only,
+ * non-executable initialized-data section (.rdata, where string literals live) writable. This is
+ * the whole .rodata-write story on Windows -- there is no on-fault fallback here. */
+static void PC_MakeRodataWritable(void) {
+    HMODULE mod = GetModuleHandleA(NULL);
+    if (!mod) return;
+    BYTE *base = (BYTE *)mod;
+    IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base;
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return;
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return;
+    IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
+    unsigned i;
+    for (i = 0; i < nt->FileHeader.NumberOfSections; i++) {
+        DWORD ch = sec[i].Characteristics;
+        if ((ch & IMAGE_SCN_MEM_READ) && !(ch & IMAGE_SCN_MEM_WRITE) && !(ch & IMAGE_SCN_MEM_EXECUTE)) {
+            void *addr = base + sec[i].VirtualAddress;
+            SIZE_T sz = sec[i].Misc.VirtualSize ? sec[i].Misc.VirtualSize : sec[i].SizeOfRawData;
+            DWORD old;
+            VirtualProtect(addr, sz, PAGE_READWRITE, &old);
+        }
+    }
+}
+#else
+static void PC_MakeRodataWritable(void) {
+    /* macOS: implemented in its Stage-2.4 phase (dyld segment walk + mprotect). Until then that
+     * build relies on the on-fault path, so this is where its startup remap goes. */
+}
+#endif
+
+/* Fatal startup error the user can actually act on (wrong/missing disc). Prints to stderr (visible
+ * in a console launch) AND, on Windows, pops a message box so double-click users -- who have no
+ * console -- still see it. `path` is the disc path we tried, appended so it's clear what was wrong.
+ * Then exits: booting on into a blank window / garbage would only confuse. */
+static void PC_FatalDiscError(const char *title, const char *body, const char *path) {
+    fprintf(stderr, "\n*** %s ***\n%s\nDisc path tried: %s\n", title, body, path);
+#if defined(_WIN32)
+    {
+        char full[PATH_MAX + 512];
+        snprintf(full, sizeof(full), "%s\n\nDisc path tried:\n%s", body, path);
+        MessageBoxA(NULL, full, title, MB_OK | MB_ICONERROR);
+    }
+#endif
+    exit(1);
+}
 
 __attribute__((constructor))
 static void PC_Bootstrap(void) {
+    PC_MakeRodataWritable();            /* make string-literal writes work without faulting (portable) */
+#if !defined(_WIN32)
     signal(SIGUSR1, PC_SigUsr1);        /* kill -USR1 <pid> -> stack dump (freeze diagnosis) */
     /* SIGSEGV/SIGBUS via sigaction+SA_SIGINFO so the handler gets the faulting address (si_addr) and
      * CPU context (for the NULL-read fixup). SA_NODEFER lets a genuine re-fault inside the handler
@@ -373,19 +641,51 @@ static void PC_Bootstrap(void) {
         sigaction(SIGSEGV, &sa, NULL);
         sigaction(SIGBUS,  &sa, NULL);
     }
+#endif /* !_WIN32 -- no POSIX signal handlers on Windows (see notes above) */
     const char *discPath = getenv("VH_DISC_IMAGE");
     if (!discPath) discPath = DefaultDiscPath();
 
     if (!PC_CdMount(discPath)) {
-        fprintf(stderr, "PC_Bootstrap: failed to mount disc image '%s'\n", discPath);
-        fprintf(stderr, "  (set VH_DISC_IMAGE to the real .bin path if this default is wrong)\n");
-    } else {
-        fprintf(stderr, "PC_Bootstrap: mounted disc image '%s'\n", discPath);
+        PC_FatalDiscError("Vandal Hearts - disc image not found",
+            "Could not open a game disc image.\n\n"
+            "Put your Vandal Hearts (USA) .bin file in a \"game\" folder next to the "
+            "executable (or right beside it), or set the disc path via VH_DISC_IMAGE in "
+            "vandalhearts.ini (or the environment).", discPath);
     }
+    if (!PC_CdDiscSignatureOk()) {
+        PC_FatalDiscError("Vandal Hearts - wrong disc image",
+            "This does not look like a Vandal Hearts (USA) disc image: the SLUS_004.47 boot "
+            "signature is missing.\n\n"
+            "Use a raw .bin dump of Vandal Hearts (USA) (not a different game, region, or a "
+            ".cue/.iso file).", discPath);
+    }
+    fprintf(stderr, "PC_Bootstrap: mounted disc image '%s'\n", discPath);
 
     if (!PC_GpuInit(SCREEN_WIDTH, SCREEN_HEIGHT, "Vandal Hearts")) {
         fprintf(stderr, "PC_Bootstrap: failed to open a window (no display, or SDL2 issue)\n");
     } else {
-        fprintf(stderr, "PC_Bootstrap: opened a %dx%d window\n", SCREEN_WIDTH, SCREEN_HEIGHT);
+        int ww = SCREEN_WIDTH, wh = SCREEN_HEIGHT, sc = 1;
+        PC_GpuGetWindowSize(&ww, &wh, &sc);
+        fprintf(stderr, "PC_Bootstrap: opened a %dx%d window (%dx%d internal, VH_SCALE=%d)\n",
+                ww, wh, SCREEN_WIDTH, SCREEN_HEIGHT, sc);
     }
+}
+
+/* ---- Stage 2.3 UI-visibility probe (PC_DEBUG_UI_LOG) ------------------------------------
+ * The -m64 build renders terrain, sprites and the damage-number correctly but drops the Vandal
+ * Hearts logo, the compass and every textbox. Windows never call AddPrim themselves -- they
+ * compose into VRAM and spawn child sprite objects that AddObjPrim2 draws. This logs both ends
+ * so one run distinguishes "the window object never runs" from "it runs but its child sprites
+ * are hidden / off-screen / at a bad OT index". Enabled with VH_UI_LOG=1; the hooks that call it
+ * are PC_DEBUG_UI_LOG-gated and compile out of the matching build entirely. */
+void PC_DebugUiLog(const char *tag, int a, int b, int c, int d, int e, int f, int g, int h) {
+    static FILE *fp = NULL;
+    static int enabled = -1, lines = 0;
+    if (enabled < 0) { const char *e2 = getenv("VH_UI_LOG"); enabled = (e2 && e2[0] == '1'); }
+    if (!enabled || lines > 4000) return;
+    if (!fp) { fp = fopen("vh_ui_log.txt", "w");
+               if (!fp) { enabled = 0; return; }
+               fprintf(fp, "tag,a,b,c,d,e,f,g,h\n"); }
+    fprintf(fp, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n", tag, a, b, c, d, e, f, g, h);
+    if ((++lines % 64) == 0) fflush(fp);
 }
