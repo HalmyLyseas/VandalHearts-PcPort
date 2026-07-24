@@ -3,6 +3,49 @@
 #include "units.h"
 #include "field.h"
 
+#ifdef PC_DEBUG_PATH_STEP
+/* Two probes for the gTravelAscentCost/DescentCost overrun the ASAN sweep found (exchange/58,
+ * battle 5). The overrun is gTravelAscentCost[stepType][diff]; the open question is which index is
+ * out of range:
+ *   (a) stepType > 13  -> a garbage/uninitialised gUnits entry (a real state bug), or
+ *   (b) |diff| >= 20   -> a genuinely steep elevation step. Battle 5's boss reshapes the terrain
+ *       into a tall sand pyramid, so adjacent-tile elevation differences really can be large; on
+ *       hardware the [14][20] tables are contiguous with the next table, so this reads real data.
+ * PcPathStepProbe catches (a); PcTravelDiffProbe catches (b). Both are deduplicated, print only on
+ * the anomaly, and only read -- behaviour-neutral, and gated out of the matching build entirely. */
+#include <stdio.h>
+static void PcPathStepProbe(const char *fn, s32 z, s32 x, s32 unitIdx, s32 step) {
+   static struct { s16 idx; s16 step; } seen[64];
+   static int nSeen = 0;
+   int i;
+   if (step >= 0 && step <= 13) return;
+   for (i = 0; i < nSeen; i++)
+      if (seen[i].idx == (s16)unitIdx && seen[i].step == (s16)step) return;
+   if (nSeen < 64) { seen[nSeen].idx = (s16)unitIdx; seen[nSeen].step = (s16)step; nSeen++; }
+   fprintf(stderr, "PC_DEBUG_PATH_STEP: %s tile(z=%d,x=%d) unitIdx=%d -> step=%d (valid 0..13)\n",
+           fn, (int)z, (int)x, (int)unitIdx, (int)step);
+}
+#define PC_PATH_STEP_PROBE(fn, z, x, uidx, step) PcPathStepProbe(fn, z, x, uidx, step)
+
+/* Logs whenever stepType*20 + |diff| leaves the real [14][20]=280-byte table (i.e. the exact
+ * condition ASAN reports). Tracks and prints the running maximum |diff| so a single playthrough of
+ * a steep map yields the worst case needed to size a faithful fix. */
+static void PcTravelDiffProbe(const char *fn, s32 stepType, s32 diff) {
+   static s32 maxAbs = -1;
+   s32 a = diff < 0 ? -diff : diff;
+   if (stepType * 20 + a < 280) return; /* in bounds -- no divergence from hardware */
+   if (a <= maxAbs) return;
+   maxAbs = a;
+   fprintf(stderr, "PC_DEBUG_PATH_STEP: %s OOB access stepType=%d diff=%d "
+                   "(linear=%d, table=280) -- new max |diff|\n",
+           fn, (int)stepType, (int)diff, (int)(stepType * 20 + a));
+}
+#define PC_TRAVEL_DIFF_PROBE(fn, st, d) PcTravelDiffProbe(fn, st, d)
+#else
+#define PC_PATH_STEP_PROBE(fn, z, x, uidx, step) ((void)0)
+#define PC_TRAVEL_DIFF_PROBE(fn, st, d) ((void)0)
+#endif
+
 // TODO: goto matches more consistently, but might still be fake.
 
 /*// TODO: Clears up double-decrement inconsistencies?
@@ -225,6 +268,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
    queueOfs = 0;
    unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
    stepType = unit->step;
+   PC_PATH_STEP_PROBE("func_8002B3A8", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
    team = gMapUnitsPtr[z][x].s.team;
 
    for (i = 0; i < 5; i++) {
@@ -264,6 +308,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -286,6 +331,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -308,6 +354,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -330,6 +377,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -485,10 +533,12 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
    if (xx == 100 && zz == 100) {
       unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
       stepType = unit->step;
+      PC_PATH_STEP_PROBE("func_8002C1D8", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
       team = gMapUnitsPtr[z][x].s.team;
    } else {
       unit = &gUnits[gMapUnitsPtr[zz][xx].s.unitIdx];
       stepType = unit->step;
+      PC_PATH_STEP_PROBE("func_8002C1D8", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
       team = gMapUnitsPtr[zz][xx].s.team;
    }
 
@@ -525,6 +575,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
       if (z != PATH_STEP_INVALID) {
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -547,6 +598,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -569,6 +621,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -591,6 +644,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -769,6 +823,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
    queueOfs = 0;
    unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
    stepType = unit->step;
+   PC_PATH_STEP_PROBE("func_8002CF88", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
 
    team = gMapUnitsPtr[z][x].s.team;
 
@@ -804,6 +859,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
       if (z != PATH_STEP_INVALID) {
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -834,6 +890,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -864,6 +921,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -894,6 +952,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -1041,6 +1100,7 @@ void PopulateMovementGrid(s16 z_, s16 x_, s32 range, s32 gridNum) {
    queueOfs = 0;
    unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
    stepType = unit->step;
+   PC_PATH_STEP_PROBE("PopulateMovementGrid", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
    team = gMapUnitsPtr[z][x].s.team;
 
    for (i = 0; i < 5; i++) {
@@ -1080,6 +1140,7 @@ void PopulateMovementGrid(s16 z_, s16 x_, s32 range, s32 gridNum) {
          // North
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("PopulateMovementGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -1106,6 +1167,7 @@ void PopulateMovementGrid(s16 z_, s16 x_, s32 range, s32 gridNum) {
          // South
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("PopulateMovementGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -1130,6 +1192,7 @@ void PopulateMovementGrid(s16 z_, s16 x_, s32 range, s32 gridNum) {
          // East
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("PopulateMovementGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -1154,6 +1217,7 @@ void PopulateMovementGrid(s16 z_, s16 x_, s32 range, s32 gridNum) {
          // West
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
+         PC_TRAVEL_DIFF_PROBE("PopulateMovementGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {

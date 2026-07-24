@@ -1344,6 +1344,10 @@ void PerformParamlessAudioCommand(s16 cmd) {
 }
 
 void PerformAudioCommand(s16 cmd) {
+#ifdef PC_DEBUG_AUDIO_LOG
+   { extern void PC_DebugAudioCmdLog(int cmd, int enabled);
+     PC_DebugAudioCmdLog((int)(u16)cmd, gAudioEnabled); }
+#endif
    if (gAudioEnabled) {
       switch ((u8)(cmd >> 8)) {
       case 0:
