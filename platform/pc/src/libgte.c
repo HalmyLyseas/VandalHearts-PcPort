@@ -3,8 +3,7 @@
  *
  * A single software model of the PS1 GTE coprocessor's register state and
  * opcodes, built from the public Nocash PSX Specifications hardware
- * reference (psx-spx, cloned locally at
- * vandalHearts_decomp/psx-spx.github.io/docs/geometrytransformationenginegte.md)
+ * reference (psx-spx.github.io/docs/geometrytransformationenginegte.md)
  * -- register numbering, RTPS/RTPT/NCLIP/AVSZ4/OP/NCCS formulas, saturation
  * rules, and the exact Unsigned Newton-Raphson (UNR) hardware division
  * algorithm (including its 257-entry lookup table, generated here from the

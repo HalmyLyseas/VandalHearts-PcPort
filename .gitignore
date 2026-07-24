@@ -7,7 +7,14 @@
 /exchange/
 /context.txt
 
-# proprietary Sony PsyQ SDK headers (from sozud/psy-q, unclear redistribution rights) —
+# Local toolchain + SDK source + game data, moved under external/ from sibling dirs (2026-07-24).
+# MUST NEVER be committed — proprietary and/or large: the Sony PsyQ SDK source (external/psy-q),
+# the game disc images + SLUS_004.47 (external/game), and the old-gcc / maspsx / binutils toolchain
+# (external/old-gcc, external/maspsx, external/toolchain). external/references lists the upstream
+# URLs to re-obtain any of it. This whole tree is local-build-use-only.
+/external/
+
+# proprietary Sony PsyQ SDK headers (from a v3.3 SDK mirror, unclear redistribution rights) —
 # local build use only, must never be committed/pushed. See exchange/00-progress-checkpoint.md.
 /include/PsyQ/
 

@@ -36,16 +36,22 @@ casing, follow this pattern rather than changing global flags.
 
 ## Toolchain / dependency inventory
 
-| Dependency | Purpose | Status as of 2026-07-10 |
+**Local dependency layout:** all local, non-committed build dependencies live under **`vh/external/`**
+(gitignored): `external/maspsx`, `external/old-gcc`, `external/toolchain` (cc1 symlinks),
+`external/psy-q` (the PsyQ SDK header source), and `external/game` (disc images + `SLUS_004.47`).
+**`external/references`** lists the upstream URLs to re-obtain any of them. Paths below are relative to
+the `vh/` repo root (where you run `make`).
+
+| Dependency | Purpose | Status |
 |---|---|---|
 | `splat` (Python pkg) | disassembly/extraction (`make extract`) | **done 2026-07-10** — system package `python-splat64` (0.41.0, upstream `ethteck/splat`) installed. Ran directly against `SLUS_004.47.yaml`: full config parsed with zero schema errors, got exactly to opening the (absent) base binary before failing — correct/expected failure point, confirms compatibility. |
 | `tools/sortSymbols.py` (+ its `symbols.csv` input) | sorts `symbol_addrs.txt` before splat runs (`SORT_SYM` step) | **missing from the repo** (a bespoke script + personal spreadsheet the original author never committed). It is **skippable**: `symbol_addrs.txt` as committed is already sorted sufficiently — run `splat` directly instead of via `make extract`, which unconditionally invokes the missing script. |
-| `tools/maspsx/maspsx.py` | post-process GCC output for PSX `as` | **done 2026-07-10** — user cloned `https://github.com/mkst/maspsx` to `vandalHearts_decomp/maspsx/`; symlinked `vh/tools/maspsx -> ../../maspsx`. Verified it runs through the symlink. |
-| `cc1_v263_decompals`, `cc1_v257_decompals` | old GCC 2.x compiler frontends | **done 2026-07-10** — no Docker in this environment, so downloaded prebuilt release tarballs directly from `decompals/old-gcc`'s Releases page (tag `0.17`: `gcc-2.6.3-psx.tar.gz`, `gcc-2.5.7-psx.tar.gz`) rather than building via their Dockerfiles. Extracted `cc1` binaries into `vandalHearts_decomp/old-gcc/build-gcc-{2.6.3,2.5.7}-psx/`, verified executable, symlinked into `vandalHearts_decomp/toolchain/bin/` under the exact names the Makefile expects. **Must be on `PATH`** when running `make` — see "Wiring up cc1" below. |
+| `tools/maspsx/maspsx.py` | post-process GCC output for PSX `as` | **present** — a `mkst/maspsx` clone at `external/maspsx/`; `vh/tools/maspsx` symlinks to it (`-> ../external/maspsx`), which is how the Makefile (`tools/maspsx`) reaches it. |
+| `cc1_v263_decompals`, `cc1_v257_decompals` | old GCC 2.x compiler frontends | **present** — prebuilt `cc1` binaries from `decompals/old-gcc`'s Releases (tag `0.17`: `gcc-2.6.3-psx.tar.gz`, `gcc-2.5.7-psx.tar.gz`; no Docker build needed) under `external/old-gcc/build-gcc-{2.6.3,2.5.7}-psx/`, symlinked into `external/toolchain/bin/` under the exact names the Makefile expects. **Must be on `PATH`** when running `make` — see "Wiring up cc1" below. |
 | `{as,ld,objcopy}` for MIPS r3000 | cross binutils | **done 2026-07-10** — system `mipsel-linux-gnu-binutils` (2.46.1) works; use `make CROSS=mipsel-linux-gnu- ...` instead of editing the Makefile's hardcoded `mips-suse-linux-` prefix. See "Toolchain vendor triple" below. |
 | `python3.11` | required interpreter version (pinned in Makefile) | **not installed** (found 2026-07-10) — only `python3.14` is present, which is what `python-splat64` targets. Use `make PYTHON=python3 ...` rather than editing the Makefile. |
 | `include/PsyQ/*.h` (libgpu.h, libgte.h, libcd.h, libpress.h, …) | headers the app code includes directly | **user-supplied**, gitignored — real Sony PsyQ **v3.3** SDK `INCLUDE/` headers at `vh/include/PsyQ/` (lowercase). Proprietary, never committed. Validate a candidate set by compiling `src/graphics.c` through the full pipeline. A modern hosted header set does NOT work. See "PsyQ SDK headers" below. |
-| `SLUS_004.47` (original exe), `LIB34.ZIP` (PsyQ v3.4 lib objects), full ISO | base game files, needed for extraction + asset/audio data | **`SLUS_004.47` done 2026-07-10** — extracted from the user's own CHD via `chdman`+`bchunk`+`7z`, MD5-verified exact match. See "Getting the base game files" below. `LIB34.ZIP` not needed by the current pipeline (see there); full ISO/BIN kept in `vandalHearts_decomp/game/` for later asset/audio extraction (Phase D) if needed. |
+| `SLUS_004.47` (original exe), `LIB34.ZIP` (PsyQ v3.4 lib objects), full ISO | base game files, needed for extraction + asset/audio data | **`SLUS_004.47` done 2026-07-10** — extracted from the user's own CHD via `chdman`+`bchunk`+`7z`, MD5-verified exact match. See "Getting the base game files" below. `LIB34.ZIP` not needed by the current pipeline (see there); disc images + `SLUS_004.47` kept in `external/game/` for later asset/audio extraction if needed. |
 
 Before trusting this table, re-verify — it reflects a single point-in-time check, not a
 guarantee these stay missing.
@@ -78,7 +84,7 @@ used by this build at all — the Makefile compiles with the specific prebuilt o
 frontends (`cc1_v263_decompals`/`cc1_v257_decompals`), not a modern distro GCC. Don't spend
 time trying to make the modern `gcc` fit into the `CC` variable.
 
-## Wiring up cc1 (done 2026-07-10)
+## Wiring up cc1
 
 The Makefile references `cc1_v263_decompals` (global default `CC`) and, separately,
 `cc1_v257_decompals` as a **literal hardcoded string** in a target-specific override
@@ -88,13 +94,13 @@ redirect that one target-specific line, since it's a fixed string, not a variabl
 So both names must resolve via `PATH` lookup exactly as spelled — there's no way to point
 them elsewhere without editing the Makefile (which we're avoiding).
 
-Fix: `vandalHearts_decomp/toolchain/bin/` contains symlinks
+Fix: `external/toolchain/bin/` contains symlinks
 `cc1_v263_decompals -> ../../old-gcc/build-gcc-2.6.3-psx/cc1` and
-`cc1_v257_decompals -> ../../old-gcc/build-gcc-2.5.7-psx/cc1`. Prepend that directory to
-`PATH` before invoking `make`, e.g. from `vh/`:
+`cc1_v257_decompals -> ../../old-gcc/build-gcc-2.5.7-psx/cc1` (relative within `external/`). Prepend
+that directory to `PATH` before invoking `make`, from `vh/`:
 
 ```
-PATH="$(cd .. && pwd)/toolchain/bin:$PATH" make PYTHON=python3 CROSS=mipsel-linux-gnu- ...
+PATH="$(pwd)/external/toolchain/bin:$PATH" make PYTHON=python3 CROSS=mipsel-linux-gnu- ...
 ```
 
 Both binaries are 32-bit x86 ELF, statically linked — verified they execute on this x86_64
@@ -139,20 +145,19 @@ useful for identifying PsyQ functions in a disassembly, not for compilable heade
 convert original PsyQ `.OBJ`/`.LIB` objects to modern-linkable form — but this pipeline extracts
 PsyQ code as raw disassembly via splat and never relinks `LIB34.ZIP`, so it isn't needed.
 
-## Getting the base game files (done 2026-07-10)
+## Getting the base game files
 
-User's own `Vandal Hearts (USA).chd` in `vandalHearts_decomp/game/` (watch out — the first
-file placed there was accidentally a different game's CHD; verify the volume label before
-trusting a CHD is the right one). Extraction recipe:
+Your own `Vandal Hearts (USA).chd` in `external/game/` (watch out — verify the volume label
+before trusting a CHD is the right one). Extraction recipe, run from `vh/`:
 
 ```
-cd vandalHearts_decomp/game
+cd external/game
 chdman extractcd -i "Vandal Hearts (USA).chd" -o "Vandal Hearts (USA).cue"   # -> .bin + .cue
 bchunk -v "Vandal Hearts (USA).bin" "Vandal Hearts (USA).cue" "Vandal Hearts (USA)"  # -> standard 2048-byte-sector ISO
 7z l "Vandal Hearts (USA)01.iso"        # sanity check: volume label should be SLUS_00447, publisher KONAMI
 7z e "Vandal Hearts (USA)01.iso" -o. "SLUS_004.47" -r
-md5sum SLUS_004.47   # must be 596bb082a2de5f1fe977dd3d7e160b03 (the hash README.md has always cited)
-cp SLUS_004.47 ../../vh/SLUS_004.47
+md5sum SLUS_004.47   # must be 596bb082a2de5f1fe977dd3d7e160b03 (the hash README.md cites)
+cp SLUS_004.47 ../../SLUS_004.47   # -> vh/SLUS_004.47 (the build's base binary)
 ```
 
 `chdman` and `bchunk` were both already present on this system (`bchunk` via the `bchunk`
@@ -173,7 +178,7 @@ confirm `build/SLUS_004.47` is identical to the original. This is stage 1, fully
 cd vh
 python3 -m splat split SLUS_004.47.yaml    # run splat directly — sortSymbols.py/SORT_SYM is skippable, symbol_addrs.txt is sufficient alone
 make dirs
-PATH="$(cd .. && pwd)/toolchain/bin:$PATH" make PYTHON=python3 CROSS=mipsel-linux-gnu- check
+PATH="$(pwd)/external/toolchain/bin:$PATH" make PYTHON=python3 CROSS=mipsel-linux-gnu- check
 ```
 
 (The `PATH=`/`PYTHON=`/`CROSS=` bits are specific to this environment's installed package
