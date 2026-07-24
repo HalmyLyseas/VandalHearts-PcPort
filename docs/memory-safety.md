@@ -97,8 +97,8 @@ A full-game AddressSanitizer playthrough (chapters 1/4/6 + the final battle + cr
 out-of-bounds bugs** that static audit could not — the class where an index is simply wrong and only
 the consequence changes with pointer width. All were fixed `PERMUTER`-gated and byte-exact (e.g.
 `gClutIds[124]→128` — which clobbered adjacent state in the retail game too; `gWindowDisplayX/Y[16]→70`
-— which was overwriting live XA audio state; several travel-cost / AI-grid tables). See
-`exchange/58-asan-sweep.md` for the full list.
+— which was overwriting live XA audio state; several travel-cost / AI-grid tables). The full list is
+in the commit history (search `PERMUTER` array-widenings) and `docs/width-bugs.md`.
 
 ASAN's blind spot, worth knowing: a buffer that is a *slice* of a larger array
 (`gCardFileBufferPtr = &gScratch1[64]`) has no redzone between the slice and the rest, so overruns

@@ -127,7 +127,7 @@ software decoder feeding OpenAL:
   realtime mixing thread, so the feed is a cheap per-`VSync` top-up (`PC_XaService`) with no locking.
   Serial volume (`SsSetSerialVol`) maps to the source's `AL_GAIN`.
 
-**Scope** (validated against hardware via `exchange/45-xa-audio-track-map`): XA carries the
+**Scope** (validated against hardware with a BizHawk track map): XA carries the
 **intro/FMV audio** and the **streamed spell SFX** — notably the big elemental spells
 (Hurricane/Salamander/Avalanche/Plasma-Wave, XA files 17/18/19/22/23/33). There are **zero looping XA
 tracks** in the game, so this layer only ever streams finite one-shots.

@@ -14,9 +14,9 @@ symbols they always were. What changes is what those symbols *link to*.
 Two pieces make that swap happen:
 
 1. **Clean-room PsyQ headers** (`platform/pc/include/PsyQ/`). These declare the same function
-   signatures and struct layouts the game expects, reconstructed as functional facts (see
-   `exchange/02-phase-c-interface-contract.md`) — not copied from Sony's SDK. They are the *contract*:
-   as long as the port honours these signatures, `src/` compiles against them unchanged.
+   signatures and struct layouts the game expects, reconstructed as functional facts — not copied
+   from Sony's SDK. They are the *contract*: as long as the port honours these signatures, `src/`
+   compiles against them unchanged.
 2. **The `include_stage` symlink tree** (built by both build systems). This is a subtle but essential
    trick. GCC resolves a quoted `#include "PsyQ/x.h"` relative to the *including file's own directory*
    before it consults any `-I` flag. Since `include/common.h` (etc.) themselves `#include

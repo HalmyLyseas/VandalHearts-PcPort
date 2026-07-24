@@ -100,8 +100,7 @@ calibrated in *game-updates* (30 Hz) against BizHawk traces.
 This work is **largely settled and banked at sub-1%**: with the throttle plus the 59.94 Hz pacing
 fix, the demo tracks hardware to ~0.35% over the full run and the RNG holds lockstep for the first
 several turns. A residual per-class difference remains (ranged/caster undershoot melee by a few
-frames), left as an optional "option-1" per-checkpoint refinement — it is not a blocker. The full
-history lives in `exchange/42-timing-ai-tick-drift.md`.
+frames), left as an optional per-checkpoint refinement — it is not a blocker.
 
 > **Caveat for timing comparisons.** The demo scripts *turn order*, not *outcomes*: block/counter
 > chance and target selection are still RNG-driven, so two runs can diverge in actual gameplay. Only
