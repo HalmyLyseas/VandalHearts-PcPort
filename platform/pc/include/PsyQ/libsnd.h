@@ -31,7 +31,7 @@ void SsInit(void);
 void SsQuit(void);
 void SsStart(void);
 void SsEnd(void);
-void SsSetTickMode(long mode);
+void SsSetTickMode(int mode);
 void SsSetTableSize(char *table, short maxVab, short maxSeq);
 char SsSetReservedVoice(char n);
 void SsSetMono(void);
@@ -40,13 +40,13 @@ void SsSetMVol(short lVol, short rVol);
 void SsSetSerialAttr(char port, char attr, char mode);
 void SsSetSerialVol(char port, short lVol, short rVol);
 
-short SsVabOpenHeadSticky(unsigned char *vabHead, short vabId, unsigned long dummy);
-short SsVabTransBodyPartly(unsigned char *vabBody, unsigned long size, short vabId);
+short SsVabOpenHeadSticky(unsigned char *vabHead, short vabId, unsigned int dummy);
+short SsVabTransBodyPartly(unsigned char *vabBody, unsigned int size, short vabId);
 short SsVabTransCompleted(short flag);
 void SsVabClose(short vabId);
 
-void SsVoKeyOn(long vabId, long prog, unsigned short pitch, unsigned short vol);
-void SsVoKeyOff(long vabId, long prog);
+void SsVoKeyOn(int vabId, int prog, unsigned short pitch, unsigned short vol);
+void SsVoKeyOff(int vabId, int prog);
 short SsUtKeyOnV(short voice, short vabId, short prog, short tone, short note, short fine, short voll, short volr);
 short SsUtKeyOffV(short voice);
 
@@ -54,7 +54,7 @@ void SsUtReverbOn(void);
 short SsUtSetReverbType(short type);
 void SsUtSetReverbDepth(short depth1, short depth2);
 
-short SsSeqOpen(unsigned long *seqData, short mode);
+short SsSeqOpen(unsigned int *seqData, short mode);
 void SsSeqPlay(short seqAccessNum, char playMode, short repeatCount);
 void SsSeqStop(short seqAccessNum);
 void SsSeqSetVol(short seqAccessNum, short lVol, short rVol);

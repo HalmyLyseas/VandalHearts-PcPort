@@ -42,37 +42,37 @@
 
 /* ---- saturation helpers ------------------------------------------------ */
 
-static long Sat16(long v, int lm) {
-    long lo = lm ? 0 : -32768;
+static int Sat16(int v, int lm) {
+    int lo = lm ? 0 : -32768;
     if (v > 32767) return 32767;
     if (v < lo) return lo;
     return v;
 }
 
-static unsigned long SatU16(long v) {
+static unsigned int SatU16(int v) {
     if (v < 0) return 0;
     if (v > 65535) return 65535;
-    return (unsigned long)v;
+    return (unsigned int)v;
 }
 
 /* ---- GTE register state (single hardware instance) --------------------- */
 
 typedef struct { short vx, vy, vz, pad; } PcSVector;
-typedef struct { long vx, vy, vz, pad; } PcVector;
+typedef struct { int vx, vy, vz, pad; } PcVector;
 typedef struct { unsigned char r, g, b, c; } PcColor;
 
 static struct {
     /* control registers */
     MATRIX rt;        /* RT11..RT33 */
-    long   tr[3];      /* TRX,TRY,TRZ */
+    int   tr[3];      /* TRX,TRY,TRZ */
     MATRIX light;      /* L11..L33 */
-    long   bk[3];       /* RBK,GBK,BBK */
+    int   bk[3];       /* RBK,GBK,BBK */
     MATRIX colorMat;   /* LR1..LB3 */
-    long   fc[3];       /* RFC,GFC,BFC */
-    long   ofx, ofy;
+    int   fc[3];       /* RFC,GFC,BFC */
+    int   ofx, ofy;
     short  h;
     short  dqa;
-    long   dqb;
+    int   dqb;
     short  zsf3, zsf4;
 
     /* push/pop matrix stack. Originally a single saved slot -- wrong: real
@@ -90,13 +90,13 @@ static struct {
      * scene-graph depth, not a hardware-mandated number (the GTE itself has
      * no native stack; PushMatrix/PopMatrix are SDK-level software only). */
     MATRIX savedRt[16];
-    long   savedTr[16][3];
+    int   savedTr[16][3];
     int    savedDepth;
 
     /* scratch for gte_ldopv1's "D1,D2,D3" (RT diagonal misused as a vector,
      * see PC_GTE_LoadOPV1) -- kept separate from savedRt/savedTr above so
      * OP0 can never collide with real PushMatrix/PopMatrix state. */
-    long opvD[3];
+    int opvD[3];
 
     /* data registers */
     PcSVector v0, v1, v2;
@@ -106,8 +106,8 @@ static struct {
     short sxy0[2], sxy1[2], sxy2[2]; /* 3-stage FIFO, [x,y] */
     unsigned short sz0, sz1, sz2, sz3; /* 4-stage FIFO */
     PcColor rgbFifo0, rgbFifo1, rgbFifo2;
-    long mac0, mac1, mac2, mac3;
-    unsigned long flag;
+    int mac0, mac1, mac2, mac3;
+    unsigned int flag;
 } g;
 
 /* ---- UNR hardware division (psx-spx "GTE Division Inaccuracy") --------- */
@@ -118,7 +118,7 @@ static int s_unrTableInit = 0;
 static void BuildUnrTable(void) {
     int i;
     for (i = 0; i <= 0x100; i++) {
-        long v = 0x40000L / (i + 0x100) + 1;
+        int v = 0x40000L / (i + 0x100) + 1;
         v = v / 2 - 0x101;
         if (v < 0) v = 0;
         s_unrTable[i] = (unsigned short)v;
@@ -137,35 +137,35 @@ static int CountLeadingZeroes16(unsigned int sz) {
 }
 
 /* Returns the UNR division result n = H/SZ3 (scaled), sets FLAG bits on overflow. */
-static unsigned long UnrDivide(unsigned short H, unsigned short SZ3) {
+static unsigned int UnrDivide(unsigned short H, unsigned short SZ3) {
     int z;
-    unsigned long n, d, u;
+    unsigned int n, d, u;
 
     if (!s_unrTableInit) BuildUnrTable();
 
-    if (SZ3 == 0 || H >= (unsigned long)SZ3 * 2) {
+    if (SZ3 == 0 || H >= (unsigned int)SZ3 * 2) {
         g.flag |= (1UL << 17) | (1UL << 31);
         return 0x1FFFF;
     }
 
     z = CountLeadingZeroes16(SZ3);
-    n = ((unsigned long)H) << z;
-    d = ((unsigned long)SZ3) << z;
+    n = ((unsigned int)H) << z;
+    d = ((unsigned int)SZ3) << z;
     u = s_unrTable[(d - 0x7FC0) >> 7] + 0x101;
     d = (0x2000080UL - (d * u)) >> 8;
     d = (0x80UL + (d * u)) >> 8;
-    /* MUST be a 64-bit product: on the -m32 build `unsigned long` is 32-bit, and n*d overflows it
+    /* MUST be a 64-bit product: on the -m32 build `unsigned int` is 32-bit, and n*d overflows it
      * whenever the division result exceeds 0x10000 (i.e. whenever SZ3 < H) -- the wrapped garbage
      * gave those (nearer-than-H) vertices a tiny `n`, projecting them onto OFX/OFY and collapsing
      * all near geometry to the screen centre. The GTE does this division in hardware without a
-     * C-width limit; do the multiply in 64-bit so it's correct at any `unsigned long` width. */
-    n = (unsigned long)((((unsigned long long)n * d) + 0x8000) >> 16);
+     * C-width limit; do the multiply in 64-bit so it's correct at any `unsigned int` width. */
+    n = (unsigned int)((((unsigned long long)n * d) + 0x8000) >> 16);
     if (n > 0x1FFFF) n = 0x1FFFF;
     return n;
 }
 
 /* Projection diagnostic ring: last 8 TransformOne results (terrain-collapse investigation). */
-static struct { long sx, sy, ir1, ir2, ir3, sz3, n; } s_projRing[8];
+static struct { int sx, sy, ir1, ir2, ir3, sz3, n; } s_projRing[8];
 static int s_projRingHead;
 
 /* ---- core transform (shared by RTPS/RTPT and the high-level wrappers) -- */
@@ -174,8 +174,8 @@ static int s_projRingHead;
  * the SZ/SXY FIFOs, and compute the perspective-projected screen X/Y and
  * IR0 depth-cue value. Matches the RTPS formula exactly. */
 static void TransformOne(short vx, short vy, short vz) {
-    long mac1, mac2, mac3;
-    unsigned long n;
+    int mac1, mac2, mac3;
+    unsigned int n;
 
     mac1 = (g.tr[0] * 4096L + g.rt.m[0][0] * vx + g.rt.m[0][1] * vy + g.rt.m[0][2] * vz) >> 12;
     mac2 = (g.tr[1] * 4096L + g.rt.m[1][0] * vx + g.rt.m[1][1] * vy + g.rt.m[1][2] * vz) >> 12;
@@ -206,11 +206,11 @@ static void TransformOne(short vx, short vy, short vz) {
      * the alternating sane/garbage pattern observed. Verified against a
      * captured real (buggy) run: replacing the unsigned cast with a plain
      * signed widen reproduces the actual captured output bit-for-bit. */
-    g.mac0 = (long)n * (long)g.ir1 + g.ofx;
+    g.mac0 = (int)n * (int)g.ir1 + g.ofx;
     {
-        long sx = g.mac0 >> 16;
-        long sy;
-        g.mac0 = (long)n * (long)g.ir2 + g.ofy;
+        int sx = g.mac0 >> 16;
+        int sy;
+        g.mac0 = (int)n * (int)g.ir2 + g.ofy;
         sy = g.mac0 >> 16;
 
         /* Real GTE SATURATES SX2/SY2 to -0x400..+0x3FF (psx-spx: RTPS "ScrX/ScrY FIFO
@@ -238,18 +238,18 @@ static void TransformOne(short vx, short vy, short vz) {
         s_projRing[s_projRingHead & 7].ir2 = g.ir2;
         s_projRing[s_projRingHead & 7].ir3 = g.ir3;
         s_projRing[s_projRingHead & 7].sz3 = g.sz3;
-        s_projRing[s_projRingHead & 7].n = (long)n;
+        s_projRing[s_projRingHead & 7].n = (int)n;
         s_projRingHead++;
     }
 
-    g.mac0 = (long)n * (long)g.dqa + g.dqb;
+    g.mac0 = (int)n * (int)g.dqa + g.dqb;
     g.ir0 = (short)Sat16(g.mac0 >> 12, 1);
 }
 
 /* Read a past TransformOne's projection (back=0 most recent .. back=7). Used by the terrain
  * projection diagnostic to recover a tile's 4 corners (v0,v1,v2 from RTPT then v3 from RTPS =
  * back 3,2,1,0). */
-void PC_GteProjEntry(int back, long *sx, long *sy, long *ir1, long *ir2, long *ir3, long *sz3, long *nout) {
+void PC_GteProjEntry(int back, int *sx, int *sy, int *ir1, int *ir2, int *ir3, int *sz3, int *nout) {
     int i = (s_projRingHead - 1 - back) & 7;
     if (sx) *sx = s_projRing[i].sx;
     if (sy) *sy = s_projRing[i].sy;
@@ -283,14 +283,14 @@ void PC_GTE_LoadOPV1(void *v) {
      * We model the functional effect (D1,D2,D3 feeding into OP0) directly
      * rather than the bit-packing, since nothing else reads the RT matrix
      * between this and gte_op0(). */
-    long *src = (long *)v;
+    int *src = (int *)v;
     g.opvD[0] = src[0];
     g.opvD[1] = src[1];
     g.opvD[2] = src[2];
 }
 
 void PC_GTE_LoadOPV2(void *v) {
-    long *src = (long *)v;
+    int *src = (int *)v;
     g.ir1 = (short)src[0];
     g.ir2 = (short)src[1];
     g.ir3 = (short)src[2];
@@ -307,20 +307,20 @@ void PC_GTE_RTPT(void) {
 }
 
 void PC_GTE_NCLIP(void) {
-    long sx0 = g.sxy0[0], sy0 = g.sxy0[1];
-    long sx1 = g.sxy1[0], sy1 = g.sxy1[1];
-    long sx2 = g.sxy2[0], sy2 = g.sxy2[1];
+    int sx0 = g.sxy0[0], sy0 = g.sxy0[1];
+    int sx1 = g.sxy1[0], sy1 = g.sxy1[1];
+    int sx2 = g.sxy2[0], sy2 = g.sxy2[1];
     g.mac0 = sx0 * sy1 + sx1 * sy2 + sx2 * sy0 - sx0 * sy2 - sx1 * sy0 - sx2 * sy1;
 }
 
 void PC_GTE_AVSZ4(void) {
-    g.mac0 = (long)g.zsf4 * (long)(g.sz0 + g.sz1 + g.sz2 + g.sz3);
+    g.mac0 = (int)g.zsf4 * (int)(g.sz0 + g.sz1 + g.sz2 + g.sz3);
     g.otz = (unsigned short)SatU16(g.mac0 >> 12);
 }
 
 void PC_GTE_OP0(void) {
-    long d1 = g.opvD[0], d2 = g.opvD[1], d3 = g.opvD[2];
-    long ir1 = g.ir1, ir2 = g.ir2, ir3 = g.ir3;
+    int d1 = g.opvD[0], d2 = g.opvD[1], d3 = g.opvD[2];
+    int ir1 = g.ir1, ir2 = g.ir2, ir3 = g.ir3;
 
     g.mac1 = ir3 * d2 - ir2 * d3;
     g.mac2 = ir1 * d3 - ir3 * d1;
@@ -331,7 +331,7 @@ void PC_GTE_OP0(void) {
 }
 
 void PC_GTE_NCCS(void) {
-    long m1, m2, m3;
+    int m1, m2, m3;
 
     m1 = (g.light.m[0][0] * g.v0.vx + g.light.m[0][1] * g.v0.vy + g.light.m[0][2] * g.v0.vz) >> 12;
     m2 = (g.light.m[1][0] * g.v0.vx + g.light.m[1][1] * g.v0.vy + g.light.m[1][2] * g.v0.vz) >> 12;
@@ -343,15 +343,15 @@ void PC_GTE_NCCS(void) {
     m3 = (g.bk[2] * 4096L + g.colorMat.m[2][0] * g.ir1 + g.colorMat.m[2][1] * g.ir2 + g.colorMat.m[2][2] * g.ir3) >> 12;
     g.ir1 = (short)Sat16(m1, 0); g.ir2 = (short)Sat16(m2, 0); g.ir3 = (short)Sat16(m3, 0);
 
-    m1 = ((long)g.rgbc.r * g.ir1) << 4;
-    m2 = ((long)g.rgbc.g * g.ir2) << 4;
-    m3 = ((long)g.rgbc.b * g.ir3) << 4;
+    m1 = ((int)g.rgbc.r * g.ir1) << 4;
+    m2 = ((int)g.rgbc.g * g.ir2) << 4;
+    m3 = ((int)g.rgbc.b * g.ir3) << 4;
     m1 >>= 12; m2 >>= 12; m3 >>= 12;
 
     g.rgbFifo0 = g.rgbFifo1;
     g.rgbFifo1 = g.rgbFifo2;
     {
-        long r = m1 / 16, gg = m2 / 16, b = m3 / 16;
+        int r = m1 / 16, gg = m2 / 16, b = m3 / 16;
         if (r < 0) r = 0;
         if (r > 255) r = 255;
         if (gg < 0) gg = 0;
@@ -384,20 +384,20 @@ void PC_GTE_StoreOTZ(void *out) {
      * value range. The PS1 GTE's OTZ register (cop2r7) is a saturated 16-bit unsigned
      * value zero-extended into its full 32-bit register, so real hardware always leaves
      * the upper 16 bits of the destination at zero. Writing only 16 bits here left the
-     * caller's full-width `s32 otz` variable (src/graphics.c's RenderMapTile and friends)
+     * caller's full-width `int otz` variable (src/graphics.c's RenderMapTile and friends)
      * with its upper 16 bits as whatever uninitialized stack garbage preceded the call --
      * usually harmless (otz normally small), but a real, reported SIGSEGV once garbage
      * upper bits made otz large enough to push `ot + OT_SIZE - otz` (AddPrim's target)
      * wildly out of bounds. */
-    *(unsigned long *)out = (unsigned long)g.otz;
+    *(unsigned int *)out = (unsigned int)g.otz;
 }
 
 void PC_GTE_StoreOPZ(void *out) {
-    *(long *)out = g.mac0;
+    *(int *)out = g.mac0;
 }
 
 void PC_GTE_StoreLVNL(void *out) {
-    long *o = (long *)out;
+    int *o = (int *)out;
     o[0] = g.mac1; o[1] = g.mac2; o[2] = g.mac3;
 }
 
@@ -435,14 +435,14 @@ void InitGeom(void) {
  * projection centre to (0,0), translating all 3D-projected content up-left by (ofx,ofy) -- which
  * pushed unit sprites off-screen while leaving the (larger) terrain partly visible. See
  * exchange/feedback-15.md / the sprite-fate GTE-state log. */
-void SetGeomOffset(long ofx, long ofy) { g.ofx = ofx << 16; g.ofy = ofy << 16; }
-void SetGeomScreen(long h) { g.h = (short)h; }
+void SetGeomOffset(int ofx, int ofy) { g.ofx = ofx << 16; g.ofy = ofy << 16; }
+void SetGeomScreen(int h) { g.h = (short)h; }
 
 /* Debug (feedback-15 follow-up): expose the projection state used by the last TransformOne, so
  * the sprite log can tell whether missing units are mis-projected by a wrong geom offset
  * (ofx/ofy/h -- the "vector translation" theory) or by the leaked facing matrix (rt = scaled
  * identity {4096,.,0;...;0,.,4096} vs a rotated camera matrix). */
-void PC_GteDebugState(long *ofx, long *ofy, int *h, int *rt00, int *rt02, int *rt22,
+void PC_GteDebugState(int *ofx, int *ofy, int *h, int *rt00, int *rt02, int *rt22,
                       int *trx, int *trz) {
     *ofx = g.ofx; *ofy = g.ofy; *h = g.h;
     *rt00 = g.rt.m[0][0]; *rt02 = g.rt.m[0][2]; *rt22 = g.rt.m[2][2];
@@ -458,7 +458,7 @@ void SetRotMatrix(MATRIX *m) { g.rt = *m; }
 void SetTransMatrix(MATRIX *m) { g.tr[0] = m->t[0]; g.tr[1] = m->t[1]; g.tr[2] = m->t[2]; }
 void SetLightMatrix(MATRIX *m) { g.light = *m; }
 void SetColorMatrix(MATRIX *m) { g.colorMat = *m; }
-void SetBackColor(long r, long gg, long b) { g.bk[0] = r; g.bk[1] = gg; g.bk[2] = b; }
+void SetBackColor(int r, int gg, int b) { g.bk[0] = r; g.bk[1] = gg; g.bk[2] = b; }
 
 void PushMatrix(void) {
     if (g.savedDepth >= (int)(sizeof(g.savedRt) / sizeof(g.savedRt[0]))) return;
@@ -516,7 +516,7 @@ MATRIX *TransMatrix(MATRIX *m, VECTOR *v) {
 }
 
 MATRIX *ScaleMatrix(MATRIX *m, VECTOR *v) {
-    long scale[3];
+    int scale[3];
     int i, j;
     scale[0] = v->vx; scale[1] = v->vy; scale[2] = v->vz;
     for (i = 0; i < 3; i++)
@@ -525,24 +525,24 @@ MATRIX *ScaleMatrix(MATRIX *m, VECTOR *v) {
     return m;
 }
 
-void RotTrans(SVECTOR *v0, VECTOR *v1, long *flag) {
-    long mac1 = (g.tr[0] * 4096L + g.rt.m[0][0] * v0->vx + g.rt.m[0][1] * v0->vy + g.rt.m[0][2] * v0->vz) >> 12;
-    long mac2 = (g.tr[1] * 4096L + g.rt.m[1][0] * v0->vx + g.rt.m[1][1] * v0->vy + g.rt.m[1][2] * v0->vz) >> 12;
-    long mac3 = (g.tr[2] * 4096L + g.rt.m[2][0] * v0->vx + g.rt.m[2][1] * v0->vy + g.rt.m[2][2] * v0->vz) >> 12;
+void RotTrans(SVECTOR *v0, VECTOR *v1, int *flag) {
+    int mac1 = (g.tr[0] * 4096L + g.rt.m[0][0] * v0->vx + g.rt.m[0][1] * v0->vy + g.rt.m[0][2] * v0->vz) >> 12;
+    int mac2 = (g.tr[1] * 4096L + g.rt.m[1][0] * v0->vx + g.rt.m[1][1] * v0->vy + g.rt.m[1][2] * v0->vz) >> 12;
+    int mac3 = (g.tr[2] * 4096L + g.rt.m[2][0] * v0->vx + g.rt.m[2][1] * v0->vy + g.rt.m[2][2] * v0->vz) >> 12;
     v1->vx = mac1; v1->vy = mac2; v1->vz = mac3;
-    if (flag) *flag = (long)g.flag;
+    if (flag) *flag = (int)g.flag;
 }
 
-static long PackSXY(long x, long y) {
+static int PackSXY(int x, int y) {
     return ((y & 0xFFFF) << 16) | (x & 0xFFFF);
 }
 
-long RotTransPers(SVECTOR *v0, long *sxy, long *p, long *flag) {
+int RotTransPers(SVECTOR *v0, int *sxy, int *p, int *flag) {
     PC_GTE_LoadV0(v0);
     TransformOne(g.v0.vx, g.v0.vy, g.v0.vz);
     if (sxy) *sxy = PackSXY(g.sxy2[0], g.sxy2[1]);
     if (p) *p = g.ir0;
-    if (flag) *flag = (long)g.flag;
+    if (flag) *flag = (int)g.flag;
     /* Real PsyQ RotTransPers returns SZ3 >> 2 (÷4), NOT raw SZ3. Disassembled from the byte-exact
      * SLUS_004.47 @ 0x800d0178:  mfc2 v0,$19 (SZ3) ; jr ra ; sra v0,v0,0x2 (delay slot). This puts
      * the returned otz on the SAME scale as the terrain's AVSZ path (gte_stotz = zsf4·ΣSZ>>12 =
@@ -554,9 +554,9 @@ long RotTransPers(SVECTOR *v0, long *sxy, long *p, long *flag) {
     return g.sz3 >> 2;
 }
 
-long RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
-                    long *sxy0, long *sxy1, long *sxy2, long *sxy3,
-                    long *p, long *flag) {
+int RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
+                    int *sxy0, int *sxy1, int *sxy2, int *sxy3,
+                    int *p, int *flag) {
     PC_GTE_LoadV3(v0, v1, v2);
     PC_GTE_RTPT();
     if (sxy0) *sxy0 = PackSXY(g.sxy0[0], g.sxy0[1]);
@@ -567,19 +567,19 @@ long RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
     TransformOne(g.v0.vx, g.v0.vy, g.v0.vz);
     if (sxy3) *sxy3 = PackSXY(g.sxy2[0], g.sxy2[1]);
     if (p) *p = g.ir0;
-    if (flag) *flag = (long)g.flag;
+    if (flag) *flag = (int)g.flag;
 
     PC_GTE_AVSZ4();
     return g.otz;
 }
 
-long RotAverage4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
-                  long *sxy0, long *sxy1, long *sxy2, long *sxy3,
-                  long *p, long *flag) {
+int RotAverage4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
+                  int *sxy0, int *sxy1, int *sxy2, int *sxy3,
+                  int *p, int *flag) {
     return RotTransPers4(v0, v1, v2, v3, sxy0, sxy1, sxy2, sxy3, p, flag);
 }
 
-long VectorNormalS(VECTOR *v0, SVECTOR *v1) {
+int VectorNormalS(VECTOR *v0, SVECTOR *v1) {
     double len = sqrt((double)v0->vx * v0->vx + (double)v0->vy * v0->vy + (double)v0->vz * v0->vz);
     if (len < 1.0) {
         v1->vx = v1->vy = v1->vz = 0;
@@ -588,21 +588,21 @@ long VectorNormalS(VECTOR *v0, SVECTOR *v1) {
     v1->vx = (short)((v0->vx * (double)ONE) / len);
     v1->vy = (short)((v0->vy * (double)ONE) / len);
     v1->vz = (short)((v0->vz * (double)ONE) / len);
-    return (long)len;
+    return (int)len;
 }
 
 /* SquareRoot0/SquareRoot12/csqrt are SDK library routines, not raw GTE
  * opcodes -- no hardware formula exists to cite. "0"/"12" name the assumed
  * fixed-point scale of the input/output (unscaled vs. Q12); implemented via
  * standard sqrt(), flagged as a reasoned choice like RotMatrix's axis order. */
-long SquareRoot0(long a) {
+int SquareRoot0(int a) {
     if (a <= 0) return 0;
-    return (long)sqrt((double)a);
+    return (int)sqrt((double)a);
 }
 
-long SquareRoot12(long a) {
+int SquareRoot12(int a) {
     if (a <= 0) return 0;
-    return (long)(sqrt((double)a / ONE) * ONE);
+    return (int)(sqrt((double)a / ONE) * ONE);
 }
 
 int csqrt(int a) {
@@ -620,10 +620,10 @@ int rsin(int a) {
     return (int)(sin(rad) * ONE + (sin(rad) >= 0 ? 0.5 : -0.5));
 }
 
-long ratan2(long y, long x) {
+int ratan2(int y, int x) {
     double rad = atan2((double)y, (double)x);
     double units = rad * (4096.0 / (2.0 * M_PI));
-    long a = (long)(units + (units >= 0 ? 0.5 : -0.5));
+    int a = (int)(units + (units >= 0 ? 0.5 : -0.5));
     while (a < 0) a += 4096;
     while (a >= 4096) a -= 4096;
     return a;

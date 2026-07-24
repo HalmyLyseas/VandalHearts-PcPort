@@ -11,7 +11,7 @@
 
 #include "libcd.h"
 
-int DecDCTBufSize(u_long *bs);
+int DecDCTBufSize(unsigned int *bs);
 int DecDCTinSync(int mode);
 int DecDCToutSync(int mode);
 

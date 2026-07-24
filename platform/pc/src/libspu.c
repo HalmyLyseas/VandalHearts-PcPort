@@ -10,12 +10,12 @@
 #include "PsyQ/libspu.h"
 #include "libsnd_internal.h"
 
-long SpuSetTransferMode(long mode) {
+int SpuSetTransferMode(int mode) {
     (void)mode;
     return 0;
 }
 
-long SpuSetIRQ(long on_off) {
+int SpuSetIRQ(int on_off) {
     (void)on_off;
     return 0;
 }
@@ -25,7 +25,7 @@ SpuIRQCallbackProc SpuSetIRQCallback(SpuIRQCallbackProc callback) {
     return 0; /* no real SPU IRQ on this backend to hook a callback to */
 }
 
-void SpuSetKey(long on_off, unsigned long voiceBit) {
+void SpuSetKey(int on_off, unsigned int voiceBit) {
     if (on_off == SPU_OFF && voiceBit == SPU_ALLCH) {
         LibSnd_StopAllVoices();
     }
@@ -33,13 +33,13 @@ void SpuSetKey(long on_off, unsigned long voiceBit) {
      * site (only the "stop everything" pattern is) -- extend if needed. */
 }
 
-long SpuMallocWithStartAddr(unsigned long addr, long size) {
+int SpuMallocWithStartAddr(unsigned int addr, int size) {
     (void)addr;
     (void)size;
     return 0; /* no real SPU RAM heap to manage on this backend */
 }
 
-long SpuClearReverbWorkArea(long mode) {
+int SpuClearReverbWorkArea(int mode) {
     (void)mode;
     return 0;
 }

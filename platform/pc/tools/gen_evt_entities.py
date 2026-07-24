@@ -45,9 +45,14 @@ unnamed_arrs = {}                                   # array addr -> [entry addrs
 def read_unnamed(A):
     if A in unnamed_arrs: return
     ents, k = [], 0
-    while k < 32:
+    # Cap was 32 -- which TRUNCATED real arrays: e.g. sArr_80102538 is indexed at 32 by a
+    # Grog-house prop (animIdx=32), so a 32-entry array read index 32 OUT OF BOUNDS -> wrong
+    # sprite (bugreport-01.md). The real end of each array is the non-anim entry (below); the
+    # cap is only a runaway guard. 256 covers any real animIdx with margin; over-reading into a
+    # contiguous following array is harmless (extra valid anim pointers no entity indexes).
+    while k < 256:
         e = u32(A + k*4)
-        if e != 0 and not ANIM_REGION(e): break     # garbage entry => end of array
+        if e != 0 and not ANIM_REGION(e): break     # non-anim entry => end of array
         ents.append(e); k += 1
     unnamed_arrs[A] = ents
 

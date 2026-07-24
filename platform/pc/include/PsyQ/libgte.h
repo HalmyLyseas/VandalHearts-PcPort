@@ -1,4 +1,11 @@
 /*
+ * ⚠️ WIDTH RULE (Stage 2.3, 2026-07-21): PSX `int` is ALWAYS 32-bit. On an LP64 host `int`
+ * is 64-bit, which silently changed MATRIX from 32 to 48 bytes (t[3] moving from offset 20 to
+ * 24) and made every `int *` out-parameter write 8 bytes into the 4-byte `int` locals that
+ * src/ passes -- a stack smash that killed the -m64 build before the first MDEC frame.
+ * Every `int` here is therefore `int` / `unsigned int`. Do NOT reintroduce `int` in this or any other
+ * PC-owned PsyQ header.
+ *
  * PC-backend replacement for the PSX SDK's libgte.h GTE (Geometry Transformation
  * Engine) interface.
  *
@@ -22,11 +29,11 @@
 
 typedef struct {
     short m[3][3];
-    long  t[3];
+    int  t[3];
 } MATRIX;
 
 typedef struct {
-    long vx, vy, vz, pad;
+    int vx, vy, vz, pad;
 } VECTOR;
 
 typedef struct {
@@ -49,14 +56,14 @@ typedef struct {
 
 void InitGeom(void);
 
-void SetGeomOffset(long ofx, long ofy);
-void SetGeomScreen(long h);
+void SetGeomOffset(int ofx, int ofy);
+void SetGeomScreen(int h);
 
 void SetRotMatrix(MATRIX *m);
 void SetTransMatrix(MATRIX *m);
 void SetLightMatrix(MATRIX *m);
 void SetColorMatrix(MATRIX *m);
-void SetBackColor(long r, long g, long b);
+void SetBackColor(int r, int g, int b);
 
 void PushMatrix(void);
 void PopMatrix(void);
@@ -65,23 +72,23 @@ MATRIX *RotMatrix(SVECTOR *r, MATRIX *m);
 MATRIX *TransMatrix(MATRIX *m, VECTOR *v);
 MATRIX *ScaleMatrix(MATRIX *m, VECTOR *v);
 
-void RotTrans(SVECTOR *v0, VECTOR *v1, long *flag);
-long RotTransPers(SVECTOR *v0, long *sxy, long *p, long *flag);
-long RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
-                    long *sxy0, long *sxy1, long *sxy2, long *sxy3,
-                    long *p, long *flag);
-long RotAverage4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
-                  long *sxy0, long *sxy1, long *sxy2, long *sxy3,
-                  long *p, long *flag);
+void RotTrans(SVECTOR *v0, VECTOR *v1, int *flag);
+int RotTransPers(SVECTOR *v0, int *sxy, int *p, int *flag);
+int RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
+                    int *sxy0, int *sxy1, int *sxy2, int *sxy3,
+                    int *p, int *flag);
+int RotAverage4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
+                  int *sxy0, int *sxy1, int *sxy2, int *sxy3,
+                  int *p, int *flag);
 
-long VectorNormalS(VECTOR *v0, SVECTOR *v1);
+int VectorNormalS(VECTOR *v0, SVECTOR *v1);
 
-long SquareRoot0(long a);
-long SquareRoot12(long a);
+int SquareRoot0(int a);
+int SquareRoot12(int a);
 int  csqrt(int a);
 
 int  rcos(int a);
 int  rsin(int a);
-long ratan2(long y, long x);
+int ratan2(int y, int x);
 
 #endif

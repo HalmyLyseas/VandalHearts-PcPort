@@ -32,7 +32,7 @@
 #define PADselect  (1<< 8)
 
 void PadInit(int mode);
-u_long PadRead(int id);
+unsigned int PadRead(int id);
 int VSync(int mode);
 int ResetCallback(void);
 

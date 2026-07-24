@@ -23,4 +23,21 @@
 u32 *Movie_GetNextFrame(void);
 s32 func_800C4350(s8 z, s8 x, s32 angle, u8 dir, s32 param_5);
 
+/* Stage 2.3: Krom2RawAdd (BIOS B(51h), implemented in platform/pc/src/libkernel.c) returns a
+ * POINTER to a glyph bitmap. src/text.c and src/window.c call it with no declaration in scope --
+ * neither includes PsyQ/kernel.h -- so gnu89's implicit rule made it `int Krom2RawAdd()`, i.e. a
+ * 32-BIT return. At -m64 the compiler emitted `cltq` after the call, sign-extending a truncated
+ * address, and DrawSjisGlyph SIGSEGV'd on the first battle menu. Fixing the header alone was NOT
+ * enough precisely because those files never see it; the declaration has to be forced in here,
+ * which is exactly what this file exists for. */
+void *Krom2RawAdd(s32 sjisCode);
+
+/* Same hazard, found by sweeping every implicitly-declared call across src/ and keeping only the
+ * ones whose definition RETURNS A POINTER (3 of ~170 -- the rest return void/int and are
+ * harmless). Without a declaration these return `int`, so at -m64 their result is truncated the
+ * moment a caller stores it. FindUnitSpriteByNameIdx has 4 such call sites and
+ * FindUnitByNameIdx 1, i.e. these were live crashes waiting for the right scene. */
+struct UnitStatus *FindUnitByNameIdx(s16 nameIdx);
+struct Object *FindUnitSpriteByNameIdx(u8 nameIdx);
+
 #endif

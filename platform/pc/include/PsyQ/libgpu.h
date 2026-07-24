@@ -15,7 +15,7 @@
  * we can't resize, fixed at 4 bytes/slot, matching the original
  * 32-bit-pointer PS1 memory model. Two representations were tried and
  * rejected before landing here (see exchange/12-phase-c-bootstrap.md):
- *   1. Widen `tag` to a full 64-bit `u_long` holding a real host pointer --
+ *   1. Widen `tag` to a full 64-bit `unsigned int` holding a real host pointer --
  *      overran the real 4-byte-wide `Graphics.ot` array by 2x (found via
  *      AddressSanitizer, not standalone testing against our own
  *      self-declared OT arrays).
@@ -51,7 +51,7 @@ typedef struct {
 
 typedef struct {
     u32 tag;
-    u_long code[15];
+    unsigned int code[15];
 } DR_ENV;
 
 typedef struct {
@@ -120,7 +120,7 @@ typedef struct {
     short  w, h;
 } TILE; /* free-size Tile (solid-color rect, no texture) */
 
-/* Real hardware's DR_MODE is `{u_long tag; u_long code[2];}` -- code[0]/
+/* Real hardware's DR_MODE is `{unsigned int tag; unsigned int code[2];}` -- code[0]/
  * code[1] are the raw GP0(E1h)/GP0(E2h) command words, never inspected by
  * game code directly (only ever built by SetDrawMode() and consumed by our
  * own DrawOTag()). We give it the same tag/r0/g0/b0/code header every other
@@ -131,15 +131,15 @@ typedef struct {
 typedef struct {
     u32 tag;
     u_char r0, g0, b0, code;
-    u_long tpage;
+    unsigned int tpage;
 } DR_MODE; /* Drawing Mode */
 
 typedef struct {
-    u_long  mode;
+    unsigned int  mode;
     RECT   *crect;
-    u_long *caddr;
+    unsigned int *caddr;
     RECT   *prect;
-    u_long *paddr;
+    unsigned int *paddr;
 } TIM_IMAGE;
 
 /* Our own internal primitive-type discriminators, stored in the `code` byte
@@ -182,10 +182,19 @@ typedef struct {
 #define setTPage(p, tp, abr, x, y) ((p)->tpage = GetTPage(tp, abr, x, y))
 #define setClut(p, x, y)           ((p)->clut = GetClut(x, y))
 
-/* See the file-header comment: tag holds the raw pointer directly (valid
- * only because this build is -m32, where sizeof(void*) == sizeof(u32)). */
+/* ⚠️ Stage 2.3: `tag` holds a TOKEN (an index into libgpu.c's per-frame OT registry), NOT an
+ * address -- see the token-bridge comment in platform/pc/src/libgpu.c. Only AddPrim/ClearOTag/
+ * DrawOTag may mint or resolve tokens, so these two macros must NEVER be used to build an OT
+ * link: storing a raw pointer through setaddr() produces a value DrawOTag resolves to NULL,
+ * which TERMINATES the whole walk and silently drops every primitive after it in the chain.
+ *
+ * That is exactly what happened when the token bridge first landed: `addPrim` below was left as
+ * a raw setaddr/getaddr pair while `AddPrim` was converted, so engine.c's compass
+ * (ot[OT_SIZE-5]) and screen_effects.c's overlays poisoned the tail of the walk -- killing the
+ * compass, the logo and every textbox, while 3D geometry (earlier buckets, walked first) looked
+ * perfect. Kept only for raw tag inspection; `nextPrim`/`isendprim` are likewise token-domain. */
 #define setaddr(p, _addr) (((P_TAG *)(p))->tag = (u32)(size_t)(_addr))
-#define getaddr(p)        ((u_long)(size_t)(((P_TAG *)(p))->tag))
+#define getaddr(p)        ((unsigned int)(size_t)(((P_TAG *)(p))->tag))
 #define setlen(p, _len)   ((void)(p), (void)(_len)) /* no length field to set -- kept for source compatibility */
 #define getlen(p)         0
 #define setcode(p, _code) (((P_TAG *)(p))->code = (u_char)(_code))
@@ -194,7 +203,9 @@ typedef struct {
 #define nextPrim(p)  ((void *)getaddr(p))
 #define isendprim(p) (((P_TAG *)(p))->tag == 0) /* raw zero-check -- no resolve needed */
 
-#define addPrim(ot, p) (setaddr(p, getaddr(ot)), setaddr(ot, p))
+/* MUST go through the real function so the primitive gets a registry token (see above). */
+#define addPrim(ot, p)       AddPrim((ot), (p))
+#define addPrims(ot, p0, p1) (AddPrim((ot), (p1)), AddPrim((ot), (p0)))
 
 #define setPolyF4(p)  SetPolyF4(p)
 
@@ -232,15 +243,15 @@ DRAWENV *PutDrawEnv(DRAWENV *env);
 DRAWENV *SetDefDrawEnv(DRAWENV *env, int x, int y, int w, int h);
 
 TIM_IMAGE *ReadTIM(TIM_IMAGE *timimg);
-int OpenTIM(u_long *addr);
+int OpenTIM(unsigned int *addr);
 
 int ResetGraph(int mode);
 int SetGraphDebug(int level);
 void SetDispMask(int mask);
 int DrawSync(int mode);
 
-int LoadImage(RECT *rect, u_long *p);
-int StoreImage(RECT *rect, u_long *p);
+int LoadImage(RECT *rect, unsigned int *p);
+int StoreImage(RECT *rect, unsigned int *p);
 int MoveImage(RECT *rect, int x, int y);
 int ClearImage(RECT *rect, u_char r, u_char g, u_char b);
 
@@ -248,9 +259,9 @@ u_short GetTPage(int tp, int abr, int x, int y);
 u_short GetClut(int x, int y);
 void SetDrawMode(DR_MODE *p, int dfe, int dtd, int tpage, RECT *tw);
 
-u_long *ClearOTag(u_long *ot, int n);
+unsigned int *ClearOTag(unsigned int *ot, int n);
 void AddPrim(void *ot, void *p);
-void DrawOTag(u_long *p);
+void DrawOTag(unsigned int *p);
 
 void SetSemiTrans(void *p, int abe);
 void SetPolyF4(POLY_F4 *p);
@@ -259,6 +270,6 @@ void SetSprt(SPRT *p);
 void SetTile(TILE *p);
 
 int FntPrint(const char *fmt, ...);
-u_long *FntFlush(int id);
+unsigned int *FntFlush(int id);
 
 #endif

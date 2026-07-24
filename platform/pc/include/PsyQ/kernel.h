@@ -29,16 +29,16 @@
 
 struct DIRENTRY {
     char name[20];
-    long attr;
-    long size;
+    int attr;
+    int size;
     struct DIRENTRY *next;
-    long head;
+    int head;
     char system[4];
 };
 
-/* s32/u32 (not long) to exactly match card.c's own local `extern s32
+/* s32/u32 (not int) to exactly match card.c's own local `extern s32
  * TestEvent(s32);` declaration -- s32 is `int` in this project's
- * types.h, not `long` (which is 64-bit on this target), so a `long`
+ * types.h, not `int` (which is 64-bit on this target), so a `int`
  * signature here would conflict. Relies on include/common.h always
  * pulling in "types.h" before any PsyQ header, same as the real project. */
 s32 OpenEvent(s32 class_, s32 spec, s32 mode, s32 (*func)());
@@ -55,6 +55,12 @@ u32 ResetRCnt(s32 which);
  * release ships no Kanji ROM data, so real hardware would also always
  * fail this lookup -- returning -1 unconditionally is the *correct*
  * behavior here, not a placeholder. */
-s32 Krom2RawAdd(s32 sjisCode);
+/* ⚠️ Returns a POINTER, so the return type must be pointer-width. It was `s32` ("matching the
+ * -m32 pointer width"), which silently TRUNCATED the glyph address under -m64: both callers do
+ * `u8 *p = Krom2RawAdd(sjis)` and then dereference, so the 64-bit build SIGSEGV'd in
+ * DrawSjisGlyph the first time a battle menu was drawn. `void *` keeps both call sites
+ * (src/text.c cast, src/window.c direct assign) and their `== -1` sentinel test working
+ * unchanged at either width. */
+void *Krom2RawAdd(s32 sjisCode);
 
 #endif

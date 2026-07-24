@@ -41,12 +41,12 @@ typedef struct {
     u_short type;
     u_short secCount;
     u_short nSectors;
-    u_long  frameCount;
-    u_long  frameSize;
+    unsigned int  frameCount;
+    unsigned int  frameSize;
     u_short width;
     u_short height;
-    u_long  dummy1;
-    u_long  dummy2;
+    unsigned int  dummy1;
+    unsigned int  dummy2;
     CdlLOC  loc;
 } StHEADER;
 
@@ -71,17 +71,17 @@ int CdInit(void);
 int CdControl(u_char com, u_char *param, u_char *result);
 int CdControlB(u_char com, u_char *param, u_char *result);
 int CdSync(int mode, u_char *result);
-int CdRead(int sectors, u_long *buf, int mode);
-int CdRead2(long mode);
+int CdRead(int sectors, unsigned int *buf, int mode);
+int CdRead2(int mode);
 int CdReadSync(int mode, u_char *result);
-u_long CdReadyCallback(void (*func)());
+unsigned int CdReadyCallback(void (*func)());
 CdlLOC *CdIntToPos(int i, CdlLOC *p);
 int CdMix(CdlATV *vol);
 
 void DecDCTReset(int mode);
-int DecDCTvlc(u_long *bs, u_long *buf);
-void DecDCTin(u_long *buf, int mode);
-void DecDCTout(u_long *buf, int size);
+int DecDCTvlc(unsigned int *bs, unsigned int *buf);
+void DecDCTin(unsigned int *buf, int mode);
+void DecDCTout(unsigned int *buf, int size);
 
 /* STR (streaming movie) ring-buffer API -- same deferral as DecDCT* above
  * (FMV/movie playback, not regular data loading). DecDCToutCallback isn't
@@ -90,12 +90,12 @@ void DecDCTout(u_long *buf, int size);
  * GetRCnt/OpenEvent) -- signature inferred from its call sites
  * (cd.c passes NULL or a function pointer, matching the
  * CdReadyCallback/DrawSyncCallback callback-setter convention). */
-u_long DecDCToutCallback(void (*func)());
-void StSetRing(u_long *ring_addr, u_long ring_size);
+unsigned int DecDCToutCallback(void (*func)());
+void StSetRing(unsigned int *ring_addr, unsigned int ring_size);
 void StUnSetRing(void);
-u_long StFreeRing(u_long *base);
-void StSetStream(u_long mode, u_long start_frame, u_long end_frame, int (*func1)(), int (*func2)());
-u_long StGetNext(u_long **addr, u_long **header);
+unsigned int StFreeRing(unsigned int *base);
+void StSetStream(unsigned int mode, unsigned int start_frame, unsigned int end_frame, int (*func1)(), int (*func2)());
+unsigned int StGetNext(unsigned int **addr, unsigned int **header);
 void StCdInterrupt(void);
 
 #endif

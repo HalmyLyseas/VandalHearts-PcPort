@@ -20,11 +20,11 @@
 
 typedef void (*SpuIRQCallbackProc)(void);
 
-long SpuSetTransferMode(long mode);
-long SpuSetIRQ(long on_off);
+int SpuSetTransferMode(int mode);
+int SpuSetIRQ(int on_off);
 SpuIRQCallbackProc SpuSetIRQCallback(SpuIRQCallbackProc callback);
-void SpuSetKey(long on_off, unsigned long voiceBit);
-long SpuMallocWithStartAddr(unsigned long addr, long size);
-long SpuClearReverbWorkArea(long mode);
+void SpuSetKey(int on_off, unsigned int voiceBit);
+int SpuMallocWithStartAddr(unsigned int addr, int size);
+int SpuClearReverbWorkArea(int mode);
 
 #endif

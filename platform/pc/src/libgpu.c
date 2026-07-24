@@ -44,6 +44,19 @@ static int s_drawModeTPage = 0; /* last SetDrawMode-configured tpage -- SPRT/TIL
                                   * have no tpage field of their own on real hw
                                   * (unlike POLY_FT4), they use this instead */
 
+/* Current GPU texture window (persistent state, GP0(E2h)), set by SetDrawMode's
+ * `tw` RECT and applied per-texel in SampleTexture. Mask/Offset are in 8-pixel
+ * steps (0..31 each); mask 0 = no windowing (full 256x256 page). Persists across
+ * primitives/frames exactly like real hardware -- callers that want full-page
+ * sampling re-arm it with a full-page window (see Map15 ocean, which brackets
+ * its 32x32-windowed chunks with a w=0 reset). See psx-spx GPU GP0(E2h):
+ *   Texcoord = (Texcoord AND NOT(Mask*8)) OR ((Offset AND Mask)*8)
+ * Used e.g. by src/map_effects_0861c8.c Objf299_Map15_Ocean, which tiles a
+ * single 32x32 water tile (MoveImage'd to the 576,256 page) across the sea via a
+ * 32x32 window -- without this the chunks' 0..255 UVs sampled the mostly-empty
+ * page (purple rectangles + noise bands during the sailing intro; bugreport-02). */
+static int s_twMaskX = 0, s_twMaskY = 0, s_twOffX = 0, s_twOffY = 0;
+
 /* ---- pixel format helpers (BGR555, bit15 = mask/semi-transparency source) */
 
 static unsigned short PackColor(int r, int g, int b) {
@@ -102,6 +115,10 @@ static unsigned short SampleTexture(int tpage, int clut, int u, int v) {
     int clutX = (clut & 0x3F) * 16;
     int clutY = (clut >> 6) & 0x1FF;
     unsigned short raw;
+
+    /* Apply the active texture window (GP0(E2h)); mask 0 leaves u/v untouched. */
+    u = (u & ~(s_twMaskX * 8)) | ((s_twOffX & s_twMaskX) * 8);
+    v = (v & ~(s_twMaskY * 8)) | ((s_twOffY & s_twMaskY) * 8);
 
     TPageOrigin(tpage, &tpX, &tpY, &tp);
 
@@ -281,14 +298,32 @@ DRAWENV *PutDrawEnv(DRAWENV *env) {
 
 void SetDrawMode(DR_MODE *p, int dfe, int dtd, int tpage, RECT *tw) {
     p->tag = 0;
-    p->tpage = (u_long)tpage;
+    p->tpage = (unsigned int)tpage;
     setcode(p, PC_GPU_PRIM_DR_MODE);
-    (void)dfe; (void)dtd; (void)tw;
+    /* Carry the texture window (if any) in this prim's otherwise-unused r0/g0/b0
+     * bytes so DrawOTag can apply it in OT order (real hw threads GP0(E2h) in
+     * code[1]). Bit 23 flags "window present"; NULL tw means "leave the window
+     * unchanged", matching PsyQ SetDrawMode(...,NULL). RECT.w/h are the window
+     * size in pixels -> Mask = (256-size)>>3 (psx-spx tiling table: 32px -> 0x1c
+     * -> wrap u&31); RECT.x/y are the window offset in pixels -> Offset = >>3. */
+    if (tw) {
+        u32 mx = ((u32)(256 - tw->w) >> 3) & 0x1f;
+        u32 my = ((u32)(256 - tw->h) >> 3) & 0x1f;
+        u32 ox = ((u32)tw->x >> 3) & 0x1f;
+        u32 oy = ((u32)tw->y >> 3) & 0x1f;
+        u32 packed = 0x800000u | mx | (my << 5) | (ox << 10) | (oy << 15);
+        p->r0 = (u_char)(packed & 0xff);
+        p->g0 = (u_char)((packed >> 8) & 0xff);
+        p->b0 = (u_char)((packed >> 16) & 0xff);
+    } else {
+        p->r0 = p->g0 = p->b0 = 0;
+    }
+    (void)dfe; (void)dtd;
 }
 
 /* ---- VRAM transfers ------------------------------------------------------ */
 
-int LoadImage(RECT *rect, u_long *p) {
+int LoadImage(RECT *rect, unsigned int *p) {
     unsigned short *src = (unsigned short *)p;
     int x, y;
     for (y = 0; y < rect->h; y++)
@@ -298,7 +333,7 @@ int LoadImage(RECT *rect, u_long *p) {
     return 0;
 }
 
-int StoreImage(RECT *rect, u_long *p) {
+int StoreImage(RECT *rect, unsigned int *p) {
     unsigned short *dst = (unsigned short *)p;
     int x, y;
     for (y = 0; y < rect->h; y++)
@@ -324,9 +359,71 @@ int ClearImage(RECT *rect, u_char r, u_char g, u_char b) {
     return 0;
 }
 
+/* ---- Ordering Table: the TOKEN BRIDGE (Stage 2.3, 2026-07-21) -------------
+ *
+ * An OT slot is 4 bytes and cannot be widened: `Graphics.ot` is `u32 ot[OT_SIZE]`
+ * in include/graphics.h, a real decompiled struct. The previous implementation
+ * stored a HOST POINTER truncated to 32 bits, which works only under -m32 and
+ * was the single thing pinning the build to a 32-bit target.
+ *
+ * Instead of an address, a slot/tag now holds a **token**: a 1-based index into
+ * a per-frame registry that owns the real (host-width) pointer. Tokens are 32
+ * bits by construction, so the representation is pointer-width independent and
+ * the same code is correct under -m32 and -m64.
+ *
+ *   token 0        = end of chain (what real hardware encodes as a NULL/terminator)
+ *   token 1..N     = registry index; the entry carries the pointer AND whether the
+ *                    target is a bare OT bucket rather than a drawable primitive
+ *
+ * This also RETIRES the old "bit 0 of the stored address means bucket" hack. That
+ * trick stole an alignment bit because a raw pointer had nowhere to put the
+ * distinction; real hardware gets it free from the tag word's separate `len`
+ * field (len==0 => just a link). A registry entry has room for it properly.
+ *
+ * Lifetime: the registry resets in ClearOTag, which is the head of every frame's
+ * ClearOTag -> AddPrim* -> DrawOTag cycle. Tokens are therefore valid for exactly
+ * one frame, which is all the OT itself is.
+ *
+ * Note the surface this replaced was tiny: src/ touches the link ONLY through
+ * AddPrim/addPrim (44 sites, 0 uses of setaddr/getaddr/termPrim/nextPrim), so
+ * this needed no decompiled-source edits at all. */
+#define PC_OT_MAX_TOKENS 65536
+
+static void *s_otPtr[PC_OT_MAX_TOKENS];
+static unsigned char s_otIsBucket[PC_OT_MAX_TOKENS];
+static u32 s_otTokens;      /* highest token minted this frame; 0 = none */
+static int s_otOverflowed;  /* latched, so the warning prints once per frame */
+
+static void PC_OtResetTokens(void) { s_otTokens = 0; s_otOverflowed = 0; }
+
+/* Mint a token for `p`. Returns 0 (= end of chain) on overflow, which drops the
+ * tail of that bucket rather than corrupting memory -- and says so loudly, since
+ * silently losing primitives is exactly the kind of failure that would otherwise
+ * look like a subtle rendering bug. */
+static u32 PC_OtMint(void *p, int isBucket) {
+    if (s_otTokens + 1 >= PC_OT_MAX_TOKENS) {
+        if (!s_otOverflowed) {
+            fprintf(stderr, "[libgpu] OT token registry full (%d/frame) -- primitives dropped. "
+                            "Raise PC_OT_MAX_TOKENS.\n", PC_OT_MAX_TOKENS);
+            s_otOverflowed = 1;
+        }
+        return 0;
+    }
+    s_otTokens++;
+    s_otPtr[s_otTokens] = p;
+    s_otIsBucket[s_otTokens] = (unsigned char)isBucket;
+    return s_otTokens;
+}
+
+static void *PC_OtResolve(u32 tok, int *isBucket) {
+    if (tok == 0 || tok > s_otTokens) return NULL;   /* 0 = terminator; > = stale/garbage */
+    *isBucket = s_otIsBucket[tok];
+    return s_otPtr[tok];
+}
+
 /* ---- Ordering Table (see the header comment on the `tag` representation) */
 
-u_long *ClearOTag(u_long *ot, int n) {
+unsigned int *ClearOTag(unsigned int *ot, int n) {
     /* ot really points at a u32[n] array (Graphics.ot in include/graphics.h)
      * -- see the libgpu.h file-header comment. Index through a u32* so each
      * slot write is 4 bytes, not 8.
@@ -346,32 +443,46 @@ u_long *ClearOTag(u_long *ot, int n) {
     u32 *slots = (u32 *)ot;
     int i;
     if (n <= 0) return ot;
-    /* Bit 0 of the stored address marks "this link's target is a bare OT
-     * bucket, not a real primitive" (safe: real primitive structs are at
-     * least 4-byte aligned, so AddPrim/setaddr never produces an odd
-     * address). DrawOTag checks this bit before dispatching each node so
-     * it can skip drawing bucket-chain slots instead of misreading their
-     * raw bytes as a primitive's code/fields -- real hardware gets the
-     * same distinction for free via the tag word's separate `len` field
-     * (len==0 means "just a link"), which direct pointer storage has no
-     * room for. See the libgpu.h file-header comment for why tag holds a
-     * direct pointer at all (only valid for this -m32 build). */
-    for (i = 0; i < n - 1; i++) slots[i] = ((u32)(size_t)&slots[i + 1]) | 1u;
-    slots[n - 1] = 0;
+    /* Frame boundary: ClearOTag is always the head of the
+     * ClearOTag -> AddPrim* -> DrawOTag cycle (3 call sites in src/, each
+     * paired with a DrawOTag), so this is where the token registry resets. */
+    PC_OtResetTokens();
+    for (i = 0; i < n - 1; i++) slots[i] = PC_OtMint(&slots[i + 1], 1);
+    slots[n - 1] = 0;   /* token 0 == end of chain */
     return ot;
 }
 
 void AddPrim(void *ot, void *p) {
-    setaddr(p, getaddr(ot));
-    setaddr(ot, p);
+    /* `ot` points at a u32 OT bucket slot; `p` at a primitive struct whose
+     * first word is its tag. Both hold TOKENS, never addresses -- see
+     * PC_OtMint. Classic list insert at the head of this bucket. */
+    u32 head = ((P_TAG *)ot)->tag;
+    ((P_TAG *)p)->tag = head;
+    ((P_TAG *)ot)->tag = PC_OtMint(p, 0);
 }
 
-void DrawOTag(u_long *p) {
-    u32 rawNext = ((P_TAG *)p)->tag;
-    while (rawNext) {
-        int isBucket = (int)(rawNext & 1u);
-        void *cur = (void *)(size_t)(rawNext & ~1u);
-        u32 rawTagOfCur = ((P_TAG *)cur)->tag;
+void DrawOTag(unsigned int *p) {
+    u32 nextTok = ((P_TAG *)p)->tag;
+    while (nextTok) {
+        int isBucket = 0;
+        void *cur = PC_OtResolve(nextTok, &isBucket);
+        u32 rawTagOfCur;
+        if (cur == NULL) {
+            /* A non-zero link that does not resolve means something wrote a RAW POINTER into a
+             * tag instead of minting a token (the `addPrim` macro did exactly this until
+             * 2026-07-21). Breaking here silently drops every primitive further down the chain --
+             * which presented as "the compass, logo and all textboxes vanished while the 3D
+             * looked perfect", and cost a full debug cycle to find. Never fail quietly again. */
+            static int warned = 0;
+            if (!warned) {
+                fprintf(stderr, "[libgpu] OT walk aborted: link %u is not a valid token "
+                                "(raw pointer written to a tag?). Everything after this point in "
+                                "the ordering table is being DROPPED.\n", nextTok);
+                warned = 1;
+            }
+            break;
+        }
+        rawTagOfCur = ((P_TAG *)cur)->tag;
 
         if (!isBucket) {
             int type = PC_GPU_PRIM_TYPE((P_TAG *)cur);
@@ -408,15 +519,22 @@ void DrawOTag(u_long *p) {
             }
             case PC_GPU_PRIM_DR_MODE: {
                 DR_MODE *m = (DR_MODE *)cur;
+                u32 tw = (u32)m->r0 | ((u32)m->g0 << 8) | ((u32)m->b0 << 16);
                 s_drawModeAbr = (int)((m->tpage >> 5) & 3);
                 s_drawModeTPage = (int)m->tpage;
+                if (tw & 0x800000u) { /* texture window present -> update state */
+                    s_twMaskX = tw & 0x1f;
+                    s_twMaskY = (tw >> 5) & 0x1f;
+                    s_twOffX = (tw >> 10) & 0x1f;
+                    s_twOffY = (tw >> 15) & 0x1f;
+                }
                 break;
             }
             default:
                 break;
             }
         }
-        rawNext = rawTagOfCur;
+        nextTok = rawTagOfCur;
     }
 
     /* Present now, after this frame's rasterization is done -- see the
@@ -444,7 +562,7 @@ void SetTile(TILE *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_TILE); }
  * Format per exchange/09-phase-c-gpu-backend.md (psx-spx cdromfileformats.md
  * "TIM Format"): 4-byte magic (10h), 4-byte mode (bit3 = has-CLUT, bits0-2 =
  * pixel type), then a CLUT section (if present) and a pixel section, each
- * shaped { u_long size; u_long destCoord (YyyyXxxxh); u_long whWord
+ * shaped { unsigned int size; unsigned int destCoord (YyyyXxxxh); unsigned int whWord
  * (YsizXsizh); pixel data }.
  *
  * Real ReadTIM does NOT upload to VRAM itself -- it only parses the header
@@ -457,22 +575,22 @@ void SetTile(TILE *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_TILE); }
  * and dojo.c does POINTER ARITHMETIC on tim.paddr (`tim.paddr + 0x1c20`) to
  * slice one TIM file into several separate LoadImage() calls. An earlier
  * version of this function uploaded to the TIM's embedded rect internally
- * with its paddr/caddr pointing at dummy zeroed static u_long placeholders --
+ * with its paddr/caddr pointing at dummy zeroed static unsigned int placeholders --
  * every caller's LoadImage() then read pixel data starting from the address
  * of a single zeroed local variable, walking off into whatever adjacent
  * stack/data-segment bytes followed it (visible on screen as garbage that
  * looked suspiciously like host pointer values -- because it was). */
 
-static u_long *s_openTimBase;
+static unsigned int *s_openTimBase;
 
-int OpenTIM(u_long *addr) {
+int OpenTIM(unsigned int *addr) {
     s_openTimBase = addr;
     return 0;
 }
 
-static u_long *ParseTimSection(u_long *sec, RECT *outRect, u_long **outData) {
-    u_long destCoord = sec[1];
-    u_long whWord = sec[2];
+static unsigned int *ParseTimSection(unsigned int *sec, RECT *outRect, unsigned int **outData) {
+    unsigned int destCoord = sec[1];
+    unsigned int whWord = sec[2];
     RECT r;
     r.x = (short)(destCoord & 0xFFFF);
     r.y = (short)(destCoord >> 16);
@@ -480,12 +598,12 @@ static u_long *ParseTimSection(u_long *sec, RECT *outRect, u_long **outData) {
     r.h = (short)(whWord >> 16);
     if (outRect) *outRect = r;
     if (outData) *outData = &sec[3];
-    return sec + (sec[0] / sizeof(u_long));
+    return sec + (sec[0] / sizeof(unsigned int));
 }
 
 TIM_IMAGE *ReadTIM(TIM_IMAGE *t) {
-    u_long *cursor = s_openTimBase;
-    u_long mode;
+    unsigned int *cursor = s_openTimBase;
+    unsigned int mode;
 
     cursor++; /* skip the 4-byte magic+version+reserved word */
     mode = *cursor++;
@@ -493,7 +611,7 @@ TIM_IMAGE *ReadTIM(TIM_IMAGE *t) {
 
     if (mode & 8) {
         static RECT s_clutRect;
-        static u_long *s_clutAddr;
+        static unsigned int *s_clutAddr;
         cursor = ParseTimSection(cursor, &s_clutRect, &s_clutAddr);
         t->crect = &s_clutRect;
         t->caddr = s_clutAddr;
@@ -504,7 +622,7 @@ TIM_IMAGE *ReadTIM(TIM_IMAGE *t) {
 
     {
         static RECT s_pixRect;
-        static u_long *s_pixAddr;
+        static unsigned int *s_pixAddr;
         ParseTimSection(cursor, &s_pixRect, &s_pixAddr);
         t->prect = &s_pixRect;
         t->paddr = s_pixAddr;
@@ -516,4 +634,4 @@ TIM_IMAGE *ReadTIM(TIM_IMAGE *t) {
 /* ---- deferred (debug bitmap-font printer, not the game's own text.c) ---- */
 
 int FntPrint(const char *fmt, ...) { (void)fmt; return 0; }
-u_long *FntFlush(int id) { (void)id; return NULL; }
+unsigned int *FntFlush(int id) { (void)id; return NULL; }

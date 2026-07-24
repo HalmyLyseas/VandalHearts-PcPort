@@ -28,7 +28,7 @@
 
 static double s_nextVBlankMs = 0.0; /* fractional frame deadline (SDL_GetTicks ms basis) */
 static int s_vsyncInitialized = 0;
-static long s_vblankCount = 0;
+static int s_vblankCount = 0;
 
 /* Diagnostic FPS logging (2026-07-12, investigating whether VSync(2) during
  * battle actually halves the real display-update rate, or whether real
@@ -38,7 +38,7 @@ static long s_vblankCount = 0;
  * inner mode-driven wait loop, and prints calls-per-real-second once a
  * second to stderr, tagged with the mode last seen. */
 static Uint32 s_fpsWindowStart = 0;
-static long s_fpsWindowCalls = 0;
+static int s_fpsWindowCalls = 0;
 static int s_fpsLastMode = -2;
 
 /* Camera-target full-watch-log (2026-07-12, exchange/20-camera-viewport-coordinates.md).
@@ -95,14 +95,46 @@ void PC_DebugSpriteLog(int tileX, int tileZ, int winX, int winZ, int mapSX, int 
     int inX = (tileX >= winX && tileX <= mapSX + winX - 1);
     int inZ = (tileZ >= winZ && tileZ <= mapSZ + winZ - 1);
     /* GTE projection state used for THIS sprite (ofx/ofy are stored <<16; report >>16 too) */
-    long ofx = 0, ofy = 0; int h = 0, rt00 = 0, rt02 = 0, rt22 = 0, trx = 0, trz = 0;
+    int ofx = 0, ofy = 0; int h = 0, rt00 = 0, rt02 = 0, rt22 = 0, trx = 0, trz = 0;
     PC_GteDebugState(&ofx, &ofy, &h, &rt00, &rt02, &rt22, &trx, &trz);
     fprintf(s_spriteFateFile, "%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%ld,%d,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, tileX, tileZ, winX, winZ, mapSX, mapSZ, inX, inZ,
             culled, gfxIdx, sx, sy, otz, otIdx,
-            (long)(ofx >> 16), (long)(ofy >> 16), h, rt00, rt02, rt22, trx, trz,
+            (int)(ofx >> 16), (int)(ofy >> 16), h, rt00, rt02, rt22, trx, trz,
             PC_GteLastOtz(), PC_GteZsf4());
     fflush(s_spriteFateFile);
+}
+
+/* Per event-entity anim-set probe (build SPRITE_LOG=1, enable VH_SPRITE_LOG). Dumps each event
+ * entity's baseAnimSet/altAnimSet pointer, the animSet actually used, animIdx, facing, animData,
+ * and resulting gfxIdx + tile -- to find a prop entity spawned with the WRONG (character) anim-set.
+ * Deduped per object slot: only writes a row when that slot's gfxIdx changes, so volume stays low. */
+static FILE *s_evtEntFile = NULL;
+void PC_DebugEvtEntityLog(int objIdx, int tileX, int tileZ, const void *base, const void *alt,
+                          const void *cur, int animIdx, int facing, const void *animData,
+                          int gfxIdx, int usingAlt, int runState, int opcode, int cmdState,
+                          int cmdOff, int cmdArg) {
+    static int enabled = -1;
+    static int lastGfx[1024], lastOp[1024], lastState[1024];
+    static unsigned char seen[1024];
+    if (enabled < 0) enabled = (getenv("VH_SPRITE_LOG") != NULL) ? 1 : 0;
+    if (!enabled) return;
+    if (objIdx >= 0 && objIdx < 1024) {
+        /* log when the sprite OR the command-processing state changes (so we catch the
+         * command each entity is parked on, not just gfx changes) */
+        if (seen[objIdx] && lastGfx[objIdx] == gfxIdx && lastOp[objIdx] == opcode && lastState[objIdx] == runState) return;
+        seen[objIdx] = 1; lastGfx[objIdx] = gfxIdx; lastOp[objIdx] = opcode; lastState[objIdx] = runState;
+    }
+    if (s_evtEntFile == NULL) {
+        s_evtEntFile = fopen("vh_evt_entity.csv", "w");
+        if (s_evtEntFile == NULL) { enabled = 0; return; }
+        fprintf(s_evtEntFile,
+                "frame,objIdx,tileX,tileZ,baseAnimSet,altAnimSet,animSetUsed,animIdx,facing,animData,gfxIdx,usingAlt,runState,opcode,cmdState,cmdOff,cmdArg\n");
+    }
+    fprintf(s_evtEntFile, "%ld,%d,%d,%d,%p,%p,%p,%d,%d,%p,%d,%d,%d,%d,%d,%d,%d\n",
+            s_vblankCount, objIdx, tileX, tileZ, base, alt, cur, animIdx, facing, animData, gfxIdx, usingAlt,
+            runState, opcode, cmdState, cmdOff, cmdArg);
+    fflush(s_evtEntFile);
 }
 
 /* AI spell-target scoring log (build with AI_LOG=1, enable at runtime with VH_AI_LOG). One line per
@@ -130,9 +162,55 @@ void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
     fflush(s_aiLogFile);
 }
 
+/* bugreport-03 (DEATHANGEL caster never casts): dumps the AI's top-level spell decision in
+ * Objf570_AI_TBD case 0 -- every input that can force the melee branch (state 1) plus the state it
+ * actually chose. `state` 1 = melee/move only (OBJF_AI_TBD_403), 2/4 = cast (OBJF_AI_TBD_402).
+ * The two zeroing inputs to watch: spells[]==SPELL_NULL, and mp < gSpells[spell].mpCost (which
+ * zeroes spellEffectA/B and drops the AI to state 1 even for a fully-equipped caster). */
+static FILE *s_aiDecFile = NULL;
+void PC_DebugAiDecisionLog(int name, int cls, int team, int lvl, int mp, int maxMp,
+                           int spell0, int spell1, int cost0, int cost1,
+                           int effect0, int effect1, int effA, int effB, int state) {
+    static int enabled = -1;
+    if (enabled < 0) enabled = (getenv("VH_AI_LOG") != NULL) ? 1 : 0;
+    if (!enabled) return;
+    if (s_aiDecFile == NULL) {
+        s_aiDecFile = fopen("vh_ai_decision.csv", "w");
+        if (s_aiDecFile == NULL) { enabled = 0; return; }
+        fprintf(s_aiDecFile, "name,class,team,level,mp,maxMp,spell0,spell1,mpCost0,mpCost1,"
+                             "exEffect0,exEffect1,spellEffectA,spellEffectB,chosenState\n");
+    }
+    fprintf(s_aiDecFile, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+            name, cls, team, lvl, mp, maxMp, spell0, spell1, cost0, cost1,
+            effect0, effect1, effA, effB, state);
+    fflush(s_aiDecFile);
+}
+
 /* Dumps the game state-machine fields for freeze diagnosis (called from the SIGUSR1 handler in
  * pc_bootstrap.c). A "freeze" where the frame loop keeps ticking = a state stuck waiting on a
  * condition; these fields say which state/scene/map it's stuck in so we know where to look. */
+/* bugreport (epilogue ocarina silent): log every PerformAudioCommand so we can see whether the
+ * ending's PLAY_XA(102) == 0x366 is ever issued (trigger fired) vs never reaching the audio layer.
+ * Decodes the 0x?00 opcode nibble for readability. Build AUDIO_CMD_LOG=1, enable VH_AUDIO_LOG. */
+void PC_DebugAudioCmdLog(int cmd, int enabled) {
+    static int en = -1;
+    static FILE *f = NULL;
+    if (en < 0) en = (getenv("VH_AUDIO_LOG") != NULL) ? 1 : 0;
+    if (!en) return;
+    if (f == NULL) {
+        f = fopen("vh_audio_cmd.csv", "w");
+        if (f == NULL) { en = 0; return; }
+        fprintf(f, "t_ms,cmd_hex,op,id,audioEnabled\n");
+    }
+    {
+        int op = (cmd >> 8) & 0xff, id = cmd & 0xff;
+        const char *name = op == 0 ? "PARAMLESS" : op == 2 ? "PLAY_SEQ" : op == 3 ? "PLAY_XA"
+                         : op == 5 || op == 6 || op == 7 ? "SFX" : op == 0x13 ? "PREPARE_XA" : "?";
+        fprintf(f, "%u,0x%04x,%s,%d,%d\n", s_vblankCount, cmd, name, id, enabled);
+        fflush(f);
+    }
+}
+
 void PC_DumpGameState(int fd) {
     (void)fd;
     fprintf(stderr,
@@ -154,6 +232,9 @@ void PC_UpdateCamOsd(void) {
 }
 
 static void LogCameraTraceRow(void) {
+    static int enabled = -1;
+    if (enabled < 0) enabled = (getenv("VH_CAM_LOG") != NULL) ? 1 : 0;   /* opt-in; off for end users */
+    if (!enabled) return;
     if (s_camTraceFile == NULL) {
         s_camTraceFile = fopen("vh_camera_target_full_watch_log_pc.csv", "w");
         if (s_camTraceFile == NULL) return;
@@ -244,7 +325,7 @@ static void LogCameraTraceRow(void) {
  * only game RAM (no src/ changes, matching build untouched). Pairs with 43-camera-focus-easein. */
 extern u8 D_80123468; /* BattleMgr state-6 release flag (battle.h) */
 extern u8 D_80123480; /* Objf570 sub-object hand-off flag (ai.c) */
-extern long g_aiVisitCount[8]; /* cumulative GetRCnt visits per AI range (libkernel.c); for calibration */
+extern int g_aiVisitCount[8]; /* cumulative GetRCnt visits per AI range (libkernel.c); for calibration */
 static FILE *s_aiChainFile = NULL;
 
 static void LogAiChainRow(void) {
@@ -307,6 +388,9 @@ extern u32 GetRandSeedForDebug(void);
 static FILE *s_randTraceFile = NULL;
 
 static void LogRandSeedRow(void) {
+    static int enabled = -1;
+    if (enabled < 0) enabled = (getenv("VH_RAND_LOG") != NULL) ? 1 : 0;   /* opt-in; off for end users */
+    if (!enabled) return;
     if (s_randTraceFile == NULL) {
         s_randTraceFile = fopen("vh_rand_seed_full_watch_log_pc.csv", "w");
         if (s_randTraceFile == NULL) return;
@@ -370,7 +454,7 @@ static void LogCameraMatrixRow(void) {
  * (VH_TERRAIN_LOG); the call site itself is a #ifdef PC_DEBUG_TERRAIN_LOG (TERRAIN_LOG=1 build),
  * so the matching build is untouched. */
 static FILE *s_terrFile = NULL;
-static long s_terrCount = 0, s_terrBlack = 0, s_terrOtzSum = 0;
+static int s_terrCount = 0, s_terrBlack = 0, s_terrOtzSum = 0;
 static int s_terrOtzMin = 0x7fffffff, s_terrOtzMax = 0;
 /* GTE state captured on the first tile of the frame (same for every tile that frame):
  * trx/trz = g.tr[0]/g.tr[2] actually loaded at terrain render (the number that bisects
@@ -382,7 +466,7 @@ void PC_DebugTerrainTile(int otz, int r0, int g0, int b0) {
     if (enabled < 0) enabled = (getenv("VH_TERRAIN_LOG") != NULL) ? 1 : 0;
     if (!enabled) return;
     if (s_terrCount == 0) {
-        long ofx, ofy; int h, rt00, rt02, rt22, trx, trz;
+        int ofx, ofy; int h, rt00, rt02, rt22, trx, trz;
         PC_GteDebugState(&ofx, &ofy, &h, &rt00, &rt02, &rt22, &trx, &trz);
         s_terrTrx = trx; s_terrTrz = trz; s_terrH = h; s_terrRt22 = rt22;
     }
@@ -450,9 +534,9 @@ static FILE *s_tprojFile = NULL;
 void PC_DebugTerrainProjLog(int v0x, int v0y, int v0z, int v1x, int v1y, int v1z,
                             int v2x, int v2y, int v2z, int v3x, int v3y, int v3z) {
     static int enabled = -1;
-    static long lastFrame = -1;
+    static int lastFrame = -1;
     int c, vin[4][3];
-    long ofx, ofy; int h, rt00, rt02, rt22, trx, trz;
+    int ofx, ofy; int h, rt00, rt02, rt22, trx, trz;
 
     if (enabled < 0) enabled = (getenv("VH_TERRAINPROJ_LOG") != NULL) ? 1 : 0;
     if (!enabled) return;
@@ -478,7 +562,7 @@ void PC_DebugTerrainProjLog(int v0x, int v0y, int v0z, int v1x, int v1y, int v1z
     fprintf(s_tprojFile, "%ld,%d,%d,%d,%ld,%ld", s_vblankCount,
             gCameraRotation.vx, gCameraRotation.vy, h, ofx, ofy);
     for (c = 0; c < 4; c++) {
-        long sx, sy, ir1, ir2, ir3, sz3, n;
+        int sx, sy, ir1, ir2, ir3, sz3, n;
         /* corners were pushed v0,v1,v2 (RTPT) then v3 (RTPS) => back = 3,2,1,0 */
         PC_GteProjEntry(3 - c, &sx, &sy, &ir1, &ir2, &ir3, &sz3, &n);
         fprintf(s_tprojFile, ",%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld,%ld",
@@ -523,7 +607,7 @@ void PC_DebugSpriteQuadLog(int gfx, int otz, int otIdx, int facingLeft,
     /* box-quad corners went through TransformOne (RotTransPers4: v0,v1,v2 via RTPT then v3) so the
      * projection ring holds them back=3,2,1,0; dump each corner's IR2/SZ3/n to pin the ~4x Y-squish
      * (height = H*IR2/SZ3): is SZ3 4x too big, IR2 (box Y-half-extent) 4x too small, or n saturated? */
-    { int c; long sx, sy, ir1, ir2, ir3, sz3, n;
+    { int c; int sx, sy, ir1, ir2, ir3, sz3, n;
       for (c = 0; c < 4; c++) {
           PC_GteProjEntry(3 - c, &sx, &sy, &ir1, &ir2, &ir3, &sz3, &n);
           fprintf(s_squadFile, ",%ld,%ld,%ld", ir2, sz3, n);
@@ -567,8 +651,8 @@ static void pc_pad_ensure_open(void) {
     }
 }
 
-static u_long pc_pad_read(void) {
-    u_long p = 0;
+static unsigned int pc_pad_read(void) {
+    unsigned int p = 0;
     SDL_GameController *c;
     const int AXIS_DZ = 16000;
 
@@ -603,16 +687,26 @@ static u_long pc_pad_read(void) {
         if (lx < -AXIS_DZ) p |= PADLleft;  else if (lx > AXIS_DZ) p |= PADLright;
         if (ly < -AXIS_DZ) p |= PADLup;    else if (ly > AXIS_DZ) p |= PADLdown;
     }
+    /* QoL: right analog stick -> camera shoulder buttons, twin-stick feel.
+     * Horizontal = L1/R1 (camera rotate), vertical = L2/R2 (camera zoom).
+     * ORs with the physical shoulders/triggers above (both inputs work).
+     * SDL Y axis is +down, matching the left-stick convention. */
+    {
+        int rx = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTX);
+        int ry = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTY);
+        if (rx < -AXIS_DZ) p |= PADL1;  else if (rx > AXIS_DZ) p |= PADR1;  /* left->L1, right->R1 */
+        if (ry >  AXIS_DZ) p |= PADL2;  else if (ry < -AXIS_DZ) p |= PADR2; /* down->L2, up->R2   */
+    }
     return p;
 }
 
-u_long PadRead(int id) {
+unsigned int PadRead(int id) {
     (void)id;
 
     SDL_PumpEvents();
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
 
-    u_long p1 = 0;
+    unsigned int p1 = 0;
     if (keys[SDL_SCANCODE_UP])     p1 |= PADLup;
     if (keys[SDL_SCANCODE_DOWN])   p1 |= PADLdown;
     if (keys[SDL_SCANCODE_LEFT])   p1 |= PADLleft;

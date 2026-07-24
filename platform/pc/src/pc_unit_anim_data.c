@@ -3949,7 +3949,7 @@ static const u8 *sUnitAnimSet_115[26] = {
     &sUnitAnimDataBlob[772], /* orig 0x800e48cc */
 };
 
-u8 **gUnitAnimSets[144] = {
+u8 **gUnitAnimSets[301] = {
     (u8 **)0, /* unit 0, NULL in the original */
     (u8 **)sUnitAnimSet_0, /* unit 1, orig 0x800e72f4 */
     (u8 **)sUnitAnimSet_1, /* unit 2, orig 0x800e735c */
@@ -4094,4 +4094,24 @@ u8 **gUnitAnimSets[144] = {
     (u8 **)sUnitAnimSet_90, /* unit 141, orig 0x800e9764 */
     (u8 **)sUnitAnimSet_88, /* unit 142, orig 0x800e96a4 */
     (u8 **)sUnitAnimSet_82, /* unit 143, orig 0x800e9464 */
+
+    /* --- PERMUTER tail, indices 144..300 (implicit NULL) -----------------------------------
+     * SetupSprites (src/split_0496f8.c:1073) reads gUnitAnimSets[gSpriteStripUnitIds[i]], and the
+     * index runs well past 143. The decomp author flagged it (`//?: Won't this read out-of-bounds
+     * of gUnitAnimSets?`). The TRUE ceiling is ~300, not the 151 first seen: SetupPartySprites
+     * (this file's src, split_0496f8.c:117-176) adjusts event-sprite IDs 151..274 by `+= adv*6`
+     * (adv <= 4) -> max ~298, and its own comment reserves "IDs 151..300". An earlier fix sized
+     * this array to 192 off the first observed index and a ch4 cutscene then overran it at ~199 --
+     * the same over-fitting mistake made with gTravelAscentCost. Sized once here to 301.
+     *
+     * On hardware the read lands in gUnitClutIds (adjacent at 0x800ea3cc), i.e. CLUT bytes read as
+     * a pointer -- garbage that happens to be in valid RAM. That is NOT reproducible here, because
+     * gUnitAnimSets is reconstructed (this file), not laid out adjacent to our gUnitClutIds. So
+     * these entries are NULL: the goal is SAFETY, not faithfulness -- gSpriteStripAnimSets IS
+     * dereferenced (split_03c94c.c:151), so a wild pointer is a real hazard, whereas NULL is caught
+     * by pc_bootstrap.c's fault handler (-> gfxIdx 0). Believed set-but-unused for rendering:
+     * cutscene units get their animset from gEvtEntities (milestone_cutscene_units_fixed), which is
+     * why 144..191 being NULL since the earlier fix broke no cutscene sprite through ch1-ch4. If a
+     * cutscene sprite ever IS wrong, reconstruct those event-sprite animsets -- do not just grow
+     * the array further. */
 };

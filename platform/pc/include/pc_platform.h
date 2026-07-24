@@ -11,12 +11,14 @@
  * extractcd`) as the virtual disc libcd.c reads from. Returns nonzero on
  * success. Must be called before CdInit(). */
 int PC_CdMount(const char *discImagePath);
+int PC_CdDiscSignatureOk(void);   /* 1 if the mounted image has Vandal Hearts (USA)'s boot signature */
 
 /* Opens an SDL2+OpenGL window for the GPU backend to present into. Optional:
  * if never called, PC_GpuPresent() below just no-ops the windowing part,
  * so libgpu.c's VRAM/rasterizer/OT logic is fully testable headlessly.
  * Returns nonzero on success. */
 int PC_GpuInit(int width, int height, const char *title);
+void PC_GpuGetWindowSize(int *w, int *h, int *scale);   /* actual scaled window size + VH_SCALE factor */
 
 /* Called by PutDispEnv() every frame: blits a VRAM sub-rect (BGR555, vramW
  * halfwords/line) to the window opened by PC_GpuInit(). No-ops if
@@ -49,12 +51,12 @@ void PC_UpdateCamOsd(void);
  * OT index -- so we can tell whether missing units are culled by winOrigin, projected off-screen,
  * or depth-gated. Writes vh_sprite_fate.csv when VH_SPRITE_LOG env var is set; no-op otherwise. */
 void PC_DebugTerrainTile(int otz, int r0, int g0, int b0);
-void PC_GteProjEntry(int back, long *sx, long *sy, long *ir1, long *ir2, long *ir3, long *sz3, long *nout);
+void PC_GteProjEntry(int back, int *sx, int *sy, int *ir1, int *ir2, int *ir3, int *sz3, int *nout);
 void PC_DebugSpriteLog(int tileX, int tileZ, int winX, int winZ, int mapSX, int mapSZ,
                        int culled, int gfxIdx, int sx, int sy, int otz, int otIdx);
 
 /* Reads the GTE projection state used by the last TransformOne (defined in libgte.c). */
-void PC_GteDebugState(long *ofx, long *ofy, int *h, int *rt00, int *rt02, int *rt22,
+void PC_GteDebugState(int *ofx, int *ofy, int *h, int *rt00, int *rt02, int *rt22,
                       int *trx, int *trz);
 int PC_GteLastOtz(void); /* last AVSZ4 terrain OTZ */
 int PC_GteZsf4(void);    /* current zsf4 */
