@@ -2453,10 +2453,44 @@ void Objf425_BattleOptions(Object *obj) {
       s_menuMem_battleOptions_801231fc = 0;
       if (gSignal1 == 0) {
 #ifdef PC_FEAT
-         /* Stage 3 (1.1): bidirectional ally-cycle on the shoulder buttons. The PC backend
+         /* Stage 3 (1.1B): Square toggles the enemy threat overlay -- the union of every living
+          * enemy's move+attack reach, drawn purple. Square was freed by the 1.1A control change
+          * (ally-cycle moved to the shoulders). Rebuilt once on enable (positions are static during
+          * the player turn). See exchange/62. */
+         if ((gSavedPadStateNewPresses & PAD_SQUARE) && !gPlayerControlSuppressed &&
+             !gClearSavedPadState) {
+            gShowThreatGrid = !gShowThreatGrid;
+         }
+         /* Refresh the overlay when the board changed (unit/crate moved, a death). This is done HERE,
+          * in the idle field-cursor state, NOT per-frame in UpdateInput: ComputeThreatGrid clobbers
+          * the shared pathfinding scratch (grids 3/4 + gImpededSteps), so running it while the game
+          * is mid-action corrupts that logic -- it broke crate pushes (bugreport-03). The idle phase
+          * has no pathfinding in flight, so it's safe. Cost: only recomputes on an actual change. */
+         if (gShowThreatGrid && !gPlayerControlSuppressed) {
+            static u32 s_threatSig = 0;
+            u32 sig = 0;
+            s32 k, gz, gx;
+            UnitStatus *u;
+            for (k = 1; k < UNIT_CT; k++) {
+               u = &gUnits[k];
+               sig = sig * 131u + (u8)u->idx;
+               if (u->idx != 0 && u->sprite != 0) {
+                  sig = sig * 131u + (u8)u->team;
+                  sig = sig * 131u + (u16)u->sprite->z1.s.hi;
+                  sig = sig * 131u + (u16)u->sprite->x1.s.hi;
+               }
+            }
+            for (gz = 0; gz < 30; gz++)
+               for (gx = 0; gx < 65; gx++)
+                  sig = sig * 131u + gCrateGrid[gz][gx];
+            if (sig != s_threatSig) {
+               ComputeThreatGrid();
+               s_threatSig = sig;
+            }
+         }
+         /* Stage 3 (1.1A): bidirectional ally-cycle on the shoulder buttons. The PC backend
           * routes the physical L1/R1 to pad 2 (gPad2State), leaving the camera (right stick
-          * -> pad 1) untouched. R1 = next unit (the original Square behaviour), L1 = previous.
-          * Square is now free for the enemy-threat overlay (Feature B). See exchange/62. */
+          * -> pad 1) untouched. R1 = next unit (the original Square behaviour), L1 = previous. */
          {
             s32 cycleDir = (gSavedPad2StateNewPresses & PAD_R1) ?  1 :
                            (gSavedPad2StateNewPresses & PAD_L1) ? -1 : 0;
@@ -2651,6 +2685,10 @@ void Objf425_BattleOptions(Object *obj) {
       switch (obj->state2) {
       case 0:
          gIsEnemyTurn = 1;
+#ifdef PC_FEAT
+         gShowThreatGrid = 0;   /* Stage 3 (1.1B): drop the threat overlay at turn end so it can't
+                                 * linger with stale positions into/after the enemy turn. */
+#endif
          obj->state2++;
          break;
       case 1:

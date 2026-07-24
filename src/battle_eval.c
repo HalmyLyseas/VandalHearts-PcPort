@@ -137,6 +137,11 @@ s32 State_Battle(void) {
          gSignal1 = 0;
          gSignal2 = 0;
          gIsEnemyTurn = 0;
+#ifdef PC_FEAT
+         gShowThreatGrid = 0;   /* Stage 3 (1.1B): every battle starts with the threat overlay off, so
+                                 * it can never linger from a prior battle into UpdateInput's per-frame
+                                 * recompute (which now runs in all phases). */
+#endif
          gState.lastSelectedUnit = 1;
          gState.mapCursorOutOfRange = 0;
          gState.expScalingLevel = gBattleExpScalingLevels[gState.mapNum];

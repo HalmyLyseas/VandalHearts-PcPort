@@ -74,6 +74,12 @@ typedef enum GridColor {
    GRID_COLOR_YELLOW = 3
 } GridColor;
 
+#ifdef PC_FEAT
+/* Stage 3 (1.1): purple enemy-threat overlay. A macro, not an enum member, so the matching
+ * build's GridColor is byte-for-byte unchanged (no trailing-comma / value-set difference). */
+#define GRID_COLOR_PURPLE 4
+#endif
+
 /*typedef struct ImpededStep {
    u8 z;
    u8 x;
@@ -181,6 +187,15 @@ extern u8 gOverheadMapState;
 extern BVectorZXY gMapCursorStartingPos[BATTLE_CT];
 extern HiddenItem gMapHiddenItems[BATTLE_CT][2];
 extern u8 gShowBlueMovementGrid;
+
+#ifdef PC_FEAT
+/* Stage 3 (1.1): enemy threat overlay. gThreatGrid holds the union of every living enemy's
+ * move+attack reach; gShowThreatGrid toggles its display; ComputeThreatGrid() rebuilds it. */
+extern PathGridRow gThreatGrid[30];
+extern PathGridRow *gThreatGridPtr;   /* = &gThreatGrid[1], the [1]-origin alias the others use */
+extern u8 gShowThreatGrid;
+void ComputeThreatGrid(void);
+#endif
 
 s16 GetTerrainElevation(s8, s8);
 void DepressButton(s32 x, s32 z);

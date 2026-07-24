@@ -2,6 +2,11 @@
 #include "battle.h"
 #include "units.h"
 #include "field.h"
+#ifdef PC_FEAT
+#include "object.h"   /* full struct Object (unit sprite z1/x1) for ComputeThreatGrid; gated so the
+                       * matching build's preprocessor input -- and thus its byte-exact output -- is
+                       * unchanged. */
+#endif
 
 #ifdef PC_DEBUG_PATH_STEP
 /* Two probes for the gTravelAscentCost/DescentCost overrun the ASAN sweep found (exchange/58,
@@ -1682,3 +1687,56 @@ void NoopForever_8002f9b0(void) {
    while (1) {
    }
 }
+
+#ifdef PC_FEAT
+/* Stage 3 (1.1): enemy threat overlay -- the union of every living enemy's move+attack reach.
+ * Rebuilt on demand (Square toggles it; NOT per frame -- unit positions are static during the
+ * player's turn). Scratch grids 3 and 4 are free in the player field phase (the AI uses 2/6, and
+ * the blue/red/yellow display grids are 10/0/1). All grids use the &grid[1] logical-origin alias,
+ * so gThreatGridPtr matches the coordinate system RenderField reads. A reachable move tile is
+ * itself threatened; each such tile's attack range (computed exactly as the game does for a unit's
+ * own preview -- ranged vs melee by attackRange) is unioned in. */
+PathGridRow  gThreatGrid[30];
+PathGridRow *gThreatGridPtr = &gThreatGrid[1];
+u8           gShowThreatGrid;
+
+void ComputeThreatGrid(void) {
+   PathGridRow *pMove   = &gPathGrid3[1];
+   PathGridRow *pAttack = &gPathGrid4[1];
+   UnitStatus *e;
+   s32 i, z, x, az, ax;
+   s16 ez, ex;
+
+   for (z = 0; z < 30; z++)
+      for (x = 0; x < 65; x++)
+         gThreatGrid[z][x] = 0;
+
+   for (i = 1; i < UNIT_CT; i++) {
+      e = &gUnits[i];
+      if (e->idx == 0 || e->team != TEAM_ENEMY || e->sprite == 0)
+         continue;
+      ez = e->sprite->z1.s.hi;
+      ex = e->sprite->x1.s.hi;
+
+      /* enemy move range into scratch grid 3 (same call the AI makes on enemies) */
+      PopulateMovementGrid(ez, ex, e->travelRange, 3);
+
+      for (z = 0; z < 29; z++) {
+         for (x = 0; x < 65; x++) {
+            if (pMove[z][x] == PATH_STEP_UNSET)
+               continue;              /* not reachable */
+            gThreatGridPtr[z][x] = 1; /* a tile the enemy can stand on is threatened */
+            /* ...and everything it can attack from there */
+            if (e->attackRange >= 2)
+               PopulateRangedAttackGrid(z, x, e->attackRange, 4);
+            else
+               PopulateMeleeAttackGrid(z, x, 4, e->attackRange);
+            for (az = 0; az < 29; az++)
+               for (ax = 0; ax < 65; ax++)
+                  if (pAttack[az][ax] != PATH_STEP_UNSET)
+                     gThreatGridPtr[az][ax] = 1;
+         }
+      }
+   }
+}
+#endif

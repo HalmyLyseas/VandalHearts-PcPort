@@ -1240,7 +1240,24 @@ void RenderField(void) {
          } else if (gRedAttackGridPtr[iz][ix] != 0) {
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
          } else if (gBlueMovementGridPtr[iz][ix] != 0) {
+#ifdef PC_FEAT
+            /* Stage 3 (1.1B): a reachable tile that is ALSO enemy-threatened -> warn in yellow, so
+             * the player still sees their own extra movement AND the danger (bugreport-02 #3).
+             * Hidden while control is suppressed (mid-animation): during a unit walk / crate push the
+             * board is changing, so a not-yet-recomputed overlay would be stale -- show nothing and
+             * let it reappear correct when control returns (bugreport-02 #2 3rd check). */
+            if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
+               RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_YELLOW);
+            } else
+#endif
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
+#ifdef PC_FEAT
+         /* Stage 3 (1.1B): pure enemy threat sits BELOW the active unit's move/target grids so
+          * casting AoE and movement previews stay visible on top (bugreport-02 #4); and it is hidden
+          * mid-animation (see above) so a stale danger zone is never drawn. */
+         } else if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
+            RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_PURPLE);
+#endif
          } else {
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_NONE);
          }
@@ -1361,6 +1378,13 @@ void RenderMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                   poly->r0 = gGridColorOscillation;
                   poly->g0 = gGridColorOscillation;
                   poly->b0 = 0;
+#ifdef PC_FEAT
+               } else if (gridColor == GRID_COLOR_PURPLE) {
+                  /* Stage 3 (1.1) enemy threat: pulsing magenta (red+blue), distinct from all three. */
+                  poly->r0 = gGridColorOscillation;
+                  poly->g0 = 40;
+                  poly->b0 = gGridColorOscillation;
+#endif
                }
             }
 
