@@ -13,15 +13,26 @@ claimed by this project.
 You must supply your own legally-owned copy of the game.
 --------------------------------------------------------------------------------
 
-This repository does NOT distribute any of the following. They are git-ignored
-and must be sourced from your own copy; the build reconstructs what it needs from
-them locally:
+This source repository does NOT distribute any of the following. They are
+git-ignored and must be sourced from your own copy; the build reconstructs what it
+needs from them locally:
 
   * the base game executable (SLUS_004.47) or a disc image;
   * the Sony PsyQ SDK headers or any PlayStation BIOS data (including the PS1
     kanji font used by the game's text rendering);
   * Konami's in-game text (e.g. spell and item description strings);
   * any extracted game graphics, audio, or other assets.
+
+Pre-built binaries (release downloads), by contrast, DO embed a portion of
+game-derived data, because a compiled binary bakes in what the source tree would
+otherwise regenerate locally: the executable's static data segment (game tables
+and some encoded UI text) reconstructed from SLUS_004.47, a small PS1 BIOS-derived
+kanji glyph set, and the reconstructed text/pointer and functional data tables.
+This is © Konami / © Sony data, embedded so the port runs, with no ownership
+claimed. It is only a fraction of the game — dialogue, maps, scripts, audio, and
+video are NOT included and load at runtime from the disc you supply, so a release
+binary does nothing without your own legally-owned copy. See NOTICE for the full
+breakdown.
 
 What the repository DOES contain, beyond the original PC-port code (see NOTICE):
 a reverse-engineered decompilation of the game code (src/), and a small number of

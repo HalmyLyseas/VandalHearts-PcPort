@@ -41,8 +41,30 @@ GPL-2.0. No ownership is claimed over it. See DISCLAIMER.
   * The decomp toolchain under tools/ originates from the broader PSX-decomp
     community (splat, maspsx, and related scripts); see CREDITS.
 
-  * NOT PRESENT in this repository at all (git-ignored, never distributed): the
-    base game executable and disc image, the Sony PsyQ SDK headers and BIOS data
-    (including the PS1 kanji font), Konami's in-game text, and any extracted game
-    assets or audio. These are regenerated locally from your own legally-owned
-    copy at build time. See DISCLAIMER and README.md.
+  * NOT PRESENT in this source repository (git-ignored): the base game executable
+    and disc image, the Sony PsyQ SDK headers and BIOS data (including the PS1
+    kanji font), Konami's in-game text, and any extracted game assets or audio.
+    These are regenerated locally from your own legally-owned copy at build time.
+    See DISCLAIMER and README.md.
+
+================================================================================
+Binary releases (pre-built downloads) — what they embed
+================================================================================
+
+The statements above describe this SOURCE REPOSITORY. Pre-built binaries may also
+be published for convenience (e.g. on the project's releases page). Being
+compiled, a binary necessarily EMBEDS a portion of game-derived data that the
+build bakes in — it cannot be reconstructed at runtime the way the source tree
+regenerates it. Concretely, a release binary contains:
+
+  * the executable's static data segment (game tables and some encoded UI text),
+    reconstructed from SLUS_004.47;
+  * a small PS1 BIOS-derived kanji glyph set used by the text renderer;
+  * the reconstructed text/pointer tables and functional game-data tables.
+
+This is game-derived data (© Konami) and BIOS-derived data (© Sony), embedded so
+the port can run; no ownership is claimed over any of it. It is only a FRACTION
+of the game — the bulk of the content (dialogue, maps, event scripts, audio, and
+video) is NOT included and is read at runtime from the disc image you supply. A
+release binary is non-functional without your own legally-owned copy of the game.
+If the copyright holder objects to this, binaries will be withdrawn on request.

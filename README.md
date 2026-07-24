@@ -142,12 +142,18 @@ endorsed by Konami or Sony, not sold, and generating no profit.
 
 - **Vandal Hearts and all related IP are © Konami.** The PlayStation, its BIOS, and the PsyQ SDK are
   © Sony. No ownership of either is claimed.
-- **Not distributed:** the game executable, a disc image, Sony BIOS/SDK data (including the PS1
-  kanji font), Konami's in-game text, or any extracted assets. Supply your own game copy.
+- **Not in this source repository:** the game executable, a disc image, Sony BIOS/SDK data
+  (including the PS1 kanji font), Konami's in-game text, or any extracted assets. Supply your own
+  game copy; the build reconstructs what it needs locally.
 - **Present in the repo:** the reverse-engineered decompilation of the game code (`src/`), and a
   small number of functional game-data tables (unit stats, animation/sprite pointer tables)
   reconstructed from the binary — included for interoperability and preservation, © Konami, not
   claimed as this project's own.
+- **Pre-built release binaries** *do* embed a portion of game-derived data (the executable's static
+  data segment, a small BIOS-derived kanji font, and the reconstructed text/data tables), because a
+  compiled binary bakes in what the source tree regenerates locally. This is only a fraction of the
+  game — dialogue, maps, audio, and video load at runtime from the disc you supply, so a release
+  binary does nothing without your own legally-owned copy. Full breakdown in [NOTICE](NOTICE).
 
 Full detail in [DISCLAIMER](DISCLAIMER).
 
