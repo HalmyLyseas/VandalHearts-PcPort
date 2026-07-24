@@ -8,6 +8,9 @@ For the project summary and legal information, see the top-level [README](../REA
 **[architecture.md](architecture.md)** — the two-layer design (byte-exact decompilation + native PC
 port), how the port avoids breaking the match, and the repository layout. Read this first.
 
+**[roadmap.md](roadmap.md)** — what's shipped and what's planned (Stage 3 gameplay/QoL). Plans, not
+commitments.
+
 ## Building & running
 
 - **[building.md](building.md)** — building the matching decompilation (`make check`) and the native PC

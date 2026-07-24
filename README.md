@@ -32,6 +32,17 @@ playthroughs on both Windows and Linux, including the endgame and credits.
   from Linux with MinGW-w64; Linux ships as an AppImage. A CMake build sits alongside the Makefile.
   macOS is scaffolded but not pursued — see [docs/cross-platform.md](docs/cross-platform.md).
 
+## Roadmap
+
+The two foundational stages — the byte-exact decompilation and the faithful native port — are
+**complete** (see *Status* above). **Stage 3** adds an optional layer of gameplay and quality-of-life
+enhancements: better controls (including an at-a-glance enemy threat overlay), an in-game options and
+save-management overlay, and an opt-in balance mode. The faithful experience is always preserved;
+gameplay-changing additions are opt-in.
+
+Full breakdown — what's shipped vs. planned — is in **[docs/roadmap.md](docs/roadmap.md)**. These are
+plans, not commitments: this is a non-commercial hobby preservation project.
+
 ## Playing the game
 
 You supply the game; the port supplies everything else. **You need your own legally-owned copy of
