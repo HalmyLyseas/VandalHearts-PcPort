@@ -216,6 +216,33 @@ for f in squashfs-root/usr/bin/vandalhearts_pc squashfs-root/usr/lib/*.so*; do
     readelf -V "$f"; done | grep -oE '(GLIBC|GLIBCXX|CXXABI)_[0-9.]+' | sort -uV | tail -3
 ```
 
+## Publishing a release
+
+`platform/pc/packaging/make-release.sh <tag>` builds both artifacts, checksums them, and publishes a
+GitHub release via the `gh` CLI:
+
+```
+platform/pc/packaging/make-release.sh v1.0.0                 # build both, publish
+platform/pc/packaging/make-release.sh v1.0.0 --no-publish    # stage only, print the gh command
+platform/pc/packaging/make-release.sh v1.0.0 --windows-only  # (or --linux-only)
+```
+
+**Why a local script and not GitHub Actions.** The data-segment generator needs the byte-exact
+`SLUS_004.47` + the PsyQ `KROMDAT.BIN` at build time to reconstruct the embedded game data. Those are
+copyrighted and cannot live on GitHub's runners, so the binaries *must* be built on a machine that has
+the user's own disc/BIOS. CI can't produce a runnable artifact; automation therefore covers packaging
+and upload only. (And a release binary embeds a portion of game-derived data — see `NOTICE`.)
+
+The script builds each artifact in the environment that gives the correct result:
+- **Windows** — host MinGW-w64 cross-compile (`build_win`), zipped with its 6 runtime DLLs +
+  `vandalhearts.ini` → `VandalHearts-<tag>-windows-x64.zip`.
+- **Linux** — the AppImage from the pinned Debian 12 `vh-deb12` container (the glibc floor; a
+  host-built AppImage would only run on distros as new as the host) → `VandalHearts-<tag>-linux-x86_64.AppImage`.
+
+Both stage under `platform/pc/dist/release/<tag>/` (gitignored) with `SHA256SUMS.txt` and generated
+`RELEASE_NOTES.md`. Prereqs: `mingw-w64-gcc`, the `vh-deb12` container (see *Building a release* above),
+and `github-cli` authenticated (`gh auth login`).
+
 ## macOS (Apple Silicon) — scaffolded, not pursued
 
 macOS is **deliberately deprioritized**. Unlike Windows, it can't be cleanly cross-compiled from Linux:
