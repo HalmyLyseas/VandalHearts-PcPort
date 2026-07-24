@@ -409,6 +409,42 @@ typedef enum ObjFunctionIdx {
    OBJF_FX_TBD_803 = 803,
 } ObjFunctionIdx;
 
+/* ---- PC_PORT (Stage 2.3): 64-bit coords-alias padding ---------------------------------------
+ * Several union members in Object_DataStore DELIBERATELY alias Object_Sprite's `coords[4]` at
+ * 0x3C: an effect writes its vertices through its own struct, and the shared renderer
+ * (AddObjPrim2/4/5 in object.c) reads them back as `obj->d.sprite.coords`. That alias holds only
+ * while every one of those structs puts coords at the same offset.
+ *
+ * Object_Sprite has `void *animData` at 0x38, immediately before coords. On a 64-bit host that
+ * pointer grows 4 -> 8 bytes and pushes Object_Sprite.coords from +24 to +32, while the effect
+ * structs -- which have plain s16 fields there -- keep coords at +24. The renderer then reads 8
+ * bytes past the vertices the effect actually wrote. Symptom: the casting "inward ray" effect
+ * (Objf314_InwardRay) drew white blobs instead of thin rays, because its quad's tail vertices
+ * came back as unrelated struct fields.
+ *
+ * This pad restores the alias on 64-bit hosts. It is a no-op for the matching build (which never
+ * defines PC_PORT) and for any 32-bit build. Object_396 needs no pad: it already carries the same
+ * `void *animData` at 0x38 and therefore shifts identically to Object_Sprite. */
+#if defined(PC_PORT) && (defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__))
+#define PC_PORT_LP64 1   /* PC build on a 64-bit host; matching/32-bit builds leave it undefined */
+/* Two sizes: Object_Sprite's `void *animData` sits at a 4-byte-aligned offset, so on LP64 it
+ * costs +8 (4 bytes of alignment padding + 4 bytes of growth) and pushes coords 24 -> 32. Most
+ * aliasing structs naturally sit at 24 and need the full +8; three (Object_323_713, _675, _719)
+ * already carry their own pointer and land at 28, needing only +4. Verified by measuring
+ * offsetof(...,coords) for all 14 at both widths -- they must ALL read 32 at -m64.
+ *
+ * ⚠️ The PAD only fixes `coords`. A struct whose OWN pointer is a LEADING field at 0x24 (aliasing
+ * Object_Sprite's 4 hidden/facing bytes) ALSO shifts gfxIdx/clut/boxIdx off Object_Sprite's alias on
+ * LP64 -- the PAD does not help those. Object_675 and Object_719 have that shape and are fixed
+ * individually below (leading pointer -> a 4-byte gap + the pointer relocated to the 0x38 animData
+ * slot, like the correct Object_396). See docs/width-bugs.md. */
+#define PC_PORT_COORDS_ALIAS_PAD8 u8 pc_coordsAliasPad[8];
+#define PC_PORT_COORDS_ALIAS_PAD4 u8 pc_coordsAliasPad[4];
+#else
+#define PC_PORT_COORDS_ALIAS_PAD8
+#define PC_PORT_COORDS_ALIAS_PAD4
+#endif
+
 typedef struct Object_Sprite {
    /* :0x24 */ s8 hidden;
    /* :0x25 */ s8 facingLeft;
@@ -446,6 +482,7 @@ typedef struct Object_Sprite2 {
    /* :0x31 */ s8 semiTrans;
    /* :0x32 */ s16 otOfs;
    /* :0x34 */ u8 unk_0x34[8];
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXY coords[4];
    /* :0x4C */ u8 unk_0x4C[20];
 } Object_Sprite2;
@@ -945,6 +982,7 @@ typedef struct Object_088 {
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 clut;
    /* :0x2E */ u8 unk_0x2E[14];
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ u8 unk_0x54[12];
 } Object_088;
@@ -1028,6 +1066,7 @@ typedef struct Object_098 {
    /* :0x2A */ u8 unk_0x2A[6];
    /* :0x30 */ s8 animFinished;
    /* :0x31 */ u8 unk_0x31[11];
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ SVectorXZY pos;
    /* :0x5A */ u8 unk_0x5A[6];
@@ -1348,6 +1387,7 @@ typedef struct Object_155 {
    /* :0x2A */ u8 unk_0x2A[7];
    /* :0x31 */ u8 todo_x31;
    /* :0x32 */ u8 unk_0x32[10];
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ s16 idx;
    /* :0x56 */ s16 theta;
@@ -2153,6 +2193,7 @@ typedef struct Object_273 {
    /* :0x36 */ s16 theta2;
    /* :0x38 */ s16 todo_x38;
    /* :0x3A */ s16 unused_0x3A;
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ s16 todo_x54;
    /* :0x56 */ u8 unk_0x56[10];
@@ -2375,6 +2416,7 @@ typedef struct Object_314 {
    /* :0x36 */ s16 theta2;
    /* :0x38 */ s16 todo_x38;
    /* :0x3A */ s16 unused_0x3A;
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ s16 todo_x54;
    /* :0x56 */ u8 unk_0x56[10];
@@ -2392,6 +2434,7 @@ typedef struct Object_315 {
    /* :0x36 */ s16 radius;
    /* :0x38 */ s16 top;
    /* :0x3A */ s16 height;
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ s16 rotationSpeed;
    /* :0x56 */ s16 speed;
@@ -2438,6 +2481,7 @@ typedef struct Object_323_713 {
    /* :0x2A */ u8 unk_0x2A[7];
    /* :0x31 */ s8 semiTrans;
    /* :0x32 */ u8 unk_0x32[10];
+   PC_PORT_COORDS_ALIAS_PAD4
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ u8 unk_0x54[8];
    /* :0x5C */ struct Object *dataStore; // cylinder
@@ -3047,6 +3091,7 @@ typedef struct Object_446 {
    /* :0x31 */ s8 semiTrans;
    /* :0x32 */ s16 otOfs;
    /* :0x34 */ u8 unk_0x34[8];
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXY coords[4];
    /* :0x4C */ s16 todo_x4c;
    /* :0x4E */ s16 todo_x4e;
@@ -3427,7 +3472,14 @@ typedef struct Object_673 {
 
 /* Leena's Forcefield */
 typedef struct Object_675 {
+#ifdef PC_PORT_LP64
+   /* PC_PORT LP64 fix (same shape as Object_719): targetSprite is a LEADING pointer at 0x24, whose 8
+    * LP64 bytes shift gfxIdx/clut/boxIdx off Object_Sprite's alias. Keep 0x24 a 4-byte gap and move
+    * the pointer to the 0x38 animData slot so all aliased fields (gfxIdx/clut/boxIdx/coords) line up. */
+   u8 pc_leadPtrGap[4];
+#else
    /* :0x24 */ struct Object *targetSprite;
+#endif
    /* :0x28 */ s16 gfxIdx;
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 clut;
@@ -3435,7 +3487,13 @@ typedef struct Object_675 {
    /* :0x31 */ s8 semiTrans;
    /* :0x32 */ u8 unk_0x32[2];
    /* :0x34 */ s16 boxIdx;
+#ifdef PC_PORT_LP64
+   /* :0x36 */ u8 unk_0x36[2];
+   /* :0x38 */ struct Object *targetSprite;   /* relocated to the animData slot */
+#else
    /* :0x36 */ u8 unk_0x36[6];
+   PC_PORT_COORDS_ALIAS_PAD4
+#endif
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ u8 unk_0x54[12];
 } Object_675;
@@ -3532,13 +3590,29 @@ typedef struct Object_715_to_718 {
 
 /* Dimensional Rift */
 typedef struct Object_719 {
+#ifdef PC_PORT_LP64
+   /* PC_PORT LP64 fix (see the note at PC_PORT_COORDS_ALIAS_PAD): entitySpriteParam is a LEADING
+    * pointer at 0x24 in the retail struct; on LP64 its 8 bytes shift gfxIdx/clut off Object_Sprite's
+    * alias, so AddObjPrim4 reads a garbage gfxIdx and the Dimensional Rift renders as white planes.
+    * Keep 0x24 a 4-byte gap (gfxIdx stays at 0x28) and relocate the pointer to the 0x38 animData slot
+    * like the correct Object_396 -- an 8-byte pointer there shifts coords identically to
+    * Object_Sprite, so coords lands at 0x40 with no extra pad. */
+   u8 pc_leadPtrGap[4];
+#else
    /* :0x24 */ struct Object *entitySpriteParam;
+#endif
    /* :0x28 */ s16 gfxIdx;
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 clut;
    /* :0x2E */ u8 unk_0x2E[3];
    /* :0x31 */ s8 semiTrans;
+#ifdef PC_PORT_LP64
+   /* :0x32 */ u8 unk_0x32[6];
+   /* :0x38 */ struct Object *entitySpriteParam;   /* relocated to the animData slot */
+#else
    /* :0x32 */ u8 unk_0x32[10];
+   PC_PORT_COORDS_ALIAS_PAD4
+#endif
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ u8 unk_0x54[4];
    /* :0x58 */ struct Object *entitySprite;
@@ -3721,6 +3795,7 @@ typedef struct Object_Unk_8008d1f0 {
    /* :0x32 */ u8 unk_0x32[2];
    /* :0x34 */ s16 boxIdx;
    /* :0x36 */ u8 unk_0x36[6];
+   PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ u8 unk_0x54[8];
    /* :0x5C */ struct Object *unitSprite;

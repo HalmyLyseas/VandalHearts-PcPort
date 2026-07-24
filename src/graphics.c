@@ -610,9 +610,24 @@ void Objf059_DebugVram(Object *obj) {
 void CopyObject(Object *src, Object *dst) {
    s32 i;
 
+#ifdef PC_PORT
+   /* PC_PORT (Stage 2.3 width fix): the original copies a hardcoded 24 u32 words = 96 bytes, which is
+    * exactly the PSX/-m32 sizeof(Object). On LP64 the pointer fields in the Object union
+    * (Object_Sprite.animData at 0x38, ...) grow 4->8 bytes, so sizeof(Object) exceeds 96 and the
+    * fields that shifted past the boundary -- notably Object_Sprite.animYOfs (0x5A -> 0x62) -- fall
+    * OUTSIDE the 96-byte copy. Symptom: the level-up hop (Objf380_LevelUpFx renders CopyObject'd
+    * copies of the unit sprite) played its animation frames but never lifted, because gfxIdx (0x28,
+    * before animData) copied fine while the copy's animYOfs stayed 0. Copy the real struct size so
+    * every field comes across. Same class as the object.c Object-zeroing loops fixed in 2.3; missed
+    * here. The matching build (no PC_PORT) keeps the exact 24-word loop, so byte-exact is unaffected. */
+   for (i = 0; i < (s32)(sizeof(Object) / sizeof(u32)); i++) {
+      ((u32 *)dst)[i] = ((u32 *)src)[i];
+   }
+#else
    for (i = 0; i < 24; i++) {
       ((u32 *)dst)[i] = ((u32 *)src)[i];
    }
+#endif
 }
 
 void SetupLightNormals(void) {
