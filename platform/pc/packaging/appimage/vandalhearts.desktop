@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Vandal Hearts
+GenericName=Tactical RPG
+Comment=Native PC port of the PlayStation game Vandal Hearts
+Exec=vandalhearts_pc
+Icon=vandalhearts
+Categories=Game;StrategyGame;
+Terminal=false
