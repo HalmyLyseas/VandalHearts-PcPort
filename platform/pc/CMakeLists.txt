@@ -116,7 +116,7 @@ endif()
 # de-duplicate repeated `-include` flags -- so a single `-include` is the only reliable form here.
 foreach(_g ${GAME_SRCS})
     set_source_files_properties(${_g} PROPERTIES
-        COMPILE_DEFINITIONS "PERMUTER;PC_PORT"
+        COMPILE_DEFINITIONS "PERMUTER;PC_PORT;PC_FEAT"
         COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt;-include;${PC_DIR}/include/cmake_game_prelude.h"
         INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
 endforeach()

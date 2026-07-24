@@ -671,8 +671,13 @@ static unsigned int pc_pad_read(void) {
     if (GC_BTN(SDL_CONTROLLER_BUTTON_B))             p |= PADRright;  /* Circle   */
     if (GC_BTN(SDL_CONTROLLER_BUTTON_X))             p |= PADRleft;   /* Square   */
     if (GC_BTN(SDL_CONTROLLER_BUTTON_Y))             p |= PADRup;     /* Triangle */
-    if (GC_BTN(SDL_CONTROLLER_BUTTON_LEFTSHOULDER))  p |= PADL1;
-    if (GC_BTN(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) p |= PADR1;
+    /* Stage 3 (1.1): the physical shoulders drive the ALLY-CYCLE, not the camera.
+     * They go into the HIGH pad word ("pad 2", PADL1/PADR1 << 16), which the game reads
+     * separately (gPad2State) from the camera rotation. The camera stays on the right
+     * stick, which feeds the LOW-word L1/R1 below (gPadState). This is the decouple that
+     * lets L1/R1 mean "cycle" while the stick still rotates the view. See exchange/62. */
+    if (GC_BTN(SDL_CONTROLLER_BUTTON_LEFTSHOULDER))  p |= (unsigned)PADL1 << 16;
+    if (GC_BTN(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) p |= (unsigned)PADR1 << 16;
     if (GC_BTN(SDL_CONTROLLER_BUTTON_START))         p |= PADstart;
     if (GC_BTN(SDL_CONTROLLER_BUTTON_BACK))          p |= PADselect;
     /* (L3/R3 are analog-pad only; VH reads a digital pad, so they're unmapped.) */
@@ -715,8 +720,13 @@ unsigned int PadRead(int id) {
     if (keys[SDL_SCANCODE_S])      p1 |= PADRdown;     /* X */
     if (keys[SDL_SCANCODE_A])      p1 |= PADRleft;     /* Square */
     if (keys[SDL_SCANCODE_D])      p1 |= PADRright;    /* Circle */
-    if (keys[SDL_SCANCODE_Q])      p1 |= PADL1;
+    if (keys[SDL_SCANCODE_Q])      p1 |= PADL1;                 /* camera rotate (low word) */
     if (keys[SDL_SCANCODE_E])      p1 |= PADR1;
+    /* Stage 3 (1.1): keyboard ally-cycle on [ / ] -> high word (pad 2), mirroring the
+     * gamepad shoulders. Keeps keyboard functional after Square is freed for the overlay.
+     * Full keyboard layout is documented/refined in docs/controls.md. */
+    if (keys[SDL_SCANCODE_LEFTBRACKET])  p1 |= (unsigned)PADL1 << 16;   /* cycle previous */
+    if (keys[SDL_SCANCODE_RIGHTBRACKET]) p1 |= (unsigned)PADR1 << 16;   /* cycle next */
     if (keys[SDL_SCANCODE_RETURN]) p1 |= PADstart;
     if (keys[SDL_SCANCODE_SPACE])  p1 |= PADselect;
 

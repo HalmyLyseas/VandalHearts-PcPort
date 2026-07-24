@@ -2452,6 +2452,44 @@ void Objf425_BattleOptions(Object *obj) {
    case 0:
       s_menuMem_battleOptions_801231fc = 0;
       if (gSignal1 == 0) {
+#ifdef PC_FEAT
+         /* Stage 3 (1.1): bidirectional ally-cycle on the shoulder buttons. The PC backend
+          * routes the physical L1/R1 to pad 2 (gPad2State), leaving the camera (right stick
+          * -> pad 1) untouched. R1 = next unit (the original Square behaviour), L1 = previous.
+          * Square is now free for the enemy-threat overlay (Feature B). See exchange/62. */
+         {
+            s32 cycleDir = (gSavedPad2StateNewPresses & PAD_R1) ?  1 :
+                           (gSavedPad2StateNewPresses & PAD_L1) ? -1 : 0;
+            if (cycleDir != 0 && !gPlayerControlSuppressed && !gClearSavedPadState) {
+               /* Step ONE unit in the press direction, THEN find the next selectable unit,
+                * and store the SELECTED index (not one past it). The original forward-only
+                * Square cycle advanced lastSelectedUnit one past the selection; that +1/-1
+                * offset was invisible in a single direction but mis-stepped for ~2 presses
+                * when REVERSING (bugreport-01). This do-while keeps it symmetric. */
+               i = 0;
+               do {
+                  gState.lastSelectedUnit += cycleDir;
+                  if (gState.lastSelectedUnit > 12) gState.lastSelectedUnit = 1;
+                  if (gState.lastSelectedUnit < 1)  gState.lastSelectedUnit = 12;
+                  unit = FindUnitByNameIdx(gState.lastSelectedUnit);
+                  if (i++ > 12) goto LAB_800347e4;   /* no selectable unit */
+               } while (unit == 0 || unit->done);
+               dx = 0;
+               dz = 0;
+               unitX = unit->sprite->x1.s.hi;
+               unitZ = unit->sprite->z1.s.hi;
+               if (gMapCursorX < unitX) dx = 1;
+               if (gMapCursorX > unitX) dx = -1;
+               if (gMapCursorZ < unitZ) dz = 1;
+               if (gMapCursorZ > unitZ) dz = -1;
+               for (; gMapCursorX != unitX; gMapCursorX += dx) CenterCamera(1);
+               for (; gMapCursorZ != unitZ; gMapCursorZ += dz) CenterCamera(1);
+               obj1 = Obj_FindByFunction(OBJF_BATTLE_MAP_CURSOR_CONTROL);
+               obj1->x1.s.hi = gMapCursorX;
+               obj1->z1.s.hi = gMapCursorZ;
+            }
+         }
+#else
          if ((gSavedPadStateNewPresses & PAD_SQUARE) && !gPlayerControlSuppressed &&
              !gClearSavedPadState) {
             // Pressing Square selects next available unit
@@ -2502,6 +2540,7 @@ void Objf425_BattleOptions(Object *obj) {
             obj1->z1.s.hi = gMapCursorZ;
             // break; // -> to next if
          } // Square
+#endif
 
       LAB_800347e4:
          if (gSignal1 == 0 && (gSavedPadStateNewPresses & PAD_CIRCLE) &&

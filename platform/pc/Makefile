@@ -106,7 +106,10 @@ OPENAL_LIBS    := $(shell $(PKG_CONFIG_32) pkg-config --libs openal)
 # `make check`) never sees these blocks and stays byte-exact. Same discipline
 # as -DPERMUTER / -DPC_DEBUG_*: every PC_PORT block must be re-verified with
 # `make check`.
-GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PORT -D'asm(x)=' \
+# -DPC_FEAT: Stage-3 gameplay/QoL gate (bidirectional ally-cycle, threat overlay,
+# ...). New player-facing behaviour, distinct from PC_PORT (correctness) so it's
+# greppable on its own. Also PC-build-only; matching build never defines it.
+GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PORT -DPC_FEAT -D'asm(x)=' \
                    -I$(STAGE_DIR) -Iinclude -I../.. \
                    -include pc_forward_decls.h -g
 

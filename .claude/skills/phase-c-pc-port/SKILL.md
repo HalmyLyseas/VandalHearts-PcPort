@@ -89,9 +89,12 @@ port-side edit to shared source sits behind one:
   the `#else`).
 - **`PC_PORT_LP64`** — 64-bit-host-only struct-layout fixes (e.g. `Object_719`/`_675` in
   `include/object.h`, where a leading pointer's 4→8-byte growth shifts aliased fields).
+- **`PC_FEAT`** — (Stage 3) PC-only gameplay/QoL additions (the bidirectional ally-cycle in
+  `battle_0201b8.c`, the enemy threat overlay, …). Defined for all game source by the PC build only;
+  distinct from `PC_PORT` so gameplay changes grep separately. Keep the original verbatim in the `#else`.
 - **`PC_DEBUG_*`** — per-file debug/instrumentation hooks, keyed to Makefile flags.
 
-`grep -rnE "PERMUTER|PC_PORT|PC_DEBUG" src/ include/` finds them all.
+`grep -rnE "PERMUTER|PC_PORT|PC_FEAT|PC_DEBUG" src/ include/` finds them all.
 
 > **TRAP that actually broke the match for ~2 days:** `sFontGlyphBitmaps` was widened `[128]`→`[129]`
 > *without a gate*, adding 12 bytes to `.data`, shifting every later symbol — unnoticed because
