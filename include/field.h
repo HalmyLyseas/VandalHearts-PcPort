@@ -117,8 +117,48 @@ extern PathGridRow *gCrateGrid_Ptr;
 extern u8 gImpededSteps[5][200];
 extern u8 *gImpededStepsQueue[5];
 extern u8 gTravelTerrainCost[14][11]; // [stepping-type][terrain-type]
+/* Indexed `[stepType][diff]` in path_grids.c. The real hardware dimensions are [14][20]; the outer
+ * dimension is widened to [20] in the PC build ONLY, for a confirmed reason -- see below. The inner
+ * dimension (stride) is NEVER changed: `gTravelAscentCost[stepType][diff]` == base + stepType*20 +
+ * diff, so keeping 20 is mandatory for the address math to match.
+ *
+ * The ASAN sweep found this table overrun in pathfinding, confirmed by the PC_DEBUG_PATH_STEP probe
+ * across two maps (exchange/58): a VALID stepType with a `diff` of ~126.
+ *
+ * CAUSE (corrected -- an earlier version blamed steep terrain / the DEATH ANT sand-pyramid; that
+ * was a red herring). The probe also fired for a short-range enchanter on FLAT terrain, so it is
+ * NOT relief. It is a map-BOUNDARY read: PopulateMovementGrid reads each neighbour's terrain and
+ * elevation UNCONDITIONALLY (path_grids.c:1140-1142) and only AFTERWARDS rejects boundary tiles via
+ * `if (gTerrainPtr[...].s.terrain >= 0)`. So when a unit's move-flood reaches the playable-area
+ * edge, it reads the off-map/boundary neighbour's elevation (~126 different from real terrain),
+ * computes gTravelAscentCost[stepType][126], and then discards the result. Ubiquitous: every map,
+ * every edge, every unit's movement -- which is why the `diff` was identical (126) on both maps.
+ * The wrong stepType>13 theory (step-14/15 units) is separately dead: every gUnitInfo[].step is
+ * 0..13.
+ *
+ * WHY FIX IT ANYWAY (the read happens before the reject, so it is real): on hardware the four travel
+ * tables are contiguous (Ascent 0x800fc110 | Descent 0x800fc228 | gGfxSubTextures 0x800fc340), so
+ * `Ascent[stepType][big diff]` reads real Descent bytes -- almost always 255. In the PC build these
+ * are independent globals with an 8-byte alignment GAP, so the same overread is shifted 8 bytes and
+ * returns DIFFERENT bytes: checked exhaustively, 112 (stepType,diff) combinations flip 255->0. For
+ * a boundary neighbour the cost is discarded, so those flips are usually harmless; but the read is
+ * a genuine OOB access regardless (ASAN-flagged, and a theoretical wild read), and for any VALID
+ * (terrain>=0) tile that ever carries diff>=20 the cost WOULD be used. Making the read in-bounds and
+ * byte-identical to hardware closes all of that at once.
+ *
+ * Fix: widen the OUTER dimension to 20 rows (400 bytes). The data-segment generator extracts
+ * `sizeof` bytes from each symbol's real VRAM address, so the extra rows contain the genuine
+ * contiguous Ascent+Descent(+gGfxSubTextures) image -- making the port read byte-identical to
+ * hardware for every overread, gap notwithstanding. 400 bytes covers the worst case (stepType 13,
+ * s8-max diff 127 -> linear 387). The PC_DEBUG_PATH_STEP probe stays as a tripwire for any diff
+ * beyond that. PERMUTER-gated; the matching build keeps the true [14][20]. */
+#ifdef PERMUTER
+extern u8 gTravelAscentCost[20][20];  // [stepping-type][elevation-diff]  (outer widened; stride=20)
+extern u8 gTravelDescentCost[20][20];
+#else
 extern u8 gTravelAscentCost[14][20];  // [stepping-type][elevation-diff]
 extern u8 gTravelDescentCost[14][20];
+#endif
 extern u8 gTravelRange[14];
 extern u8 gPathBackToUnit[300];
 

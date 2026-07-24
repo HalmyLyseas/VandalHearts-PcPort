@@ -120,7 +120,25 @@ void MsgBox_SetText(s32, s32, s32);
 void MsgBox_SetText2(s32, s32, s32);
 void Objf798_ResetInputState(Object *);
 
+/* PERMUTER: 101 entries, not 100. src/dojo.c:511 deliberately sets `OBJ.partyIdx = 100` as a
+ * "no selection yet" sentinel, and dojo.c:1007 then does
+ * `gStringTable[32] = gStringTable[OBJ.partyIdx];` -- reading index 100 of a 100-entry table for
+ * the one frame before a real party index is assigned. Found by the ASAN sweep during chapter 1.
+ *
+ * On hardware that reads `whiteShades` (0x801011bc, immediately after gStringTable's 400 bytes)
+ * reinterpreted as a string pointer -- garbage, but the game evidently never displays string 32
+ * on that frame. In this build the same read lands on zero padding, so it yields NULL and
+ * pc_bootstrap.c's handler turns it into an empty string: benign, but only BY LUCK, and it would
+ * become a wild pointer the moment the linker placed something non-zero there.
+ *
+ * The extra entry is implicitly NULL, so behaviour is unchanged -- this only makes the existing
+ * outcome deterministic instead of dependent on linker padding. The initializer list keeps
+ * supplying exactly the 100 real entries, so nothing about the matching build shifts. */
+#ifdef PERMUTER
+u8 *gStringTable[101] = {
+#else
 u8 *gStringTable[100] = {
+#endif
 #include "assets/8010102c.inc"
 };
 

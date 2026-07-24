@@ -707,7 +707,30 @@ extern s16 gSpriteStripTPageIds[50];
 extern s16 gSpriteStripUnitIds[23];
 extern s16 gSceneSpriteStripUnitIds[105][20];
 extern u8 **gSpriteStripAnimSets[25];
+/* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites (src/split_0496f8.c:1073) indexes
+ * this with gSpriteStripUnitIds[i], and the decomp already carried a `//?: Won't this read
+ * out-of-bounds of gUnitAnimSets?` comment at that line. The true index ceiling is ~300, not the
+ * 151 first observed: SetupPartySprites (split_0496f8.c:117-176) shows event-sprite IDs run 151..274
+ * and then get `+= adv*6` (adv up to 4) -> max ~298, and the comment there says "IDs 151..300 are
+ * reserved for main party event sprites". An earlier fix sized this to [192] off the first observed
+ * index (151) and a ch4 cutscene then overran it at ~199 -- the same "widen on an observed value"
+ * mistake made with gTravelAscentCost. Sized once here to the documented ceiling.
+ *
+ * Unlike the generator-extracted travel tables, gUnitAnimSets is a hand-RECONSTRUCTED pointer table
+ * (platform/pc/src/pc_unit_anim_data.c), so the hardware bytes past 144 (adjacent gUnitClutIds read
+ * as pointers -- garbage even on hardware) cannot be faithfully reproduced. Entries 144..300 are
+ * therefore NULL: the point of widening is SAFETY (the read stays in bounds and yields NULL instead
+ * of a dereferenced wild pointer -- gSpriteStripAnimSets IS dereferenced at split_03c94c.c:151),
+ * not faithfulness. Believed set-but-unused for rendering: cutscene units take their animset from
+ * gEvtEntities (see milestone_cutscene_units_fixed), which is why entries 144..191 being NULL since
+ * the earlier fix has not broken any cutscene sprite through ch1-ch4. If a future cutscene sprite
+ * IS wrong, the real fix is to reconstruct those event-sprite animsets, not to grow the array.
+ * PERMUTER-gated; the matching build keeps [UNIT_DB_CT]. */
+#ifdef PERMUTER
+extern u8 **gUnitAnimSets[301];
+#else
 extern u8 **gUnitAnimSets[UNIT_DB_CT];
+#endif
 extern u8 gUnitClutIds[492];
 
 // Mix of 48x48 and 64x48 px frames (tpages 11 & 27); wider frames allow for e.g. slash animations
@@ -729,7 +752,28 @@ extern s16 gTPageIds[128];
 // ?: Going off of the loop at {@addr 0x8005cd94}, this should
 // have 128 elements, but the last few bytes ({@addr 0x8014014c})
 // are used in a completely unrelated manner: {@addr 800c471c}
+//
+// CONFIRMED 2026-07-21, and the "?" can be resolved: the original really does write 128 entries
+// and really does overrun. SetupGfx (src/split_0496f8.c:1712) runs `for i<8 { for k<16 }` = 128
+// s16 writes from 0x80140054, i.e. through 0x80140153 -- straight over `s_cdSyncStatus`
+// (0x8014014c, an s32) and the 4-byte gap before gPortraitOverlayOffsets (0x80140154). It is a
+// genuine out-of-bounds write in the retail game, benign only by luck: src/audio.c always does
+// `s_cdSyncStatus = CdSync(1, buf);` immediately before every read of it (audio.c:473 vs 475/479),
+// so the clobbered value is never observed. Found by the AddressSanitizer sweep (`make asan32`),
+// which flagged it on every SetupGfx call.
+//
+// The PC build widens it to the 128 the code actually uses, so the write is in bounds. This is
+// PERMUTER-gated -- NOT PC_PORT -- because the data-segment generator's sizeof() probe compiles
+// with -DPERMUTER only, and it must agree with the game code about the size or it emits a
+// 248-byte object for code that writes 256. Same discipline as src/text.c's
+// sFontGlyphBitmaps[129] vs [128]; the matching build defines neither macro and keeps [124].
+// Behaviourally this means s_cdSyncStatus survives SetupGfx on PC but not on PSX -- harmless per
+// the reassign-before-read above, and it removes ASAN noise that would otherwise bury real finds.
+#ifdef PERMUTER
+extern s16 gClutIds[128];
+#else
 extern s16 gClutIds[124];
+#endif
 
 extern PortraitOverlayOffsets gPortraitOverlayOffsetsDb[692];
 extern PortraitsDb gPortraitsDb;

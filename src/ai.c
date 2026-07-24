@@ -23,7 +23,32 @@ void Objf589_AI_TBD(Object *);
 
 extern u8 D_80123410, D_80123480, D_80123484;
 extern s16 D_8012F63C[40];
+/* AI casting-score grid, indexed D_8017DF50[iz][ix] where iz is an ABSOLUTE map-Z coordinate
+ * (gMapMinZ..gMapMaxZ), not a 0-based index. gMapSizeZ caps at 16 but gMapMinZ can be large, so on
+ * tall maps gMapMaxZ reaches 27 -- one row past this [27] declaration. Found by the ASAN sweep on a
+ * chapter-4 map (Objf400_AI_TBD, ai.c:381/383/411, and the read at 613).
+ *
+ * The retail game writes that row too; it is safe on hardware because D_8017DF50 (0x8017df50) has
+ * 3600 bytes of real allocation before gSlainUnits (0x8017ed60) -- 144 bytes more than this
+ * [27][64]=3456 decl -- so row 27 lands in slack. In the PC build the generator emits exactly 3456
+ * bytes and the next global (D_801801B0) sits only 32 bytes later, so the same write corrupts it.
+ *
+ * Widen the OUTER dimension so the PC allocation covers the SAME range hardware's 3600 bytes do:
+ * 3600 bytes = 1800 s16 = up to element [28][7], i.e. the retail array is really sized for
+ * gMapMaxZ = 28 (that is why it has slack, not zero, before gSlainUnits). gMapMaxZ = gMapMinZ +
+ * gMapSizeZ - 1, gMapSizeZ caps at 16 and gMapMinZ comes from map data, so tall maps genuinely
+ * reach 27 (observed, ch4) and can reach 28. [29][64] = 3712 bytes covers iz 0..28 fully, i.e. >=
+ * the hardware footprint, so the port never overflows where hardware does not. (An earlier fix used
+ * [28] = row-27-only, sized to the first observed map; grown to match the hardware allocation
+ * before the ch6 huge-terrain stress map.) Only the INNER dimension (64) enters the address
+ * computation `base + (iz*64 + ix)*2`, so this does not change ai.c codegen; PERMUTER-gated
+ * regardless, so the matching build's declaration stays identical and the generator sizes the PC
+ * global correctly. See exchange/58. */
+#ifdef PERMUTER
+extern s16 D_8017DF50[29][64];
+#else
 extern s16 D_8017DF50[27][64];
+#endif
 extern u8 D_80123484;
 
 #undef OBJF
@@ -128,6 +153,17 @@ void Objf570_AI_TBD(Object *obj) {
             obj->state2 = 0;
          }
       }
+
+#ifdef PC_DEBUG_AI_LOG
+      { extern void PC_DebugAiDecisionLog(int, int, int, int, int, int, int, int, int, int, int,
+                                          int, int, int, int);
+        PC_DebugAiDecisionLog(unit->name, unit->class, unit->team, unit->level, unit->mp,
+                              unit->maxMp, unit->spells[0], unit->spells[1],
+                              gSpells[unit->spells[0]].mpCost, gSpells[unit->spells[1]].mpCost,
+                              gSpellsEx[unit->spells[0]][SPELL_EX_EFFECT],
+                              gSpellsEx[unit->spells[1]][SPELL_EX_EFFECT],
+                              spellEffectA, spellEffectB, obj->state); }
+#endif
 
       break;
 
