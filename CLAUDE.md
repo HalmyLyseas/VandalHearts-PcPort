@@ -24,18 +24,30 @@ decomp is stage 1 of a two-stage project:
    equivalent (SDL2/OpenGL, decided after evaluating Vulkan). All 6 swappable-interface
    subsystems are done, all 70 `src/*.c` files compile, the link succeeds, **and the game runs
    real demo battles and renders battle scenes with real unit sprites** —
-   `platform/pc/build/vandalhearts_pc` (`make link`). Current work (2026-07-13) is a
-   rendering-correctness pass, comparing our output against real hardware (BizHawk) at matched
-   camera poses: several GTE-backend bugs have been found and fixed this way (`SetGeomOffset`
-   not shifting the projection centre `<<16`; `zsf3/zsf4` never set, flattening terrain depth),
-   with a few known rendering differences still open (far-terrain `otz` overflowing the OT →
-   black patches; some sprites horizontally flipped). See the `phase-c-pc-port` skill and
-   `exchange/00-progress-checkpoint.md` for current status.
-   **Important**: the current build is intentionally **32-bit** (`-m32`), not 64-bit — a
-   deliberate debugging baseline (a real chunk of decompiled source does raw pointer-relative
-   struct access that breaks under 64-bit's wider pointers), not the final target. 64-bit is
-   still required eventually (macOS dropped 32-bit entirely in 2019) — see the skill's
-   32-bit callout before changing this. `OpenDriver2/PsyCross` was evaluated and rejected as
+   `platform/pc/build/vandalhearts_pc` (`make link`). As of 2026-07-17 the **full core game loop
+   runs end-to-end** from the real disc and **A/V fidelity is complete (user-signed-off)**; the
+   earlier rendering-correctness bugs (perspective collapse, sprite occlusion, terrain `otz`) are
+   all fixed. The project has **forked** to a private repo (Codeberg) and moved into the
+   de-consolization phases: 2.1 music ✅, 2.2 memory-safety ✅ (cap-less portable fault handler),
+   **2.3 64-bit ✅ DONE (2026-07-21)** + **AddressSanitizer OOB sweep ✅ DONE (2026-07-23), 7 more OOB
+   bugs fixed (`exchange/58`)** + **2.4 cross-platform ✅ (Windows + Linux, 2026-07-23; macOS deferred)**.
+   Stage 2 is essentially complete. **Canonical developer/user docs now live in committed [`docs/`](docs/)**
+   (architecture, building, configuration, per-subsystem deep-dives, memory-safety, cross-platform) —
+   prefer those for durable reference; `exchange/` remains gitignored investigation scratch. See also the
+   `phase-c-pc-port` skill, `exchange/52-stage2-roadmap.md`, and `exchange/00-progress-checkpoint.md`.
+   **Build width (updated 2026-07-21): the default is now 64-bit** (`make link`). The port was
+   deliberately **32-bit** for a long time as a debugging baseline — decompiled source assumes the
+   PS1's 32-bit-pointer layout in places, and at 64-bit that shifts struct fields *silently*
+   instead of failing loudly. Phase 2.3 fixed every case and validated the demo battle at both
+   widths, so `-m32` is no longer the default. The 32-bit build remains available as an A/B
+   reference: `make link M32=-m32 BUILD_DIR=build32`.
+   The five width bugs found, all worth knowing before touching this area (details in
+   `exchange/52-stage2-roadmap.md`): PSX `long` is 32-bit but LP64's is 64 (a `long *` GTE
+   out-param wrote 8 bytes into a 4-byte local — stack smash); raw byte offsets into the Object
+   union (`d.bytes[4]`); union members deliberately aliasing `Object_Sprite.coords`; the GPU OT
+   link storing a truncated host pointer (now a token bridge); and the data-segment generator
+   probing `sizeof()` at a hardcoded `-m32`. **All but the last are invisible to static audit —
+   they were found by building and running.** `OpenDriver2/PsyCross` was evaluated and rejected as
    a drop-in — kept as a reference only.
 
 Do not "clean up" or restructure decompiled code toward stage-2 concerns unless explicitly
@@ -61,28 +73,59 @@ Keep the two concerns separated in commits and discussion.
   is documented in the `decomp-build` skill (`.claude/skills/decomp-build/SKILL.md`) — use it
   rather than re-deriving from scratch if the build environment needs to be rebuilt.
 
-## Stage 2 (PC port) status (2026-07-13)
+## Stage 2 (PC port) status (2026-07-17)
 
 - The native PC port lives under `platform/pc/` (all 6 PSX subsystem backends, the data-segment
-  generator, SDL2/OpenGL windowing). `make link` builds `platform/pc/build/vandalhearts_pc`;
-  it runs the demo battle and renders battle scenes with unit sprites.
-- Active work is **rendering correctness vs. real hardware**, driven by matched-pose BizHawk
-  comparison (see the `phase-c-pc-port` skill's "Render-debugging tooling" section). Recurring
-  bug class this session: **GTE setup values left unshifted/unset in `platform/pc/src/libgte.c`**
-  (`SetGeomOffset` stored screen offsets raw instead of `<<16`; `zsf3/zsf4` were never assigned)
-  — silent until unit sprites actually render, then they translate/mis-depth the whole scene.
-- Debug-only, gated flags/tooling added (matching build untouched): `NO_FADE=1` / `NO_LOADING=1`
-  make-flags, `VH_CAM_OSD=1` (on-screen camera-pose overlay), `SPRITE_LOG=1` + `VH_SPRITE_LOG`
-  (per-sprite cull/projection/GTE-state CSV), `exchange/30-disable-fade-bizhawk.lua`.
-- **Byte-exact re-verified 2026-07-13** (MD5 `596bb082a2de5f1fe977dd3d7e160b03`) — and doing so
-  caught a **real regression**: a prior stage-2 PC-port fix (widening `sFontGlyphBitmaps` from
-  `[128][9]` to `[129][9]` in `src/text.c` to kill a start-menu glyph artifact) had been applied
-  *unconditionally*, adding 12 bytes to `.data` and silently breaking the match since ~07-11. Now
-  fixed: the widening is gated behind `#ifdef PERMUTER` (defined only by the platform/pc build),
-  so the matching build keeps `[128]` and the PC build keeps `[129]`. **Rule this established:**
-  any stage-2 change to decompiled `src/*.c` that alters code size or data layout MUST be gated
-  (`#ifdef PERMUTER` for behavioural/layout changes; `#ifdef PC_DEBUG_*` for debug-only hooks) and
-  re-verified with `make check`, or it breaks stage-1 invisibly.
+  generator, SDL2/OpenGL/OpenAL windowing+audio). `make link` builds
+  `platform/pc/build/vandalhearts_pc`. The **full core game loop runs end-to-end** from the real
+  disc (intro FMVs, cutscenes, scripted + story battles, world map, dialogue, shops, save/load).
+- **A/V fidelity complete + user-signed-off (2026-07-16; music re-opened and closed properly
+  2026-07-21):** graphics (GTE/perspective, terrain, unit-sprite depth/occlusion) and sound
+  (sample-accurate software SPU + SEQ music, CD-XA, MDEC video, SJIS/kanji text) all validated
+  against real hardware (BizHawk). The 2026-07-13/14 rendering bugs (perspective collapse, sprite
+  occlusion, terrain otz) are all fixed.
+  **Caution for future sessions:** the 07-16 *sound* sign-off was by ear and turned out to be
+  premature — four real bugs remained (missing `ProgAtr.mvol`, pan divisor 63-not-64, PsyQ's
+  **square volume law**, and VAB **tone-block packing** which had five programs playing the wrong
+  instrument's samples). All fixed 07-20/21; measured error vs the octoshock reference is now
+  **1.33 dB mean** (was 3.21). Treat "signed off" as "no known issue", not "verified" — and see
+  `exchange/57`'s structural note: our SPU *hardware* emulation was never the problem, every bug
+  was in the **PsyQ `libsnd` reimplementation**, a layer neither psx-spx nor octoshock covers.
+- **Forked** to a private repo (Codeberg `halmyrach/VandalHearts-PcPort`, origin); `upstream-master`
+  = the pristine byte-exact base. Commits allowed now. See memory `reference_codeberg_push`.
+- **Stage 2 (de-consolization) is essentially COMPLETE**, sequenced per `exchange/52-stage2-roadmap.md`:
+  2.0 fork ✅ · 2.1 music ✅ · **2.2 memory-safety ✅** (removed the setcap/zero-page + `/proc`
+  rodata crutches — a portable SIGSEGV fault handler in `pc_bootstrap.c` emulates transient PSX
+  NULL-reads + in-place `.rodata` writes, so the build runs **cap-less, no root**) ·
+  **2.3 64-bit ✅ DONE (2026-07-21)** (NULL guards, GPU token bridge, `long`→`int` width fix, union-offset fixes; default is now `-m64`) ·
+  **2.4 cross-platform ✅ (Windows + Linux, 2026-07-23)** — a MinGW-w64 `.exe` is cross-compiled from
+  Linux (CMake toolchain file) and **validated end-to-end on real Windows** (full demo playthrough);
+  self-contained DLL package + drop-in disc auto-detect + `vandalhearts.ini` config + fatal wrong-disc
+  check. **macOS/Apple Silicon DEPRIORITIZED** (can't cleanly cross-compile from Linux; `__APPLE__`
+  scaffolding left in place for an on-device finish — see memory `stage2_4_crossplatform`).
+- **Stage-2.3 out-of-bounds sweep ✅ COMPLETE (2026-07-23), `exchange/58-asan-sweep.md`.** After the
+  `-m64` flip, an AddressSanitizer playthrough (chapters 1/4/6 + final battle + credits) found **7 real
+  OOB bugs** static audit could not — a class where an index is simply *wrong* and only the consequence
+  changes with pointer width. All fixed `PERMUTER`-gated + byte-exact: `gClutIds[124]→128` (clobbered
+  `s_cdSyncStatus`, in retail too), `gWindowDisplayX/Y[16]→70` (was overwriting **live XA audio state**),
+  `gUnitAnimSets[144]→301`, `gStringTable[100]→101`, travel-cost tables `[14][20]→[20][20]`,
+  `D_8017DF50[27]→[29][64]` (AI-grid write). **Tooling now in `platform/pc/`:** `make asan32` +
+  `./run_asan.sh` (must be 32-bit — 64-bit ASAN's shadow collides with the `0x80000000` arena);
+  `make ubsan` (bounds-checking that *does* work at 64-bit); `tools/struct_width_diff.sh` (the width-bug
+  class neither sanitizer sees). This also retires the "re-run the 6-chapter NULL sweep at 64-bit" 2.4
+  to-do. **Method lesson (bit me 3×): a mis-sized-array *report* is not automatically a too-small
+  *declaration* — prove which index is out of range against the byte-exact binary before widening.**
+- **Gating conventions for `src/*.c` edits** (the matching build must stay byte-exact — **re-run
+  `make check` after any `src/` change**, MD5 `596bb082a2de5f1fe977dd3d7e160b03`): the matching
+  build defines **none** of these, so each keeps its `src/` edit out of stage 1 —
+  - `#ifdef PC_DEBUG_*` — per-file debug/instrumentation hooks, keyed to Makefile flags.
+  - `#ifdef PERMUTER` — PC-build behavioural/layout changes (PC Makefile defines it globally for
+    all game source). E.g. `src/text.c`'s `sFontGlyphBitmaps[129][9]` (PC) vs `[128][9]` (matching).
+  - `#ifdef PC_PORT` — **(NEW, Stage 2.3)** portability/64-bit correctness guards (e.g. per-site
+    NULL-deref guards replacing the x86-32 fault decoder). Also PC-build-only.
+  - `grep -rnE "PC_DEBUG|PERMUTER|PC_PORT" src/` finds them all. **History lesson:** an
+    *unconditional* `src/text.c` widening once silently broke the match for ~2 days — gate, then
+    `make check`.
 - **Debug-only gates in decompiled source** (`grep -rn PC_DEBUG src/`): `src/screen_effects.c`,
   `src/cd.c`, `src/object.c` carry `#ifdef PC_DEBUG_*` blocks; they compile out of the matching
   build and are included in the re-verified byte-exact result above. If matching ever regresses,

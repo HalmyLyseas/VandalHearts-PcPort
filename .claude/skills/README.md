@@ -5,6 +5,12 @@ continuing the Vandal Hearts decomp → native PC port project. `CLAUDE.md` at t
 stays a short always-loaded overview; anything long enough to need its own structure (build
 internals, later the PC-port architecture) goes here instead, one subfolder per skill.
 
+> **Note (2026-07-23):** durable *technical* documentation now lives in committed
+> [`docs/`](../../docs/) (architecture, building, configuration, per-subsystem deep-dives,
+> memory-safety, cross-platform). These skills are the **agent-workflow companions** — setup
+> recipes, working conventions, and gotchas for *how to work* in the tree — and they point into
+> `docs/` for the canonical reference rather than duplicating it.
+
 ## Convention
 
 - Each skill is a folder: `.claude/skills/<skill-name>/SKILL.md`, with YAML frontmatter

@@ -5,6 +5,18 @@ description: How the Vandal Hearts native PC port (Phase C) works — the swappa
 
 # Phase C — native PC port
 
+> **Canonical reference now lives in committed [`docs/`](../../../docs/)** (as of 2026-07-23): the
+> two-layer architecture, building, configuration, per-subsystem deep-dives
+> (`docs/pc-port/subsystems/`), memory-safety, and cross-platform. Prefer `docs/` for durable technical
+> reference and keep it current alongside code. This skill remains the **agent-workflow companion** —
+> the working conventions, gating rules, gotchas, and the local psx-spx reference index that guide
+> *how to work* in `platform/pc/`. `exchange/` stays gitignored investigation scratch.
+>
+> **Status (2026-07-23): Stage 2 essentially complete.** All six subsystem backends done and validated
+> (Linux + Windows, full demo playthrough); A/V fidelity signed off vs BizHawk. 2.2 memory-safety ✅,
+> 2.3 64-bit ✅ (default `-m64`) + ASAN sweep ✅, 2.4 cross-platform ✅ (Windows via MinGW-w64; macOS
+> deprioritized). QoL: disc auto-detect, `vandalhearts.ini`, fatal wrong-disc check.
+
 ## The architecture, in one paragraph
 
 `src/*.c` calls PSX APIs via `#include "PsyQ/whatever.h"` (transitively, mostly through
@@ -46,16 +58,23 @@ Full contract (all confirmed-used PSX API symbols, exact signatures, what each d
 `vh/exchange/02-phase-c-interface-contract.md`. Per-file PSX-subsystem breakdown:
 `vh/exchange/01-phase-c-psx-api-inventory.md`.
 
-## Subsystem status (6 of 6 done — all subsystems complete as of 2026-07-10)
+## Subsystem status — all 6 done + A/V fidelity complete
+
+> **Current status (2026-07-17):** all 6 backends done AND **fidelity-complete** (graphics + sound
+> user-signed-off vs BizHawk, 2026-07-16). Items the table once called "deferred" have **all landed**
+> — MDEC video, the software SPU, and the SEQ sequencer. The project has **forked** (Codeberg) and is
+> in Stage-2 de-consolization: 2.0/2.1/2.2 ✅, **2.3 64-bit in progress**. Authoritative phase
+> tracker: `exchange/52-stage2-roadmap.md`; per-milestone detail lives in the `milestone_*` memory
+> files. The table below now records the backend *architecture*, not a to-do list.
 
 | Subsystem | Status | Step file | Notes |
 |---|---|---|---|
-| Pad/VSync | ✅ done | `04-phase-c-swappable-interface-poc.md` | SDL2 keyboard input; frame-locked ~60Hz timing verified at runtime |
-| CD | ✅ done | `05-phase-c-cd-backend.md` | Reads the real `.bin`; byte-exact verified against a real game file. Real MDEC video *decode* is still deferred (`CdRead2`/`DecDCT*` remain stubs, intentionally rendering honest black) — but movie *timing* is real as of 2026-07-12 (`platform/pc/src/libcd.c`'s `StGetNext`/`StSetStream`, paced to match real hardware's ~15fps STR frame rate; see `exchange/20-camera-viewport-coordinates.md`) |
-| Audio | ✅ done | `06-phase-c-audio-backend.md` | Real SPU-ADPCM decoder + OpenAL playback, verified against a real VAB. Sequencer (`SsSeq*`, music) deferred |
-| Kernel | ✅ done | `07-phase-c-kernel-backend.md` | Real working memory-card save/load, verified byte-identical round trip |
-| GTE | ✅ core done, **2 setup-register bugs fixed 2026-07-13** | `08-phase-c-gte-backend.md` | Single software GTE core backing both the high-level SDK API and `graphics.c`'s raw `gte_*` macros; RTPS/RTPT/NCLIP/AVSZ4/OP/NCCS bit-exact to psx-spx's formulas incl. the real UNR division. **The transform *math* was right, but two GTE *setup* registers were wrong and stayed invisible until unit sprites rendered: `SetGeomOffset` stored OFX/OFY raw (needed `<<16`); `ZSF3/ZSF4` were never assigned (→ terrain OTZ=0). Both fixed — see "What's next" + "Traps".** One `otz>OT_SIZE` far-object edge case still open. Note: `graphics.c`'s raw macros need `-Iplatform/pc/include` **before** `-Iinclude` to resolve (see "Traps" below) |
-| GPU | ✅ done | `09-phase-c-gpu-backend.md` | Real 1MB VRAM (BGR555) + real OT walk + software rasterizer for the 4 confirmed-used primitives (`POLY_F4`/`POLY_FT4`/`SPRT`/`TILE`) + real TIM parsing + SDL2/OpenGL present, verified against a real X11 display. `FntPrint`/Gouraud/line primitives deferred (unused per the contract) |
+| Pad/VSync | ✅ done | `04-phase-c-swappable-interface-poc.md` | SDL2 keyboard + SDL_GameController; frame-locked ~59.94Hz |
+| CD | ✅ done | `05-phase-c-cd-backend.md` | Reads the real `.bin`, byte-exact vs a real game file. **MDEC/STR video now fully decodes** (from-scratch decoder, ffmpeg pixel-parity — memory `milestone_mdec_video_working`); movie timing real; CD-XA audio streaming works (`milestone_xa_audio_working`) |
+| Audio | ✅ done | `06-phase-c-audio-backend.md` | **Sample-accurate software SPU** (pitch/4-pt Gaussian/ADSR/STUDIO_C reverb) is the default music path, + the **SEQ sequencer** (real instruments/tempo/reverb) + CD-XA + VAG SFX — all user-signed-off. Memory `spu_m1_progress`, `milestone_seq_music_sequencer` |
+| Kernel | ✅ done | `07-phase-c-kernel-backend.md` | Memory-card save/load (real host files under `saves/` — `milestone_memcard_and_saves`); tick model for AI throttle |
+| GTE | ✅ done | `08-phase-c-gte-backend.md` | Software GTE core; RTPS/RTPT/NCLIP/AVSZ4/OP/NCCS bit-exact to psx-spx. The 2026-07-13/14 setup-register + `UnrDivide` 32-bit-overflow + far-object `otz` bugs are **all fixed** — perspective pixel-accurate vs BizHawk (`milestone_perspective_collapse_fix`). `graphics.c`'s raw macros need `-Iplatform/pc/include` **before** `-Iinclude` (see "Traps") |
+| GPU | ✅ done | `09-phase-c-gpu-backend.md` | Real 1MB VRAM (BGR555) + OT walk + software rasterizer (`POLY_F4`/`FT4`/`SPRT`/`TILE`) + TIM parsing + SDL2/OpenGL present. Sprite occlusion fixed (`milestone_sprite_occlusion_fix`). **64-bit caveat:** the OT link stores a host pointer truncated to 32 bits (`-m32`-only) — Stage 2.3 replaces it with the ctr-native **token bridge** (`../ctr-native/platform/native_gpu_links.c`) |
 
 **Phase C's swappable-interface mechanism is proven for all 6 subsystems, all 70 `src/*.c`
 files compile (Step 10), the link succeeds (Step 11), AND (2026-07-10, Step 12) the game runs
@@ -72,12 +91,20 @@ struct writes (`((u32*)p)[23] = 0`) assuming the original 32-bit-pointer PS1 mem
 every pointer field in heavily-used structs (`Object`, `UnitStatus`) doubles in size on a
 64-bit host, silently corrupting these accesses. 32-bit eliminates that bug class at the
 root, giving a working reference to validate a later 64-bit migration against (64-bit is the
-real long-term target — required for macOS, which dropped 32-bit entirely in 2019). Migrating
-back to 64-bit is real, not-yet-started future work, not optional polish.
+real long-term target — required for macOS, which dropped 32-bit entirely in 2019).
 `platform/pc/Makefile`'s `M32 := -m32` variable (and the matching `PKG_CONFIG_LIBDIR`
-overrides for 32-bit `sdl2`/`openal` lookups) is the toggle point when that migration
-happens — flip it and expect the raw-offset-access bugs to resurface, needing the audit that
-was deliberately deferred by this decision.
+overrides for 32-bit `sdl2`/`openal` lookups) is the toggle point when that migration happens.
+
+> **UPDATE (2026-07-17): this migration is now Stage 2.3, audited + planned** —
+> `exchange/52-stage2-roadmap.md` Phase 2.3. Good news: the "66+ raw word-indexed writes" that drove
+> this 32-bit decision turned out to be **74 `((u32*)p)[N]` sites that collapse to just 3 `object.c`
+> Object-zeroing routines** (`Obj_GetUnused`/`GetFirstUnused`/`GetLastUnusedSkippingTail`, each a
+> `((u32*)p)[2..23]=0` block) → fixable with **1 gated `memset((u32*)p+2,0,sizeof(*p)-8)` each**
+> (byte-exact at `-m32`, 64-bit-correct); the other 8 sites are flat non-pointer buffer copies (safe).
+> The rest of the 64-bit surface is small too (0 ptr↔int casts, 0 dangerous union aliasing, data-gen
+> already `sizeof()`-probe-driven). Real remaining blockers: the **GPU OT token bridge** + the
+> **NULL-guard pass** (`PC_PORT`, replacing the x86-32 fault decoder). Don't re-derive this — read the
+> roadmap's Phase 2.3 audit table.
 
 **How the data segment problem got solved**: 341 real global-variable symbols are used by
 `src/*.c` but never given a C-level defining declaration anywhere (the matching-decomp data
@@ -321,7 +348,8 @@ build are unaffected; the actual *fixes* live in `platform/pc/src/libgte.c`.
 ### Gated instrumentation / stage-2-safe edits in decompiled source — don't panic if you see `#ifdef` in `src/`
 
 Some decompiled files carry `#ifdef` blocks. **This is allowed, but only when gated**, because the
-matching build must stay byte-exact. Two macro families are in use:
+matching build must stay byte-exact. Three macro families are in use (the matching build defines
+**none** of them):
 
 - **`PC_DEBUG_*`** — debug-only hooks, keyed to Makefile flags. The matching build never defines
   them, so they compile out entirely:
@@ -338,8 +366,18 @@ matching build must stay byte-exact. Two macro families are in use:
   does. Current use: `src/text.c`'s `sFontGlyphBitmaps[129][9]` (PC) vs `[128][9]` (matching) —
   see the trap below.
 
-`grep -rnE "PC_DEBUG|#ifdef PERMUTER" src/` finds them all. **These are included in the
-2026-07-13 byte-exact re-verification** (MD5 `596bb082a2de5f1fe977dd3d7e160b03`).
+- **`PC_PORT`** — **(NEW, Stage 2.3)** portability / 64-bit-correctness guards. Also defined for all
+  game source by `platform/pc/Makefile` (`GAME_C_FLAGS`), never by the matching build. First use:
+  **per-site NULL-deref guards** replacing the x86-32-only fault-handler decoder (the portable path
+  for the 2.3/2.4 goal). Pattern mirrors the 2.2 handler's policy exactly so runtime is unchanged:
+  reads → `ptr ? ptr->f : 0` (read-0, NOT a bare skip); stores → `if (ptr)` (discard). Keep the
+  original code verbatim in the non-`PC_PORT` path so byte-exact holds by construction. Sites so far:
+  `src/battle_0201b8.c:3768-3770` (camera-follow), `src/fx_0506c0.c:1890,1892` (unit-blocking). Find
+  remaining sites via the fault handler's `vh_null_reads.log` + `make crash-trace`. See
+  `exchange/52-stage2-roadmap.md` Phase 2.3 Step A.
+
+`grep -rnE "PC_DEBUG|PERMUTER|PC_PORT" src/` finds them all. **All are included in the byte-exact
+re-verification** (MD5 `596bb082a2de5f1fe977dd3d7e160b03`; the matching build compiles none of them).
 
 > **TRAP — a stage-2 fix to decompiled `src/*.c` that changes code size or data layout breaks
 > stage-1 silently.** This actually happened: `sFontGlyphBitmaps` was widened `[128]`→`[129]`
@@ -354,6 +392,42 @@ matching build must stay byte-exact. Two macro families are in use:
 > `platform/pc/src/libgte.c` and touch no decompiled source.
 - **The always-on camera/rand CSV mirrors** (`libetc.c` `LogCameraTraceRow`/`LogRandSeedRow` →
   `vh_camera_target_full_watch_log_pc.csv` etc.) mirror the BizHawk Lua captures field-for-field.
+
+## Memory-safety tooling (Stage 2.3 — added 2026-07-23)
+
+Three complementary checks, each catching a class the others miss. Full write-up + findings ledger
+in `exchange/58-asan-sweep.md`; setup detail in the `asan_sweep_setup` memory.
+
+- **`make asan32` + `./run_asan.sh`** (in `platform/pc/`) — AddressSanitizer playthrough. **Must be
+  32-bit**: 64-bit ASAN's shadow starts at `0x7fff8000` and collides with the `0x80000000` PSX RAM
+  arena `pc_bootstrap.c` reserves (the hardcoded PSX scratch literals need it) → `mmap` fails → dies
+  in the first `CdRead`. No GCC option relocates the shadow; the 32-bit shadow is at `0x20000000`, so
+  the arena is free. No coverage lost — OOB bugs are width-independent. `run_asan.sh` sets the
+  required options (`handle_segv=0` because `pc_bootstrap`'s SIGSEGV handler is load-bearing;
+  `halt_on_error=0`+`-fsanitize-recover` so one run surfaces every site; `VH_RCNT1_NORMALIZE=1` so the
+  sprite decoder's `GetRCnt(RCntCNT1)<=470` budget doesn't starve at ~12 FPS and freeze the enemy
+  turn). Findings land in `asan.log.<pid>`, archived to `asan_runs/`.
+- **`make ubsan`** — `-fsanitize=bounds`, and this one **works at 64-bit** (no shadow region). Covers
+  the "is it also OOB at the real width?" gap `asan32` can't speak to. Limit: only where the array
+  bound is statically visible in the TU (pointer-based accesses unchecked).
+- **`tools/struct_width_diff.sh`** — `gdb` sizeof-diff of `build/` vs `build32/`. The width-bug class
+  **neither sanitizer can see**: a struct that changes size at LP64 and overflows a *fixed* byte
+  buffer elsewhere (e.g. `UnitStatus` 120→136 broke in-battle saves, `bugreport-07`). Needs no run.
+
+**The sweep (2026-07-23) found 7 real OOB bugs** static audit could not — a wrong *index*, where
+only the consequence changes with pointer width. All fixed `PERMUTER`-gated + byte-exact:
+`gClutIds[124]→128`, `gWindowDisplayX/Y[16]→70` (was overwriting live XA audio state),
+`gUnitAnimSets[144]→301`, `gStringTable[100]→101`, travel tables `[14][20]→[20][20]`,
+`D_8017DF50[27]→[29][64]`. Two non-bugs left documented (`ReserveSprite` stack OOB = authentic UB;
+`gTexwSpriteSetFrames[-12]` negative-`gfxIdx` = one-frame cosmetic, never reproduced).
+
+**Method lesson (bit me 3× in one sweep): a mis-sized-array *report* is NOT automatically a
+too-small *declaration*.** `gClutIds`/`gWindowDisplayX` genuinely were undersized; `gTravelAscentCost`
+was NOT (correct size, the *index* — a boundary-tile elevation `diff` — was the OOB). Prove which
+index is out of range against the byte-exact binary and the code before widening, and widen the
+*outer* dimension only (never change a stride). When the offending index is data-driven, add a
+self-gating `PC_DEBUG_*` probe (see `PC_DEBUG_PATH_STEP` in `src/path_grids.c`) to capture the real
+value instead of guessing from one observed sample.
 
 ## Traps already hit (avoid repeating)
 
