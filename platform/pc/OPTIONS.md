@@ -12,7 +12,7 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 
 | Variable | Default | Effect |
 |---|---|---|
-| `VH_DISC_IMAGE` | `../../../../game/Vandal Hearts (USA).bin` (relative to the exe) | Path to your game disc `.bin`. |
+| `VH_DISC_IMAGE` | auto-detected (a `game/` folder or a `*.bin` next to the exe/AppImage; dev fallback `../../../external/game/Vandal Hearts (USA).bin`) | Path to your game disc `.bin`; overrides auto-detect. |
 | `VH_SCALE` | `2` | Integer window scale (clamped 1–8). Aspect-preserved. |
 | `VH_SPU_GAIN` | `1.012` | Software-SPU master output trim (float). Music/SFX loudness. Calibrated so the rendered mix RMS-matches the octoshock reference to within 0.01 dB (peak −5.6 dBFS vs the reference's −5.9, i.e. the same headroom hardware leaves for SFX). Falls back to `0.24` if `VH_SPU_SQUARE=0`. |
 | `VH_SPU_SQUARE` | on | PsyQ's **square volume law** — the final stage of the real key-on chain (`0x800d6d8c`): `VolL = L*L / 16383`, applied after panning, to music *and* SFX. Quadratic, so every dB of attenuation is doubled. Without it the mix renders at half the hardware's dynamic range in dB. `0` reverts to the old linear behaviour (and drops `VH_SPU_GAIN` to `0.24`) for A/B. See `exchange/57`. |

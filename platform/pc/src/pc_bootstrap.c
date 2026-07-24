@@ -316,9 +316,10 @@ static const char *DefaultDiscPath(void) {
         if (FirstBinInDir(deployDir, path, sizeof(path))) return path;
     }
     if (!PC_GetExeDir(exeDir, sizeof(exeDir)))
-        return "../../../game/Vandal Hearts (USA).bin"; /* exe path unavailable: old cwd-relative fallback */
-    /* 3. dev build layout: repo game/ four levels up from platform/pc/build */
-    snprintf(path, sizeof(path), "%s/../../../../game/Vandal Hearts (USA).bin", exeDir);
+        return "../external/game/Vandal Hearts (USA).bin"; /* exe path unavailable: cwd-relative fallback */
+    /* 3. dev build layout: the disc lives in vh/external/game (three levels up from
+     * platform/pc/build*, then external/game). VH_DISC_IMAGE overrides this. */
+    snprintf(path, sizeof(path), "%s/../../../external/game/Vandal Hearts (USA).bin", exeDir);
     return path;
 }
 
