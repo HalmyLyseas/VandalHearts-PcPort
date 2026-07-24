@@ -18,6 +18,9 @@ commitments.
 - **[configuration.md](configuration.md)** — supplying the disc image, the `vandalhearts.ini` config
   file, runtime options, and diagnostics. (Full option reference:
   [`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md).)
+- **[controls.md](controls.md)** — the full gamepad + keyboard control scheme in battle.
+- **[gameplay-additions.md](gameplay-additions.md)** — the optional Stage-3 QoL features (twin-stick
+  camera, unit-cycle, enemy threat overlay) and what they do.
 
 ## The PC port internals
 

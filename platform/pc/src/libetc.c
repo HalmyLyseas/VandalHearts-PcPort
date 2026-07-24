@@ -693,7 +693,7 @@ static unsigned int pc_pad_read(void) {
         if (ly < -AXIS_DZ) p |= PADLup;    else if (ly > AXIS_DZ) p |= PADLdown;
     }
     /* QoL: right analog stick -> camera shoulder buttons, twin-stick feel.
-     * Horizontal = L1/R1 (camera rotate), vertical = L2/R2 (camera zoom).
+     * Horizontal = L1/R1 (camera rotate), vertical = L2/R2 (camera elevation).
      * ORs with the physical shoulders/triggers above (both inputs work).
      * SDL Y axis is +down, matching the left-stick convention. */
     {
