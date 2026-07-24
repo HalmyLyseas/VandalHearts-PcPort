@@ -1,0 +1,39 @@
+DISCLAIMER
+================================================================================
+
+This is a non-commercial fan preservation and interoperability project. It is
+NOT affiliated with, endorsed by, or sponsored by Konami or Sony. It is not
+sold and generates no profit.
+
+Vandal Hearts and all related characters, names, text, music, art, and other
+intellectual property are © Konami. The PlayStation, its BIOS, and the PsyQ SDK
+are © Sony. No ownership of, or license to, any Konami or Sony property is
+claimed by this project.
+
+You must supply your own legally-owned copy of the game.
+--------------------------------------------------------------------------------
+
+This repository does NOT distribute any of the following. They are git-ignored
+and must be sourced from your own copy; the build reconstructs what it needs from
+them locally:
+
+  * the base game executable (SLUS_004.47) or a disc image;
+  * the Sony PsyQ SDK headers or any PlayStation BIOS data (including the PS1
+    kanji font used by the game's text rendering);
+  * Konami's in-game text (e.g. spell and item description strings);
+  * any extracted game graphics, audio, or other assets.
+
+What the repository DOES contain, beyond the original PC-port code (see NOTICE):
+a reverse-engineered decompilation of the game code (src/), and a small number of
+functional game-data tables (unit stats and animation/sprite pointer tables)
+reconstructed from the binary. These are included for interoperability and
+preservation, derive from Konami's copyrighted work, and are not claimed as the
+project's own. If the copyright holder objects to their inclusion, they will be
+removed on request.
+
+The decompiled game code is provided strictly for interoperability, preservation,
+and educational purposes. Whether such reverse engineering is permitted is a
+matter of the law in your jurisdiction; you are responsible for your own use.
+
+This project is not legal advice and makes no warranty as to the legality of any
+particular use.

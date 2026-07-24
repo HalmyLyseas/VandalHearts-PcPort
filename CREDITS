@@ -1,0 +1,32 @@
+CREDITS
+================================================================================
+
+Original game
+  * Vandal Hearts (PlayStation, US release SLUS_004.47) — © Konami. All game
+    design, code, text, art, and music are theirs.
+
+Decompilation base
+  * shao113 — the matching decompilation this project builds on
+    (https://github.com/shao113/vh). The decompiled game code under src/ and the
+    matching-decomp configuration derive from that work.
+
+Decomp toolchain (PSX-decomp community)
+  * splat        — segment/asset disassembly & extraction (ethteck & contributors)
+  * maspsx       — GCC 2.x → PSX assembler post-processor (mkst)
+  * old-gcc      — prebuilt GCC 2.x frontend (decompals)
+  * mips binutils cross-toolchain
+
+References used to build the native PC backends
+  * psx-spx / nocash PSX specifications (Martin Korth) — PS1 hardware behaviour,
+    used to re-implement the GPU, GTE, SPU, CD/XA, and MDEC in software.
+  * BizHawk — used as a ground-truth reference for validating rendering, audio,
+    timing, and AI behaviour against real-hardware output.
+
+Native PC port
+  * The SDL2 / OpenGL / OpenAL backends, software subsystem re-implementations,
+    build system, and tooling under platform/pc/ were written for this project
+    by HalmyLyseas, and are licensed GPL-2.0 (see LICENSE / NOTICE).
+
+Sony
+  * The PlayStation, its BIOS, and the PsyQ SDK are © Sony. PsyQ headers and BIOS
+    data are referenced but never distributed here (see DISCLAIMER).

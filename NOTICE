@@ -1,0 +1,48 @@
+Vandal Hearts — PC Port
+Copyright (C) 2026 HalmyLyseas
+
+================================================================================
+Scope of the GPL-2.0 license (LICENSE file)
+================================================================================
+
+The GPL-2.0 license in LICENSE covers ONLY the original work authored for this
+project by the copyright holder above — principally the native PC port and its
+tooling. Concretely, that is:
+
+  * platform/pc/**   — the entire native PC port: the SDL2 / OpenGL / OpenAL
+                       backends, the software SPU/GTE/GPU/CD/MDEC re-implementations,
+                       the clean-room PsyQ interface headers (platform/pc/include/PsyQ/),
+                       the build system (Makefile, CMakeLists.txt), and the
+                       data-generation tooling (platform/pc/tools/).
+  * Original additions to the decompiled sources, marked in-tree by the
+    `PC_PORT`, `PC_DEBUG_*`, and `PERMUTER` preprocessor gates in src/ and include/.
+  * The project documentation authored here (README.md, this NOTICE, DISCLAIMER,
+    CREDITS).
+
+================================================================================
+What the GPL-2.0 license does NOT cover
+================================================================================
+
+The following is NOT the copyright holder's work and is NOT licensed under
+GPL-2.0. No ownership is claimed over it. See DISCLAIMER.
+
+  * The decompiled game code — src/*.c and the matching-decomp headers/config it
+    depends on (include/*.h, symbol_addrs.txt, SLUS_004.47.yaml,
+    undefined_additional.txt). This is a reverse-engineered representation of
+    Vandal Hearts (© Konami), derived from the unlicensed decompilation by
+    shao113 (https://github.com/shao113/vh). It is included for interoperability
+    and preservation only.
+
+  * A small number of functional game-data tables reconstructed from the game
+    binary — platform/pc/src/pc_battle_data.c, pc_unit_anim_data.c,
+    pc_sprite_box_quads.c, pc_event_anim_data.c (unit stats, animation/sprite
+    pointer tables). Game-derived data, © Konami.
+
+  * The decomp toolchain under tools/ originates from the broader PSX-decomp
+    community (splat, maspsx, and related scripts); see CREDITS.
+
+  * NOT PRESENT in this repository at all (git-ignored, never distributed): the
+    base game executable and disc image, the Sony PsyQ SDK headers and BIOS data
+    (including the PS1 kanji font), Konami's in-game text, and any extracted game
+    assets or audio. These are regenerated locally from your own legally-owned
+    copy at build time. See DISCLAIMER and README.md.
