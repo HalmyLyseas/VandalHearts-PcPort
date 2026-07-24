@@ -1887,8 +1887,17 @@ void Objf202_746_UnitBlocking(Object *obj) {
       if (--OBJ.variant_0x24.timer == -1) {
          obj->functionIndex = OBJF_NULL;
          obj_s0 = OBJ.unusedSprite;
+         /* PC_PORT (Stage 2.3): unusedSprite/unitSprite may be NULL here; PSX / the 2.2
+          * fault handler discard the store. Skip it -- store-discard is exact. NULL site #4
+          * (functionIndex@0x8). See exchange/52 Phase 2.3 Step A. */
+#ifdef PC_PORT
+         if (obj_s0)
+#endif
          obj_s0->functionIndex = OBJF_NULL;
          obj_s0 = OBJ.unitSprite;
+#ifdef PC_PORT
+         if (obj_s0)
+#endif
          obj_s0->d.sprite.hidden = 0;
       }
 

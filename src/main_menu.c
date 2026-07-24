@@ -148,6 +148,29 @@ static s8 *sText_FileLoadCaptions[] = {
     "",
     "",
     "",
+#ifdef PC_PORT
+    /* PC_PORT (Stage 2.3): FOURTH entry. This array is read with `i < numChoices`, and
+     * numChoices is 4 for OBJF_FILE_LOAD_MENU / _DEBUG / _IBS / _DEFEAT (only the _343/_367
+     * variants use 3) -- the title-screen Load path goes through OBJF_FILE_LOAD_MENU
+     * (src/card.c:112), so index 3 IS read. The neighbouring `if (i < 4 && ...)` and
+     * `slotOccupied[4]` both say the original array is 4 wide; the decomp inferred 3 from its
+     * initializer count.
+     *
+     * With only 3 entries the read runs off the end: at -m32 it fetched 4 bytes of adjacent
+     * static data that happened to be harmless, at -m64 it fetches 8 and DrawText_Internal
+     * SIGSEGVs dereferencing it.
+     *
+     * The value is "In-battle save", confirmed from the byte-exact binary: sText_FileLoadCaptions
+     * is at 0x801023bc and the pointer at [3] (0x801023c8) is 0x800158b0 = "In-battle save".
+     * The decomp attributed that word to the *next* static, sText_InBattleSaveOrBattleStart --
+     * which is declared but referenced by nothing (hence its "Unused" comment). Both readings
+     * emit identical bytes, so the match is unaffected either way; this one is correct because
+     * the array is genuinely indexed at 3. Slot 4 is the in-battle save, which is also why the
+     * fill loop above is `i < 3` and CardFileData_Listing only carries captions[3][40]: the
+     * card supplies the 3 regular-save captions, slot 4's caption is a constant.
+     * Gated, so the matching build keeps its 3-entry layout. */
+    "In-battle save",
+#endif
 };
 
 // Unused

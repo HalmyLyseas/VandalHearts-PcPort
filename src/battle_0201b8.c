@@ -2792,9 +2792,20 @@ void FieldInfo_HandleCursorUnit(Object *obj) {
    case 0:
       // Bug: cursorUnit is uninitialized here; presumably because this function's code was lifted
       // from Objf003_BattleActions
+#ifdef PC_PORT
+      /* PC_PORT (Stage 2.3): cursorUnit is uninitialised (the dev-acknowledged bug above), so
+       * cursorUnit->idx is a read through a garbage low-address pointer. The 2.2 fault handler
+       * zeroed it; mirror that deterministically (read-0), reducing the compare to "is the cursor
+       * tile empty?" -- bit-identical to the validated build. Portable replacement for the x86-32
+       * fault decoder. NULL site: FieldInfo_HandleCursorUnit+0x7d. See exchange/56. */
+      if (gMapUnitsPtr[gMapCursorZ][gMapCursorX].s.unitIdx == 0) {
+         break;
+      }
+#else
       if (gMapUnitsPtr[gMapCursorZ][gMapCursorX].s.unitIdx == cursorUnit->idx) {
          break;
       }
+#endif
       obj->mem++;
 
    // fallthrough
@@ -3764,11 +3775,27 @@ void Objf013_BattleMgr(Object *obj) {
 
    if (!gPlayerControlSuppressed) {
       s16 a, b;
+#ifdef PC_PORT
+      /* PC_PORT (Stage 2.3): unitSprite can be NULL here when no unit occupies the
+       * followed tile. On PSX / under the 2.2 fault handler these three reads yield 0;
+       * mirror that exactly (read-0, NOT skip -- the camera still eases toward origin)
+       * so the math stays bit-identical to the validated build. Portable replacement
+       * for the x86-32 fault decoder. NULL sites #1-3; see exchange/52 Phase 2.3 Step A. */
+      if (OBJ.todo_x2d) {
+         s32 sx = unitSprite ? unitSprite->x1.n : 0;
+         s32 sz = unitSprite ? unitSprite->z1.n : 0;
+         s32 sy = unitSprite ? unitSprite->y1.n : 0;
+         gCameraPos.vx += (-(sx >> 3) - gCameraPos.vx) >> 4;
+         gCameraPos.vz += (-(sz >> 3) - gCameraPos.vz) >> 4;
+         gCameraPos.vy += (((sy + CV(1.0)) >> 3) - gCameraPos.vy) >> 4;
+      }
+#else
       if (OBJ.todo_x2d) {
          gCameraPos.vx += (-(unitSprite->x1.n >> 3) - gCameraPos.vx) >> 4;
          gCameraPos.vz += (-(unitSprite->z1.n >> 3) - gCameraPos.vz) >> 4;
          gCameraPos.vy += (((unitSprite->y1.n + CV(1.0)) >> 3) - gCameraPos.vy) >> 4;
       }
+#endif
       if (!gPlayerControlSuppressed && gIsEnemyTurn && gState.cameraMode == CAMERA_MODE_DYNAMIC) {
          gCameraRotation.vy -= 8;
          s_camRotXPhase_80123208 += 16;

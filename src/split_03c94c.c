@@ -39,9 +39,20 @@ void MsgBox_SetPortrait(s16 portraitId, u8 lower) {
    obj1 = gObjectArray;
    for (i = 0; i < OBJ_DATA_CT; i++) {
       if (obj1->functionIndex == OBJF_MSGBOX_PORTRAIT && obj1->d.objf413.flipped == lower) {
+#ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): the portrait's face/speak/blink sprite pointers can be NULL
+          * (a portrait with no speak/blink sub-sprite). These are NULL writes to functionIndex
+          * (@0x8); the 2.2 fault handler discarded them, so guard each write -- bit-identical to
+          * the validated build (the write had no observable effect on a NULL sprite anyway).
+          * NULL sites: MsgBox_SetPortrait +0x4f/0x5b/0x67. See exchange/56. */
+         if (obj1->d.objf413.faceSprite) obj1->d.objf413.faceSprite->functionIndex = OBJF_NULL;
+         if (obj1->d.objf413.speakSprite) obj1->d.objf413.speakSprite->functionIndex = OBJF_NULL;
+         if (obj1->d.objf413.blinkSprite) obj1->d.objf413.blinkSprite->functionIndex = OBJF_NULL;
+#else
          obj1->d.objf413.faceSprite->functionIndex = OBJF_NULL;
          obj1->d.objf413.speakSprite->functionIndex = OBJF_NULL;
          obj1->d.objf413.blinkSprite->functionIndex = OBJF_NULL;
+#endif
          break;
       }
       obj1++;
@@ -2654,8 +2665,32 @@ void Objf409_EventEntity(Object *obj) {
    } else {
       animSet = OBJ.altAnimSet;
    }
+#ifdef PC_PORT
+   /* PC_PORT (Stage 2.3): OBJ.baseAnimSet/altAnimSet can be NULL (the gEvtEntities data-gen
+    * residual, see milestone_cutscene_units_fixed) -- animSet[idx] then reads through NULL.
+    * The 2.2 fault handler read 0; mirror that (animData = NULL), which UpdateUnitSpriteAnimation
+    * below already tolerates (its own PC_PORT zero-table guard) -- bit-identical to the validated
+    * build. NULL site: Objf409_EventEntity+0x1f5e. See exchange/56. */
+   sprite->d.sprite.animData =
+       animSet ? animSet[OBJ.animIdx + sprite->d.sprite.facingFront] : (u8 *)0;
+#else
    sprite->d.sprite.animData = animSet[OBJ.animIdx + sprite->d.sprite.facingFront];
+#endif
    UpdateUnitSpriteAnimation(sprite);
+#ifdef PC_DEBUG_SPRITE_LOG
+   { extern void PC_DebugEvtEntityLog(int, int, int, const void *, const void *, const void *,
+                                      int, int, const void *, int, int, int, int, int, int, int);
+     extern s16 gEvtEntityData[];
+     s16 *pc = OBJ.pNextCommand;
+     long cmdOff = (pc >= gEvtEntityData && pc < gEvtEntityData + 4096) ? (long)(pc - gEvtEntityData) : -1;
+     int cmdArg = (cmdOff > 0) ? pc[-1] : 0;
+     PC_DebugEvtEntityLog((int)(obj - gObjectArray), sprite->x1.s.hi, sprite->z1.s.hi,
+                          (const void *)OBJ.baseAnimSet, (const void *)OBJ.altAnimSet,
+                          (const void *)animSet, OBJ.animIdx, sprite->d.sprite.facingFront,
+                          (const void *)sprite->d.sprite.animData, sprite->d.sprite.gfxIdx,
+                          OBJ.usingAltAnimSet, obj->state3, obj->mem, OBJ.commandState,
+                          (int)cmdOff, cmdArg); }
+#endif
    RenderUnitSprite(gGraphicsPtr->ot, sprite, OBJ.elevationType + 1);
 }
 

@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef PC_PORT
+#include <string.h>   /* memset -- see the PC_PORT zeroing note in Obj_GetUnused. Declared
+                       * explicitly because an implicit declaration returns int, which would
+                       * truncate memset's void* return under -m64. */
+#endif
 #include "object.h"
 #include "state.h"
 #include "graphics.h"
@@ -205,6 +210,17 @@ Object *Obj_GetUnused(void) {
    p = &gObjectArray[20];
    for (i = 20; i < OBJ_DATA_CT; i++, p++) {
       if (p->functionIndex == OBJF_NULL) {
+#ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): this zeroes Object words 2..23 -- i.e. everything from
+          * `functionIndex` to the end of the struct, deliberately preserving `vec` (words 0..1).
+          * The literal word count is 32-bit-only: the `d` union holds a pointer
+          * (Object_Sprite.animData), so sizeof(Object) GROWS under -m64 and words 2..23 would
+          * stop short, leaving the tail of the union uninitialised -- a silent-corruption bug,
+          * not a crash. Expressed as a memset the range is derived from the struct itself, so it
+          * is pointer-width independent and keeps exactly the same semantics. */
+         memset(&p->functionIndex, 0,
+                sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
+#else
          ((u32 *)p)[2] = 0;
          ((u32 *)p)[3] = 0;
          ((u32 *)p)[4] = 0;
@@ -227,6 +243,7 @@ Object *Obj_GetUnused(void) {
          ((u32 *)p)[21] = 0;
          ((u32 *)p)[22] = 0;
          ((u32 *)p)[23] = 0;
+#endif
          return p;
       }
    }
@@ -239,6 +256,17 @@ Object *Obj_GetFirstUnused(void) {
    p = &gObjectArray[0];
    for (i = 0; i < OBJ_DATA_CT; i++, p++) {
       if (p->functionIndex == OBJF_NULL) {
+#ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): this zeroes Object words 2..23 -- i.e. everything from
+          * `functionIndex` to the end of the struct, deliberately preserving `vec` (words 0..1).
+          * The literal word count is 32-bit-only: the `d` union holds a pointer
+          * (Object_Sprite.animData), so sizeof(Object) GROWS under -m64 and words 2..23 would
+          * stop short, leaving the tail of the union uninitialised -- a silent-corruption bug,
+          * not a crash. Expressed as a memset the range is derived from the struct itself, so it
+          * is pointer-width independent and keeps exactly the same semantics. */
+         memset(&p->functionIndex, 0,
+                sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
+#else
          ((u32 *)p)[2] = 0;
          ((u32 *)p)[3] = 0;
          ((u32 *)p)[4] = 0;
@@ -261,6 +289,7 @@ Object *Obj_GetFirstUnused(void) {
          ((u32 *)p)[21] = 0;
          ((u32 *)p)[22] = 0;
          ((u32 *)p)[23] = 0;
+#endif
          return p;
       }
    }
@@ -276,6 +305,17 @@ Object *Obj_GetLastUnusedSkippingTail(s32 tailEntriesToSkip) {
    // Ensures scan doesn't enter first 20 entries (reserved?)
    for (i = 0; i < (OBJ_DATA_CT - 20) - tailEntriesToSkip; i++, p--) {
       if (p->functionIndex == OBJF_NULL) {
+#ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): this zeroes Object words 2..23 -- i.e. everything from
+          * `functionIndex` to the end of the struct, deliberately preserving `vec` (words 0..1).
+          * The literal word count is 32-bit-only: the `d` union holds a pointer
+          * (Object_Sprite.animData), so sizeof(Object) GROWS under -m64 and words 2..23 would
+          * stop short, leaving the tail of the union uninitialised -- a silent-corruption bug,
+          * not a crash. Expressed as a memset the range is derived from the struct itself, so it
+          * is pointer-width independent and keeps exactly the same semantics. */
+         memset(&p->functionIndex, 0,
+                sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
+#else
          ((u32 *)p)[2] = 0;
          ((u32 *)p)[3] = 0;
          ((u32 *)p)[4] = 0;
@@ -298,6 +338,7 @@ Object *Obj_GetLastUnusedSkippingTail(s32 tailEntriesToSkip) {
          ((u32 *)p)[21] = 0;
          ((u32 *)p)[22] = 0;
          ((u32 *)p)[23] = 0;
+#endif
          return p;
       }
    }
@@ -1078,6 +1119,15 @@ void AddObjPrim2(u32 *ot, Object *obj) {
    u32 otIdx;
    s32 gfx;
 
+#ifdef PC_DEBUG_UI_LOG
+   /* Stage 2.3 (-m64 UI-invisibility probe): record EVERY call, including the ones the `hidden`
+    * test below rejects -- "never drawn" and "drawn off-screen" look identical on screen but are
+    * different bugs. See PC_DebugUiLog in pc_bootstrap.c. */
+   { extern void PC_DebugUiLog(const char *, int, int, int, int, int, int, int, int);
+     PC_DebugUiLog("prim2", obj->functionIndex, obj->d.sprite2.hidden, obj->d.sprite2.gfxIdx,
+                   obj->d.sprite2.otOfs, obj->d.sprite2.coords[0].x, obj->d.sprite2.coords[0].y,
+                   obj->d.sprite2.coords[3].x, obj->d.sprite2.coords[3].y); }
+#endif
    if (!obj->d.sprite2.hidden) {
       poly = &gGraphicsPtr->quads[gQuadIndex];
       gfx = obj->d.sprite2.gfxIdx;
@@ -1328,6 +1378,19 @@ void UpdateObjAnimation(Object *obj) {
 
    animData = (s16 *)obj->d.sprite.animData;
 
+#ifdef PC_PORT
+   /* PC_PORT (Stage 2.3): obj->d.sprite.animData can be NULL (uninitialised sprite).
+    * PSX / the 2.2 fault handler read 0 through NULL; redirect a NULL table to an
+    * all-zero table so every animData[] index yields 0 -- bit-identical to the handler's
+    * per-read zeroing (the s8 delay/idx + terminator logic then caps animDataIdx small,
+    * so a size-16 zero table can never be over-indexed). Portable replacement for the
+    * x86-32 fault decoder. NULL sites: object.c:1342/1343/1368. See exchange/56. */
+   {
+      static const s16 s_nullAnim[16] = {0};
+      if (animData == NULL) animData = (s16 *)s_nullAnim;
+   }
+#endif
+
    if (!obj->d.sprite.animInitialized) {
       obj->state3 = 1;
    }
@@ -1421,6 +1484,19 @@ void UpdateMultisizeObjAnimation(Object *obj) {
 void UpdateUnitSpriteAnimation(Object *obj) {
    // Unit anim data consists of bytes instead of shorts
    s8 *animData = (s8 *)obj->d.sprite.animData;
+
+#ifdef PC_PORT
+   /* PC_PORT (Stage 2.3): obj->d.sprite.animData can be NULL (uninitialised unit sprite --
+    * same class as the gEvtEntities data-gen gap). PSX / the 2.2 fault handler read 0
+    * through NULL; redirect NULL to an all-zero table so every animData[] index yields 0,
+    * bit-identical to the handler's per-read zeroing (s8 delay/idx + the >=0x3b / 0-terminator
+    * logic caps animDataIdx small, so size-16 can't be over-indexed). NULL sites:
+    * object.c:1437/1449/1507/1516. See exchange/56. */
+   {
+      static const s8 s_nullAnim[16] = {0};
+      if (animData == NULL) animData = (s8 *)s_nullAnim;
+   }
+#endif
 
    if (!obj->d.sprite.animInitialized) {
       obj->state3 = 1;

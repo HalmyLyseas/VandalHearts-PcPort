@@ -274,6 +274,19 @@ void Objf026_588_Camera_TBD(Object *obj) {
 
    target = OBJ.target;
 
+#ifdef PC_PORT
+   /* PC_PORT (Stage 2.3): OBJ.target (the followed unit's sprite) can be NULL when the
+    * camera targets an empty/vacated tile. PSX / the 2.2 fault handler read 0 through NULL;
+    * target is read-only here (only target->{x1,z1,y1} are read), so redirect NULL to a
+    * zero Object -- every field then reads 0, bit-identical to the handler's per-read
+    * zeroing (read-0, NOT skip: the camera still eases toward origin). NULL sites:
+    * battle_011604.c:296/328/329/333. See exchange/56. */
+   {
+      static const Object s_nullObj = {0};
+      if (target == NULL) target = (Object *)&s_nullObj;
+   }
+#endif
+
    switch (obj->state) {
    case 0:
       OBJ.todo_x44 = !OBJ.todo_x44;

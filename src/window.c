@@ -1335,6 +1335,16 @@ void SlideWindowTo(s32 windowId, s16 x, s16 y) {
 #undef OBJF
 #define OBJF 004
 void Objf004_005_408_Window(Object *obj) {
+#ifdef PC_DEBUG_UI_LOG
+   /* Stage 2.3 (-m64 UI-invisibility probe): does the window object run at all, and with what
+    * state / child-object pointers? A window never draws directly -- it spawns child sprites --
+    * so "no rows here" means the object is dead, while "rows here but no matching prim2 rows"
+    * means the children are never submitted. See PC_DebugUiLog in pc_bootstrap.c. */
+   { extern void PC_DebugUiLog(const char *, int, int, int, int, int, int, int, int);
+     PC_DebugUiLog("window", obj->state, obj->d.objf004.windowId, obj->d.objf004.otOfs,
+                   obj->d.objf004.effect, obj->d.objf004.halfWidth, obj->d.objf004.halfHeight,
+                   obj->d.objf004.window != 0, obj->d.objf004.highlight != 0); }
+#endif
    // TODO: todo_x2c, todo_x30 (highlight location)
    // obj->state3: effectState
    // obj->x3: destX
@@ -1592,8 +1602,18 @@ void Objf004_005_408_Window(Object *obj) {
          obj->state++;
          obj->state3 = 0;
          obj->functionIndex = OBJF_NULL;
+#ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): window/highlight can be NULL here (highlight is already
+          * NULL-checked at the `if (highlight)` above; these two teardown writes were not).
+          * NULL writes to functionIndex (@0x8); the 2.2 fault handler discarded them, so guard
+          * each -- bit-identical to the validated build (no effect on a NULL sprite). NULL sites:
+          * Objf004_005_408_Window +0xcd0/0xcd9. See exchange/56. */
+         if (window) window->functionIndex = OBJF_NULL;
+         if (highlight) highlight->functionIndex = OBJF_NULL;
+#else
          window->functionIndex = OBJF_NULL;
          highlight->functionIndex = OBJF_NULL;
+#endif
          return;
       case 1:
       case 2:

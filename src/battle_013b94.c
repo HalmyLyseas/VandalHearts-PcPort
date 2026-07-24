@@ -275,7 +275,17 @@ void Objf021_UnitAttacking(Object *obj) {
       if (attacker->class != CLASS_ARCHER) {
          // ?: LO byte of camSavedX doubles as a caller-set arg for specifying melee/ranged
          // LO(obj1->d.objf017.camSavedX) = 1;
+         #ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+          * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+          * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+          * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+          * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+          * as the field access the decompiler's own comment documents as the real intent. */
+         LO(obj1->d.objf017.camSavedX) = 1;
+         #else
          obj1->d.bytes[4] = 1;
+         #endif
       }
       if (gTargetX > obj2->x1.s.hi) {
          obj2->d.sprite.direction = ANGLE_WEST;
@@ -728,7 +738,17 @@ void Objf567_OpeningChest(Object *obj) {
       obj1->functionIndex = OBJF_CAMERA_TBD_017;
       obj1->d.objf017.sprite = obj2 = opener->sprite;
       if (opener->class != CLASS_ARCHER) {
+         #ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+          * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+          * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+          * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+          * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+          * as the field access the decompiler's own comment documents as the real intent. */
+         LO(obj1->d.objf017.camSavedX) = 1;
+         #else
          obj1->d.bytes[4] = 1;
+         #endif
       }
 
       if (gTargetX > obj2->x1.s.hi) {
@@ -1017,7 +1037,17 @@ void Objf028_UnitCasting(Object *obj) {
    case 3:
       obj_s1 = Obj_GetUnused();
       obj_s1->functionIndex = OBJF_CAMERA_TBD_017;
+      #ifdef PC_PORT
+      /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+       * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+       * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+       * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+       * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+       * as the field access the decompiler's own comment documents as the real intent. */
+      LO(obj_s1->d.objf017.camSavedX) = 0;
+      #else
       obj_s1->d.bytes[4] = 0;
+      #endif
 
       obj_a2 = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
       obj_s1->d.objf017.sprite = obj_a2;
@@ -1513,7 +1543,17 @@ void Objf592_BattleTurnStart(Object *obj) {
          if (OBJ.targets == 0) {
             obj_v1 = Obj_GetUnused();
             obj_v1->functionIndex = OBJF_CAMERA_TBD_017;
+            #ifdef PC_PORT
+            /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+             * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+             * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+             * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+             * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+             * as the field access the decompiler's own comment documents as the real intent. */
+            LO(obj_v1->d.objf017.camSavedX) = 0;
+            #else
             obj_v1->d.bytes[4] = 0;
+            #endif
             obj_v1->d.objf017.sprite = obj_s1;
          } else {
             obj_v1 = Obj_GetUnused();
@@ -1635,7 +1675,17 @@ void Objf592_BattleTurnStart(Object *obj) {
          if (OBJ.targets == 0) {
             obj_v1 = Obj_GetUnused();
             obj_v1->functionIndex = OBJF_CAMERA_TBD_017;
+            #ifdef PC_PORT
+            /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+             * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+             * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+             * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+             * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+             * as the field access the decompiler's own comment documents as the real intent. */
+            LO(obj_v1->d.objf017.camSavedX) = 0;
+            #else
             obj_v1->d.bytes[4] = 0;
+            #endif
             obj_v1->d.objf017.sprite = obj_s1;
          } else {
             obj_v1 = Obj_GetUnused();
@@ -1734,7 +1784,17 @@ void Objf592_BattleTurnStart(Object *obj) {
          if (OBJ.targets == 0) {
             obj_v1 = Obj_GetUnused();
             obj_v1->functionIndex = OBJF_CAMERA_TBD_017;
+            #ifdef PC_PORT
+            /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+             * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+             * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+             * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+             * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+             * as the field access the decompiler's own comment documents as the real intent. */
+            LO(obj_v1->d.objf017.camSavedX) = 0;
+            #else
             obj_v1->d.bytes[4] = 0;
+            #endif
             obj_v1->d.objf017.sprite = obj_s1;
          } else {
             obj_v1 = Obj_GetUnused();
@@ -1888,7 +1948,17 @@ void Objf592_BattleTurnStart(Object *obj) {
       if (OBJ.targets == 0) {
          obj_v1 = Obj_GetUnused();
          obj_v1->functionIndex = OBJF_CAMERA_TBD_017;
+         #ifdef PC_PORT
+         /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
+          * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
+          * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
+          * Objf017_Camera_TBD reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
+          * pointer and corrupts it -- the SIGSEGV in Objf017_Camera_TBD on the first attack. Written
+          * as the field access the decompiler's own comment documents as the real intent. */
+         LO(obj_v1->d.objf017.camSavedX) = 0;
+         #else
          obj_v1->d.bytes[4] = 0;
+         #endif
          obj_v1->d.objf017.sprite = obj_s1;
       } else {
          obj_v1 = Obj_GetUnused();
