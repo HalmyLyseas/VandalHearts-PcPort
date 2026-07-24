@@ -651,6 +651,21 @@ static void pc_pad_ensure_open(void) {
     }
 }
 
+/* Stage 3 (1.1C): right-stick camera axis invert. Runtime-mutable (the in-game options overlay
+ * toggles these and persists them to vandalhearts.ini's [camera] section); initialised once from
+ * VH_CAM_INVERT_X/Y (which the ini loader sets). Not static -- the overlay reads/writes them. */
+int g_camInvertX = 0;
+int g_camInvertY = 0;
+
+static void PC_LoadCamInvert(void) {
+    static int loaded = 0;
+    const char *e;
+    if (loaded) return;
+    loaded = 1;
+    e = getenv("VH_CAM_INVERT_X"); g_camInvertX = (e && e[0] == '1') ? 1 : 0;
+    e = getenv("VH_CAM_INVERT_Y"); g_camInvertY = (e && e[0] == '1') ? 1 : 0;
+}
+
 static unsigned int pc_pad_read(void) {
     unsigned int p = 0;
     SDL_GameController *c;
@@ -699,6 +714,9 @@ static unsigned int pc_pad_read(void) {
     {
         int rx = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTX);
         int ry = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTY);
+        PC_LoadCamInvert();               /* Stage 3 (1.1C): per-axis right-stick invert */
+        if (g_camInvertX) rx = -rx;
+        if (g_camInvertY) ry = -ry;
         if (rx < -AXIS_DZ) p |= PADL1;  else if (rx > AXIS_DZ) p |= PADR1;  /* left->L1, right->R1 */
         if (ry >  AXIS_DZ) p |= PADL2;  else if (ry < -AXIS_DZ) p |= PADR2; /* down->L2, up->R2   */
     }
