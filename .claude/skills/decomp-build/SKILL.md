@@ -137,8 +137,7 @@ no usable header set); `lab313ru/ghidra_psx_ldr` (a Ghidra loader + FLIRT signat
 useful for identifying PsyQ functions in a disassembly, not for compilable headers);
 `pcsx-redux` (ships only a small `inline_n.h` shim). pcsx-redux's `psyq-obj-parser` *does*
 convert original PsyQ `.OBJ`/`.LIB` objects to modern-linkable form — but this pipeline extracts
-PsyQ code as raw disassembly via splat and never relinks `LIB34.ZIP`, so it isn't needed (a
-copy already sits unused at `vh/tools/old/psyq-obj-parser/`).
+PsyQ code as raw disassembly via splat and never relinks `LIB34.ZIP`, so it isn't needed.
 
 ## Getting the base game files (done 2026-07-10)
 
