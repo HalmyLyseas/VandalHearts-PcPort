@@ -6,31 +6,59 @@ byte-exact matching decompilation of the game.
 > **Non-commercial fan preservation project. Not affiliated with Konami or Sony. You must supply
 > your own legally-owned copy of the game.** See [DISCLAIMER](DISCLAIMER) and *Legal* below.
 
-The project has two stages:
+The project has two stages, **both complete**:
 
-1. **Matching decompilation (complete).** Every non-PsyQ function is decompiled to C that rebuilds
-   the original `SLUS_004.47` byte-for-byte (`md5 596bb082a2de5f1fe977dd3d7e160b03`, verified by
-   `make check`). This is the foundation the port is built on.
-2. **De-consolization → native PC port (in progress).** Each PlayStation hardware interface — GPU
-   packet submission, GTE matrix math, CD-ROM / XA audio, SPU, MDEC video, pad input — is replaced
-   with a portable equivalent (SDL2 + OpenGL + OpenAL), so the game boots and runs on a modern
-   desktop from its own data.
+1. **Matching decompilation.** Every non-PsyQ function is decompiled to C that rebuilds the original
+   `SLUS_004.47` byte-for-byte (`md5 596bb082a2de5f1fe977dd3d7e160b03`, verified by `make check`).
+   This is the foundation the port is built on, and it is still enforced on every change.
+2. **De-consolization → native PC port.** Each PlayStation hardware interface — GPU packet
+   submission, GTE matrix math, CD-ROM / XA audio, SPU, MDEC video, pad input — is replaced with a
+   portable equivalent (SDL2 + OpenGL + OpenAL), so the game boots and runs on a modern desktop from
+   its own data.
 
 ## Status
 
 The port **runs the full game** end-to-end from the original data — intro FMVs, cutscenes, tactical
-battles, world map, party management, dialogue, shops, and save/load — validated by a full
-playthrough.
+battles, world map, party management, dialogue, shops, and save/load — validated by full
+playthroughs on both Windows and Linux, including the endgame and credits.
 
 - **A/V fidelity: complete**, validated against real hardware (BizHawk): GTE/perspective and
   terrain/sprite rendering; a sample-accurate software SPU driving the SEQ music and VAG sound
   effects; CD-XA streamed audio; MDEC/STR video; and PS1 Shift-JIS/kanji text.
-- **64-bit** is the default build; the port is memory-safe (runs unprivileged, no root/setcap) and
-  has passed an AddressSanitizer out-of-bounds sweep across the game.
-- **In progress:** cross-platform support (Windows via MinGW-w64, then macOS/Apple Silicon), with a
-  CMake build alongside the Makefile.
+- **64-bit** is the default build. The port is memory-safe — it runs unprivileged (no root, no
+  `setcap`) and has passed both an AddressSanitizer out-of-bounds sweep and a UBSan pass across the
+  game, which together fixed seven real out-of-bounds bugs latent in the retail game.
+- **Platforms: Windows and Linux**, from a single source tree. The Windows `.exe` is cross-compiled
+  from Linux with MinGW-w64; Linux ships as an AppImage. A CMake build sits alongside the Makefile.
+  macOS is scaffolded but not pursued — see [docs/cross-platform.md](docs/cross-platform.md).
 
-## Building & running
+## Playing the game
+
+You supply the game; the port supplies everything else. **You need your own legally-owned copy of
+Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derived is distributed here.
+
+A release is self-contained and needs no dependency hunting:
+
+| Platform | Package | Requirements |
+|---|---|---|
+| **Windows** | `.zip` — `vandalhearts_pc.exe`, 6 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
+| **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 to run the AppImage |
+
+**Setup is drop-in:** put your disc image in a `game/` folder next to the executable (or a bare
+`*.bin` beside it) and launch. No configuration, no environment variables — the disc is
+auto-detected, and its boot signature is verified, so mounting the wrong disc fails with a clear
+message instead of booting into a blank window.
+
+**To configure**, edit `vandalhearts.ini` next to the executable (on Linux, next to the
+`.AppImage`): window scale, audio, and compatibility options, all commented out at their defaults.
+The same file and keys work on every platform; environment variables still override it. Full option
+reference in [`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md) and
+[docs/configuration.md](docs/configuration.md).
+
+Saves are ordinary files in a `saves/` folder next to the executable. They use a fixed on-disk
+layout, so they are architecture-agnostic and cross-loadable between the 32- and 64-bit builds.
+
+## Building from source
 
 > **No game executable, disc image, Sony BIOS/SDK data, or in-game text is distributed here.** They
 > are git-ignored and must come from your own legally-owned copy; the build reconstructs what it
@@ -54,11 +82,29 @@ make link M32=-m32 BUILD_DIR=build32   # 32-bit reference build
 cmake -S . -B build_cmake && cmake --build build_cmake   # -> build_cmake/vandalhearts_pc
 ```
 
-Point `VH_DISC_IMAGE` at your extracted disc `.bin` (it defaults to a sibling `game/` folder).
-Runtime options (window scale, audio, diagnostics) and build flags are in
+Windows is **cross-compiled from Linux** (no Windows machine needed) via a CMake toolchain file:
+
+```sh
+cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake
+cmake --build build_win         # -> build_win/vandalhearts_pc.exe + bundled DLLs
+```
+
+Linux releases are packaged as an AppImage, built inside a pinned Debian 12 container so the
+artifact's glibc floor stays low — see [docs/cross-platform.md](docs/cross-platform.md) for the
+full recipe:
+
+```sh
+packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc   # -> dist/VandalHearts-x86_64.AppImage
+```
+
+The built binary finds your disc and `vandalhearts.ini` the same way a release does (see *Playing
+the game*); `VH_DISC_IMAGE` still overrides. Runtime options and build flags are in
 [`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md).
 
 Byte-exact decomp check: `make check` rebuilds `SLUS_004.47` and md5-compares it to the original.
+**Any change under `src/` or `include/` must keep this passing** — see
+[docs/architecture.md](docs/architecture.md) for the gating conventions (`PERMUTER`, `PC_PORT`,
+`PC_DEBUG_*`) that keep port work out of the matching build.
 
 ## Documentation
 
@@ -70,13 +116,18 @@ Full developer and user documentation is in **[`docs/`](docs/)**:
   ([GPU](docs/pc-port/subsystems/gpu.md), [GTE](docs/pc-port/subsystems/gte.md),
   [SPU](docs/pc-port/subsystems/spu.md), [CD/XA](docs/pc-port/subsystems/cd-xa.md),
   [MDEC](docs/pc-port/subsystems/mdec.md), [Kernel](docs/pc-port/subsystems/kernel.md))
-- [Memory safety & the 64-bit port](docs/memory-safety.md) · [Cross-platform (Windows/macOS)](docs/cross-platform.md)
+- [Memory safety & the 64-bit port](docs/memory-safety.md) ·
+  [Cross-platform & packaging](docs/cross-platform.md) — Windows cross-compile, Linux AppImage releases
+- [Width bugs](docs/width-bugs.md) — the 32→64-bit bug class that **neither ASan nor UBSan can
+  detect** (truncated copies, union aliasing, struct-layout drift), with a detector table. Read this
+  before touching struct layouts or `Object` unions.
 
 ## Repository layout
 
 - `src/`, `include/` — the matching decompilation (C source and project headers).
 - `platform/pc/` — the native PC port: PSX subsystem backends (`src/lib*.c`, `pc_*.c`), the build
-  system (Makefile, CMake), data-generation tooling (`tools/`), and clean-room PsyQ headers.
+  system (Makefile, CMake, `cmake/` toolchain files), data-generation and sanitizer tooling
+  (`tools/`, `run_*san.sh`), release packaging (`packaging/`), and clean-room PsyQ headers.
 - `docs/` — developer & user documentation.
 - `SLUS_004.47.yaml`, `symbol_addrs.txt` — the splat configuration and the address → symbol map.
 
