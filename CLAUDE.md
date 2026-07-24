@@ -1,186 +1,146 @@
-# Vandal Hearts Decompilation — Project Context
+# Vandal Hearts Decompilation → Native PC Port — Project Context
 
 ## What this is
 
-A matching decompilation of the US PS1 release of Vandal Hearts (`SLUS_004.47`), using the
-standard PSX-decomp toolchain: [splat](https://github.com/ethteck/splat) for
-disassembly/extraction, [maspsx](https://github.com/mkst/maspsx) to post-process GCC 2.x
-asm for the PSX assembler quirks, an old GCC 2.x frontend (`cc1_v263`/`cc1_v257`, prebuilt
-by [decompals/old-gcc](https://github.com/decompals/old-gcc)) for compilation, and a
-`mips-suse-linux-*` binutils cross-toolchain for assembling/linking. The build is verified by
+A matching decompilation of the US PS1 release of Vandal Hearts (`SLUS_004.47`), carried through
+to a **working, packaged, cross-platform native PC port**. The decomp uses the standard PSX-decomp
+toolchain: [splat](https://github.com/ethteck/splat) for disassembly/extraction,
+[maspsx](https://github.com/mkst/maspsx) to post-process GCC 2.x asm for the PSX assembler quirks,
+an old GCC 2.x frontend (`cc1_v263`/`cc1_v257`, prebuilt by
+[decompals/old-gcc](https://github.com/decompals/old-gcc)) for compilation, and a
+`mips-suse-linux-*` binutils cross-toolchain for assembling/linking. The match is verified by
 `md5sum`-comparing the rebuilt `SLUS_004.47` against the original.
 
-## End goal — read this before making architectural calls
+## Project stages — read this before making architectural calls
 
-**The actual objective is a native PC port**, not just a matching PS1 rebuild. The matching
-decomp is stage 1 of a two-stage project:
+The objective was always a **native PC port**, not just a matching rebuild. Two stages, **both
+complete**; a third (gameplay/QoL) is the next phase.
 
-1. **Stage 1 (✅ done 2026-07-10): matching decomp.** Prove the C source is bit-identical
-   to the original binary. `make check` produces a byte-exact `SLUS_004.47` (`md5sum` and
-   `cmp` both confirm). See "Current status" below.
-2. **Stage 2 (in progress, the active phase): de-consolization.** Replace every PSX
-   hardware call — GPU packet submission (`libgpu`), GTE fixed-point matrix math (`libgte`),
-   CD-ROM/XA audio streaming (`libcd`/`libpress`), SPU audio, pad input — with a modern
-   equivalent (SDL2/OpenGL, decided after evaluating Vulkan). All 6 swappable-interface
-   subsystems are done, all 70 `src/*.c` files compile, the link succeeds, **and the game runs
-   real demo battles and renders battle scenes with real unit sprites** —
-   `platform/pc/build/vandalhearts_pc` (`make link`). As of 2026-07-17 the **full core game loop
-   runs end-to-end** from the real disc and **A/V fidelity is complete (user-signed-off)**; the
-   earlier rendering-correctness bugs (perspective collapse, sprite occlusion, terrain `otz`) are
-   all fixed. The project has **forked** to a private repo (Codeberg) and moved into the
-   de-consolization phases: 2.1 music ✅, 2.2 memory-safety ✅ (cap-less portable fault handler),
-   **2.3 64-bit ✅ DONE (2026-07-21)** + **AddressSanitizer OOB sweep ✅ DONE (2026-07-23), 7 more OOB
-   bugs fixed (`exchange/58`)** + **2.4 cross-platform ✅ (Windows + Linux, 2026-07-23; macOS deferred)**.
-   Stage 2 is essentially complete. **Canonical developer/user docs now live in committed [`docs/`](docs/)**
-   (architecture, building, configuration, per-subsystem deep-dives, memory-safety, cross-platform) —
-   prefer those for durable reference; `exchange/` remains gitignored investigation scratch. See also the
-   `phase-c-pc-port` skill, `exchange/52-stage2-roadmap.md`, and `exchange/00-progress-checkpoint.md`.
-   **Build width (updated 2026-07-21): the default is now 64-bit** (`make link`). The port was
-   deliberately **32-bit** for a long time as a debugging baseline — decompiled source assumes the
-   PS1's 32-bit-pointer layout in places, and at 64-bit that shifts struct fields *silently*
-   instead of failing loudly. Phase 2.3 fixed every case and validated the demo battle at both
-   widths, so `-m32` is no longer the default. The 32-bit build remains available as an A/B
-   reference: `make link M32=-m32 BUILD_DIR=build32`.
-   The five width bugs found, all worth knowing before touching this area (details in
-   `exchange/52-stage2-roadmap.md`): PSX `long` is 32-bit but LP64's is 64 (a `long *` GTE
-   out-param wrote 8 bytes into a 4-byte local — stack smash); raw byte offsets into the Object
-   union (`d.bytes[4]`); union members deliberately aliasing `Object_Sprite.coords`; the GPU OT
-   link storing a truncated host pointer (now a token bridge); and the data-segment generator
-   probing `sizeof()` at a hardcoded `-m32`. **All but the last are invisible to static audit —
-   they were found by building and running.** `OpenDriver2/PsyCross` was evaluated and rejected as
-   a drop-in — kept as a reference only.
+1. **Stage 1 — matching decomp (✅ done 2026-07-10).** The C source is bit-identical to the
+   original: `make check` produces a byte-exact `SLUS_004.47` (`md5 596bb082a2de5f1fe977dd3d7e160b03`,
+   confirmed by both `md5sum` and `cmp`). This is the foundation, and it is **still enforced on
+   every change** — see *Byte-exact discipline* below.
+2. **Stage 2 — de-consolization / native PC port (✅ complete 2026-07-24).** Every PSX hardware
+   interface — GPU packet submission (`libgpu`), GTE matrix math (`libgte`), CD-ROM/XA audio
+   (`libcd`/`libpress`), SPU, MDEC video, pad input — is replaced with a portable equivalent
+   (SDL2 + OpenGL + OpenAL, chosen after evaluating Vulkan). The **full game runs end-to-end** from
+   the real disc, validated by full playthroughs on **Windows and Linux** including the endgame and
+   credits. Details below and in [`docs/`](docs/).
+3. **Stage 3 — gameplay/QoL (planned, not started).** PC-only quality-of-life and balance work,
+   scoped to stay out of the matching source (a separate PC-only module, zero `src/` edits). Not
+   yet designed — do not begin Stage 3 changes without an explicit decision.
 
-Do not "clean up" or restructure decompiled code toward stage-2 concerns unless explicitly
-working on stage 2 — stage 1's job is byte-exact matching, not readability or portability.
-Keep the two concerns separated in commits and discussion.
+**Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
+job is byte-exact matching, not readability or portability; all port-side changes live behind gates
+(below) or under `platform/pc/`. Keep the two concerns separate in commits and discussion.
 
-## Current status (last verified 2026-07-10)
+## Where things live
 
-- **`make check` produces a byte-exact match** — verified via both `md5sum` and `cmp` against
-  the user's own legally-owned copy of the game. This is the first time this has actually been
-  reproduced from a from-scratch environment; the prior claim (commit `a9e53de`, 2024-09-17,
-  *"Finish matching all non-PsyQ functions!"*) is now independently confirmed accurate, not
-  just asserted.
-- All application code is decompiled and matches: **1184 typed functions across 70
-  `src/*.c` files**. PsyQ SDK library functions are intentionally left as raw, un-decompiled
-  asm — this is standard practice; Sony's proprietary SDK isn't the target of the decomp.
+- **The port** is under [`platform/pc/`](platform/pc/): the six PSX subsystem backends
+  (`src/lib*.c`, `pc_*.c`), the SDL2/OpenGL/OpenAL windowing+audio, the data-segment generator
+  (`tools/`), both build systems, release packaging (`packaging/`), and clean-room PsyQ headers.
+- **Canonical documentation** is committed under [`docs/`](docs/) — architecture, building,
+  configuration, per-subsystem deep-dives, memory-safety, cross-platform/packaging, and
+  [`docs/width-bugs.md`](docs/width-bugs.md). **Prefer these for durable reference.** The
+  [`README.md`](README.md) is the end-user + contributor entry point.
+- **On-demand build knowledge** is in the tracked skills [`.claude/skills/decomp-build`](.claude/skills/decomp-build/SKILL.md)
+  (full toolchain/environment recipe) and [`.claude/skills/phase-c-pc-port`](.claude/skills/phase-c-pc-port/SKILL.md)
+  (port architecture + the local psx-spx hardware reference).
+- **`exchange/` is gitignored local scratch** (investigation notes, extracted-asset staging) — it is
+  **not part of the repo** and will not exist in a clone. Do not cite it as a durable reference; put
+  anything that should survive into `docs/` or a skill.
+
+## Stage 1 status (matching decomp)
+
+- **`make check` is byte-exact** (`596bb082a2de5f1fe977dd3d7e160b03`), reproduced from a from-scratch
+  environment. All application code is decompiled and matches: **1184 typed functions across 70
+  `src/*.c` files**. PsyQ SDK library functions are intentionally left as raw asm — Sony's SDK isn't
+  the decomp's target (standard practice).
 - Two small regions of `src/text.c` are byte-exact placeholders rather than proper decompiles
-  (`D_800151C8[888]`, `D_80122FB0`..`D_80123090`) — both marked `TODO` in the source. Neither
-  is referenced by any code yet; a real decompile would identify the actual consumer and
-  replace them with typed structures. See `exchange/00-progress-checkpoint.md`'s Phase B
-  section for the full story — don't delete these as "dead code," they hold specific bytes.
-- Full environment-setup recipe (headers, toolchain, base game files, exact build commands)
-  is documented in the `decomp-build` skill (`.claude/skills/decomp-build/SKILL.md`) — use it
-  rather than re-deriving from scratch if the build environment needs to be rebuilt.
+  (`D_800151C8[888]`, `D_80122FB0`..`D_80123090`), both marked `TODO`. Neither is referenced by any
+  code yet — **don't delete them as "dead code," they hold specific bytes.**
 
-## Stage 2 (PC port) status (2026-07-17)
+## Stage 2 status (native PC port) — COMPLETE
 
-- The native PC port lives under `platform/pc/` (all 6 PSX subsystem backends, the data-segment
-  generator, SDL2/OpenGL/OpenAL windowing+audio). `make link` builds
-  `platform/pc/build/vandalhearts_pc`. The **full core game loop runs end-to-end** from the real
-  disc (intro FMVs, cutscenes, scripted + story battles, world map, dialogue, shops, save/load).
-- **A/V fidelity complete + user-signed-off (2026-07-16; music re-opened and closed properly
-  2026-07-21):** graphics (GTE/perspective, terrain, unit-sprite depth/occlusion) and sound
-  (sample-accurate software SPU + SEQ music, CD-XA, MDEC video, SJIS/kanji text) all validated
-  against real hardware (BizHawk). The 2026-07-13/14 rendering bugs (perspective collapse, sprite
-  occlusion, terrain otz) are all fixed.
-  **Caution for future sessions:** the 07-16 *sound* sign-off was by ear and turned out to be
-  premature — four real bugs remained (missing `ProgAtr.mvol`, pan divisor 63-not-64, PsyQ's
-  **square volume law**, and VAB **tone-block packing** which had five programs playing the wrong
-  instrument's samples). All fixed 07-20/21; measured error vs the octoshock reference is now
-  **1.33 dB mean** (was 3.21). Treat "signed off" as "no known issue", not "verified" — and see
-  `exchange/57`'s structural note: our SPU *hardware* emulation was never the problem, every bug
-  was in the **PsyQ `libsnd` reimplementation**, a layer neither psx-spx nor octoshock covers.
-- **Forked** to a private repo (Codeberg `halmyrach/VandalHearts-PcPort`, origin); `upstream-master`
-  = the pristine byte-exact base. Commits allowed now. See memory `reference_codeberg_push`.
-- **Stage 2 (de-consolization) is essentially COMPLETE**, sequenced per `exchange/52-stage2-roadmap.md`:
-  2.0 fork ✅ · 2.1 music ✅ · **2.2 memory-safety ✅** (removed the setcap/zero-page + `/proc`
-  rodata crutches — a portable SIGSEGV fault handler in `pc_bootstrap.c` emulates transient PSX
-  NULL-reads + in-place `.rodata` writes, so the build runs **cap-less, no root**) ·
-  **2.3 64-bit ✅ DONE (2026-07-21)** (NULL guards, GPU token bridge, `long`→`int` width fix, union-offset fixes; default is now `-m64`) ·
-  **2.4 cross-platform ✅ (Windows + Linux, 2026-07-23)** — a MinGW-w64 `.exe` is cross-compiled from
-  Linux (CMake toolchain file) and **validated end-to-end on real Windows** (full demo playthrough);
-  self-contained DLL package + drop-in disc auto-detect + `vandalhearts.ini` config + fatal wrong-disc
-  check. **macOS/Apple Silicon DEPRIORITIZED** (can't cleanly cross-compile from Linux; `__APPLE__`
-  scaffolding left in place for an on-device finish — see memory `stage2_4_crossplatform`).
-- **Stage-2.3 out-of-bounds sweep ✅ COMPLETE (2026-07-23), `exchange/58-asan-sweep.md`.** After the
-  `-m64` flip, an AddressSanitizer playthrough (chapters 1/4/6 + final battle + credits) found **7 real
-  OOB bugs** static audit could not — a class where an index is simply *wrong* and only the consequence
-  changes with pointer width. All fixed `PERMUTER`-gated + byte-exact: `gClutIds[124]→128` (clobbered
-  `s_cdSyncStatus`, in retail too), `gWindowDisplayX/Y[16]→70` (was overwriting **live XA audio state**),
-  `gUnitAnimSets[144]→301`, `gStringTable[100]→101`, travel-cost tables `[14][20]→[20][20]`,
-  `D_8017DF50[27]→[29][64]` (AI-grid write). **Tooling now in `platform/pc/`:** `make asan32` +
-  `./run_asan.sh` (must be 32-bit — 64-bit ASAN's shadow collides with the `0x80000000` arena);
-  `make ubsan` (bounds-checking that *does* work at 64-bit); `tools/struct_width_diff.sh` (the width-bug
-  class neither sanitizer sees). This also retires the "re-run the 6-chapter NULL sweep at 64-bit" 2.4
-  to-do. **Method lesson (bit me 3×): a mis-sized-array *report* is not automatically a too-small
-  *declaration* — prove which index is out of range against the byte-exact binary before widening.**
-- **Gating conventions for `src/*.c` edits** (the matching build must stay byte-exact — **re-run
-  `make check` after any `src/` change**, MD5 `596bb082a2de5f1fe977dd3d7e160b03`): the matching
-  build defines **none** of these, so each keeps its `src/` edit out of stage 1 —
-  - `#ifdef PC_DEBUG_*` — per-file debug/instrumentation hooks, keyed to Makefile flags.
-  - `#ifdef PERMUTER` — PC-build behavioural/layout changes (PC Makefile defines it globally for
-    all game source). E.g. `src/text.c`'s `sFontGlyphBitmaps[129][9]` (PC) vs `[128][9]` (matching).
-  - `#ifdef PC_PORT` — **(NEW, Stage 2.3)** portability/64-bit correctness guards (e.g. per-site
-    NULL-deref guards replacing the x86-32 fault decoder). Also PC-build-only.
-  - `grep -rnE "PC_DEBUG|PERMUTER|PC_PORT" src/` finds them all. **History lesson:** an
-    *unconditional* `src/text.c` widening once silently broke the match for ~2 days — gate, then
-    `make check`.
-- **Debug-only gates in decompiled source** (`grep -rn PC_DEBUG src/`): `src/screen_effects.c`,
-  `src/cd.c`, `src/object.c` carry `#ifdef PC_DEBUG_*` blocks; they compile out of the matching
-  build and are included in the re-verified byte-exact result above. If matching ever regresses,
-  check recent `src/` layout/size changes first (see the `phase-c-pc-port` skill's "Gated
-  instrumentation / stage-2-safe edits" note).
+- **A/V fidelity complete**, validated against real hardware (BizHawk): GTE/perspective, terrain and
+  unit-sprite depth/occlusion; a **sample-accurate software SPU** driving SEQ music + VAG SFX
+  (measured **1.33 dB mean** error vs the octoshock reference); CD-XA streamed audio; MDEC/STR video;
+  PS1 Shift-JIS/kanji text. *Lesson for future audio work:* every sound bug turned out to be in the
+  **PsyQ `libsnd` reimplementation** (missing `ProgAtr.mvol`, pan divisor 63-not-64, the square
+  volume law, VAB tone-block packing), a layer neither psx-spx nor octoshock covers — not our SPU
+  hardware emulation. Treat "signed off" as "no known issue," not "verified."
+- **64-bit is the default build** (`make link`). The port was deliberately 32-bit for a long time as
+  a debugging baseline — decompiled source assumes the PS1's 32-bit-pointer layout, and at 64-bit
+  that shifts struct fields *silently* rather than failing loudly. All cases are fixed and validated
+  at both widths; the 32-bit build remains as an A/B reference
+  (`make link M32=-m32 BUILD_DIR=build32`). The **width-bug class** (truncated copies, union
+  aliasing, struct-layout drift) is invisible to both ASan and UBSan — found only by building,
+  running, and diffing widths. Full catalogue + detector table in
+  [`docs/width-bugs.md`](docs/width-bugs.md); **read it before touching struct layouts or the
+  `Object` union.**
+- **Memory-safe:** runs unprivileged (no root, no `setcap`) via a portable SIGSEGV fault handler in
+  `pc_bootstrap.c`. Passed an **AddressSanitizer OOB sweep** and a **UBSan pass** across the game,
+  fixing **seven real out-of-bounds bugs latent in the retail game** (e.g. `gWindowDisplayX/Y` was
+  corrupting live XA audio state). Tooling: `make asan32` + `run_asan.sh` (ASan must be 32-bit — its
+  64-bit shadow collides with the `0x80000000` PSX RAM arena), `make ubsan` (works at 64-bit),
+  `tools/struct_width_diff.sh`. *Method lesson (bit us 3×): a mis-sized-array report is not
+  automatically a too-small declaration — prove which index is out of range against the byte-exact
+  binary before widening.*
+- **Cross-platform (Windows + Linux) from one source tree.** The Windows `.exe` is cross-compiled
+  from Linux via a MinGW-w64 CMake toolchain and validated end-to-end on real hardware; it ships as
+  a self-contained zip (exe + 6 DLLs + `vandalhearts.ini`). Linux ships as an **AppImage** built in a
+  pinned Debian 12 container (the build box sets the glibc floor — 2.34, broadly portable). Both have
+  drop-in disc auto-detect, a fatal wrong-disc guard, and `vandalhearts.ini` config. **macOS is
+  scaffolded but not pursued.** Full recipe in [`docs/cross-platform.md`](docs/cross-platform.md).
+- **Repo:** private GitHub `HalmyLyseas/VandalHearts-PcPort` (`origin`); `upstream` =
+  `github.com/shao113/vh` (the original decomp, reference only). `upstream-master` is the pristine
+  byte-exact base.
+
+## Byte-exact discipline — the one rule that must not break
+
+**The matching build must stay byte-exact. Re-run `make check` after ANY change under `src/` or
+`include/`** (target MD5 `596bb082a2de5f1fe977dd3d7e160b03`). The matching build defines **none** of
+the gates below, so every port-side edit to shared source must sit behind one:
+
+- `#ifdef PERMUTER` — PC-build behavioural/layout changes (the PC Makefile defines it globally for
+  game source). E.g. `src/text.c`'s `sFontGlyphBitmaps[129][9]` (PC) vs `[128][9]` (matching).
+- `#ifdef PC_PORT` — portability/64-bit correctness guards (per-site NULL-deref guards, etc.).
+- `#ifdef PC_PORT_LP64` — 64-bit-host-only struct-layout fixes (e.g. `Object_719`/`_675` in
+  `include/object.h`, where a leading pointer's 4→8-byte growth shifts aliased fields).
+- `#ifdef PC_DEBUG_*` — per-file debug/instrumentation hooks, keyed to Makefile flags.
+
+`grep -rnE "PERMUTER|PC_PORT|PC_DEBUG" src/ include/` finds them all. **History lesson:** an
+*unconditional* `src/text.c` widening once silently broke the match for ~2 days — gate first, then
+`make check`.
 
 ## Repo layout
 
-- `src/*.c` — decompiled C source, one file per logical unit (roughly one per original
-  object file boundary). Filenames like `split_XXXXXX.c`, `fx_XXXXXX.c`,
-  `map_effects_XXXXXX.c`, `battle_XXXXXX.c` are named by their start VRAM address because a
-  clearer semantic name hasn't been assigned yet — rename opportunistically as understanding
-  improves, but check `symbol_addrs.txt` / the yaml before renaming to avoid breaking splat's
-  segment mapping.
-- `include/*.h` — project headers (`common.h`, `graphics.h`, `audio.h`, `object.h`, `state.h`,
-  etc.). `include/PsyQ/` (libgpu.h, libgte.h, libcd.h, libpress.h, …) is populated locally
-  (real Sony PsyQ v3.3 SDK headers) but **gitignored** — proprietary, local-build-use-only by
-  explicit user decision; see the `decomp-build` skill before re-sourcing these.
-- `SLUS_004.47.yaml` — splat config: segment/section layout, symbol paths, compiler settings.
-- `symbol_addrs.txt` — the authoritative address→symbol map (1735 lines) that both splat and
-  the linker rely on.
-- `Makefile` — build orchestration (`extract`, `check`/build, `clean`). See targets and
-  toolchain variables at the top of the file for exact versions/flags expected.
-- `tools/old/` — legacy scripts (dosbox-based assembly, PsyQ obj/lnk parsing, data extraction)
-  from an earlier iteration of the project. Kept for reference; not part of the current
-  Makefile-driven flow. `tools/maspsx/` is populated locally (symlink to a sibling clone),
-  gitignored — see the `decomp-build` skill.
-- `asm/`, `build/`, `assets/` appear after `python3 -m splat split SLUS_004.47.yaml` runs
-  against a real copy of the game (`make extract` itself is currently broken — it
-  unconditionally shells out to a still-missing `sortSymbols.py`; run `splat` directly
-  instead, per the `decomp-build` skill). All three are gitignored.
+- `src/*.c` — the decompiled C source, one file per logical unit. `split_XXXXXX.c` / `fx_XXXXXX.c` /
+  `battle_XXXXXX.c` names come from the unit's start VRAM address where no semantic name is assigned
+  yet — rename opportunistically, but check `symbol_addrs.txt` / the yaml first so splat's segment
+  mapping doesn't break.
+- `include/*.h` — project headers. `include/PsyQ/` holds the **real Sony PsyQ v3.3 SDK headers** and
+  is **gitignored** (proprietary, local-build-only) — do not confuse with the **clean-room** PsyQ
+  headers under `platform/pc/include/PsyQ/`, which are tracked and safe.
+- `SLUS_004.47.yaml`, `symbol_addrs.txt` — splat config and the authoritative address→symbol map.
+- `Makefile` — top-level decomp build (`check`, etc.). Port build is `platform/pc/Makefile` (and
+  `platform/pc/CMakeLists.txt`).
+- `asm/`, `build/`, `assets/` — generated by splat against a real game copy; all gitignored.
+- `tools/old/` — legacy scripts kept for reference, not part of the current flow.
 
-## Known blockers to building
+## Build environment
 
-**None as of 2026-07-10** — every dependency has been sourced, wired up, and the resulting
-build is verified byte-exact. Don't assume this list stays current forever (a fresh container
-won't have any of this installed) — the `decomp-build` skill has the full recipe to redo it,
-including exact PATH/env-var overrides needed because several tools live outside `vh/`
-(sibling folders under `vandalHearts_decomp/`) or use non-default package names in this
-environment. `README.md`'s setup section is still just a placeholder ("TODO") — the real,
-proven steps exist in the skill but haven't been transcribed into the README yet.
+Every dependency has been sourced and the build is verified byte-exact, but a fresh checkout has
+none of it installed — the [`decomp-build`](.claude/skills/decomp-build/SKILL.md) skill has the full
+recipe (headers, toolchain, base game files, exact PATH/env overrides; several tools live in sibling
+folders or use non-default package names). Building the **port** needs far less: a Linux host with
+SDL2/OpenAL/OpenGL dev libraries and Python 3 — see [`docs/building.md`](docs/building.md). Nothing
+game-derived (the disc, `SLUS_004.47`, Sony BIOS/SDK data, in-game text) is committed; the build
+reconstructs what it needs from the user's own copy.
 
 ## Working conventions
 
-- `exchange/` (inside this repo, but **gitignored — never git-tracked**) is the
-  staging/communication layer for anything that shouldn't enter this repo's git history:
-  sourced headers pending vetting, toolchain notes, research, extracted-asset scratch space.
-  It lives inside the repo purely for convenience (one tree to work in); it is not part of
-  the project's committed content.
-- `exchange/00-progress-checkpoint.md` is the living top-level progress tracker across
-  both stages — update it at milestones instead of writing new summary docs. Step-specific
-  detail docs live alongside it as `NN-<topic>.md`.
-- `context.txt` (also gitignored) is the original task-framing note from the user — kept for
-  reference, not project documentation in its own right.
-- `.claude/skills/` in this repo holds deeper, on-demand knowledge for continuing this
-  project (build-system internals, later: PC-port architecture) — keep it updated as work
-  progresses rather than letting this file grow unbounded. This file (`CLAUDE.md`) should
-  stay a concise always-loaded overview; put deep-dive detail in a skill instead.
+- Keep this file a concise, accurate, always-loaded overview. It is **committed and public** —
+  reference only tracked files (`docs/`, `.claude/skills/`, real source paths), never `exchange/` or
+  external notes that a cloner won't have. Put deep-dive detail in `docs/` or a skill.
+- Update `docs/` and this file at milestones rather than writing new top-level summary files.

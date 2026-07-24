@@ -78,10 +78,14 @@ SDL2.dll  OpenAL32.dll        libwinpthread-1.dll
 libgcc_s_seh-1.dll  libstdc++-6.dll  libssp-0.dll
 ```
 
-The three "lib*" DLLs are the MinGW GCC/pthreads/stdc++ runtime (not Windows system DLLs, so they
-ship); everything else the `.exe` imports — the UCRT `api-ms-win-crt-*`, `OPENGL32`, `KERNEL32`,
-`USER32` — is an OS component. The user drops their disc `.bin` in a `game\` folder next to the `.exe`
-and double-clicks (see [configuration.md](configuration.md)).
+Six DLLs ship. Two are our own dependencies (`SDL2.dll`, `OpenAL32.dll`); the four `lib*` DLLs are the
+MinGW runtime — `libwinpthread-1` (pthreads), `libgcc_s_seh-1` (GCC unwinder), `libstdc++-6` (C++
+runtime, pulled in by SDL2/OpenAL-soft), and `libssp-0` (stack-protector). None are Windows system
+DLLs, so all six must ship. Everything else the `.exe` imports — the UCRT `api-ms-win-crt-*`,
+`OPENGL32`, `KERNEL32`, `USER32` — is an OS component. A missing `lib*` DLL fails at load with a
+message box *before* any code runs and produces no log, which is the tell. The user drops their disc
+`.bin` in a `game\` folder next to the `.exe` and double-clicks (see
+[configuration.md](configuration.md)).
 
 **Status: validated end-to-end** — a full demo (both intro FMVs, menu, attract-mode timeout, and a
 complete battle) runs with no visual or gameplay defect, both RAM reservations succeed, and the
