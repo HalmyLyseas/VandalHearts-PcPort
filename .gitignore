@@ -40,7 +40,8 @@
 
 # PC-port runtime output: save files + unit-test scratch audio
 /platform/pc/saves/
-/saves/                       # created when the game is run from the repo root (cwd-relative saves)
+# /saves/ is created when the game is run from the repo root (cwd-relative saves)
+/saves/
 /platform/pc/test_vag1.wav
 
 # AppImage packaging output (dist/ = AppDir + the .AppImage) and the icon PNG rasterized from

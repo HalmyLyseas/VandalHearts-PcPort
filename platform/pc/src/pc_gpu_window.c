@@ -15,7 +15,13 @@
 
 static SDL_Window *s_window;
 static SDL_GLContext s_glCtx;
-static int s_winW, s_winH, s_winScale;   /* actual (scaled) window size + the VH_SCALE factor used */
+static int s_winW, s_winH;               /* actual (scaled) window size */
+
+/* Overlay-facing video settings (Stage-3 1.2a). g_vhScale is the VH_SCALE integer factor (1..8);
+ * g_vhFullscreen is 0/1. Written by PC_GpuSetScale/SetFullscreen (from the options overlay) and read
+ * for display; initialised from VH_SCALE / VH_FULLSCREEN in PC_GpuInit. */
+int g_vhScale = 2;
+int g_vhFullscreen = 0;
 static unsigned char *s_rgbaScratch;
 static int s_scratchCap;
 
@@ -202,7 +208,9 @@ void PC_GpuDrawOverlay(int w, int h) {
     for (i = 0; i < count; i++) {
         const char *label, *val;
         int selected = (i == sel);
+        int disabled = PC_OverlayItemDisabled(i);
         int lr = selected ? 122 : 200, lg = selected ? 182 : 206, lb = selected ? 240 : 214;
+        if (disabled) { lr = 96; lg = 100; lb = 110; }   /* greyed/inactive (e.g. scale while fullscreen) */
         PC_OverlayItem(i, &label, &val);
         if (selected)                                    /* highlight bar under the selected row */
             ovlFillRect(w, h, px + 3, ty - 2, panelW - 6, 7 * scale + 3, 48, 56, 72, 235);
@@ -247,15 +255,20 @@ int PC_GpuInit(int width, int height, const char *title) {
     {
         int scale = 2;
         const char *env = getenv("VH_SCALE");
+        const char *fs;
         if (env) { scale = atoi(env); if (scale < 1) scale = 1; if (scale > 8) scale = 8; }
         width  *= scale;
         height *= scale;
-        s_winScale = scale;
+        g_vhScale = scale;
+        fs = getenv("VH_FULLSCREEN");
+        g_vhFullscreen = (fs && fs[0] == '1') ? 1 : 0;
     }
     s_window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                  width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!s_window) return 0;
     s_winW = width; s_winH = height;   /* the real (scaled) window size, for PC_GpuGetWindowSize */
+    if (g_vhFullscreen)                /* apply the persisted fullscreen preference at startup */
+        SDL_SetWindowFullscreen(s_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
     s_glCtx = SDL_GL_CreateContext(s_window);
     if (!s_glCtx) { SDL_DestroyWindow(s_window); s_window = NULL; return 0; }
     /* Explicitly OFF, not on. The game's own VSync() (src/libetc.c) already
@@ -282,7 +295,26 @@ int PC_GpuInit(int width, int height, const char *title) {
 void PC_GpuGetWindowSize(int *w, int *h, int *scale) {
     if (w)     *w = s_winW;
     if (h)     *h = s_winH;
-    if (scale) *scale = s_winScale;
+    if (scale) *scale = g_vhScale;
+}
+
+/* Stage-3 (1.2a) options-overlay setters. The present path already re-letterboxes to any window size
+ * each frame, so these just resize / toggle the window -- no render changes. */
+void PC_GpuSetScale(int scale) {
+    if (scale < 1) scale = 1; if (scale > 8) scale = 8;
+    g_vhScale = scale;
+    s_winW = 320 * scale;   /* native 320x240 framebuffer * scale (see PC_GpuInit) */
+    s_winH = 240 * scale;
+    /* Resize the windowed size. While fullscreen this has no visible effect; it takes hold when
+     * fullscreen is turned back off (SDL restores this size). */
+    if (s_window && !g_vhFullscreen) SDL_SetWindowSize(s_window, s_winW, s_winH);
+}
+
+void PC_GpuSetFullscreen(int on) {
+    g_vhFullscreen = on ? 1 : 0;
+    if (!s_window) return;
+    SDL_SetWindowFullscreen(s_window, g_vhFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+    if (!g_vhFullscreen) SDL_SetWindowSize(s_window, s_winW, s_winH);   /* restore the windowed scale */
 }
 
 /* Fullscreen movie (MDEC/FMV) overlay. When a .STR movie is playing, libcd decodes each frame

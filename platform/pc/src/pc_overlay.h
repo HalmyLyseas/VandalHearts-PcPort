@@ -30,5 +30,7 @@ int  PC_OverlaySelected(void);
 /* Fills *label; for a toggle also *valueText (e.g. "NORMAL"/"INVERTED"), else *valueText = NULL.
  * Returns 1 if item `i` is a toggle, 0 if it is an action (or out of range). */
 int  PC_OverlayItem(int i, const char **label, const char **valueText);
+/* 1 if item i is currently greyed/inactive (drawn dimmed by the renderer), else 0. */
+int  PC_OverlayItemDisabled(int i);
 
 #endif

@@ -13,31 +13,47 @@
  * at close until it is released, so no close path leaks. Nothing is lost: changes are instant + saved.
  */
 #include "pc_overlay.h"
-#include "pc_platform.h"   /* PC_SaveIniConfig */
+#include "pc_platform.h"   /* PC_SaveIniConfig, PC_GpuSetScale/SetFullscreen, g_vhScale/g_vhFullscreen */
 #include <stddef.h>
+#include <stdio.h>         /* snprintf (CHOICE value formatting) */
 
-/* The live settings, defined in libetc.c and read every frame by the right-stick camera mapping.
- * The overlay writes them directly, so a change takes effect on the very next pad read. */
+/* Live settings the overlay reads/writes. Camera invert (libetc.c) is read every frame by the pad
+ * mapping. Video (pc_gpu_window.c) is applied via the apply() callback below. */
 extern int g_camInvertX;
 extern int g_camInvertY;
 
-enum { OVL_TOGGLE, OVL_ACTION };
+enum { OVL_TOGGLE, OVL_ACTION, OVL_CHOICE };
 
 typedef struct {
     const char *label;
     int         kind;
-    int        *value;                      /* OVL_TOGGLE: the live setting              */
-    const char *iniSection, *iniKey;        /* OVL_TOGGLE: where to persist it           */
-    const char *offText, *onText;           /* OVL_TOGGLE: value labels (0 / 1)          */
-    void      (*action)(void);              /* OVL_ACTION: run on activate               */
+    int        *value;                      /* TOGGLE/CHOICE: the live setting            */
+    const char *iniSection, *iniKey;        /* TOGGLE/CHOICE: where to persist it         */
+    const char *offText, *onText;           /* TOGGLE: value labels (0 / 1)               */
+    int         minv, maxv, step;           /* CHOICE: inclusive range + increment        */
+    const char *prefix;                     /* CHOICE: display prefix, e.g. "X" -> "X3"    */
+    void      (*apply)(int);                /* TOGGLE/CHOICE: apply the new value (side effect); may be NULL */
+    void      (*action)(void);              /* OVL_ACTION: run on activate                */
+    int       (*disabled)(void);            /* optional: 1 => greyed (inactive right now); may be NULL */
 } Item;
 
-/* A global's address is a compile-time constant, so this const table with &g_camInvert* is valid. */
+/* Window scale and fullscreen are two mutually-exclusive display modes; the INACTIVE one is greyed.
+ * WINDOW SCALE dims while fullscreen is on (desktop res wins); FULLSCREEN dims while windowed. Both
+ * stay selectable -- touching the greyed one switches to that mode (scale change also drops
+ * fullscreen, see the cross-item rule in setValue). */
+static int dis_whenFullscreen(void) { return g_vhFullscreen; }
+static int dis_whenWindowed(void)   { return !g_vhFullscreen; }
+
+/* A global's address is a compile-time constant, so this const table with &g_* is valid. */
 static const Item s_items[] = {
-    { "CAMERA X-AXIS", OVL_TOGGLE, &g_camInvertX, "camera", "VH_CAM_INVERT_X",
-      "NORMAL", "INVERTED", NULL },
-    { "CAMERA Y-AXIS", OVL_TOGGLE, &g_camInvertY, "camera", "VH_CAM_INVERT_Y",
-      "NORMAL", "INVERTED", NULL },
+    { "WINDOW SCALE",  OVL_CHOICE, &g_vhScale,      "video",  "VH_SCALE",
+      NULL, NULL,               1, 8, 1, "X",  PC_GpuSetScale,      NULL, dis_whenFullscreen },
+    { "FULLSCREEN",    OVL_TOGGLE, &g_vhFullscreen, "video",  "VH_FULLSCREEN",
+      "OFF", "ON",              0, 0, 0, NULL, PC_GpuSetFullscreen, NULL, dis_whenWindowed },
+    { "CAMERA X-AXIS", OVL_TOGGLE, &g_camInvertX,   "camera", "VH_CAM_INVERT_X",
+      "NORMAL", "INVERTED",     0, 0, 0, NULL, NULL,                NULL, NULL },
+    { "CAMERA Y-AXIS", OVL_TOGGLE, &g_camInvertY,   "camera", "VH_CAM_INVERT_Y",
+      "NORMAL", "INVERTED",     0, 0, 0, NULL, NULL,                NULL, NULL },
 };
 #define N_ITEMS ((int)(sizeof(s_items) / sizeof(s_items[0])))
 
@@ -55,8 +71,31 @@ void PC_OverlayToggle(void) {
 }
 
 static void persist(const Item *it) {
-    if (it->kind == OVL_TOGGLE && it->iniKey)
+    char buf[16];
+    if (!it->iniKey) return;
+    if (it->kind == OVL_CHOICE) {
+        snprintf(buf, sizeof(buf), "%d", *it->value);
+        PC_SaveIniConfig(it->iniSection, it->iniKey, buf);
+    } else if (it->kind == OVL_TOGGLE) {
         PC_SaveIniConfig(it->iniSection, it->iniKey, *it->value ? "1" : "0");
+    }
+}
+
+/* Set the item's value to nv: the apply() callback (if any) owns writing *value + its side effect;
+ * otherwise write *value directly. Then persist, and apply any cross-item rule. */
+static void setValue(const Item *it, int nv) {
+    if (it->apply) it->apply(nv);
+    else           *it->value = nv;
+    persist(it);
+    /* Cross-item rule: changing the window scale drops fullscreen (so the new scale is actually
+     * visible), and persists that too. Pointer-guarded to the scale item; recurses only one level
+     * (the fullscreen item carries no such rule). PC_GpuSetScale already stored the new windowed
+     * size, so exiting fullscreen restores the window at the chosen scale. */
+    if (it->value == &g_vhScale && g_vhFullscreen) {
+        int i;
+        for (i = 0; i < N_ITEMS; i++)
+            if (s_items[i].value == &g_vhFullscreen) { setValue(&s_items[i], 0); break; }
+    }
 }
 
 void PC_OverlayMove(int delta) {
@@ -72,7 +111,12 @@ void PC_OverlayAdjust(int delta) {
     it = &s_items[s_sel];
     if (it->kind == OVL_TOGGLE) {
         int nv = (delta < 0) ? 0 : 1;             /* left = off, right = on */
-        if (*it->value != nv) { *it->value = nv; persist(it); }
+        if (*it->value != nv) setValue(it, nv);
+    } else if (it->kind == OVL_CHOICE) {
+        int nv = *it->value + delta * it->step;   /* left/right steps within [minv, maxv] */
+        if (nv < it->minv) nv = it->minv;
+        if (nv > it->maxv) nv = it->maxv;
+        if (nv != *it->value) setValue(it, nv);
     }
 }
 
@@ -81,8 +125,11 @@ void PC_OverlayActivate(void) {
     if (!s_open) return;
     it = &s_items[s_sel];
     if (it->kind == OVL_TOGGLE) {
-        *it->value = !*it->value;
-        persist(it);
+        setValue(it, !*it->value);
+    } else if (it->kind == OVL_CHOICE) {
+        int nv = *it->value + it->step;           /* cycle forward, wrap to min */
+        if (nv > it->maxv) nv = it->minv;
+        setValue(it, nv);
     } else if (it->action) {
         it->action();
     }
@@ -93,6 +140,7 @@ void PC_OverlayCancel(void) {
 }
 
 int PC_OverlayItem(int i, const char **label, const char **valueText) {
+    static char vbuf[24];       /* CHOICE formatting; consumed by the caller before the next call */
     const Item *it;
     if (i < 0 || i >= N_ITEMS) {
         if (label) *label = "";
@@ -105,6 +153,19 @@ int PC_OverlayItem(int i, const char **label, const char **valueText) {
         if (valueText) *valueText = *it->value ? it->onText : it->offText;
         return 1;
     }
+    if (it->kind == OVL_CHOICE) {
+        if (valueText) {
+            snprintf(vbuf, sizeof(vbuf), "%s%d", it->prefix ? it->prefix : "", *it->value);
+            *valueText = vbuf;
+        }
+        return 1;
+    }
     if (valueText) *valueText = NULL;
     return 0;
+}
+
+/* 1 if item i is currently greyed/inactive (e.g. WINDOW SCALE while fullscreen). Renderer dims it. */
+int PC_OverlayItemDisabled(int i) {
+    if (i < 0 || i >= N_ITEMS) return 0;
+    return s_items[i].disabled ? s_items[i].disabled() : 0;
 }

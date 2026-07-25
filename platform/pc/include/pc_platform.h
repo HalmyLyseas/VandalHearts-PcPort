@@ -27,6 +27,14 @@ int PC_CdDiscSignatureOk(void);   /* 1 if the mounted image has Vandal Hearts (U
 int PC_GpuInit(int width, int height, const char *title);
 void PC_GpuGetWindowSize(int *w, int *h, int *scale);   /* actual scaled window size + VH_SCALE factor */
 
+/* Stage-3 (1.2a) video settings, driven by the in-game options overlay. The window is resizable and
+ * the present path re-letterboxes each frame, so these just resize / toggle it. g_vhScale (1..8) and
+ * g_vhFullscreen (0/1) are the live values the overlay reads for display. */
+extern int g_vhScale;
+extern int g_vhFullscreen;
+void PC_GpuSetScale(int scale);
+void PC_GpuSetFullscreen(int on);
+
 /* Called by PutDispEnv() every frame: blits a VRAM sub-rect (BGR555, vramW
  * halfwords/line) to the window opened by PC_GpuInit(). No-ops if
  * PC_GpuInit() was never called. */

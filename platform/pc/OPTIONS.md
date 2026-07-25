@@ -13,7 +13,8 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 | Variable | Default | Effect |
 |---|---|---|
 | `VH_DISC_IMAGE` | auto-detected (a `game/` folder or a `*.bin` next to the exe/AppImage; dev fallback `../../../external/game/Vandal Hearts (USA).bin`) | Path to your game disc `.bin`; overrides auto-detect. |
-| `VH_SCALE` | `2` | Integer window scale (clamped 1–8). Aspect-preserved. |
+| `VH_SCALE` | `2` | Integer window scale (clamped 1–8). Aspect-preserved. Also settable live in the in-game options overlay (SELECT+START). |
+| `VH_FULLSCREEN` | `0` | Start in fullscreen-desktop (`1`) vs windowed (`0`). Aspect preserved (letterboxed). Also toggleable in the options overlay. |
 | `VH_CAM_INVERT_X` | `0` | Invert the right-stick camera *horizontal* axis (rotate direction). `1` = inverted. Also toggleable in the in-game options overlay (SELECT+START). |
 | `VH_CAM_INVERT_Y` | `1` | Invert the right-stick camera *vertical* axis (raise/lower angle). **Ships inverted** — the modern twin-stick convention (push up = tilt the view down); set `0` for a normal vertical axis. Also toggleable in the in-game options overlay. |
 | `VH_SPU_GAIN` | `1.012` | Software-SPU master output trim (float). Music/SFX loudness. Calibrated so the rendered mix RMS-matches the octoshock reference to within 0.01 dB (peak −5.6 dBFS vs the reference's −5.9, i.e. the same headroom hardware leaves for SFX). Falls back to `0.24` if `VH_SPU_SQUARE=0`. |
