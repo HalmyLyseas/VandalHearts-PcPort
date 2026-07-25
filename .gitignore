@@ -38,10 +38,10 @@
 # build*/ also catches build_asan/ (sanitizer build) and any future variant build dirs.
 /platform/pc/build*/
 
-# PC-port runtime output: save files + unit-test scratch audio
-/platform/pc/saves/
-# /saves/ is created when the game is run from the repo root (cwd-relative saves)
-/saves/
+# PC-port runtime output: save files + unit-test scratch audio. `saves/` (unanchored) catches the
+# folder wherever the game creates it -- next to the exe (platform/pc/saves/) or the repo root when
+# run from there (cwd-relative). test_vag1.wav is written by the libsnd unit test.
+saves/
 /platform/pc/test_vag1.wav
 
 # AppImage packaging output (dist/ = AppDir + the .AppImage) and the icon PNG rasterized from
@@ -57,9 +57,6 @@
 /platform/pc/ubsan.log.*
 /platform/pc/asan_runs/
 /platform/pc/ubsan_runs/
-
-# stray shell-redirect scratch
-/platform/pc/out.txt
 
 # env-gated PC-port debug dumps (per-frame CSVs / logs) written to cwd or platform/pc/;
 # these are diagnostics, never committed (VH_XA_CSV, VH_XA_LOG, SPRITE_LOG, etc.)
