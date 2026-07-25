@@ -41,6 +41,7 @@ int  PC_OverlaySaveHasActive(void);       /* 1 if there is an active card to bac
 /* CONFIRM screen -- a small prompt. */
 const char *PC_OverlayConfirmMsg(void);    /* the question line */
 const char *PC_OverlayConfirmTarget(void); /* the archive label being acted on */
+int  PC_OverlayConfirmTargetWarn(void);    /* 1 => render the target line as a red warning */
 int  PC_OverlayConfirmCount(void);         /* number of options */
 const char *PC_OverlayConfirmOption(int i);
 int  PC_OverlayConfirmSelected(void);

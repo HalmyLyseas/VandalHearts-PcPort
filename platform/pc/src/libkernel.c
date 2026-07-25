@@ -32,6 +32,7 @@
 #include "PsyQ/kernel.h"
 #include "PsyQ/sys/file.h"
 #include "pc_platform.h"     /* PC_GetDeployDir -- resolve the saves folder next to the exe/AppImage */
+#include "pc_balance.h"      /* gTacticalMode -- Tactical saves live in a separate folder (GAP 4) */
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -492,21 +493,24 @@ static int MakeDir(const char *p) {
  *   4. deploy dir unusable/read-only           -> fall back to cwd-relative "saves"           */
 static const char *SaveDir(void) {
     static char cached[PATH_MAX];
-    static int resolved = 0;
+    static int cachedMode = -1;
     char deploy[PATH_MAX];
     struct stat st;
-    if (resolved) return cached;
-    resolved = 1;
+    /* Mode isolation (GAP 4): Tactical saves live in "saves_tactical/", Normal in "saves/". Re-resolve
+     * when the mode changes (it only changes at the title menu, so no save op is ever in flight). */
+    const char *sub = gTacticalMode ? "saves_tactical" : "saves";
+    if (cachedMode == gTacticalMode) return cached;
+    cachedMode = gTacticalMode;
     if (PC_GetDeployDir(deploy, sizeof(deploy))) {
-        snprintf(cached, sizeof(cached), "%s/saves", deploy);
+        snprintf(cached, sizeof(cached), "%s/%s", deploy, sub);
         if (stat(cached, &st) == 0 && S_ISDIR(st.st_mode)) return cached;   /* 1 */
-        if (stat("saves", &st) == 0 && S_ISDIR(st.st_mode)) {               /* 2 (legacy) */
-            snprintf(cached, sizeof(cached), "saves");
+        if (stat(sub, &st) == 0 && S_ISDIR(st.st_mode)) {                   /* 2 (legacy, cwd-relative) */
+            snprintf(cached, sizeof(cached), "%s", sub);
             return cached;
         }
         if (MakeDir(cached) == 0) return cached;                            /* 3 */
     }
-    snprintf(cached, sizeof(cached), "saves");                             /* 4 */
+    snprintf(cached, sizeof(cached), "%s", sub);                            /* 4 */
     return cached;
 }
 

@@ -8,6 +8,13 @@
 #include "audio.h"
 #include "graphics.h"
 
+#ifdef PC_FEAT
+/* Stage-3 1.3: pc_balance.c -- the per-chapter Tactical level cap (GAP 1, returns 50 in Normal so the
+ * XP-award guards are retail-identical until Tactical is on) + the mode flag (GAP 5 MYSTIC_ENERGY v3). */
+extern int TacticalCap(int chapter);
+extern int gTacticalMode;
+#endif
+
 void ClearBattlePortraits(void) {
    Object *p;
    s32 i;
@@ -645,7 +652,11 @@ void Objf021_UnitAttacking(Object *obj) {
             prevExp = attacker->exp;
             SyncGainedHp(attacker, 0);
             prevLevel = attacker->level;
+#ifdef PC_FEAT
+            if (attacker->level < TacticalCap(gState.chapter)) {   /* GAP 1: per-chapter cap (=50 Normal) */
+#else
             if (attacker->level < 50) {
+#endif
                BigIntAdd(attacker->experience, gState.experience);
             }
             CalculateUnitStats(attacker);
@@ -1326,8 +1337,22 @@ void Objf028_UnitCasting(Object *obj) {
             if (!s_targetUnit_801231a8->atkBoosted || !s_targetUnit_801231a8->defBoosted) {
                CalculateSupportSpellExp(s_targetUnit_801231a8);
             }
+#ifdef PC_FEAT
+            /* GAP 5 B2: MYSTIC_ENERGY v3 (spell 32) in Tactical is a defensive-only group buff -- a big
+             * defBoosted (3, vs the usual 1) covering physical damage, plus magSusc=1 covering magic;
+             * the atk boost is dropped. Keyed on gCurrentSpell so any other BOOST_ATK_AND_DEF spell (and
+             * MYSTIC_SHIELD, which is a separate BOOST_DEF case) keeps retail behaviour. */
+            if (gTacticalMode && gCurrentSpell == SPELL_MYSTIC_ENERGY) {
+               s_targetUnit_801231a8->defBoosted = 3;
+               s_targetUnit_801231a8->magicSusceptibility = 1;
+            } else {
+               s_targetUnit_801231a8->atkBoosted = 1;
+               s_targetUnit_801231a8->defBoosted = 1;
+            }
+#else
             s_targetUnit_801231a8->atkBoosted = 1;
             s_targetUnit_801231a8->defBoosted = 1;
+#endif
             break;
 
          case SPELL_EFFECT_CURE_AILMENTS:
@@ -1426,7 +1451,11 @@ void Objf028_UnitCasting(Object *obj) {
             prevExp = s_casterUnit_801231a4->exp;
             SyncGainedHp(s_casterUnit_801231a4, 0);
             prevLevel = s_casterUnit_801231a4->level;
+#ifdef PC_FEAT
+            if (s_casterUnit_801231a4->level < TacticalCap(gState.chapter)) {  /* GAP 1: per-chapter cap */
+#else
             if (s_casterUnit_801231a4->level < 50) {
+#endif
                BigIntAdd(s_casterUnit_801231a4->experience, gState.experience);
             }
             CalculateUnitStats(s_casterUnit_801231a4);
@@ -1503,6 +1532,13 @@ void Objf592_BattleTurnStart(Object *obj) {
          if (s_unit_801231c0->idx != 0 && s_unit_801231c0->team == OBJ.team) {
             s_unit_801231c0->atkBoosted = 0;
             s_unit_801231c0->defBoosted = 0;
+#ifdef PC_FEAT
+            /* GAP 5 B2: MYSTIC_ENERGY set magSusc=1 for a turn; restore each team unit's real value
+             * (in Tactical that's the A1-adjusted gUnitInfo value) as its buffs clear at turn start. */
+            if (gTacticalMode) {
+               s_unit_801231c0->magicSusceptibility = gUnitInfo[s_unit_801231c0->unitId].magicSusceptibility;
+            }
+#endif
          }
       }
       s_pTargetCoordsToSet_801231bc = gTargetCoords;

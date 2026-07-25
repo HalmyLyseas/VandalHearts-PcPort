@@ -18,6 +18,7 @@
 #include "graphics.h"
 #include "field.h"
 #include "pc_platform.h"
+#include "pc_balance.h"
 #include "pc_overlay.h"
 
 /* PSX NTSC vblank rate. The old `FRAME_MS = 1000/60` truncated to 16 (integer), pacing the game at
@@ -828,6 +829,10 @@ int VSync(int mode) {
     if (!s_vsyncInitialized) {
         s_nextVBlankMs = (double)SDL_GetTicks();
         s_vsyncInitialized = 1;
+        /* Stage-3 1.3: apply the Tactical-mode config default now -- first VSync is the earliest
+         * post-constructor point, so pc_balance.c snapshots retail-pristine tables. (The title-menu
+         * toggle + new-game/load hooks will become the interactive triggers in later increments.) */
+        PC_BalanceBoot();
     }
 
     if (mode < 0) {

@@ -10,6 +10,12 @@
 
 #include "PsyQ/libsn.h"
 
+#ifdef PC_FEAT
+/* Stage-3 1.3: pc_balance.c -- gTacticalMode + the per-chapter cap (GAP 2 Trials, GAP 3 PLASMA_WAVE). */
+extern int gTacticalMode;
+extern int TacticalCap(int chapter);
+#endif
+
 void ClearPortraitSet(void);
 void ResetStateForNewGame(void);
 void SetupParty(u8);
@@ -264,6 +270,20 @@ void PopulateUnitSpellList(UnitStatus *unit) {
             }
          }
       }
+#ifdef PC_FEAT
+      /* GAP 3: in Tactical, re-grant PLASMA_WAVE to Ash's de-godmoded Vandalier ONLY (weapon ==
+       * V_HEART_2). Set directly into the first free slot -- Vandalier-exclusive (doesn't leak to Ash's
+       * other promotions like the doc's gSpellLists-append would), and it never indexes
+       * gSpellLevelRequirement[45], which would be an OOB read past that table's 36 entries. */
+      if (gTacticalMode && unit->name == UNIT_ASH && unit->weapon == ITEM_V_HEART_2) {
+         for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
+            if (unit->spells[i] == SPELL_NULL) {
+               unit->spells[i] = SPELL_PLASMA_WAVE;
+               break;
+            }
+         }
+      }
+#endif
    }
 }
 
@@ -895,6 +915,18 @@ void SetupBattleUnit(s16 stripIdx, u8 z, u8 x, s8 level, u8 team, u8 direction, 
 
    if (gState.mapNum <= 5) {
       // Trials of Toroah
+#ifdef PC_FEAT
+      /* GAP 2: in Tactical, spawn trial enemies at the per-chapter cap instead of copying Ash's EXP
+       * (which benches Ash trivialises the trial). Derive experience[] the same way the else branch
+       * does, so the derived level is consistent. Normal mode keeps the retail Ash-copy below. */
+      if (gTacticalMode) {
+         int lvl = TacticalCap(gState.chapter);
+         for (i = 0; i < 8; i++) {
+            gTempUnitPtr->experience[i] = gExperienceLevels[lvl - 1][i];
+         }
+         gTempUnitPtr->level = lvl;
+      } else {
+#endif
       for (i = 0; i < 8; i++) {
          gTempUnitPtr->experience[i] = gPartyMembers[UNIT_ASH].experience[i];
       }
@@ -903,6 +935,9 @@ void SetupBattleUnit(s16 stripIdx, u8 z, u8 x, s8 level, u8 team, u8 direction, 
          i++;
       }
       gTempUnitPtr->level = i;
+#ifdef PC_FEAT
+      }
+#endif
    } else {
       for (i = 0; i < 8; i++) {
          gTempUnitPtr->experience[i] = gExperienceLevels[level - 1][i];

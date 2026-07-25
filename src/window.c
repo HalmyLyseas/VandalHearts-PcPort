@@ -9,6 +9,13 @@
 #include "audio.h"
 #include "battle.h"
 
+#ifdef PC_FEAT
+/* Stage-3 1.3 (GAP 3): in Tactical, the promoted Vandal Heart no longer opens the all-spells/all-items
+ * "god" spell menu -- the 5 guards below neutralise the `weapon == V_HEART_2` term so Ash falls to his
+ * real gSpellLists kit. Normal mode keeps the retail god-path. pc_balance.c owns gTacticalMode. */
+extern int gTacticalMode;
+#endif
+
 s32 WindowIsOffScreen(Object *);
 void DrawSmallEquipmentWindow(u8);
 void DrawWindow(s16, s16, s16, s16, s16, s16, s16, u8, u8);
@@ -2124,7 +2131,11 @@ void Objf031_BattleSpellsList(Object *obj) {
       CloseWindow(0x1e);
       gWindowChoiceHeight = 17;
 
+#ifdef PC_FEAT
+      if (!gState.debug && (unit->weapon != ITEM_V_HEART_2 || gTacticalMode)) {
+#else
       if (!gState.debug && unit->weapon != ITEM_V_HEART_2) {
+#endif
          numSpells = 0;
          while (unit->spells[numSpells] != SPELL_NULL) {
             numSpells++;
@@ -2159,7 +2170,11 @@ void Objf031_BattleSpellsList(Object *obj) {
       gWindowActiveIdx = 0x38;
       gClearSavedPadState = 1;
 
+#ifdef PC_FEAT
+      if (gState.debug || (unit->weapon == ITEM_V_HEART_2 && !gTacticalMode)) {
+#else
       if (gState.debug || unit->weapon == ITEM_V_HEART_2) {
+#endif
          gWindowChoicesTopMargin = 9;
          DrawWindow(0x38, 0, 50, 144, 190, 70, 8, WBS_CROSSED, 10);
 
@@ -2180,7 +2195,11 @@ void Objf031_BattleSpellsList(Object *obj) {
 
    case 1:
 
+#ifdef PC_FEAT
+      if (gState.debug || (unit->weapon == ITEM_V_HEART_2 && !gTacticalMode)) {
+#else
       if (gState.debug || unit->weapon == ITEM_V_HEART_2) {
+#endif
          // Paged menu to select from all spells; for debug mode / vandalier
          if (gPadStateNewPresses & PAD_RIGHT) {
             if (obj->state2 != 6) {
@@ -2226,7 +2245,11 @@ void Objf031_BattleSpellsList(Object *obj) {
       }
       if (gWindowChoice.s.windowId == 0x38 && gWindowChoice.s.choice != 0) {
          gCurrentSpell = unit->spells[gWindowChoice.s.choice - 1];
-         if (gState.debug || unit->weapon == ITEM_V_HEART_2) {
+   #ifdef PC_FEAT
+      if (gState.debug || (unit->weapon == ITEM_V_HEART_2 && !gTacticalMode)) {
+#else
+      if (gState.debug || unit->weapon == ITEM_V_HEART_2) {
+#endif
             gCurrentSpell = gWindowChoice.s.choice + obj->state2 * 10;
          }
          if (unit->mp < gSpells[gCurrentSpell].mpCost) {
@@ -2256,7 +2279,11 @@ void Objf031_BattleSpellsList(Object *obj) {
    case 1:
       spellIdx = GetWindowChoice(0x38);
       spell = unit->spells[spellIdx - 1];
+#ifdef PC_FEAT
+      if (gState.debug || (unit->weapon == ITEM_V_HEART_2 && !gTacticalMode)) {
+#else
       if (gState.debug || unit->weapon == ITEM_V_HEART_2) {
+#endif
          spell = spellIdx + obj->state2 * 10;
       }
       if (OBJ.spell != spell) {

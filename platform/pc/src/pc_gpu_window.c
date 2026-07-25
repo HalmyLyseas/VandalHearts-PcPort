@@ -49,6 +49,7 @@ static void glyphRows(char c, unsigned char out[7]) {
         {')', {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08}},
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
         {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
+        {'?', {0x0E, 0x11, 0x01, 0x06, 0x04, 0, 0x04}},
         {'A', {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
         {'B', {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}},
         {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
@@ -312,7 +313,11 @@ static void drawConfirm(int w, int h) {
     ovlText(w, h, px + (panelW - ovlTextPx(title, scale)) / 2, ty, scale, title, 168, 198, 236);
     ty += OVL_GLY1 * scale + titleGap;
     ovlText(w, h, px + (panelW - ovlTextPx(msg, scale)) / 2, ty, scale, msg, 210, 214, 220); ty += lineH;
-    if (hasTgt) { ovlText(w, h, px + (panelW - ovlTextPx(tgt, scale)) / 2, ty, scale, tgt, 150, 170, 190); ty += lineH; }
+    if (hasTgt) {
+        int tr = 150, tg = 170, tb = 190;                       /* neutral label */
+        if (PC_OverlayConfirmTargetWarn()) { tr = 236; tg = 96; tb = 96; }   /* warning -> red */
+        ovlText(w, h, px + (panelW - ovlTextPx(tgt, scale)) / 2, ty, scale, tgt, tr, tg, tb); ty += lineH;
+    }
     ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200); ty += lineH;
     for (i = 0; i < n; i++) {
         int selected = (i == sel);

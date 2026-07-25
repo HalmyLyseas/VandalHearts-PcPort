@@ -15,6 +15,7 @@
 #include "pc_overlay.h"
 #include "pc_platform.h"   /* PC_SaveIniConfig, PC_GpuSetScale/SetFullscreen, g_vhScale/g_vhFullscreen */
 #include "pc_saves.h"      /* archive list + backup/restore/delete */
+#include "pc_balance.h"    /* gTacticalMode, PC_SyncBalance, PC_AtTitleMenu (no game headers) */
 #include <stddef.h>
 #include <stdio.h>         /* snprintf */
 #include <string.h>        /* strncpy */
@@ -23,6 +24,10 @@
  * mapping. Video (pc_gpu_window.c) is applied via the apply() callback below. */
 extern int g_camInvertX;
 extern int g_camInvertY;
+
+/* Stage-3 1.3: applying the Tactical Mode toggle -- set the mode and re-sync the balance patch
+ * (idempotent). The save folder follows automatically (PC_SaveDir reads gTacticalMode). */
+static void apply_tactical(int nv) { gTacticalMode = nv; PC_SyncBalance(); }
 
 /* ---- MAIN screen: data-driven settings list ---------------------------------------------------- */
 
@@ -45,10 +50,19 @@ typedef struct {
 static int dis_whenFullscreen(void) { return g_vhFullscreen; }
 static int dis_whenWindowed(void)   { return !g_vhFullscreen; }
 
+/* Tactical Mode is editable ONLY at the main title menu (a run's mode is fixed -- GAP 4). Greyed
+ * (read-only) during a run, where it just reflects the current run's mode. */
+static int dis_notAtTitle(void)     { return !PC_AtTitleMenu(); }
+/* RETURN TO TITLE is the opposite -- only meaningful during a run, so greyed AT the title menu. */
+static int dis_atTitle(void)        { return PC_AtTitleMenu(); }
+
 static void act_enterSaves(void);           /* SAVE MANAGEMENT -> the saves screen */
+static void act_returnToTitle(void);        /* RETURN TO TITLE -> confirm -> PC_ReturnToTitle */
 
 /* A global's address is a compile-time constant, so this const table with &g_* is valid. */
 static const Item s_items[] = {
+    { "TACTICAL MODE",   OVL_TOGGLE, &gTacticalMode,  "tactical", "VH_TACTICAL",
+      "OFF", "ON",            0, 0, 0, NULL, apply_tactical,      NULL,           dis_notAtTitle },
     { "WINDOW SCALE",    OVL_CHOICE, &g_vhScale,      "video",  "VH_SCALE",
       NULL, NULL,             1, 8, 1, "X",  PC_GpuSetScale,      NULL,           dis_whenFullscreen },
     { "FULLSCREEN",      OVL_TOGGLE, &g_vhFullscreen, "video",  "VH_FULLSCREEN",
@@ -59,13 +73,15 @@ static const Item s_items[] = {
       "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL },
     { "SAVE MANAGEMENT", OVL_ACTION, NULL, NULL, NULL,
       NULL, NULL,             0, 0, 0, NULL, NULL,                act_enterSaves, NULL },
+    { "RETURN TO TITLE", OVL_ACTION, NULL, NULL, NULL,
+      NULL, NULL,             0, 0, 0, NULL, NULL,                act_returnToTitle, dis_atTitle },
 };
 #define N_ITEMS ((int)(sizeof(s_items) / sizeof(s_items[0])))
 
 /* ---- state ------------------------------------------------------------------------------------- */
 
 #define MAX_ARCHIVES 64
-enum { CONF_RESTORE, CONF_DELETE };
+enum { CONF_RESTORE, CONF_DELETE, CONF_RETURN_TITLE };
 
 static int s_open   = 0;
 static int s_screen = OVL_SCREEN_MAIN;
@@ -121,6 +137,7 @@ static void mainMove(int d)   { s_sel += d; if (s_sel < 0) s_sel = N_ITEMS - 1; 
 
 static void mainAdjust(int d) {
     const Item *it = &s_items[s_sel];
+    if (it->disabled && it->disabled()) return;   /* greyed items are read-only (e.g. mode off-title) */
     if (it->kind == OVL_TOGGLE) { int nv = (d < 0) ? 0 : 1; if (*it->value != nv) setValue(it, nv); }
     else if (it->kind == OVL_CHOICE) {
         int nv = *it->value + d * it->step;
@@ -131,6 +148,7 @@ static void mainAdjust(int d) {
 
 static void mainActivate(void) {
     const Item *it = &s_items[s_sel];
+    if (it->disabled && it->disabled()) return;   /* greyed items are read-only (e.g. mode off-title) */
     if (it->kind == OVL_TOGGLE) setValue(it, !*it->value);
     else if (it->kind == OVL_CHOICE) { int nv = *it->value + it->step; if (nv > it->maxv) nv = it->minv; setValue(it, nv); }
     else if (it->action) it->action();
@@ -148,6 +166,13 @@ static void startConfirm(int kind) {
         strncpy(s_confLabel, s_arch[s_saveSel].label, sizeof(s_confLabel) - 1); s_confLabel[sizeof(s_confLabel) - 1] = '\0';
     }
     s_screen = OVL_SCREEN_CONFIRM;
+}
+
+static void act_returnToTitle(void) {
+    startConfirm(CONF_RETURN_TITLE);
+    /* startConfirm may have copied an archive label; replace it with the stakes warning. */
+    strncpy(s_confLabel, "UNSAVED PROGRESS LOST", sizeof(s_confLabel) - 1);
+    s_confLabel[sizeof(s_confLabel) - 1] = '\0';
 }
 
 static void openDetail(void) {
@@ -176,6 +201,11 @@ static void savesInput(int b) {
 static int confCount(void) { return (s_confKind == CONF_RESTORE) ? 3 : 2; }
 
 static void execConfirm(void) {
+    if (s_confKind == CONF_RETURN_TITLE) {
+        if (s_confSel == 0) { PC_ReturnToTitle(); s_open = 0; }  /* yes: teardown to title + close overlay */
+        else                { s_screen = OVL_SCREEN_MAIN; }      /* cancel: back to the settings list */
+        return;
+    }
     if (s_confKind == CONF_RESTORE) {
         if (s_confSel == 0)      { PC_SaveBackupCurrent(); PC_SaveRestore(s_confFile); }  /* back up first */
         else if (s_confSel == 1) { PC_SaveRestore(s_confFile); }                          /* restore only */
@@ -194,7 +224,8 @@ static void confirmInput(int b) {
     case OVL_BTN_UP:    case OVL_BTN_LEFT:  if (s_confSel > 0)     s_confSel--; break;
     case OVL_BTN_DOWN:  case OVL_BTN_RIGHT: if (s_confSel < n - 1) s_confSel++; break;
     case OVL_BTN_CIRCLE:                    execConfirm(); break;
-    case OVL_BTN_CROSS:                     s_screen = OVL_SCREEN_SAVES; break;   /* cancel */
+    case OVL_BTN_CROSS:  /* cancel -> back to where the confirm was opened from */
+        s_screen = (s_confKind == CONF_RETURN_TITLE) ? OVL_SCREEN_MAIN : OVL_SCREEN_SAVES; break;
     default: break;
     }
 }
@@ -224,7 +255,9 @@ void PC_OverlayInput(int b) {
 /* ---- renderer accessors ------------------------------------------------------------------------ */
 
 const char *PC_OverlayTitle(void) {
-    if (s_screen == OVL_SCREEN_SAVES || s_screen == OVL_SCREEN_CONFIRM) return "SAVE MANAGEMENT";
+    if (s_screen == OVL_SCREEN_SAVES) return "SAVE MANAGEMENT";
+    /* CONFIRM: save-mgmt confirms belong to that screen; the return-to-title confirm is an OPTIONS action. */
+    if (s_screen == OVL_SCREEN_CONFIRM) return (s_confKind == CONF_RETURN_TITLE) ? "OPTIONS" : "SAVE MANAGEMENT";
     return "OPTIONS";
 }
 
@@ -265,15 +298,19 @@ int PC_OverlaySaveActive(int i) {   /* 1 if row i matches the current active car
 }
 
 const char *PC_OverlayConfirmMsg(void) {
+    if (s_confKind == CONF_RETURN_TITLE) return "RETURN TO TITLE?";
     return (s_confKind == CONF_RESTORE) ? "REPLACE CURRENT CARD?" : "DELETE THIS BACKUP?";
 }
 int PC_OverlayConfirmCount(void) { return confCount(); }
 int PC_OverlayConfirmSelected(void) { return s_confSel; }
 const char *PC_OverlayConfirmTarget(void) { return s_confLabel; }   /* the archive label being acted on */
+int PC_OverlayConfirmTargetWarn(void) { return s_confKind == CONF_RETURN_TITLE; }  /* red = a warning */
 const char *PC_OverlayConfirmOption(int i) {
     static const char *RESTORE[3] = { "BACK UP THEN RESTORE", "RESTORE ONLY", "CANCEL" };
     static const char *DELETE_[2] = { "DELETE", "CANCEL" };
-    if (s_confKind == CONF_RESTORE) return (i >= 0 && i < 3) ? RESTORE[i] : "";
+    static const char *RETTITLE[2] = { "RETURN TO TITLE", "CANCEL" };
+    if (s_confKind == CONF_RETURN_TITLE) return (i >= 0 && i < 2) ? RETTITLE[i] : "";
+    if (s_confKind == CONF_RESTORE)      return (i >= 0 && i < 3) ? RESTORE[i] : "";
     return (i >= 0 && i < 2) ? DELETE_[i] : "";
 }
 

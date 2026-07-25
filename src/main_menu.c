@@ -8,6 +8,11 @@
 
 extern void DrawText(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 color, u8 *text);
 
+#ifdef PC_FEAT
+/* Stage-3 1.3 (GAP 4): adopt a loaded save's mode from its card-header marker before applying it. */
+extern void PC_AdoptSaveMode(void);
+#endif
+
 static s8 *sText_InsertCard[] = {
     "Put the memory card",
     "in slot 1.",
@@ -1326,6 +1331,9 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
             default:
             case 1:
                if (++obj->mem >= 32) {
+#ifdef PC_FEAT
+                  PC_AdoptSaveMode();   /* GAP 4: mode = the card's marker, before the save is applied */
+#endif
                   OBJ.error = Card_LoadRegularSave(OBJ.choice - 1);
                   CloseWindow(0x3c);
                   obj->state2++;
@@ -1348,6 +1356,9 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
 
             case 1:
                if (++obj->mem >= 32) {
+#ifdef PC_FEAT
+                  PC_AdoptSaveMode();   /* GAP 4: mode = the card's marker, before the save is applied */
+#endif
                   OBJ.error = Card_LoadInBattleSave();
                   if (OBJ.error == 0) {
                      Obj_ResetFromIdx10();

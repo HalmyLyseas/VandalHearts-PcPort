@@ -21,7 +21,7 @@ STAGE_DIR      := $(BUILD_DIR)/include_stage
 C_FILES        := $(wildcard $(SRC_DIR)/*.c)
 GAME_O_FILES   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/src/%.o,$(C_FILES))
 
-BACKEND_SRCS   := libetc.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c
+BACKEND_SRCS   := libetc.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c
 BACKEND_OBJS   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BACKEND_SRCS))
 
 # TARGET WIDTH. Default is now 64-bit (Stage 2.3 complete, 2026-07-21).
@@ -390,6 +390,11 @@ $(BUILD_DIR)/pc_overlay.o: src/pc_overlay.c
 # Stage-3 (1.2b) save-management file ops -- pure C, no SDL/game headers.
 $(BUILD_DIR)/pc_saves.o: src/pc_saves.c
 	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+
+# Stage-3 (1.3) Tactical-mode balance package -- patches mutable game tables (gUnitInfo, etc.), so it
+# needs the real struct layouts via the staged include chain, same flags as the pc data files above.
+$(BUILD_DIR)/pc_balance.o: src/pc_balance.c | stage
+	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libsn.o: src/libsn.c
 	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<

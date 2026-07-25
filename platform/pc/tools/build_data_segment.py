@@ -129,7 +129,10 @@ MANUALLY_DEFINED = {'gBattleEnemyUnitInitialStates', 'gBattlePartyUnitInitialSta
                      # item/equipment info strings -- reconstructed in pc_item_descriptions.c (were
                      # NULL -> blank overworld/shop item-description window; see gen_item_descriptions.py).
                      # NOTE: gTextPointers (0x8012be9c) is runtime-filled (.bss, all-NULL in ROM) -- NOT here.
-                     'gItemDescriptions', 'gItemDescriptions2'}
+                     'gItemDescriptions', 'gItemDescriptions2',
+                     # Stage-3 1.3 Tactical Mode flag -- defined in platform/pc/src/pc_balance.c, referenced
+                     # by the gated src/ hooks (split_0496f8.c etc.); not a ROM data symbol.
+                     'gTacticalMode'}
 
 
 def sh(cmd, **kw):
@@ -461,6 +464,10 @@ def generate(results, sizes, unresolved_by_probe):
     flagged = sorted(s for s, r in results.items() if r['route'] == 'flagged')
 
     for s in safe:
+        if s in MANUALLY_DEFINED:
+            out.append(f'/* {s}: real definition in a platform/pc backend -- not emitted here */')
+            out.append('')
+            continue
         decl = results[s]['decl']
         size = SIZE_OVERRIDES.get(s, sizes.get(s))
         def_decl = re.sub(r'^extern\s+', '', decl)
