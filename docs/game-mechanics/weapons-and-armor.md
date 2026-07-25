@@ -6,15 +6,17 @@ with class stats, the number the shop shows you is not the number combat uses.
 
 ## How equipment enters combat
 
-Through `resist`, not through any attack/defense stat (`src/battle_0190dc.c:480-484`):
+Through `resist`, not through any attack/defense stat — and **only for player units** (both terms are
+gated on `team == TEAM_PLAYER`, `src/battle_0190dc.c:479-484`):
 
 ```c
-resist −= gItemEquipmentPower[attacker.weapon];   // better weapon → lower resist → more damage
-resist += gItemEquipmentPower[defender.helmet];
-resist += gItemEquipmentPower[defender.armor];
+if (attacker.team == TEAM_PLAYER) resist −= gItemEquipmentPower[attacker.weapon];  // → more damage
+if (defender.team == TEAM_PLAYER) resist += gItemEquipmentPower[defender.helmet];
+if (defender.team == TEAM_PLAYER) resist += gItemEquipmentPower[defender.armor];
 ```
 
-A top weapon takes a defender's `resist` from ~20 to ~7 — nearly **3× damage**. In absolute terms it is
+**Enemy equipment power never enters the formula.** A top weapon takes a *player* defender's `resist`
+from ~20 to ~7 — nearly **3× damage**. In absolute terms it is
 the biggest lever in the game. But every class receives essentially the same benefit, so it cancels out
 of any *class-vs-class* comparison: equipment is a **power-progression axis, not a class axis.**
 
@@ -45,18 +47,27 @@ The **display** table (`gItemEquipmentDisplayPower`) is inflated and non-linear 
 39 against Runewand's 14, yet they are **identical in combat** (both real 13). Balance from the real
 column above, never the shown one.
 
-### The claws gap is ceiling-only, not per-tier
+### The claws gap is in the top TWO tiers
 
-A natural assumption is that claws are underpowered at *every* tier. The data says otherwise: **the
-claw line is the axe line minus its top weapon.** Claws `4 / 8 / 10 / 12` are **identical to axes
-`4 / 8 / 10 / 12`** at every shared tier — axes simply add a **5th** weapon (Ragnarok 13) that claws
-lack. (Versus spears' coarser `4 / 8 / 12 / 13` the claws even have a smoother low-end.)
+Real power tracks the acquisition tier exactly — the "Iron" weapons (real 4) are all bought at the
+first shop that sells them, the "Steel/Great" tier (real 8) at the next, and the endgame-buyable tier
+at real 12. Comparing each type's weapons **by tier position from the top**:
 
-So the *only* real asymmetry is the **ceiling**: claws top out at **12**, one below every other type's
-**13** (Ash's 14 aside). It is the single weapon line that never reaches parity.
+| tier | SWORD | BOW | STAFF | AXE | SPEAR | **CLAWS** |
+|---|--:|--:|--:|--:|--:|--:|
+| ultimate | 13 | 13 | 13 | 13 | 13 | **12** ⬇ |
+| penultimate | 12 | 12 | 12 | 12 | 12 | **10** ⬇ |
 
-⇒ **The complete weapon rebalance is one byte: `D.claws` real power `12 → 13`.** The lower claw tiers
-already match axes and need no change; there is no per-tier deficit to chase.
+*(ultimate ignores Ash's V.Heart 14.)* The claw line's **top two** weapons — **P.claws 10** and
+**D.claws 12** — each land a **full tier below** the norm (12 and 13). The lower two (Ironclaw 4,
+Stl claw 8) sit correctly. Aligning the claw powers from the *bottom* obscures this (they match axes
+`4/8/10/12` there); the acquisition/tier-position frame is the balance-relevant one.
+
+⇒ **The weapon rebalance is two bytes: `P.claws 10 → 12` and `D.claws 12 → 13`.** That makes the claw
+line **`4 / 8 / 12 / 13` — identical to the spear line** (the other 4-weapon melee type). No collateral:
+`gItemEquipmentPower` is read **only for player units** (see above), so these bumps affect only the
+Monk/Ninja party members who wield claws — never an enemy (enemy Monks *do* get claws via the map
+loadout, but their equipment power is never used).
 
 ## Defensive gear also converges — heavy plate == cloth robe
 
