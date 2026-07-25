@@ -1,36 +1,48 @@
 /*
- * Stage-3 (1.1C) in-game options overlay -- model/state only.
+ * Stage-3 in-game options overlay -- model/state. PC-side, backend-level (zero src/ changes), opened
+ * by the SELECT+START chord, works everywhere, no pause. See pc_overlay.c for the design.
  *
- * PC-side, backend-level: zero `src/` changes, works in every context (battle, world map, menus,
- * movies). Opened by the SELECT+START chord. This file owns the menu model (a small data-driven
- * item list) and the current selection; the two hooks that drive it live elsewhere:
- *   - input:  libetc.c's pad filter (PC_OverlayFilterPad) calls the Move/Adjust/Activate/Cancel and
- *             Toggle entry points, and freezes the pad the game sees while the overlay is open.
- *   - render: pc_gpu_window.c's PC_GpuDrawOverlay() reads the Title/Count/Selected/Item accessors
- *             and paints a neutral panel over the presented frame.
- * The game keeps running behind the overlay (no pause) -- it simply receives a zero pad and idles.
+ * Screens: MAIN (settings list) -> SAVES (save-management browser) -> CONFIRM (Yes/No / 3-way).
+ * The pad filter (libetc.c) forwards one button edge at a time via PC_OverlayInput(); the renderer
+ * (pc_gpu_window.c) reads the accessors below and paints the current screen.
  */
 #ifndef PLATFORM_PC_OVERLAY_H
 #define PLATFORM_PC_OVERLAY_H
 
+/* Buttons the pad filter forwards (positional face buttons). */
+enum {
+    OVL_BTN_UP, OVL_BTN_DOWN, OVL_BTN_LEFT, OVL_BTN_RIGHT,
+    OVL_BTN_CIRCLE, OVL_BTN_CROSS, OVL_BTN_SQUARE, OVL_BTN_TRIANGLE
+};
+/* Current screen. */
+enum { OVL_SCREEN_MAIN, OVL_SCREEN_SAVES, OVL_SCREEN_CONFIRM };
+
 int  PC_OverlayIsOpen(void);
-void PC_OverlayToggle(void);       /* the SELECT+START chord: open <-> close (sole show/hide) */
+void PC_OverlayToggle(void);        /* chord: open <-> close (always reopens on the MAIN screen) */
+void PC_OverlayInput(int button);   /* one OVL_BTN_* edge from the pad filter */
 
-/* Input, driven by the pad filter while the overlay is open. */
-void PC_OverlayMove(int delta);    /* -1 = up, +1 = down: move the selection (wraps) */
-void PC_OverlayAdjust(int delta);  /* -1/+1: set the selected toggle (left=off, right=on) */
-void PC_OverlayActivate(void);     /* Circle/confirm: flip the selected toggle, or run an action */
-void PC_OverlayCancel(void);       /* close the overlay -- available, but currently unbound (the    */
-                                   /* chord is the only close; a face button would leak, see .c)   */
+int  PC_OverlayScreen(void);        /* OVL_SCREEN_* */
+const char *PC_OverlayTitle(void);  /* the current screen's title */
 
-/* Read API, for the renderer. */
-const char *PC_OverlayTitle(void);
+/* MAIN screen -- the settings list. */
 int  PC_OverlayCount(void);
 int  PC_OverlaySelected(void);
-/* Fills *label; for a toggle also *valueText (e.g. "NORMAL"/"INVERTED"), else *valueText = NULL.
- * Returns 1 if item `i` is a toggle, 0 if it is an action (or out of range). */
+/* Fills *label; for toggle/choice also *valueText. Returns 1 if the item shows a value, else 0. */
 int  PC_OverlayItem(int i, const char **label, const char **valueText);
-/* 1 if item i is currently greyed/inactive (drawn dimmed by the renderer), else 0. */
-int  PC_OverlayItemDisabled(int i);
+int  PC_OverlayItemDisabled(int i); /* 1 => greyed/inactive */
+
+/* SAVES screen -- the archive browser. */
+int  PC_OverlaySaveCount(void);
+int  PC_OverlaySaveSelected(void);
+const char *PC_OverlaySaveLabel(int i);   /* row i's display label ("2026-07-25 15:30"), or NULL */
+int  PC_OverlaySaveActive(int i);         /* 1 if row i is byte-identical to the current card */
+int  PC_OverlaySaveHasActive(void);       /* 1 if there is an active card to back up */
+
+/* CONFIRM screen -- a small prompt. */
+const char *PC_OverlayConfirmMsg(void);    /* the question line */
+const char *PC_OverlayConfirmTarget(void); /* the archive label being acted on */
+int  PC_OverlayConfirmCount(void);         /* number of options */
+const char *PC_OverlayConfirmOption(int i);
+int  PC_OverlayConfirmSelected(void);
 
 #endif

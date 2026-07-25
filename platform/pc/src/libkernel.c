@@ -514,6 +514,10 @@ static void LocalPath(const unsigned char *cardPath, char *out, size_t outSize) 
     snprintf(out, outSize, "%s/%s", SaveDir(), StripDevicePrefix(cardPath));
 }
 
+/* Public accessor (pc_platform.h) so the save-management backend (pc_saves.c) archives/restores from
+ * the exact same folder the game reads its card from. */
+const char *PC_SaveDir(void) { return SaveDir(); }
+
 void _bu_init(void) {}
 
 /* On real hardware these three kick off ASYNC memory-card BIOS operations whose completion fires a

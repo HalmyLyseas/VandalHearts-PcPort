@@ -14,6 +14,11 @@
  * and the saves folder, so they all resolve to one predictable place. Returns 1 on success. */
 int PC_GetDeployDir(char *out, size_t outSize);
 
+/* The resolved saves directory the game reads/writes its memory-card file in (defined in libkernel.c,
+ * resolved once via PC_GetDeployDir). The save-management backend (pc_saves.c) uses it to keep
+ * archives beside the active card. */
+const char *PC_SaveDir(void);
+
 /* Mounts a raw CD image (2352-byte/sector BIN, as produced by `chdman
  * extractcd`) as the virtual disc libcd.c reads from. Returns nonzero on
  * success. Must be called before CdInit(). */

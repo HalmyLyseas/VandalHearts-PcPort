@@ -48,6 +48,7 @@ static void glyphRows(char c, unsigned char out[7]) {
         {',', {0, 0, 0, 0, 0, 0x04, 0x08}},     {'(', {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02}},
         {')', {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08}},
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
+        {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
         {'A', {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
         {'B', {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}},
         {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
@@ -168,56 +169,163 @@ static int ovlTextPx(const char *s, int scale) {   /* rendered width; last cell 
     return n > 0 ? (n * 6 - 1) * scale : 0;
 }
 
-void PC_GpuDrawOverlay(int w, int h) {
-    int count = PC_OverlayCount(), sel = PC_OverlaySelected();
-    int scale, i, base = ovlTextPx(PC_OverlayTitle(), 1);   /* longest line, measured at scale 1 */
-    const int GAP1 = 12, PADX1 = 8, PADY1 = 7, LINE1 = 10, TGAP1 = 6, GLYPH1 = 7;
-    int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
+/* Shared overlay layout constants (scale-1 base units) + panel box. */
+#define OVL_PADX1 8
+#define OVL_PADY1 7
+#define OVL_LINE1 10
+#define OVL_TGAP1 6
+#define OVL_GLY1  7
 
-    /* Longest line = title, or an item's "label ....gap.... value". */
+static void ovlPanelBox(int w, int h, int px, int py, int panelW, int panelH) {
+    ovlFillRect(w, h, px, py, panelW, panelH, 26, 29, 36, 216);           /* translucent dark grey */
+    ovlFillRect(w, h, px, py, panelW, 1, 92, 108, 134, 235);             /* cool-grey border */
+    ovlFillRect(w, h, px, py + panelH - 1, panelW, 1, 92, 108, 134, 235);
+    ovlFillRect(w, h, px, py, 1, panelH, 92, 108, 134, 235);
+    ovlFillRect(w, h, px + panelW - 1, py, 1, panelH, 92, 108, 134, 235);
+}
+
+/* Pick scale 2 if a panel `base` px wide (scale-1) fits the native width with margins, else 1. */
+static int ovlPickScale(int w, int base) { return (2 * (base + 2 * OVL_PADX1) <= w - 8) ? 2 : 1; }
+
+/* MAIN: the settings list. */
+static void drawMain(int w, int h) {
+    const char *title = PC_OverlayTitle();
+    int count = PC_OverlayCount(), sel = PC_OverlaySelected();
+    int scale, i, base = ovlTextPx(title, 1);
+    int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
     for (i = 0; i < count; i++) {
         const char *label, *val;
         int lw;
         PC_OverlayItem(i, &label, &val);
-        lw = ovlTextPx(label, 1) + (val ? GAP1 + ovlTextPx(val, 1) : 0);
+        lw = ovlTextPx(label, 1) + (val ? 12 + ovlTextPx(val, 1) : 0);
         if (lw > base) base = lw;
     }
-    /* Prefer scale 2; drop to 1 only if the panel wouldn't fit the native width with margins. */
-    scale = (2 * (base + 2 * PADX1) <= w - 8) ? 2 : 1;
-
-    padX = PADX1 * scale; padY = PADY1 * scale;
-    lineH = LINE1 * scale; titleGap = TGAP1 * scale;
+    scale = ovlPickScale(w, base);
+    padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
     panelW = base * scale + 2 * padX;
-    panelH = padY + GLYPH1 * scale + titleGap + count * lineH + padY;
-    px = (w - panelW) / 2;
-    py = (h - panelH) / 2;
-
-    /* Panel: semi-transparent dark grey + a thin cool-grey border. */
-    ovlFillRect(w, h, px, py, panelW, panelH, 26, 29, 36, 216);
-    ovlFillRect(w, h, px, py, panelW, 1, 92, 108, 134, 235);
-    ovlFillRect(w, h, px, py + panelH - 1, panelW, 1, 92, 108, 134, 235);
-    ovlFillRect(w, h, px, py, 1, panelH, 92, 108, 134, 235);
-    ovlFillRect(w, h, px + panelW - 1, py, 1, panelH, 92, 108, 134, 235);
-
-    /* Title: centered, light blue. */
+    panelH = padY + OVL_GLY1 * scale + titleGap + count * lineH + padY;
+    px = (w - panelW) / 2; py = (h - panelH) / 2;
+    ovlPanelBox(w, h, px, py, panelW, panelH);
     ty = py + padY;
-    ovlText(w, h, px + (panelW - ovlTextPx(PC_OverlayTitle(), scale)) / 2, ty, scale,
-            PC_OverlayTitle(), 168, 198, 236);
-    ty += 7 * scale + titleGap;
-
+    ovlText(w, h, px + (panelW - ovlTextPx(title, scale)) / 2, ty, scale, title, 168, 198, 236);
+    ty += OVL_GLY1 * scale + titleGap;
     for (i = 0; i < count; i++) {
         const char *label, *val;
-        int selected = (i == sel);
-        int disabled = PC_OverlayItemDisabled(i);
+        int selected = (i == sel), disabled = PC_OverlayItemDisabled(i);
         int lr = selected ? 122 : 200, lg = selected ? 182 : 206, lb = selected ? 240 : 214;
-        if (disabled) { lr = 96; lg = 100; lb = 110; }   /* greyed/inactive (e.g. scale while fullscreen) */
+        if (disabled) { lr = 96; lg = 100; lb = 110; }
         PC_OverlayItem(i, &label, &val);
-        if (selected)                                    /* highlight bar under the selected row */
-            ovlFillRect(w, h, px + 3, ty - 2, panelW - 6, 7 * scale + 3, 48, 56, 72, 235);
+        if (selected) ovlFillRect(w, h, px + 3, ty - 2, panelW - 6, OVL_GLY1 * scale + 3, 48, 56, 72, 235);
         ovlText(w, h, px + padX, ty, scale, label, lr, lg, lb);
-        if (val)                                         /* right-aligned value */
-            ovlText(w, h, px + panelW - padX - ovlTextPx(val, scale), ty, scale, val, lr, lg, lb);
+        if (val) ovlText(w, h, px + panelW - padX - ovlTextPx(val, scale), ty, scale, val, lr, lg, lb);
         ty += lineH;
+    }
+}
+
+/* SAVES: the archive browser -- flat list (scrolls), a position line if long, and a 2-line legend. */
+static void drawSaves(int w, int h) {
+    static const char *L1 = "SQUARE BACK UP   CIRCLE RESTORE";
+    static const char *L2 = "TRIANGLE DELETE   CROSS BACK";
+    static const char *EMPTY = "(NO BACKUPS YET)";
+    const int MAXVIS = 6;
+    const char *title = PC_OverlayTitle();
+    int count = PC_OverlaySaveCount(), sel = PC_OverlaySaveSelected();
+    int scale, i, base, visN, scrollOff = 0, showPos, bodyLines;
+    int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
+    char posbuf[24];
+
+    base = ovlTextPx(title, 1);
+    if (ovlTextPx(L1, 1) > base) base = ovlTextPx(L1, 1);
+    if (ovlTextPx(L2, 1) > base) base = ovlTextPx(L2, 1);
+    if (count == 0 && ovlTextPx(EMPTY, 1) > base) base = ovlTextPx(EMPTY, 1);
+    for (i = 0; i < count; i++) { int lw = ovlTextPx(PC_OverlaySaveLabel(i), 1); if (lw > base) base = lw; }
+
+    visN = (count < MAXVIS) ? count : MAXVIS;
+    if (count == 0) visN = 1;                            /* the EMPTY line occupies a row */
+    if (count > MAXVIS) {                                /* scroll window follows the cursor */
+        scrollOff = sel - MAXVIS / 2;
+        if (scrollOff < 0) scrollOff = 0;
+        if (scrollOff > count - MAXVIS) scrollOff = count - MAXVIS;
+    }
+    showPos = (count > MAXVIS) ? 1 : 0;
+    bodyLines = visN + showPos + 1 /*separator*/ + 2 /*legend*/;
+
+    scale = ovlPickScale(w, base);
+    padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
+    panelW = base * scale + 2 * padX;
+    panelH = padY + OVL_GLY1 * scale + titleGap + bodyLines * lineH + padY;
+    px = (w - panelW) / 2; py = (h - panelH) / 2;
+    ovlPanelBox(w, h, px, py, panelW, panelH);
+    ty = py + padY;
+    ovlText(w, h, px + (panelW - ovlTextPx(title, scale)) / 2, ty, scale, title, 168, 198, 236);
+    ty += OVL_GLY1 * scale + titleGap;
+
+    if (count == 0) {
+        ovlText(w, h, px + (panelW - ovlTextPx(EMPTY, scale)) / 2, ty, scale, EMPTY, 130, 134, 142);
+        ty += lineH;
+    } else {
+        for (i = 0; i < visN; i++) {
+            int idx = scrollOff + i, selected = (idx == sel);
+            const char *label = PC_OverlaySaveLabel(idx);
+            int lr = selected ? 122 : 200, lg = selected ? 182 : 206, lb = selected ? 240 : 214;
+            if (selected) ovlFillRect(w, h, px + 3, ty - 2, panelW - 6, OVL_GLY1 * scale + 3, 48, 56, 72, 235);
+            ovlText(w, h, px + padX, ty, scale, label ? label : "", lr, lg, lb);
+            if (PC_OverlaySaveActive(idx))               /* mark the archive matching the current card */
+                ovlText(w, h, px + panelW - padX - ovlTextPx("(*)", scale), ty, scale, "(*)", 150, 210, 160);
+            ty += lineH;
+        }
+    }
+    if (showPos) {
+        snprintf(posbuf, sizeof(posbuf), "( %d / %d )", sel + 1, count);
+        ovlText(w, h, px + (panelW - ovlTextPx(posbuf, scale)) / 2, ty, scale, posbuf, 130, 134, 142);
+        ty += lineH;
+    }
+    ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200);
+    ty += lineH;
+    ovlText(w, h, px + (panelW - ovlTextPx(L1, scale)) / 2, ty, scale, L1, 150, 170, 190); ty += lineH;
+    ovlText(w, h, px + (panelW - ovlTextPx(L2, scale)) / 2, ty, scale, L2, 150, 170, 190);
+}
+
+/* CONFIRM: a small centered prompt (message + target + options). */
+static void drawConfirm(int w, int h) {
+    const char *title = PC_OverlayTitle(), *msg = PC_OverlayConfirmMsg(), *tgt = PC_OverlayConfirmTarget();
+    int n = PC_OverlayConfirmCount(), sel = PC_OverlayConfirmSelected();
+    int scale, i, base, bodyLines, hasTgt = (tgt && tgt[0]) ? 1 : 0;
+    int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
+
+    base = ovlTextPx(title, 1);
+    if (ovlTextPx(msg, 1) > base) base = ovlTextPx(msg, 1);
+    if (hasTgt && ovlTextPx(tgt, 1) > base) base = ovlTextPx(tgt, 1);
+    for (i = 0; i < n; i++) { int lw = ovlTextPx(PC_OverlayConfirmOption(i), 1); if (lw > base) base = lw; }
+
+    bodyLines = 1 /*msg*/ + hasTgt + 1 /*separator*/ + n;
+    scale = ovlPickScale(w, base);
+    padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
+    panelW = base * scale + 2 * padX;
+    panelH = padY + OVL_GLY1 * scale + titleGap + bodyLines * lineH + padY;
+    px = (w - panelW) / 2; py = (h - panelH) / 2;
+    ovlPanelBox(w, h, px, py, panelW, panelH);
+    ty = py + padY;
+    ovlText(w, h, px + (panelW - ovlTextPx(title, scale)) / 2, ty, scale, title, 168, 198, 236);
+    ty += OVL_GLY1 * scale + titleGap;
+    ovlText(w, h, px + (panelW - ovlTextPx(msg, scale)) / 2, ty, scale, msg, 210, 214, 220); ty += lineH;
+    if (hasTgt) { ovlText(w, h, px + (panelW - ovlTextPx(tgt, scale)) / 2, ty, scale, tgt, 150, 170, 190); ty += lineH; }
+    ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200); ty += lineH;
+    for (i = 0; i < n; i++) {
+        int selected = (i == sel);
+        const char *opt = PC_OverlayConfirmOption(i);
+        int lr = selected ? 122 : 200, lg = selected ? 182 : 206, lb = selected ? 240 : 214;
+        if (selected) ovlFillRect(w, h, px + 3, ty - 2, panelW - 6, OVL_GLY1 * scale + 3, 48, 56, 72, 235);
+        ovlText(w, h, px + (panelW - ovlTextPx(opt, scale)) / 2, ty, scale, opt, lr, lg, lb);
+        ty += lineH;
+    }
+}
+
+void PC_GpuDrawOverlay(int w, int h) {
+    switch (PC_OverlayScreen()) {
+    case OVL_SCREEN_SAVES:   drawSaves(w, h);   break;
+    case OVL_SCREEN_CONFIRM: drawConfirm(w, h); break;
+    default:                 drawMain(w, h);    break;
     }
 }
 

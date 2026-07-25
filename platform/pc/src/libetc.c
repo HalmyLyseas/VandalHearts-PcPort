@@ -765,11 +765,16 @@ static unsigned int PC_OverlayFilterPad(unsigned int raw) {
     if (selHeld) out &= ~(unsigned)(PADstart | PADselect);   /* SELECT gates START (movie-skip safe) */
 
     if (PC_OverlayIsOpen()) {
-        if (newpress & PADLup)    PC_OverlayMove(-1);
-        if (newpress & PADLdown)  PC_OverlayMove(+1);
-        if (newpress & PADLleft)  PC_OverlayAdjust(-1);
-        if (newpress & PADLright) PC_OverlayAdjust(+1);
-        if (newpress & PADRright) PC_OverlayActivate();      /* Circle: flip the selected toggle */
+        /* Forward one edge at a time; the overlay routes each per its current screen. Cross is
+         * Back/Cancel inside the overlay (the SELECT+START chord remains the only full close). */
+        if (newpress & PADLup)    PC_OverlayInput(OVL_BTN_UP);
+        if (newpress & PADLdown)  PC_OverlayInput(OVL_BTN_DOWN);
+        if (newpress & PADLleft)  PC_OverlayInput(OVL_BTN_LEFT);
+        if (newpress & PADLright) PC_OverlayInput(OVL_BTN_RIGHT);
+        if (newpress & PADRright) PC_OverlayInput(OVL_BTN_CIRCLE);   /* Circle   */
+        if (newpress & PADRdown)  PC_OverlayInput(OVL_BTN_CROSS);    /* Cross    */
+        if (newpress & PADRleft)  PC_OverlayInput(OVL_BTN_SQUARE);   /* Square   */
+        if (newpress & PADRup)    PC_OverlayInput(OVL_BTN_TRIANGLE); /* Triangle */
         swallow = raw;                                       /* keep the swallow set primed with all held */
         prev = raw;
         return 0;                                            /* freeze the game's pad while open */
