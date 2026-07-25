@@ -7,6 +7,13 @@
 #ifndef PLATFORM_PC_PLATFORM_H
 #define PLATFORM_PC_PLATFORM_H
 
+#include <stddef.h>   /* size_t */
+
+/* The directory the end user's files live in: next to the .AppImage when packaged, else the
+ * executable's own directory (cwd-independent). Used for the disc auto-detect, vandalhearts.ini,
+ * and the saves folder, so they all resolve to one predictable place. Returns 1 on success. */
+int PC_GetDeployDir(char *out, size_t outSize);
+
 /* Mounts a raw CD image (2352-byte/sector BIN, as produced by `chdman
  * extractcd`) as the virtual disc libcd.c reads from. Returns nonzero on
  * success. Must be called before CdInit(). */

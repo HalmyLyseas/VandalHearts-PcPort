@@ -4,8 +4,9 @@
  * header, matching how the original relies on old-GCC implicit
  * declaration -- see the Kernel step file for the full story).
  *
- * Memory card: "bu00:FILENAME" paths map onto real local files under
- * SAVE_DIR/ -- card.c's own block/capacity accounting (BYTES_PER_BLOCK,
+ * Memory card: "bu00:FILENAME" paths map onto real local files under the
+ * saves/ folder (resolved by SaveDir(), next to the exe/AppImage) -- card.c's
+ * own block/capacity accounting (BYTES_PER_BLOCK,
  * TOTAL_BLOCKS) is driven entirely by real file sizes via firstfile/
  * nextfile, so this layer only needs honest file existence/size/read/
  * write behavior, not a simulated PS1 card filesystem format.
@@ -17,6 +18,8 @@
  * for the reasoning behind the chosen rate.
  */
 #include <dirent.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,10 +31,14 @@
 #endif
 #include "PsyQ/kernel.h"
 #include "PsyQ/sys/file.h"
+#include "pc_platform.h"     /* PC_GetDeployDir -- resolve the saves folder next to the exe/AppImage */
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #define MAX_EVENTS 16
 #define MAX_CARD_FILES 8
-#define SAVE_DIR "saves"
 
 typedef struct {
     int used;
@@ -461,8 +468,50 @@ static const char *StripDevicePrefix(const unsigned char *path) {
     return colon ? colon + 1 : p;
 }
 
+/* Create dir `p` (portably). Returns 0 if it now exists as a directory, -1 otherwise. */
+static int MakeDir(const char *p) {
+#if defined(_WIN32)
+    if (_mkdir(p) == 0) return 0;
+#else
+    if (mkdir(p, 0755) == 0) return 0;
+#endif
+    if (errno == EEXIST) {
+        struct stat st;
+        if (stat(p, &st) == 0 && S_ISDIR(st.st_mode)) return 0;
+    }
+    return -1;
+}
+
+/* The saves directory, resolved once and cached. Prefer a "saves" folder NEXT TO the executable /
+ * .AppImage (via PC_GetDeployDir), so it's the same predictable place as the disc regardless of the
+ * working directory the game was launched from -- fixes saves silently landing in $HOME/saves when
+ * an AppImage is double-clicked. Resolution order:
+ *   1. <deploy>/saves already exists          -> use it (established location)
+ *   2. legacy cwd-relative "saves" exists      -> use it (don't orphan pre-1.1 saves)
+ *   3. create <deploy>/saves                   -> use it (the new default)
+ *   4. deploy dir unusable/read-only           -> fall back to cwd-relative "saves"           */
+static const char *SaveDir(void) {
+    static char cached[PATH_MAX];
+    static int resolved = 0;
+    char deploy[PATH_MAX];
+    struct stat st;
+    if (resolved) return cached;
+    resolved = 1;
+    if (PC_GetDeployDir(deploy, sizeof(deploy))) {
+        snprintf(cached, sizeof(cached), "%s/saves", deploy);
+        if (stat(cached, &st) == 0 && S_ISDIR(st.st_mode)) return cached;   /* 1 */
+        if (stat("saves", &st) == 0 && S_ISDIR(st.st_mode)) {               /* 2 (legacy) */
+            snprintf(cached, sizeof(cached), "saves");
+            return cached;
+        }
+        if (MakeDir(cached) == 0) return cached;                            /* 3 */
+    }
+    snprintf(cached, sizeof(cached), "saves");                             /* 4 */
+    return cached;
+}
+
 static void LocalPath(const unsigned char *cardPath, char *out, size_t outSize) {
-    snprintf(out, outSize, "%s/%s", SAVE_DIR, StripDevicePrefix(cardPath));
+    snprintf(out, outSize, "%s/%s", SaveDir(), StripDevicePrefix(cardPath));
 }
 
 void _bu_init(void) {}
@@ -481,11 +530,7 @@ s32 _card_clear(s32 port) { (void)port; SignalCardEvent(EvSpIOE); return 0; }
 
 void InitCard(s32 padEnable) {
     (void)padEnable;
-#if defined(_WIN32)
-    _mkdir(SAVE_DIR);            /* MinGW mkdir takes no mode argument */
-#else
-    mkdir(SAVE_DIR, 0755);
-#endif
+    MakeDir(SaveDir());         /* resolve (next to the exe/AppImage) and ensure it exists */
 }
 
 s32 StartCard(void) {
@@ -496,7 +541,7 @@ s32 StartCard(void) {
 s32 FormatDevice(unsigned char *deviceName) {
     (void)deviceName;
     /* Not exercised by any test yet -- left as a documented no-op rather
-     * than speculatively deleting real save data under SAVE_DIR. */
+     * than speculatively deleting real save data under the saves/ folder. */
     return 0;
 }
 
@@ -514,6 +559,12 @@ s32 FileOpen(unsigned char *filename, s32 flag) {
     if (flag & O_CREAT) mode = "wb";
     else if (flag & O_WRONLY) mode = "r+b";
     else if (flag & O_RDONLY) mode = "rb";
+
+    /* A creating open needs the saves folder to exist -- InitCard made it at startup, but the user
+     * can delete it mid-session (or it may never have been created if the deploy dir only became
+     * writable later). Re-create it here so an in-battle save can't fail with "Save unsuccessful"
+     * just because the directory is missing. (No-op when it already exists.) */
+    if (flag & O_CREAT) MakeDir(SaveDir());
 
     for (int i = 0; i < MAX_CARD_FILES; i++) {
         if (!s_cardFiles[i].used) {
@@ -561,7 +612,7 @@ struct DIRENTRY *nextfile(struct DIRENTRY *entry);
 struct DIRENTRY *firstfile(unsigned char *path, struct DIRENTRY *entry) {
     (void)path;
     if (s_scanDir) closedir(s_scanDir);
-    s_scanDir = opendir(SAVE_DIR);
+    s_scanDir = opendir(SaveDir());
     if (!s_scanDir) return NULL;
     return nextfile(entry);
 }
@@ -571,8 +622,8 @@ struct DIRENTRY *nextfile(struct DIRENTRY *entry) {
     struct dirent *de;
     while ((de = readdir(s_scanDir)) != NULL) {
         if (de->d_name[0] == '.') continue;
-        char path[512];
-        snprintf(path, sizeof(path), "%s/%s", SAVE_DIR, de->d_name);
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "%s/%s", SaveDir(), de->d_name);
         struct stat st;
         if (stat(path, &st) != 0) continue;
         strncpy(entry->name, de->d_name, sizeof(entry->name) - 1);

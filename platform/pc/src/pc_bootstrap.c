@@ -216,7 +216,7 @@ static int PC_GetExeDir(char *out, size_t outSize) {
  * The AppImage runtime exports $APPIMAGE = the absolute path of the .AppImage file itself, so its
  * dirname is where the user actually keeps things. Prefer that when present; otherwise fall back to
  * the exe dir. Harmless on Windows/native Linux (env var simply unset). Returns 1 on success. */
-static int PC_GetDeployDir(char *out, size_t outSize) {
+int PC_GetDeployDir(char *out, size_t outSize) {
     const char *appimage = getenv("APPIMAGE");   /* set only when running as an AppImage */
     if (appimage && *appimage) {
         char *sep;
