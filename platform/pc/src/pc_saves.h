@@ -19,6 +19,17 @@ typedef struct {
     int  active;      /* 1 if byte-identical to the current active card (i.e. this IS the loaded state) */
 } PC_SaveArchive;
 
+/* The readable content of a card: its three regular save slots (the in-battle "continue" record has
+ * no listing caption, so it's naturally excluded). `slot[i]` is the game's own caption, uppercased for
+ * the overlay font ("CHAP. 1 SCT. 1  L5  0:06"), or "" when that slot is empty. */
+typedef struct {
+    int  occupied[3];
+    char slot[3][40];
+} PC_SaveCard;
+
+/* Parse the listing block of archive `file` into `out` (3 regular slots). Returns 1 on success. */
+int  PC_SaveReadCard(const char *file, PC_SaveCard *out);
+
 /* Fill `out` (up to `cap`) with the archives, newest first. Returns the count (0 if none / no folder). */
 int  PC_SaveArchiveList(PC_SaveArchive *out, int cap);
 

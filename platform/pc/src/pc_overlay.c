@@ -80,6 +80,9 @@ static char s_confFile[64];                 /* CONFIRM: target archive filename 
 static char s_confLabel[24];                /* CONFIRM: target archive display label */
 static int  s_confSel  = 0;                 /* CONFIRM: option cursor */
 
+static PC_SaveCard s_detail;                /* DETAIL: the inspected archive's 3 slots */
+static char s_detailLabel[24];              /* DETAIL: the inspected archive's label */
+
 static void loadArchives(void) {
     s_archCount = PC_SaveArchiveList(s_arch, MAX_ARCHIVES);
     if (s_saveSel >= s_archCount) s_saveSel = (s_archCount > 0) ? s_archCount - 1 : 0;
@@ -147,6 +150,14 @@ static void startConfirm(int kind) {
     s_screen = OVL_SCREEN_CONFIRM;
 }
 
+static void openDetail(void) {
+    if (s_archCount <= 0) return;
+    PC_SaveReadCard(s_arch[s_saveSel].file, &s_detail);
+    strncpy(s_detailLabel, s_arch[s_saveSel].label, sizeof(s_detailLabel) - 1);
+    s_detailLabel[sizeof(s_detailLabel) - 1] = '\0';
+    s_screen = OVL_SCREEN_DETAIL;
+}
+
 static void savesInput(int b) {
     switch (b) {
     case OVL_BTN_UP:       if (s_saveSel > 0) s_saveSel--; break;
@@ -154,6 +165,7 @@ static void savesInput(int b) {
     case OVL_BTN_SQUARE:   PC_SaveBackupCurrent(); s_saveSel = 0; loadArchives(); break; /* new one lands on top */
     case OVL_BTN_CIRCLE:   if (s_archCount > 0) startConfirm(CONF_RESTORE); break;
     case OVL_BTN_TRIANGLE: if (s_archCount > 0) startConfirm(CONF_DELETE);  break;
+    case OVL_BTN_START:    openDetail(); break;    /* inspect the selected archive's slots */
     case OVL_BTN_CROSS:    s_screen = OVL_SCREEN_MAIN; break;
     default: break;
     }
@@ -202,6 +214,8 @@ void PC_OverlayInput(int b) {
         }
     } else if (s_screen == OVL_SCREEN_SAVES) {
         savesInput(b);
+    } else if (s_screen == OVL_SCREEN_DETAIL) {
+        if (b == OVL_BTN_CROSS || b == OVL_BTN_START) s_screen = OVL_SCREEN_SAVES;  /* back */
     } else {
         confirmInput(b);
     }
@@ -261,4 +275,10 @@ const char *PC_OverlayConfirmOption(int i) {
     static const char *DELETE_[2] = { "DELETE", "CANCEL" };
     if (s_confKind == CONF_RESTORE) return (i >= 0 && i < 3) ? RESTORE[i] : "";
     return (i >= 0 && i < 2) ? DELETE_[i] : "";
+}
+
+const char *PC_OverlayDetailTitle(void) { return s_detailLabel; }
+const char *PC_OverlayDetailSlot(int i) {
+    if (i < 0 || i > 2 || !s_detail.occupied[i]) return NULL;   /* NULL => renderer shows "EMPTY" */
+    return s_detail.slot[i];
 }

@@ -9,13 +9,13 @@
 #ifndef PLATFORM_PC_OVERLAY_H
 #define PLATFORM_PC_OVERLAY_H
 
-/* Buttons the pad filter forwards (positional face buttons). */
+/* Buttons the pad filter forwards (positional face buttons + Start). */
 enum {
     OVL_BTN_UP, OVL_BTN_DOWN, OVL_BTN_LEFT, OVL_BTN_RIGHT,
-    OVL_BTN_CIRCLE, OVL_BTN_CROSS, OVL_BTN_SQUARE, OVL_BTN_TRIANGLE
+    OVL_BTN_CIRCLE, OVL_BTN_CROSS, OVL_BTN_SQUARE, OVL_BTN_TRIANGLE, OVL_BTN_START
 };
 /* Current screen. */
-enum { OVL_SCREEN_MAIN, OVL_SCREEN_SAVES, OVL_SCREEN_CONFIRM };
+enum { OVL_SCREEN_MAIN, OVL_SCREEN_SAVES, OVL_SCREEN_CONFIRM, OVL_SCREEN_DETAIL };
 
 int  PC_OverlayIsOpen(void);
 void PC_OverlayToggle(void);        /* chord: open <-> close (always reopens on the MAIN screen) */
@@ -44,5 +44,9 @@ const char *PC_OverlayConfirmTarget(void); /* the archive label being acted on *
 int  PC_OverlayConfirmCount(void);         /* number of options */
 const char *PC_OverlayConfirmOption(int i);
 int  PC_OverlayConfirmSelected(void);
+
+/* DETAIL screen -- the 3 slots inside the inspected archive. */
+const char *PC_OverlayDetailTitle(void);   /* the archive's label (date) */
+const char *PC_OverlayDetailSlot(int i);   /* slot i's caption (0..2), or NULL if empty */
 
 #endif

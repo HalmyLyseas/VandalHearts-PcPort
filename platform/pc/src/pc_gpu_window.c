@@ -224,8 +224,9 @@ static void drawMain(int w, int h) {
 
 /* SAVES: the archive browser -- flat list (scrolls), a position line if long, and a 2-line legend. */
 static void drawSaves(int w, int h) {
-    static const char *L1 = "SQUARE BACK UP   CIRCLE RESTORE";
-    static const char *L2 = "TRIANGLE DELETE   CROSS BACK";
+    static const char *L1 = "SQUARE: BACK UP   CIRCLE: RESTORE";
+    static const char *L2 = "TRIANGLE: DELETE   CROSS: BACK";
+    static const char *L3 = "START: SAVE CONTENT";
     static const char *EMPTY = "(NO BACKUPS YET)";
     const int MAXVIS = 6;
     const char *title = PC_OverlayTitle();
@@ -237,6 +238,7 @@ static void drawSaves(int w, int h) {
     base = ovlTextPx(title, 1);
     if (ovlTextPx(L1, 1) > base) base = ovlTextPx(L1, 1);
     if (ovlTextPx(L2, 1) > base) base = ovlTextPx(L2, 1);
+    if (ovlTextPx(L3, 1) > base) base = ovlTextPx(L3, 1);
     if (count == 0 && ovlTextPx(EMPTY, 1) > base) base = ovlTextPx(EMPTY, 1);
     for (i = 0; i < count; i++) { int lw = ovlTextPx(PC_OverlaySaveLabel(i), 1); if (lw > base) base = lw; }
 
@@ -248,7 +250,7 @@ static void drawSaves(int w, int h) {
         if (scrollOff > count - MAXVIS) scrollOff = count - MAXVIS;
     }
     showPos = (count > MAXVIS) ? 1 : 0;
-    bodyLines = visN + showPos + 1 /*separator*/ + 2 /*legend*/;
+    bodyLines = visN + showPos + 1 /*separator*/ + 3 /*legend*/;
 
     scale = ovlPickScale(w, base);
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
@@ -283,7 +285,8 @@ static void drawSaves(int w, int h) {
     ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200);
     ty += lineH;
     ovlText(w, h, px + (panelW - ovlTextPx(L1, scale)) / 2, ty, scale, L1, 150, 170, 190); ty += lineH;
-    ovlText(w, h, px + (panelW - ovlTextPx(L2, scale)) / 2, ty, scale, L2, 150, 170, 190);
+    ovlText(w, h, px + (panelW - ovlTextPx(L2, scale)) / 2, ty, scale, L2, 150, 170, 190); ty += lineH;
+    ovlText(w, h, px + (panelW - ovlTextPx(L3, scale)) / 2, ty, scale, L3, 150, 170, 190);
 }
 
 /* CONFIRM: a small centered prompt (message + target + options). */
@@ -321,10 +324,45 @@ static void drawConfirm(int w, int h) {
     }
 }
 
+/* DETAIL: the three regular slots inside the inspected archive. */
+static void drawDetail(int w, int h) {
+    static const char *LEG = "CROSS: BACK";
+    const char *title = PC_OverlayDetailTitle();
+    int scale, i, base, bodyLines;
+    int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
+    char rows[3][48];
+    for (i = 0; i < 3; i++) {
+        const char *cap = PC_OverlayDetailSlot(i);
+        snprintf(rows[i], sizeof(rows[i]), "SLOT %d   %s", i + 1, cap ? cap : "EMPTY");
+    }
+    base = ovlTextPx(title, 1);
+    if (ovlTextPx(LEG, 1) > base) base = ovlTextPx(LEG, 1);
+    for (i = 0; i < 3; i++) { int lw = ovlTextPx(rows[i], 1); if (lw > base) base = lw; }
+    bodyLines = 3 /*slots*/ + 1 /*separator*/ + 1 /*legend*/;
+    scale = ovlPickScale(w, base);
+    padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
+    panelW = base * scale + 2 * padX;
+    panelH = padY + OVL_GLY1 * scale + titleGap + bodyLines * lineH + padY;
+    px = (w - panelW) / 2; py = (h - panelH) / 2;
+    ovlPanelBox(w, h, px, py, panelW, panelH);
+    ty = py + padY;
+    ovlText(w, h, px + (panelW - ovlTextPx(title, scale)) / 2, ty, scale, title, 168, 198, 236);
+    ty += OVL_GLY1 * scale + titleGap;
+    for (i = 0; i < 3; i++) {
+        int empty = (PC_OverlayDetailSlot(i) == NULL);
+        int lr = empty ? 120 : 200, lg = empty ? 124 : 206, lb = empty ? 132 : 214;
+        ovlText(w, h, px + padX, ty, scale, rows[i], lr, lg, lb);
+        ty += lineH;
+    }
+    ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200); ty += lineH;
+    ovlText(w, h, px + (panelW - ovlTextPx(LEG, scale)) / 2, ty, scale, LEG, 150, 170, 190);
+}
+
 void PC_GpuDrawOverlay(int w, int h) {
     switch (PC_OverlayScreen()) {
     case OVL_SCREEN_SAVES:   drawSaves(w, h);   break;
     case OVL_SCREEN_CONFIRM: drawConfirm(w, h); break;
+    case OVL_SCREEN_DETAIL:  drawDetail(w, h);  break;
     default:                 drawMain(w, h);    break;
     }
 }

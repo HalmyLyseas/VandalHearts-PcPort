@@ -775,6 +775,9 @@ static unsigned int PC_OverlayFilterPad(unsigned int raw) {
         if (newpress & PADRdown)  PC_OverlayInput(OVL_BTN_CROSS);    /* Cross    */
         if (newpress & PADRleft)  PC_OverlayInput(OVL_BTN_SQUARE);   /* Square   */
         if (newpress & PADRup)    PC_OverlayInput(OVL_BTN_TRIANGLE); /* Triangle */
+        /* Start alone = an overlay action (e.g. inspect a save); Start WITH Select is the close chord,
+         * so only forward Start when Select isn't held (else the closing chord would also fire it). */
+        if ((newpress & PADstart) && !selHeld) PC_OverlayInput(OVL_BTN_START);
         swallow = raw;                                       /* keep the swallow set primed with all held */
         prev = raw;
         return 0;                                            /* freeze the game's pad while open */

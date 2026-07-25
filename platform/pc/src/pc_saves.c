@@ -65,6 +65,46 @@ static void formatLabel(const char *file, char *out, size_t cap) {
         snprintf(out, cap, "%s", s);
 }
 
+/* Bytes of CardFileData_Header (card.h) that precede the listing in every card file: magic[2] +
+ * type + blockCount + sjisName[64] + padding[28] + clut[32] + icon1[128] + icon2[128] = 384. The game
+ * writes the listing at offset + sizeof(header) (card.c: Card_WriteFile FileSeek). No pointers in the
+ * header, so this size is width-independent. */
+#define CARD_HEADER_SIZE 384
+
+int PC_SaveReadCard(const char *file, PC_SaveCard *out) {
+    /* Listing block (at file offset CARD_HEADER_SIZE): checksum[0..3], slotOccupied[4..7],
+     * captions[3][40] at 8. All bytes/char arrays -> width-safe to parse directly. */
+    char full[PATH_MAX];
+    unsigned char hdr[128];
+    FILE *f;
+    size_t r;
+    int i, j;
+    if (!file || !out) return 0;
+    for (i = 0; i < 3; i++) { out->occupied[i] = 0; out->slot[i][0] = '\0'; }
+    archivePath(full, sizeof(full), file);
+    f = fopen(full, "rb");
+    if (!f) return 0;
+    if (fseek(f, CARD_HEADER_SIZE, SEEK_SET) != 0) { fclose(f); return 0; }
+    r = fread(hdr, 1, sizeof(hdr), f);
+    fclose(f);
+    if (r < sizeof(hdr)) return 0;
+    for (i = 0; i < 3; i++) {
+        const unsigned char *cap = hdr + 8 + i * 40;
+        int n = 0;
+        out->occupied[i] = (hdr[4 + i] != 0);
+        if (!out->occupied[i]) continue;
+        for (j = 0; j < 39 && cap[j]; j++) {
+            unsigned char c = cap[j];
+            if (c >= 'a' && c <= 'z') c -= 32;           /* uppercase for the caps-only overlay font */
+            if (c < 0x20 || c > 0x7e) c = ' ';           /* keep it printable/in-font */
+            out->slot[i][n++] = (char)c;
+        }
+        while (n > 0 && out->slot[i][n - 1] == ' ') n--; /* trim trailing pad spaces */
+        out->slot[i][n] = '\0';
+    }
+    return 1;
+}
+
 int PC_SaveHasActive(void) {
     char p[PATH_MAX];
     activePath(p, sizeof(p));
