@@ -22,6 +22,19 @@ commitments.
 - **[gameplay-additions.md](gameplay-additions.md)** — the optional Stage-3 QoL features (twin-stick
   camera, unit-cycle, enemy threat overlay) and what they do.
 
+## Game mechanics (decoded reference)
+
+**[game-mechanics/](game-mechanics/README.md)** — how the game actually works under the hood, decoded
+from the byte-exact source. The recurring theme is a **display-vs-real split**: much of what the status
+screen shows is cosmetic, while the values that drive combat are never surfaced.
+
+- [combat-mechanics.md](game-mechanics/combat-mechanics.md) — the damage/resist model, evasion, magic
+  & ailment chains, and what's real vs fluff
+- [classes.md](game-mechanics/classes.md) — the real per-class levers (`gUnitInfo`, resistance metric,
+  movement profile)
+- [weapons-and-armor.md](game-mechanics/weapons-and-armor.md) — the display-vs-real power tables
+- [spells-and-items.md](game-mechanics/spells-and-items.md) — the full spell + consumable table
+
 ## The PC port internals
 
 - **[pc-port/overview.md](pc-port/overview.md)** — the swappable-interface design and how the six
