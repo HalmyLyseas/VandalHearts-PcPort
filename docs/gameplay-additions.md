@@ -22,12 +22,23 @@ pads without a right stick keep the original controls.
 Press **Square** to toggle a **purple overlay** showing the combined danger zone of **every enemy on
 the map at once** — every tile any enemy could move to *and* attack from this turn. It's the fastest
 way to plan positioning: you see all the threatened squares in one glance, instead of inspecting each
-enemy's range one at a time.
+enemy's range one at a time. (The overlay gently pulses between purple and magenta so it reads clearly
+over any terrain.)
+
+Before — a normal battle view:
+
+![A normal battle view before toggling the overlay](images/features-1.1-EnemyOverlay-01.png)
+
+After pressing **Square** — every enemy's combined move-and-attack danger zone appears at once:
+
+![The threat overlay showing the enemies' combined danger zone](images/features-1.1-EnemyOverlay-02.png)
 
 - **Layering:** the overlay sits *below* your own previews, so it never hides what you're doing. When
   you select a unit to move, its blue movement range stays visible — and any of its reachable tiles
   that are *also* under threat turn **yellow** (reachable **and** dangerous). When you target a spell
   or attack, that preview shows on top of the threat.
+
+  ![With a unit selected: blue movement range, yellow where it overlaps the threat, purple enemy threat beyond](images/features-1.1-EnemyOverlay-03.png)
 - **Stays current:** the overlay refreshes automatically when the board changes — a unit moves, a
   crate is pushed, an enemy dies — so it always reflects the real danger. (It updates while you're
   planning at the cursor; during an action animation it hides and reappears, correct, when the action
@@ -37,8 +48,19 @@ enemy's range one at a time.
 
 Movies (intros/cutscenes) can be skipped at any time with **Start**.
 
+### In-game options overlay
+
+Press **Select + Start** to open a small options overlay anywhere in the game (the same chord closes
+it). It doesn't pause — the field idles behind it — and settings apply immediately and save to
+`vandalhearts.ini` on the spot.
+
+![The in-game options overlay](images/features-1.1-CameraControls.png)
+
+1.1 ships two settings: independent **invert** for each right-stick camera axis (X = rotate, Y =
+raise/lower). The full navigation and the rationale for the Select + Start chord are in
+[controls.md](controls.md#options-overlay-pc-addition).
+
 ## Planned
 
-See the [roadmap](roadmap.md). Next up in 1.1 is an in-game options overlay (START + SELECT) whose
-first setting is per-axis invert for the right-stick camera; 1.2 adds save-file management and window
-scaling to that overlay.
+See the [roadmap](roadmap.md). The options overlay is the foundation for 1.2 (save-file management,
+window scale / fullscreen) and 1.3 (an opt-in balance mode), which slot in as new overlay entries.
