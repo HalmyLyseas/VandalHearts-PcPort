@@ -656,15 +656,17 @@ static void pc_pad_ensure_open(void) {
  * toggles these and persists them to vandalhearts.ini's [camera] section); initialised once from
  * VH_CAM_INVERT_X/Y (which the ini loader sets). Not static -- the overlay reads/writes them. */
 int g_camInvertX = 0;
-int g_camInvertY = 0;
+int g_camInvertY = 1;   /* default INVERTED (modern twin-stick); PC_LoadCamInvert honours env/ini */
 
 static void PC_LoadCamInvert(void) {
     static int loaded = 0;
     const char *e;
     if (loaded) return;
     loaded = 1;
+    /* X defaults to normal; Y defaults to INVERTED (the modern twin-stick convention -- push up =
+     * tilt the view down). An explicit VH_CAM_INVERT_Y=0 (env or the shipped ini) restores normal. */
     e = getenv("VH_CAM_INVERT_X"); g_camInvertX = (e && e[0] == '1') ? 1 : 0;
-    e = getenv("VH_CAM_INVERT_Y"); g_camInvertY = (e && e[0] == '1') ? 1 : 0;
+    e = getenv("VH_CAM_INVERT_Y"); g_camInvertY = e ? (e[0] == '1' ? 1 : 0) : 1;
 }
 
 static unsigned int pc_pad_read(void) {
@@ -672,6 +674,8 @@ static unsigned int pc_pad_read(void) {
     SDL_GameController *c;
     const int AXIS_DZ = 16000;
 
+    PC_LoadCamInvert();          /* load invert defaults once, before the no-controller early-out, so
+                                    keyboard-only play + the overlay still see the right values */
     pc_pad_ensure_open();
     c = s_pad;
     if (!c) return 0;
@@ -715,7 +719,7 @@ static unsigned int pc_pad_read(void) {
     {
         int rx = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTX);
         int ry = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTY);
-        PC_LoadCamInvert();               /* Stage 3 (1.1C): per-axis right-stick invert */
+        /* Stage 3 (1.1C): per-axis right-stick invert (loaded once at the top of pc_pad_read). */
         if (g_camInvertX) rx = -rx;
         if (g_camInvertY) ry = -ry;
         if (rx < -AXIS_DZ) p |= PADL1;  else if (rx > AXIS_DZ) p |= PADR1;  /* left->L1, right->R1 */

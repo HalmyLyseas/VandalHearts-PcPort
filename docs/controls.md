@@ -61,10 +61,10 @@ Changes apply immediately and are saved to `vandalhearts.ini` right away, so the
 
 1.1 ships two settings — independent **invert** for each right-stick camera axis:
 
-| Setting | Effect |
-|---|---|
-| **Camera X-axis** | `NORMAL` / `INVERTED` — flips the horizontal (rotate) direction |
-| **Camera Y-axis** | `NORMAL` / `INVERTED` — flips the vertical (raise/lower angle) direction |
+| Setting | Default | Effect |
+|---|---|---|
+| **Camera X-axis** | `NORMAL` | `NORMAL` / `INVERTED` — flips the horizontal (rotate) direction |
+| **Camera Y-axis** | `INVERTED` | `NORMAL` / `INVERTED` — flips the vertical (raise/lower angle) direction. Ships **inverted** (the modern twin-stick convention: push up = tilt the view down); flip it here if you prefer a normal axis. |
 
 The same two settings can also be preset in `vandalhearts.ini`'s `[camera]` section
 (`VH_CAM_INVERT_X` / `VH_CAM_INVERT_Y`) — see [configuration.md](configuration.md). More settings

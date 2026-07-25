@@ -293,6 +293,30 @@ static int PC_IniLineIsKey(const char *line, const char *key, const char **inlin
     return 1;
 }
 
+/* If `line` is a "[name]" section header, copy `name` (trimmed) into nameOut and return 1, else 0. */
+static int PC_IniHeaderName(const char *line, char *nameOut, size_t cap) {
+    const char *p = line, *e;
+    size_t n;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p != '[') return 0;
+    p++;
+    e = p;
+    while (*e && *e != ']' && *e != '\n' && *e != '\r') e++;
+    if (*e != ']') return 0;
+    n = (size_t)(e - p);
+    if (n >= cap) n = cap - 1;
+    memcpy(nameOut, p, n);
+    nameOut[n] = '\0';
+    return 1;
+}
+
+/* Case-insensitive string equality (ASCII), for matching section names regardless of case. */
+static int PC_CiEq(const char *a, const char *b) {
+    for (; *a && *b; a++, b++)
+        if ((*a | 0x20) != (*b | 0x20)) return 0;
+    return *a == *b;
+}
+
 /* Write "KEY=VALUE" to `out`, re-appending a trimmed inline comment if the original line had one. */
 static void PC_IniWriteKeyLine(FILE *out, const char *key, const char *value, const char *inlineCmt) {
     fprintf(out, "%s=%s", key, value);
@@ -308,37 +332,62 @@ static void PC_IniWriteKeyLine(FILE *out, const char *key, const char *value, co
     fputc('\n', out);
 }
 
-/* See pc_platform.h. Surgical single-key ini write; keeps the file otherwise byte-for-byte. */
+/* See pc_platform.h. Surgical single-key ini write; keeps the file otherwise byte-for-byte.
+ *
+ * Two passes over the (tiny) file so the three cases stay unambiguous and never fight each other:
+ *   1. key already present (active or commented, in any section) -> replace that line in place,
+ *      preserving its inline comment. Highest priority, so a stray value is never duplicated.
+ *   2. key absent but its [section] exists -> insert the line at the END of that section (before the
+ *      next header, or at EOF), so it joins the existing section rather than spawning a new one.
+ *   3. neither -> append a fresh [section] header + the line (also the from-scratch/no-file case). */
 int PC_SaveIniConfig(const char *section, const char *key, const char *value) {
-    char dir[PATH_MAX], iniPath[PATH_MAX], tmpPath[PATH_MAX], line[512];
+    char dir[PATH_MAX], iniPath[PATH_MAX], tmpPath[PATH_MAX], line[512], hdr[128];
     FILE *in, *out;
-    int keyWritten = 0;
+    int keyExists = 0, sectionExists = 0, keyWritten = 0, inTarget = 0;
     if (!section) section = "";
     if (!key || !value) return 0;
     if (!PC_GetDeployDir(dir, sizeof(dir))) return 0;
     snprintf(iniPath, sizeof(iniPath), "%s/vandalhearts.ini", dir);
     snprintf(tmpPath, sizeof(tmpPath), "%s/vandalhearts.ini.tmp", dir);
 
+    /* Pass 1: does the key exist anywhere, and does the target section exist? */
+    in = fopen(iniPath, "r");
+    if (in) {
+        while (fgets(line, sizeof(line), in)) {
+            if (PC_IniHeaderName(line, hdr, sizeof(hdr))) {
+                if (section[0] && PC_CiEq(hdr, section)) sectionExists = 1;
+            } else if (PC_IniLineIsKey(line, key, NULL)) {
+                keyExists = 1;
+            }
+        }
+        fclose(in);
+    }
+
+    /* Pass 2: rewrite. */
     out = fopen(tmpPath, "w");
     if (!out) return 0;
-
     in = fopen(iniPath, "r");
     if (in) {
         while (fgets(line, sizeof(line), in)) {
             const char *inlineCmt = NULL;
-            if (!keyWritten && PC_IniLineIsKey(line, key, &inlineCmt)) {
-                PC_IniWriteKeyLine(out, key, value, inlineCmt);   /* replace this line in place */
-                keyWritten = 1;
-                continue;
+            if (keyExists) {                                  /* case 1: replace in place */
+                if (!keyWritten && PC_IniLineIsKey(line, key, &inlineCmt)) {
+                    PC_IniWriteKeyLine(out, key, value, inlineCmt);
+                    keyWritten = 1;
+                    continue;
+                }
+            } else if (sectionExists && PC_IniHeaderName(line, hdr, sizeof(hdr))) {
+                /* case 2: leaving a section -- if it was the target and we haven't inserted, do it now */
+                if (inTarget && !keyWritten) { PC_IniWriteKeyLine(out, key, value, NULL); keyWritten = 1; }
+                inTarget = (section[0] && PC_CiEq(hdr, section));
             }
             fputs(line, out);
         }
         fclose(in);
     }
-    if (!keyWritten) {
-        /* Key present in neither the file nor (the file was absent) any file: append it under a
-         * [section] header. A duplicate header if the section already existed is only cosmetic -- our
-         * loader ignores headers and standard INI semantics still place the key inside the section. */
+    if (!keyWritten && sectionExists && inTarget)             /* case 2: target was the last section */
+        { PC_IniWriteKeyLine(out, key, value, NULL); keyWritten = 1; }
+    if (!keyWritten) {                                        /* case 3: no key, no section (or no file) */
         if (section[0]) fprintf(out, "\n[%s]\n", section);
         PC_IniWriteKeyLine(out, key, value, NULL);
     }
