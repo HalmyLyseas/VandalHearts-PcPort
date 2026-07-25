@@ -27,20 +27,36 @@ There are **two** tables, and they differ on **61 of 104 entries**:
 
 > **Never balance from the displayed number.** Same "display vs real" split as class attack/defense.
 
-## Weapons — every type converges at the top
+## Weapons — the full real-power progression
 
-| type | best weapon | display | **real** | used by |
-|---|---|---:|---:|---|
-| SWORD | Caliburn *(Ash's V.Heart 40→14 is special)* | 28 | **13** | Knight line |
-| AXE | Ragnarok | **39** | **13** | Armored line |
-| BOW | Rune bow | 25 | **13** | Archer line |
-| STAFF | Runewand | **14** | **13** | Mage / Priest lines |
-| SPEAR | D.Spear | 14 | **13** | Airman line |
-| **CLAWS** | **D.claws** | 24 | **12** | **Monk/Ninja line** |
+Every weapon's **real** power (`gItemEquipmentPower`), by type, in acquisition order — the number
+combat actually uses, not the shop display. Used-by is the class line that wields the type.
 
-Ragnarok *displays* 39 against Runewand's 14 — yet they are **identical in combat** (both real 13).
-The one asymmetry: **claws top out at real 12, one below every other type's 13** — the Monk/Ninja
-weapon line is the only one that never reaches parity.
+| type | progression (name · real power) | used by |
+|---|---|---|
+| SWORD | S.sword 0 · L.sword 1 · I.sword 4 · G.sword 8 · M.sword 12 · **Caliburn 13** · *(V.Heart 14, Ash)* | Knight line |
+| BOW | H.bow 0 · L.bow 1 · Iron bow 4 · Stl.bow 8 · Kill bow 9 · Grt.bow 12 · **Rune bow 13** | Archer line |
+| STAFF | Staff 0 · L.staff 1 · I.staff 4 · M.staff 8 · S.staff 9 · Arkstaff 12 · **Runewand 13** | Mage / Priest |
+| AXE | Iron axe 4 · Battleax 8 · Bloodaxe 10 · Grt.Axe 12 · **Ragnarok 13** | Armored line |
+| SPEAR | I.spear 4 · S.lance 8 · Halberd 12 · **D.Spear 13** | Airman line |
+| **CLAWS** | Ironclaw 4 · Stl claw 8 · P.claws 10 · **D.claws 12** | **Monk/Ninja line** |
+
+The **display** table (`gItemEquipmentDisplayPower`) is inflated and non-linear — e.g. Ragnarok *shows*
+39 against Runewand's 14, yet they are **identical in combat** (both real 13). Balance from the real
+column above, never the shown one.
+
+### The claws gap is ceiling-only, not per-tier
+
+A natural assumption is that claws are underpowered at *every* tier. The data says otherwise: **the
+claw line is the axe line minus its top weapon.** Claws `4 / 8 / 10 / 12` are **identical to axes
+`4 / 8 / 10 / 12`** at every shared tier — axes simply add a **5th** weapon (Ragnarok 13) that claws
+lack. (Versus spears' coarser `4 / 8 / 12 / 13` the claws even have a smoother low-end.)
+
+So the *only* real asymmetry is the **ceiling**: claws top out at **12**, one below every other type's
+**13** (Ash's 14 aside). It is the single weapon line that never reaches parity.
+
+⇒ **The complete weapon rebalance is one byte: `D.claws` real power `12 → 13`.** The lower claw tiers
+already match axes and need no change; there is no per-tier deficit to chase.
 
 ## Defensive gear also converges — heavy plate == cloth robe
 
