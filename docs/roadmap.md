@@ -28,12 +28,14 @@ is an optional layer of gameplay and quality-of-life enhancements built on top o
 - Saves and config now live next to the executable / AppImage, independent of where you launch from
 - A documented control scheme and a dedicated page for the PC-port additions
 
-## Planned — Stage 3
+### 1.2 — User experience ✅
+- **Save management** in the overlay: unlimited whole-card backups (working around the three-slot
+  limit), restore any backup over the current card (with a "back up first" safe default), delete, and
+  a `(*)` marker for the backup matching your current card — each backup stays a real-hardware-valid
+  save. Press **Start** on a backup to inspect its three slots' chapter / level / playtime.
+- **Window scale** (X1–X8) and **fullscreen** from the overlay, applied live and saved to the config.
 
-### 1.2 — User experience
-- Save management from the in-game overlay: copy the current save to a new file (a way around the
-  three-slot limit), and promote any save file to the active one
-- Window scale (1–6) and a fullscreen option from the overlay, saved to the config file
+## Planned — Stage 3
 
 ### 1.3 — "Balance" mode (optional / opt-in)
 A mode that curbs experience-grinding and exploit snowballing to make more classes viable — a level

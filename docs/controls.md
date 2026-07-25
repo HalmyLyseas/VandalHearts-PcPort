@@ -54,22 +54,38 @@ Press **Select + Start** together to open a small in-game options overlay; the s
 It works everywhere — battle, world map, even over a movie — and it doesn't pause the game (Vandal
 Hearts is turn-based, so the field simply idles behind it while it's open).
 
-![The in-game options overlay, opened mid-battle](images/features-1.1-CameraControls.png)
+![The in-game options overlay: video, camera, and save management](images/features-1.2-OverlayNewEntries.png)
 
 Navigate with **Up / Down**; change the highlighted setting with **Left / Right** or **Circle**.
 Changes apply immediately and are saved to `vandalhearts.ini` right away, so they persist across runs.
 
-1.1 ships two settings — independent **invert** for each right-stick camera axis:
+### Settings
 
 | Setting | Default | Effect |
 |---|---|---|
-| **Camera X-axis** | `NORMAL` | `NORMAL` / `INVERTED` — flips the horizontal (rotate) direction |
-| **Camera Y-axis** | `INVERTED` | `NORMAL` / `INVERTED` — flips the vertical (raise/lower angle) direction. Ships **inverted** (the modern twin-stick convention: push up = tilt the view down); flip it here if you prefer a normal axis. |
+| **Window scale** | `X2` | Window size `X1`–`X8` (integer multiples of native 320×240), applied live. |
+| **Fullscreen** | `OFF` | Fullscreen-desktop vs windowed (aspect-preserved, letterboxed). Scale and fullscreen are mutually exclusive — the inactive one greys out, and changing the scale turns fullscreen off. |
+| **Camera X-axis** | `NORMAL` | Flips the horizontal (rotate) direction. |
+| **Camera Y-axis** | `INVERTED` | Flips the vertical (raise/lower) direction. Ships **inverted** (modern twin-stick: push up = tilt the view down). |
 
-The same two settings can also be preset in `vandalhearts.ini`'s `[camera]` section
-(`VH_CAM_INVERT_X` / `VH_CAM_INVERT_Y`) — see [configuration.md](configuration.md). More settings
-(window scale, save management, a balance mode) are planned for the overlay — see the
-[roadmap](roadmap.md).
+These persist in `vandalhearts.ini`'s `[video]` / `[camera]` sections and can be preset there too — see
+[configuration.md](configuration.md).
+
+### Save management
+
+Selecting **Save management** opens a browser of whole-card backups (what it does + why is in
+[gameplay-additions.md](gameplay-additions.md#save-management)):
+
+| Button | Action |
+|---|---|
+| **Square** | Back up the current card to a new timestamped snapshot |
+| **Circle** | Restore the selected backup (confirms first; *back up then restore* is the safe default) |
+| **Triangle** | Delete the selected backup (confirms) |
+| **Start** | Inspect the selected backup — its three slots' chapter / section / level / playtime |
+| **Cross** | Back (to the settings, or out of a sub-screen) |
+
+A green **(\*)** marks the backup identical to your current card. Backups live in a hidden
+`saves/.archive/` folder next to the game.
 
 > **Why a chord, and why no "Close" item:** Start alone skips movies and opens the battle menu, so the
 > overlay is bound to Select + Start to avoid clashing. While the overlay is open the game receives no

@@ -60,7 +60,44 @@ it). It doesn't pause — the field idles behind it — and settings apply immed
 raise/lower). The full navigation and the rationale for the Select + Start chord are in
 [controls.md](controls.md#options-overlay-pc-addition).
 
+## Shipped (1.2)
+
+The options overlay grew from two toggles into a small menu system — still opened with **Select +
+Start**, still no pause.
+
+![The full options overlay: video, camera, and save management](images/features-1.2-OverlayNewEntries.png)
+
+### Video options
+
+**Window scale** (X1–X8) and **Fullscreen**, applied live and saved to `vandalhearts.ini`'s `[video]`
+section. Scale and fullscreen are mutually-exclusive display modes: the inactive one is greyed, and
+changing the scale drops fullscreen so your new size is actually shown.
+
+### Save management
+
+Vandal Hearts saves to a single memory card with three slots. Save management lets you keep **unlimited
+whole-card backups** and swap them in — each backup stays a byte-identical, real-hardware-valid card, so
+nothing here diverges the save format or makes a save unloadable on real hardware.
+
+![The save browser: timestamped backups, the active-card marker, and the control legend](images/features-1.2-SaveManagement-01.png)
+
+- **Square: back up** — copy the current card to a new timestamped snapshot.
+- **Circle: restore** — replace the current card with a backup. Because this overwrites all three
+  slots, it asks first, with **"back up then restore"** as the safe default so you can't lose your
+  current save by surprise.
+- **Triangle: delete** a backup · **Cross: back**.
+- A green **(\*)** marks the backup identical to your current card — a glance tells you where you are,
+  and it doubles as a duplicate-spotter (two identical backups both show it).
+
+Press **Start** on a backup to inspect it without restoring — the three save slots, each with chapter,
+section, Ash's level and playtime (the game's own save caption):
+
+![The save-detail view: each slot's chapter, section, level and playtime](images/features-1.2-SaveManagement-02.png)
+
+Backups live in a hidden `saves/.archive/` folder next to the game, invisible to the game's own
+load/save screens.
+
 ## Planned
 
-See the [roadmap](roadmap.md). The options overlay is the foundation for 1.2 (save-file management,
-window scale / fullscreen) and 1.3 (an opt-in balance mode), which slot in as new overlay entries.
+See the [roadmap](roadmap.md). Next is **1.3** — an opt-in balance mode — which slots into the same
+overlay as another entry.
