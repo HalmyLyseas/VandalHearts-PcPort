@@ -26,16 +26,19 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    (SDL2 + OpenGL + OpenAL, chosen after evaluating Vulkan). The **full game runs end-to-end** from
    the real disc, validated by full playthroughs on **Windows and Linux** including the endgame and
    credits. Details below and in [`docs/`](docs/).
-3. **Stage 3 — gameplay/QoL (in progress).** PC-only quality-of-life and balance work. **v1.1.0
-   released 2026-07-25** (controls: bidirectional shoulder-button ally-cycle; the enemy threat
-   overlay; a **SELECT+START** in-game options overlay whose first settings are right-stick axis
-   invert — Y inverted by default — plus deploy-relative saves). Gameplay changes to shared `src/`
-   use the **`#ifdef PC_FEAT`** gate (see *Byte-exact discipline*). Public roadmap in
-   [`docs/roadmap.md`](docs/roadmap.md); the working plan with implementation risks is the gitignored
-   `exchange/61-stage3-roadmap.md`. Note: the "zero `src/` edits" ideal was the *balance-package*
-   rule — other Stage-3 features need gated `src/` hooks. **Next: 1.2** (save management + window
-   scale/fullscreen via the overlay). **1.3** (opt-in balance mode) is DESIGN-GATED on re-deriving the
-   damage model — the class stat tables are cosmetic (see `docs/` / the class-balance analysis).
+3. **Stage 3 — gameplay/QoL (in progress).** PC-only quality-of-life and balance work, all
+   `platform/pc/` or `#ifdef PC_FEAT`-gated. **v1.1.0 released 2026-07-25** (bidirectional
+   shoulder-button ally-cycle; enemy threat overlay; a **SELECT+START** in-game options overlay,
+   right-stick axis invert — Y inverted by default — plus deploy-relative saves). **v1.2.0 released
+   2026-07-25** (video: window scale/fullscreen in the overlay; **save management** — unlimited
+   whole-card backups via `saves/.archive/`, restore/delete with a "back up first" safe default, a
+   `(*)` active-card marker, and a Start-to-inspect detail view of each backup's 3 slots). The overlay
+   is now a small menu system (`platform/pc/src/pc_overlay.c` + `pc_saves.c`; screens MAIN/SAVES/
+   CONFIRM/DETAIL). Public roadmap in [`docs/roadmap.md`](docs/roadmap.md); the working plan with
+   implementation risks is the gitignored `exchange/61-stage3-roadmap.md`. Note: the "zero `src/`
+   edits" ideal was the *balance-package* rule — other Stage-3 features need gated `src/` hooks.
+   **Next: 1.3** (opt-in balance mode), DESIGN-GATED on re-deriving the damage model — the class stat
+   tables are cosmetic (see `docs/` / the class-balance analysis).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates
