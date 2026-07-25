@@ -1,10 +1,11 @@
 # Gameplay additions (PC port)
 
-Stage 3 adds optional quality-of-life features on top of the faithful port. They never change the
-underlying game — the vanilla experience is preserved — they just make it nicer to play with a modern
-controller. Everything here is guarded by the `PC_FEAT` build gate, so the matching decompilation is
-unaffected. See the [roadmap](roadmap.md) for what's planned next, and [controls.md](controls.md) for
-the full button layout.
+Stage 3 adds optional features on top of the faithful port. The quality-of-life additions never change
+the underlying game — the vanilla experience is preserved — they just make it nicer to play with a
+modern controller. The one feature that *does* change gameplay, **Tactical Mode** (1.3), is strictly
+opt-in and isolated, so the faithful mode stays byte-for-byte the original. Everything here is guarded
+by the `PC_FEAT` build gate, so the matching decompilation is unaffected. See the [roadmap](roadmap.md)
+for what's planned next, and [controls.md](controls.md) for the full button layout.
 
 ## Shipped (1.1)
 
@@ -97,7 +98,34 @@ section, Ash's level and playtime (the game's own save caption):
 Backups live in a hidden `saves/.archive/` folder next to the game, invisible to the game's own
 load/save screens.
 
+## In testing (1.3)
+
+1.3 adds **Tactical Mode** — a large, opt-in gameplay rebalance — plus two general overlay
+conveniences. The rebalance is its own topic; this section covers the overlay-facing additions. The
+full player guide to what Tactical Mode changes (level cap, class rebalancing, restored content, save
+isolation) is in **[tactical-mode.md](tactical-mode.md)**.
+
+![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/features-1.3-OverlayNewEntries.png)
+
+### Tactical Mode toggle
+
+A **Tactical Mode** on/off toggle sits at the top of the overlay. It is editable only at the main title
+screen (greyed during a run, so a run can't switch modes mid-flight), and its state is remembered in
+`vandalhearts.ini`. Turning it on and starting a New Game begins a Tactical run, with its own separate
+save folder. Everything it changes is described in [tactical-mode.md](tactical-mode.md) — and none of
+it touches the normal mode.
+
+### Return to Title
+
+A **Return to Title** entry lets you jump straight back to the title screen from anywhere — no need to
+reset the application or sit through the intro again. Because it abandons unsaved progress, it asks for
+confirmation first, with the warning shown in red and **Cancel** a button away:
+
+![The Return to Title confirmation, warning that unsaved progress will be lost](images/features-1.3-ReturnToTitle.png)
+
+This one is available in **both** modes (it's a plain convenience, not a Tactical change). It's greyed
+out while you're already at the title screen.
+
 ## Planned
 
-See the [roadmap](roadmap.md). Next is **1.3** — an opt-in balance mode — which slots into the same
-overlay as another entry.
+See the [roadmap](roadmap.md).

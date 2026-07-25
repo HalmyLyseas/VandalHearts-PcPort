@@ -63,6 +63,7 @@ Changes apply immediately and are saved to `vandalhearts.ini` right away, so the
 
 | Setting | Default | Effect |
 |---|---|---|
+| **Tactical Mode** *(1.3)* | `OFF` | Opt-in gameplay rebalance — see [tactical-mode.md](tactical-mode.md). Editable **only at the title screen** (greyed during a run); starts a separate save. |
 | **Window scale** | `X2` | Window size `X1`–`X8` (integer multiples of native 320×240), applied live. |
 | **Fullscreen** | `OFF` | Fullscreen-desktop vs windowed (aspect-preserved, letterboxed). Scale and fullscreen are mutually exclusive — the inactive one greys out, and changing the scale turns fullscreen off. |
 | **Camera X-axis** | `NORMAL` | Flips the horizontal (rotate) direction. |
@@ -86,6 +87,12 @@ Selecting **Save management** opens a browser of whole-card backups (what it doe
 
 A green **(\*)** marks the backup identical to your current card. Backups live in a hidden
 `saves/.archive/` folder next to the game.
+
+### Return to Title *(1.3)*
+
+Selecting **Return to Title** jumps straight back to the title screen from anywhere, skipping the
+intro. It confirms first (unsaved progress is lost) and is greyed while you're already at the title.
+Available in both normal and Tactical mode.
 
 > **Why a chord, and why no "Close" item:** Start alone skips movies and opens the battle menu, so the
 > overlay is bound to Select + Start to avoid clashing. While the overlay is open the game receives no

@@ -35,12 +35,19 @@ is an optional layer of gameplay and quality-of-life enhancements built on top o
   save. Press **Start** on a backup to inspect its three slots' chapter / level / playtime.
 - **Window scale** (X1–X8) and **fullscreen** from the overlay, applied live and saved to the config.
 
-## Planned — Stage 3
+## In testing
 
-### 1.3 — "Balance" mode (optional / opt-in)
-A mode that curbs experience-grinding and exploit snowballing to make more classes viable — a level
-cap, adjustments to the Trials of Toroah, and class rebalancing. Vanilla and Balance saves are kept
-separate so neither affects the other.
+### 1.3 — Tactical Mode (optional / opt-in)
+An opt-in rebalance for a tighter tactical experience: a per-chapter level cap that ends
+experience-grinding, Trials of Toroah that scale to your chapter instead of to Ash, class rebalancing
+that makes the sidelined classes viable, a de-godmoded Vandalier, restored item descriptions, and two
+finished-but-cut weapons put back in the shops. It also adds two general overlay conveniences — a
+**Return to Title** entry and the **Tactical Mode** toggle itself. The normal mode is untouched, and
+Tactical and vanilla saves are kept fully separate so neither affects the other. Full player guide:
+**[tactical-mode.md](tactical-mode.md)**.
+
+*Implemented and playable; being played through end-to-end before it ships in a numbered release, so
+some balance numbers may still change.*
 
 ## Beyond
 

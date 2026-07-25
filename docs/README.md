@@ -20,7 +20,9 @@ commitments.
   [`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md).)
 - **[controls.md](controls.md)** — the full gamepad + keyboard control scheme in battle.
 - **[gameplay-additions.md](gameplay-additions.md)** — the optional Stage-3 QoL features (twin-stick
-  camera, unit-cycle, enemy threat overlay) and what they do.
+  camera, unit-cycle, enemy threat overlay, save management) and what they do.
+- **[tactical-mode.md](tactical-mode.md)** — the opt-in 1.3 gameplay rebalance (level cap, class
+  rebalancing, restored content) and how it stays isolated from the faithful mode.
 
 ## Game mechanics (decoded reference)
 
