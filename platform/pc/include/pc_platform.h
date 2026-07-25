@@ -30,6 +30,10 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
  * and registers it here; PC_GpuPresent shows it fullscreen while set. Pass NULL to disable. */
 void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h);
 
+/* Stage-3 (1.1C) in-game options overlay: paints the pc_overlay.c menu over the presented frame.
+ * Called by PC_GpuPresent when PC_OverlayIsOpen(). w,h are the native scratch dimensions. */
+void PC_GpuDrawOverlay(int w, int h);
+
 /* Decode one BS (v2/v3) MDEC bitstream frame to BGR555. Reimplemented from psx-spx (pc_mdec.c). */
 int PC_MdecDecodeBS(const unsigned char *bs, int bsLen, int w, int h, unsigned short *outBGR555);
 
@@ -60,5 +64,14 @@ void PC_GteDebugState(int *ofx, int *ofy, int *h, int *rt00, int *rt02, int *rt2
                       int *trx, int *trz);
 int PC_GteLastOtz(void); /* last AVSZ4 terrain OTZ */
 int PC_GteZsf4(void);    /* current zsf4 */
+
+/* Stage-3 in-game options overlay: persist a single `VH_*` setting back to vandalhearts.ini
+ * (next to the executable, or the .AppImage under AppImage). Surgical -- rewrites only the one
+ * key's line in place, preserving every other line, comment and section, and keeping any inline
+ * comment on the key's own line. If the key is absent it is appended under `[section]` (the section
+ * is created if missing); if the file itself is absent a minimal one is created. `section` is used
+ * only for that append path (a header for readability -- our loader ignores headers). Returns 1 on
+ * success, 0 on any I/O failure (the in-memory setting still applies for the session either way). */
+int PC_SaveIniConfig(const char *section, const char *key, const char *value);
 
 #endif

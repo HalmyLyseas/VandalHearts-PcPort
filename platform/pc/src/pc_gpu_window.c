@@ -8,8 +8,10 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "pc_platform.h"
+#include "pc_overlay.h"
 
 static SDL_Window *s_window;
 static SDL_GLContext s_glCtx;
@@ -33,25 +35,39 @@ static const unsigned char FONT_DIGIT[10][7] = {
     {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E}, {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},
 };
 static void glyphRows(char c, unsigned char out[7]) {
+    /* Full uppercase A-Z + digits (above) + the punctuation the debug OSD and the options overlay
+     * need. bit4 = leftmost of 5 columns. Shared by osdDrawText (debug) and PC_GpuDrawOverlay. */
     static const struct { char c; unsigned char r[7]; } LETTERS[] = {
         {'-', {0, 0, 0, 0x1F, 0, 0, 0}},        {':', {0, 0x04, 0, 0, 0, 0x04, 0}},
         {',', {0, 0, 0, 0, 0, 0x04, 0x08}},     {'(', {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02}},
         {')', {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08}},
-        {'P', {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10}},
-        {'I', {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E}},
-        {'T', {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}},
-        {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
-        {'H', {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
-        {'Y', {0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04}},
+        {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
         {'A', {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
+        {'B', {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}},
+        {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
+        {'D', {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E}},
+        {'E', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F}},
+        {'F', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10}},
+        {'G', {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0E}},
+        {'H', {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
+        {'I', {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E}},
+        {'J', {0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C}},
+        {'K', {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11}},
+        {'L', {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F}},
+        {'M', {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11}},
+        {'N', {0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11}},
+        {'O', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},
+        {'P', {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10}},
+        {'Q', {0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D}},
+        {'R', {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11}},
+        {'S', {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E}},
+        {'T', {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}},
+        {'U', {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},
+        {'V', {0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04}},
         {'W', {0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11}},
         {'X', {0x11, 0x0A, 0x04, 0x04, 0x04, 0x0A, 0x11}},
+        {'Y', {0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04}},
         {'Z', {0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F}},
-        {'O', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},
-        {'S', {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E}},
-        {'F', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10}},
-        {'R', {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11}},
-        {'D', {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E}},
     };
     int i;
     if (c >= '0' && c <= '9') {
@@ -94,6 +110,106 @@ static void osdDrawText(int w, int h, int sx, int sy, int scale, const char *tex
                 }
             }
         }
+    }
+}
+
+/* --- Stage-3 (1.1C) in-game options overlay renderer ---------------------------
+ * Paints the pc_overlay.c menu over the presented frame, into the same bottom-up RGB scratch as the
+ * debug OSD. Deliberately plain/neutral (user direction): a semi-transparent dark-grey panel, a
+ * light-grey/light-blue clean bitmap font (the shared 5x7 glyphs), a light-blue selection -- nothing
+ * that competes with the game's own art. Sizes itself from the longest line so it always fits. */
+
+/* Blend (r,g,b) at alpha a/255 into the scratch pixel at screen (X,Y) (top-left origin; the scratch
+ * is bottom-up, so flip Y here as osdDrawText does). Out-of-bounds is a no-op. */
+static void ovlBlend(int w, int h, int X, int Y, int r, int g, int b, int a) {
+    unsigned char *o;
+    int fy;
+    if (X < 0 || X >= w || Y < 0 || Y >= h) return;
+    fy = h - 1 - Y;
+    o = &s_rgbaScratch[(fy * w + X) * 3];
+    o[0] = (unsigned char)((o[0] * (255 - a) + r * a) / 255);
+    o[1] = (unsigned char)((o[1] * (255 - a) + g * a) / 255);
+    o[2] = (unsigned char)((o[2] * (255 - a) + b * a) / 255);
+}
+
+static void ovlFillRect(int w, int h, int x, int y, int rw, int rh, int r, int g, int b, int a) {
+    int dx, dy;
+    for (dy = 0; dy < rh; dy++)
+        for (dx = 0; dx < rw; dx++)
+            ovlBlend(w, h, x + dx, y + dy, r, g, b, a);
+}
+
+/* Opaque colored text (no per-cell background -- the panel supplies contrast). 6*scale px per cell. */
+static void ovlText(int w, int h, int sx, int sy, int scale, const char *text, int r, int g, int b) {
+    int ci = 0;
+    const char *p;
+    for (p = text; *p; p++, ci++) {
+        unsigned char rows[7];
+        int gx = sx + ci * 6 * scale, rr, cbit, dy, dx;
+        glyphRows(*p, rows);
+        for (rr = 0; rr < 7; rr++)
+            for (cbit = 0; cbit < 5; cbit++) {
+                if (!((rows[rr] >> (4 - cbit)) & 1)) continue;
+                for (dy = 0; dy < scale; dy++)
+                    for (dx = 0; dx < scale; dx++)
+                        ovlBlend(w, h, gx + cbit * scale + dx, sy + rr * scale + dy, r, g, b, 255);
+            }
+    }
+}
+
+static int ovlTextPx(const char *s, int scale) {   /* rendered width; last cell has no trailing gap */
+    int n = (int)strlen(s);
+    return n > 0 ? (n * 6 - 1) * scale : 0;
+}
+
+void PC_GpuDrawOverlay(int w, int h) {
+    int count = PC_OverlayCount(), sel = PC_OverlaySelected();
+    int scale, i, base = ovlTextPx(PC_OverlayTitle(), 1);   /* longest line, measured at scale 1 */
+    const int GAP1 = 12, PADX1 = 8, PADY1 = 7, LINE1 = 10, TGAP1 = 6, GLYPH1 = 7;
+    int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
+
+    /* Longest line = title, or an item's "label ....gap.... value". */
+    for (i = 0; i < count; i++) {
+        const char *label, *val;
+        int lw;
+        PC_OverlayItem(i, &label, &val);
+        lw = ovlTextPx(label, 1) + (val ? GAP1 + ovlTextPx(val, 1) : 0);
+        if (lw > base) base = lw;
+    }
+    /* Prefer scale 2; drop to 1 only if the panel wouldn't fit the native width with margins. */
+    scale = (2 * (base + 2 * PADX1) <= w - 8) ? 2 : 1;
+
+    padX = PADX1 * scale; padY = PADY1 * scale;
+    lineH = LINE1 * scale; titleGap = TGAP1 * scale;
+    panelW = base * scale + 2 * padX;
+    panelH = padY + GLYPH1 * scale + titleGap + count * lineH + padY;
+    px = (w - panelW) / 2;
+    py = (h - panelH) / 2;
+
+    /* Panel: semi-transparent dark grey + a thin cool-grey border. */
+    ovlFillRect(w, h, px, py, panelW, panelH, 26, 29, 36, 216);
+    ovlFillRect(w, h, px, py, panelW, 1, 92, 108, 134, 235);
+    ovlFillRect(w, h, px, py + panelH - 1, panelW, 1, 92, 108, 134, 235);
+    ovlFillRect(w, h, px, py, 1, panelH, 92, 108, 134, 235);
+    ovlFillRect(w, h, px + panelW - 1, py, 1, panelH, 92, 108, 134, 235);
+
+    /* Title: centered, light blue. */
+    ty = py + padY;
+    ovlText(w, h, px + (panelW - ovlTextPx(PC_OverlayTitle(), scale)) / 2, ty, scale,
+            PC_OverlayTitle(), 168, 198, 236);
+    ty += 7 * scale + titleGap;
+
+    for (i = 0; i < count; i++) {
+        const char *label, *val;
+        int selected = (i == sel);
+        int lr = selected ? 122 : 200, lg = selected ? 182 : 206, lb = selected ? 240 : 214;
+        PC_OverlayItem(i, &label, &val);
+        if (selected)                                    /* highlight bar under the selected row */
+            ovlFillRect(w, h, px + 3, ty - 2, panelW - 6, 7 * scale + 3, 48, 56, 72, 235);
+        ovlText(w, h, px + padX, ty, scale, label, lr, lg, lb);
+        if (val)                                         /* right-aligned value */
+            ovlText(w, h, px + panelW - padX - ovlTextPx(val, scale), ty, scale, val, lr, lg, lb);
+        ty += lineH;
     }
 }
 
@@ -232,6 +348,8 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         if (s_osdEnabled < 0) s_osdEnabled = (getenv("VH_CAM_OSD") != NULL) ? 1 : 0;
         if (s_osdEnabled && g_camOsdText[0]) osdDrawText(w, h, 2, 2, 1, g_camOsdText);
     }
+
+    if (PC_OverlayIsOpen()) PC_GpuDrawOverlay(w, h);   /* Stage-3 (1.1C) options overlay, on top */
 
     /* Scale the native w*h framebuffer up to fill the current window, preserving
      * the source aspect ratio (letterboxed with black bars). Recomputed every

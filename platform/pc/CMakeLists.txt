@@ -69,7 +69,7 @@ find_path(OPENAL_INCLUDE_DIR AL/al.h)
 file(GLOB GAME_SRCS ${SRC_DIR}/*.c)
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
-set(BACKEND_PLAIN   libcd libspu libkernel libgpu libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font)
+set(BACKEND_PLAIN   libcd libspu libkernel libgpu libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay)
 set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data pc_evt_entities)
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 

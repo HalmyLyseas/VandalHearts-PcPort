@@ -18,6 +18,7 @@
 #include "graphics.h"
 #include "field.h"
 #include "pc_platform.h"
+#include "pc_overlay.h"
 
 /* PSX NTSC vblank rate. The old `FRAME_MS = 1000/60` truncated to 16 (integer), pacing the game at
  * 62.5Hz => it ran ~4% too fast, the uniform "everything a touch shorter than BizHawk" drift
@@ -723,6 +724,59 @@ static unsigned int pc_pad_read(void) {
     return p;
 }
 
+/* Stage-3 (1.1C) options-overlay pad filter. Sits between the raw pad word and what the game reads,
+ * so it works in every context (battle, world map, movies) with zero src/ changes.
+ *
+ * Contract -- MUST be idempotent across repeated same-frame calls: the game reads PadRead(0) twice
+ * per battle frame (gPadState battle_0201b8:125, gPad2State :149) and busy-waits on it in engine.c.
+ * So no stateful multi-frame buffering of edges; only a chord *latch* (fires once per press, stable
+ * when re-read), stateless SELECT masking, and the release-tracked swallow mask below.
+ *
+ * Chord = SELECT+START is the SOLE show/hide trigger. While SELECT is held we strip START+SELECT
+ * (low word) from what the game sees, so the movie/battle START-skip (gPadStateNewPresses &
+ * PAD_START) never mistakes the chord for a skip; START alone is untouched, so normal skipping still
+ * works. (SELECT on the low word has no non-debug game use.) While open, the overlay owns all input
+ * and the game receives a zero pad -- it keeps rendering but idles (no pause).
+ *
+ * Leak fix (user 2026-07-25): because the game sees a zero pad while the overlay is open, any button
+ * still held at the instant it closes would read to the game as a fresh 0->held press (e.g. Circle
+ * would pop the battle menu). So on close we latch every currently-held button into `swallow` and
+ * keep masking each from the game until it is physically released. Covers all buttons/close paths. */
+static unsigned int PC_OverlayFilterPad(unsigned int raw) {
+    static unsigned int prev = 0;
+    static int chordLatch = 0;
+    static unsigned int swallow = 0;             /* buttons held at close, masked until released */
+    int wasOpen = PC_OverlayIsOpen();
+    unsigned int lo = raw & 0xFFFFu;
+    int selHeld   = (lo & PADselect) != 0;
+    int startHeld = (lo & PADstart)  != 0;
+    unsigned int newpress = raw & ~prev;         /* rising edges vs the previous distinct read */
+    unsigned int out = raw;
+
+    if (selHeld && startHeld) {                   /* chord: toggle once per press (latched) */
+        if (!chordLatch) { PC_OverlayToggle(); chordLatch = 1; }
+    } else {
+        chordLatch = 0;
+    }
+    if (selHeld) out &= ~(unsigned)(PADstart | PADselect);   /* SELECT gates START (movie-skip safe) */
+
+    if (PC_OverlayIsOpen()) {
+        if (newpress & PADLup)    PC_OverlayMove(-1);
+        if (newpress & PADLdown)  PC_OverlayMove(+1);
+        if (newpress & PADLleft)  PC_OverlayAdjust(-1);
+        if (newpress & PADLright) PC_OverlayAdjust(+1);
+        if (newpress & PADRright) PC_OverlayActivate();      /* Circle: flip the selected toggle */
+        swallow = raw;                                       /* keep the swallow set primed with all held */
+        prev = raw;
+        return 0;                                            /* freeze the game's pad while open */
+    }
+    if (wasOpen) swallow |= raw;                  /* closed THIS frame (e.g. via chord): swallow held */
+    swallow &= raw;                               /* drop buttons the user has since released */
+    out &= ~swallow;                              /* hide the still-held leftovers from the game */
+    prev = raw;
+    return out;
+}
+
 unsigned int PadRead(int id) {
     (void)id;
 
@@ -755,7 +809,7 @@ unsigned int PadRead(int id) {
      * in the low 16 bits, port 1 in the high 16); the original code reads
      * player 2 via `PadRead(0/1) >> 0x10`. No second controller mapped
      * yet, so the high half stays zero. */
-    return p1;
+    return PC_OverlayFilterPad(p1);   /* Stage-3 (1.1C): chord/overlay input filter */
 }
 
 int VSync(int mode) {

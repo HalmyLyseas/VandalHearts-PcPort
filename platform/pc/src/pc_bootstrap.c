@@ -271,6 +271,86 @@ static void PC_LoadIniConfig(void) {
     fclose(f);
 }
 
+/* Does `line` set (or comment out) `key`? Matches "KEY=", ";KEY=", "# KEY =", etc. -- an optional
+ * leading comment marker, then the key, optional ws, '='. On a match, *inlineCmt (if non-NULL) is set
+ * to the ';'/'#' inline-comment tail on that line (past the '='), or NULL if there is none, so the
+ * rewrite can preserve the human-readable note (e.g. "; horizontal (rotate direction)"). */
+static int PC_IniLineIsKey(const char *line, const char *key, const char **inlineCmt) {
+    const char *p = line;
+    size_t klen = strlen(key);
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == ';' || *p == '#') { p++; while (*p == ' ' || *p == '\t') p++; }
+    if (strncmp(p, key, klen) != 0) return 0;
+    p += klen;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p != '=') return 0;
+    if (inlineCmt) {
+        const char *c = p + 1, *cm = NULL;                 /* scan the value region for ';' or '#' */
+        for (; *c && *c != '\n' && *c != '\r'; c++)
+            if (*c == ';' || *c == '#') { cm = c; break; }
+        *inlineCmt = cm;
+    }
+    return 1;
+}
+
+/* Write "KEY=VALUE" to `out`, re-appending a trimmed inline comment if the original line had one. */
+static void PC_IniWriteKeyLine(FILE *out, const char *key, const char *value, const char *inlineCmt) {
+    fprintf(out, "%s=%s", key, value);
+    if (inlineCmt) {
+        char cbuf[256]; size_t i = 0;
+        while (inlineCmt[i] && inlineCmt[i] != '\n' && inlineCmt[i] != '\r' && i < sizeof(cbuf) - 1) {
+            cbuf[i] = inlineCmt[i]; i++;
+        }
+        while (i > 0 && (cbuf[i-1] == ' ' || cbuf[i-1] == '\t')) i--;   /* trim trailing ws */
+        cbuf[i] = '\0';
+        fprintf(out, "    %s", cbuf);
+    }
+    fputc('\n', out);
+}
+
+/* See pc_platform.h. Surgical single-key ini write; keeps the file otherwise byte-for-byte. */
+int PC_SaveIniConfig(const char *section, const char *key, const char *value) {
+    char dir[PATH_MAX], iniPath[PATH_MAX], tmpPath[PATH_MAX], line[512];
+    FILE *in, *out;
+    int keyWritten = 0;
+    if (!section) section = "";
+    if (!key || !value) return 0;
+    if (!PC_GetDeployDir(dir, sizeof(dir))) return 0;
+    snprintf(iniPath, sizeof(iniPath), "%s/vandalhearts.ini", dir);
+    snprintf(tmpPath, sizeof(tmpPath), "%s/vandalhearts.ini.tmp", dir);
+
+    out = fopen(tmpPath, "w");
+    if (!out) return 0;
+
+    in = fopen(iniPath, "r");
+    if (in) {
+        while (fgets(line, sizeof(line), in)) {
+            const char *inlineCmt = NULL;
+            if (!keyWritten && PC_IniLineIsKey(line, key, &inlineCmt)) {
+                PC_IniWriteKeyLine(out, key, value, inlineCmt);   /* replace this line in place */
+                keyWritten = 1;
+                continue;
+            }
+            fputs(line, out);
+        }
+        fclose(in);
+    }
+    if (!keyWritten) {
+        /* Key present in neither the file nor (the file was absent) any file: append it under a
+         * [section] header. A duplicate header if the section already existed is only cosmetic -- our
+         * loader ignores headers and standard INI semantics still place the key inside the section. */
+        if (section[0]) fprintf(out, "\n[%s]\n", section);
+        PC_IniWriteKeyLine(out, key, value, NULL);
+    }
+    fclose(out);
+
+#if defined(_WIN32)
+    remove(iniPath);                 /* MinGW rename() won't clobber an existing target */
+#endif
+    if (rename(tmpPath, iniPath) != 0) { remove(tmpPath); return 0; }
+    return 1;
+}
+
 /* Case-insensitive ".bin" suffix test (no strcasecmp dependency -- MinGW spells it _stricmp). */
 static int HasBinExt(const char *name) {
     size_t n = strlen(name);
