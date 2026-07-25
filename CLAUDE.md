@@ -13,8 +13,8 @@ an old GCC 2.x frontend (`cc1_v263`/`cc1_v257`, prebuilt by
 
 ## Project stages — read this before making architectural calls
 
-The objective was always a **native PC port**, not just a matching rebuild. Two stages, **both
-complete**; a third (gameplay/QoL) is the next phase.
+The objective was always a **native PC port**, not just a matching rebuild. Two foundational stages
+are **complete**; a third (gameplay/QoL) is **underway** (first release shipped).
 
 1. **Stage 1 — matching decomp (✅ done 2026-07-10).** The C source is bit-identical to the
    original: `make check` produces a byte-exact `SLUS_004.47` (`md5 596bb082a2de5f1fe977dd3d7e160b03`,
@@ -26,12 +26,16 @@ complete**; a third (gameplay/QoL) is the next phase.
    (SDL2 + OpenGL + OpenAL, chosen after evaluating Vulkan). The **full game runs end-to-end** from
    the real disc, validated by full playthroughs on **Windows and Linux** including the endgame and
    credits. Details below and in [`docs/`](docs/).
-3. **Stage 3 — gameplay/QoL (planned, not started).** PC-only quality-of-life and balance work
-   (controls, an in-game overlay, an enemy threat overlay, an opt-in balance mode). Public roadmap in
+3. **Stage 3 — gameplay/QoL (in progress).** PC-only quality-of-life and balance work. **v1.1.0
+   released 2026-07-25** (controls: bidirectional shoulder-button ally-cycle; the enemy threat
+   overlay; a **SELECT+START** in-game options overlay whose first settings are right-stick axis
+   invert — Y inverted by default — plus deploy-relative saves). Gameplay changes to shared `src/`
+   use the **`#ifdef PC_FEAT`** gate (see *Byte-exact discipline*). Public roadmap in
    [`docs/roadmap.md`](docs/roadmap.md); the working plan with implementation risks is the gitignored
-   `exchange/61-stage3-roadmap.md`. Note: the "zero `src/` edits" ideal was the *balance-package* rule
-   — other Stage-3 features will need gated `src/` hooks. Not yet designed — do not begin Stage 3
-   changes without an explicit decision.
+   `exchange/61-stage3-roadmap.md`. Note: the "zero `src/` edits" ideal was the *balance-package*
+   rule — other Stage-3 features need gated `src/` hooks. **Next: 1.2** (save management + window
+   scale/fullscreen via the overlay). **1.3** (opt-in balance mode) is DESIGN-GATED on re-deriving the
+   damage model — the class stat tables are cosmetic (see `docs/` / the class-balance analysis).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates

@@ -19,14 +19,16 @@ is an optional layer of gameplay and quality-of-life enhancements built on top o
 - Skip intro / movies with START
 - Camera rotation and elevation mapped to the right analog stick
 
-## Planned — Stage 3
-
-### 1.1 — Controls
-- Cycle through your units with the shoulder buttons (ascending / descending order)
-- **Enemy threat overlay** — see the combined movement-and-attack reach of *all* enemy units at once,
-  so you can plan positioning without inspecting them one at a time
-- An in-game options overlay (START + SELECT), starting with right-stick axis configuration
+### 1.1 — Controls ✅ (released 2026-07-25)
+- Cycle through your units with the shoulder buttons (both directions), freeing the Square button
+- **Enemy threat overlay** — press Square to see the combined movement-and-attack reach of *all*
+  enemy units at once, so you can plan positioning without inspecting them one at a time
+- An in-game options overlay (**Select + Start**), with per-axis right-stick invert as its first
+  settings (the vertical axis ships inverted by default — the modern twin-stick convention)
+- Saves and config now live next to the executable / AppImage, independent of where you launch from
 - A documented control scheme and a dedicated page for the PC-port additions
+
+## Planned — Stage 3
 
 ### 1.2 — User experience
 - Save management from the in-game overlay: copy the current save to a new file (a way around the
