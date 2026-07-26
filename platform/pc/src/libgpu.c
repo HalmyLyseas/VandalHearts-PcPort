@@ -348,7 +348,11 @@ int MoveImage(RECT *rect, int x, int y) {
     for (j = 0; j < rect->h; j++)
         for (i = 0; i < rect->w; i++) {
             int sx = rect->x + i, sy = rect->y + j, dx = x + i, dy = y + j;
-            if (sx < VRAM_W && sy < VRAM_H && dx < VRAM_W && dy < VRAM_H)
+            /* Guard BOTH bounds: a negative coord (from a garbage RECT) passes "< VRAM_W" and would
+             * fault on s_vram. PSX masks off-VRAM coords into the framebuffer rather than faulting;
+             * skipping the pixel is the safe equivalent. */
+            if (sx >= 0 && sy >= 0 && dx >= 0 && dy >= 0 &&
+                sx < VRAM_W && sy < VRAM_H && dx < VRAM_W && dy < VRAM_H)
                 s_vram[dy][dx] = s_vram[sy][sx];
         }
     return 0;

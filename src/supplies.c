@@ -995,7 +995,13 @@ void Objf406_ShopOrDepot(Object *obj) {
             // Depot
             SlideWindowTo(0x3d, 350, 170);
          }
+#ifdef PC_PORT
+         /* See the partyIdx2 >= 0 guard note in state 31 -- avoid the gUnits[-1] wild read on PC. */
+         if (OBJ.partyIdx2 >= 0)
+            gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#else
          gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#endif
          SlideWindowTo(0x3e, 210, 128);
          SlideWindowTo(1, 108, 90);
          if (i >= 13) {
@@ -1408,7 +1414,16 @@ void Objf406_ShopOrDepot(Object *obj) {
       if (OBJ.partyIdx2 != i && i < 13) {
          OBJ.partyIdx2 = i;
       }
+#ifdef PC_PORT
+      /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot (i >= 13,
+       * so partyIdx2 is still -1). On PSX the garbage portrait id is harmless -- overwritten by the
+       * `i >= 13` branch below -- but on PC the wild index can hit unmapped memory. Skip the read when
+       * partyIdx2 is invalid; the branch below sets the portrait to 0 in exactly that case. */
+      if (OBJ.partyIdx2 >= 0)
+         gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#else
       gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#endif
       SlideWindowTo(0x3e, 210, 128);
       if (i >= 13) {
          gState.unitListPortraitId = 0;
@@ -1773,7 +1788,16 @@ void Objf406_ShopOrDepot(Object *obj) {
       if (OBJ.partyIdx2 != i && i < 13) {
          OBJ.partyIdx2 = i;
       }
+#ifdef PC_PORT
+      /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot (i >= 13,
+       * so partyIdx2 is still -1). On PSX the garbage portrait id is harmless -- overwritten by the
+       * `i >= 13` branch below -- but on PC the wild index can hit unmapped memory. Skip the read when
+       * partyIdx2 is invalid; the branch below sets the portrait to 0 in exactly that case. */
+      if (OBJ.partyIdx2 >= 0)
+         gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#else
       gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#endif
       SlideWindowTo(0x3e, 210, 128);
       if (i >= 13) {
          SlideWindowTo(0x3e, 210, 250);
@@ -2043,7 +2067,13 @@ void Objf406_ShopOrDepot(Object *obj) {
          if (i >= 13) {
             SlideWindowTo(0x3d, 350, 170);
          }
+#ifdef PC_PORT
+         /* See the partyIdx2 >= 0 guard note in state 31 -- avoid the gUnits[-1] wild read on PC. */
+         if (OBJ.partyIdx2 >= 0)
+            gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#else
          gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
+#endif
          SlideWindowTo(0x3e, 210, 128);
          SlideWindowTo(1, 108, 90);
          if (i >= 13) {

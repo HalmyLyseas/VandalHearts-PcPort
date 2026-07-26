@@ -1805,6 +1805,14 @@ void ReserveSprite(u8 srcIdxWithinSheet, u8 dstStripIdx, u8 dstSubIdx) {
    }
 
    srcIdxWithinSheet -= 1;
+#ifdef PC_PORT
+   /* spriteOffsets has 24 entries; retail indexes it with the raw event argument. An out-of-range
+    * sprite id (0 -> this u8 underflows to 255, or >24) reads past the array, producing a garbage
+    * srcRect that makes MoveImage walk off VRAM. Harmless stack garbage on PSX (coords stay inside the
+    * 1MB framebuffer); a wild s_vram access on PC. Skip the reserve for an out-of-range id. */
+   if (srcIdxWithinSheet >= 24)
+      return;
+#endif
    srcRect.w = 48 >> 2;
    srcRect.h = 48;
    srcRect.x = spriteOffsets[srcIdxWithinSheet].vx + 704;
