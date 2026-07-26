@@ -466,7 +466,12 @@ void AddPrim(void *ot, void *p) {
 }
 
 void DrawOTag(unsigned int *p) {
+    /* VH_GPU_PRIM_LOG=1: dump "anomalous" primitives (our SetSemiTrans 0x80 bit set, or a code that
+     * decodes to an unrecognized type) -- the fx SetSemiTrans-without-SetPolyFT4 effect polys we hunt.
+     * Env checked once. */
+    static int s_primLog = -1;
     u32 nextTok = ((P_TAG *)p)->tag;
+    if (s_primLog < 0) s_primLog = getenv("VH_GPU_PRIM_LOG") ? 1 : 0;
     while (nextTok) {
         int isBucket = 0;
         void *cur = PC_OtResolve(nextTok, &isBucket);
@@ -491,6 +496,16 @@ void DrawOTag(unsigned int *p) {
         if (!isBucket) {
             int type = PC_GPU_PRIM_TYPE((P_TAG *)cur);
             int semi = PC_GPU_IS_SEMI((P_TAG *)cur) ? 1 : 0;
+
+            if (s_primLog) {
+                unsigned char code = getcode((P_TAG *)cur);
+                if ((code & 0x80) || type < 1 || type > 5) {   /* the anomalies we're chasing */
+                    POLY_FT4 *q = (POLY_FT4 *)cur;   /* raw field dump; offsets fine for the FT4 case */
+                    fprintf(stderr,
+                        "[gpuprim] code=0x%02x -> type=%d semi=%d  tpage=0x%04x clut=0x%04x rgb=(%d,%d,%d)\n",
+                        code, type, semi, (unsigned)q->tpage, (unsigned)q->clut, q->r0, q->g0, q->b0);
+                }
+            }
 
             switch (type) {
             case PC_GPU_PRIM_POLY_F4: {

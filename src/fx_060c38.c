@@ -1663,6 +1663,11 @@ void Objf178_ThunderFlash_FX1(Object *obj) {
       }
 
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped. */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];
@@ -1685,6 +1690,11 @@ void Objf178_ThunderFlash_FX1(Object *obj) {
 
    case 4:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped. */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];
@@ -1830,7 +1840,12 @@ void Objf180_SpreadForce_FX1(Object *obj) {
             }
 
             poly = &gGraphicsPtr->quads[gQuadIndex];
-            SetSemiTrans(poly, 1);
+      #ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped. */
+      SetPolyFT4(poly);
+#endif
+      SetSemiTrans(poly, 1);
             poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
             poly->clut = gGfxClutIds[GFX_COLOR_15];
             setUVWH(poly, gGfxSubTextures[GFX_COLOR_15][0], gGfxSubTextures[GFX_COLOR_15][1],
@@ -1866,6 +1881,11 @@ void Objf180_SpreadForce_FX1(Object *obj) {
 
    case 3:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped. */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];

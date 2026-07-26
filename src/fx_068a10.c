@@ -663,6 +663,11 @@ void Objf222_Fx_TBD(Object *obj) {
 
       if (obj->state3++ > 51) {
          poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+         /* bugreport-02: type the textured quad explicitly (fx omits SetPolyFT4; PSX relies on a stale
+          * POLY_FT4 slot code, ours is stale-POLY_F4 -> texture dropped). */
+         SetPolyFT4(poly);
+#endif
          SetSemiTrans(poly, 1);
          poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
          poly->clut = gGfxClutIds[GFX_COLOR_15];
@@ -685,6 +690,11 @@ void Objf222_Fx_TBD(Object *obj) {
 
    case 2:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly (fx omits SetPolyFT4; PSX relies on a stale
+       * POLY_FT4 slot code, ours is stale-POLY_F4 -> texture dropped). */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];

@@ -315,6 +315,12 @@ void Objf072_FadeFromWhite(Object *obj) {
    // fallthrough
    case 1:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped
+       * (rendered as a flat semi-transparent fill). */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];
@@ -348,6 +354,12 @@ void Objf073_FadeToWhite(Object *obj) {
    // fallthrough
    case 1:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped
+       * (rendered as a flat semi-transparent fill). */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[32 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];
@@ -382,6 +394,12 @@ void Objf070_FadeFromBlack(Object *obj) {
    // fallthrough
    case 1:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped
+       * (rendered as a flat semi-transparent fill). */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[64 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];
@@ -415,6 +433,12 @@ void Objf071_FadeToBlack(Object *obj) {
    // fallthrough
    case 1:
       poly = &gGraphicsPtr->quads[gQuadIndex];
+#ifdef PC_PORT
+      /* bugreport-02: type the textured quad explicitly. The fx code omits SetPolyFT4 and relies on a
+       * stale POLY_FT4 slot code (0x2c on PSX); our backend's slot is stale-POLY_F4 -> texture dropped
+       * (rendered as a flat semi-transparent fill). */
+      SetPolyFT4(poly);
+#endif
       SetSemiTrans(poly, 1);
       poly->tpage = gTPageIds[64 + gGfxTPageCells[GFX_COLOR_15]];
       poly->clut = gGfxClutIds[GFX_COLOR_15];
