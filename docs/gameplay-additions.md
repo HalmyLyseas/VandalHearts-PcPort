@@ -103,12 +103,12 @@ section, Ash's level and playtime (the game's own save caption):
 Backups live in a hidden `saves/.archive/` folder next to the game, invisible to the game's own
 load/save screens.
 
-## In testing (1.3)
+## Shipped (1.3)
 
-1.3 adds **Tactical Mode** — a large, opt-in gameplay rebalance — plus two general overlay
-conveniences. The rebalance is its own topic; this section covers the overlay-facing additions. The
-full player guide to what Tactical Mode changes (level cap, class rebalancing, restored content, save
-isolation) is in **[tactical-mode.md](tactical-mode.md)**.
+1.3 adds **Tactical Mode** — a large, opt-in gameplay rebalance (shipped as an **in-testing beta**) —
+plus two general overlay conveniences. The rebalance is its own topic; this section covers the
+overlay-facing additions. The full player guide to what Tactical Mode changes (level cap, class
+rebalancing, restored content, save isolation) is in **[tactical-mode.md](tactical-mode.md)**.
 
 ![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/features-1.3-OverlayNewEntries.png)
 

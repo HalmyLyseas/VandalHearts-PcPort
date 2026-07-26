@@ -5,9 +5,10 @@ who want a tighter, more deliberate tactical experience than the retail game off
 default and fully isolated**: the normal game stays byte-for-byte the original, and Tactical saves live
 in their own place, so turning it on never touches a vanilla playthrough.
 
-> **Status: in testing.** Everything here is implemented and playable, but the mode has not yet shipped
-> in a numbered release and the exact numbers may still change during playtesting. See the
-> [roadmap](roadmap.md).
+> **Status: released as opt-in beta (in v1.3.0), still in testing.** Everything here is implemented and
+> playable. Later chapters are still being validated in playtest, so the exact balance numbers may change
+> in 1.3.x point releases. Normal mode is unaffected. See the [roadmap](roadmap.md) and
+> [changelog](../CHANGELOG.md).
 
 ## Design goals
 
