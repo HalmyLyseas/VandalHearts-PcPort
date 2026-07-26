@@ -91,11 +91,31 @@ cat "$STAGE/SHA256SUMS.txt" | sed 's/^/    /'
 
 # ---- release notes ----------------------------------------------------------
 NOTES="$STAGE/RELEASE_NOTES.md"
+
+# Lead the release body with this version's changelog section: everything under
+# "## [<ver>]" up to the next "## [" heading (the heading line itself dropped, since
+# the release title already names the version). Best-effort; warns if absent.
+VER="${TAG#v}"
+WHATS_NEW="$(awk -v ver="$VER" '
+    index($0, "## [" ver "]") == 1 { p=1; next }
+    p && index($0, "## [") == 1    { exit }
+    p                              { print }
+' "$REPO/CHANGELOG.md" 2>/dev/null || true)"
+
 cat > "$NOTES" <<NOTE
 ## Vandal Hearts — PC Port $TAG
 
 A native PC port of Vandal Hearts (US, SLUS_004.47). **You must supply your own
 legally-owned disc image** (\`.bin\`); the download does nothing without it.
+NOTE
+
+if printf '%s' "$WHATS_NEW" | grep -q '[^[:space:]]'; then
+    printf '%s\n' "$WHATS_NEW" >> "$NOTES"
+else
+    log "WARN: CHANGELOG.md has no [$VER] section -- release notes omit the changelog."
+fi
+
+cat >> "$NOTES" <<NOTE
 
 ### Downloads
 | Platform | File | How to run |

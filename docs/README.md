@@ -11,6 +11,8 @@ port), how the port avoids breaking the match, and the repository layout. Read t
 **[roadmap.md](roadmap.md)** — what's shipped and what's planned (Stage 3 gameplay/QoL). Plans, not
 commitments.
 
+**[../CHANGELOG.md](../CHANGELOG.md)** — per-release notes (what changed in each version).
+
 ## Building & running
 
 - **[building.md](building.md)** — building the matching decompilation (`make check`) and the native PC
