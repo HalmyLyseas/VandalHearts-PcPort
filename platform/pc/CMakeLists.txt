@@ -74,7 +74,7 @@ set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_even
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 
 set(ALL_OBJ_SRCS ${GAME_SRCS})
-foreach(_b ${BACKEND_PLAIN} libetc libsnd libgte pc_gpu_window ${DATA_PERM} ${DATA_PLAIN})
+foreach(_b ${BACKEND_PLAIN} libetc libsnd libgte pc_gpu_window pc_balance ${DATA_PERM} ${DATA_PLAIN})
     list(APPEND ALL_OBJ_SRCS ${PC_DIR}/src/${_b}.c)
 endforeach()
 
@@ -148,6 +148,14 @@ foreach(_d ${DATA_PERM})
         COMPILE_OPTIONS "-std=gnu89"
         INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 endforeach()
+
+# pc_balance.c is backend LOGIC (the Tactical Mode balance patcher), not data, but it reads game
+# structs/globals, so it needs the same gnu89+PERMUTER+stage profile as DATA_PERM (matches the Makefile
+# rule at Makefile:396-397). It lives in the foreach source list above; this sets its compile profile.
+set_source_files_properties(${PC_DIR}/src/pc_balance.c PROPERTIES
+    COMPILE_DEFINITIONS "PERMUTER"
+    COMPILE_OPTIONS "-std=gnu89"
+    INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 
 # ---- data-segment generator (mid-build) -------------------------------------------------------
 # Runs after the objects compile; link-probes them for undefined symbols and emits generated_data.c.
