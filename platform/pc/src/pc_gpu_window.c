@@ -227,7 +227,7 @@ static void drawMain(int w, int h) {
 static void drawSaves(int w, int h) {
     static const char *L1 = "SQUARE: BACK UP   CIRCLE: RESTORE";
     static const char *L2 = "TRIANGLE: DELETE   CROSS: BACK";
-    static const char *L3 = "START: SAVE CONTENT";
+    static const char *L3 = "START: INSPECT FILE CONTENT";
     static const char *EMPTY = "(NO BACKUPS YET)";
     const int MAXVIS = 6;
     const char *title = PC_OverlayTitle();
@@ -312,7 +312,11 @@ static void drawConfirm(int w, int h) {
     ty = py + padY;
     ovlText(w, h, px + (panelW - ovlTextPx(title, scale)) / 2, ty, scale, title, 168, 198, 236);
     ty += OVL_GLY1 * scale + titleGap;
-    ovlText(w, h, px + (panelW - ovlTextPx(msg, scale)) / 2, ty, scale, msg, 210, 214, 220); ty += lineH;
+    {
+        int mr = 210, mg = 214, mb = 220;                       /* neutral question */
+        if (PC_OverlayConfirmMsgWarn()) { mr = 236; mg = 96; mb = 96; }   /* destructive -> red */
+        ovlText(w, h, px + (panelW - ovlTextPx(msg, scale)) / 2, ty, scale, msg, mr, mg, mb); ty += lineH;
+    }
     if (hasTgt) {
         int tr = 150, tg = 170, tb = 190;                       /* neutral label */
         if (PC_OverlayConfirmTargetWarn()) { tr = 236; tg = 96; tb = 96; }   /* warning -> red */

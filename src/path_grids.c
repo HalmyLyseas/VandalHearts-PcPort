@@ -1721,8 +1721,13 @@ void ComputeThreatGrid(void) {
       /* enemy move range into scratch grid 3 (same call the AI makes on enemies) */
       PopulateMovementGrid(ez, ex, e->travelRange, 3);
 
-      for (z = 0; z < 29; z++) {
-         for (x = 0; x < 65; x++) {
+      /* Iterate ONLY the playable area [gMapMin..gMapMax] -- the same range ClearGrid clears.
+       * ClearGrid never touches the 1-tile border ring outside those bounds, so reading the full
+       * grid array there picks up STALE, never-cleared path-steps from earlier calls and unions them
+       * in as phantom threat (bugreport-01: melee-only enemies "threatening" far border water). Real
+       * reach is always inside the playable field, so nothing real is lost. */
+      for (z = gMapMinZ; z <= gMapMaxZ; z++) {
+         for (x = gMapMinX; x <= gMapMaxX; x++) {
             if (pMove[z][x] == PATH_STEP_UNSET)
                continue;              /* not reachable */
             gThreatGridPtr[z][x] = 1; /* a tile the enemy can stand on is threatened */
@@ -1731,8 +1736,8 @@ void ComputeThreatGrid(void) {
                PopulateRangedAttackGrid(z, x, e->attackRange, 4);
             else
                PopulateMeleeAttackGrid(z, x, 4, e->attackRange);
-            for (az = 0; az < 29; az++)
-               for (ax = 0; ax < 65; ax++)
+            for (az = gMapMinZ; az <= gMapMaxZ; az++)
+               for (ax = gMapMinX; ax <= gMapMaxX; ax++)
                   if (pAttack[az][ax] != PATH_STEP_UNSET)
                      gThreatGridPtr[az][ax] = 1;
          }

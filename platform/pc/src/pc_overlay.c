@@ -43,7 +43,8 @@ typedef struct {
     const char *prefix;                     /* CHOICE: display prefix, e.g. "X" -> "X3"    */
     void      (*apply)(int);                /* TOGGLE/CHOICE: apply the new value; may be NULL */
     void      (*action)(void);              /* OVL_ACTION: run on activate                */
-    int       (*disabled)(void);            /* optional: 1 => greyed; may be NULL         */
+    int       (*disabled)(void);            /* optional: 1 => greyed (visual only); may be NULL */
+    int       (*locked)(void);              /* optional: 1 => read-only (blocks edit/activate); may be NULL */
 } Item;
 
 /* Window scale and fullscreen are mutually-exclusive display modes; the INACTIVE one is greyed. */
@@ -61,20 +62,23 @@ static void act_returnToTitle(void);        /* RETURN TO TITLE -> confirm -> PC_
 
 /* A global's address is a compile-time constant, so this const table with &g_* is valid. */
 static const Item s_items[] = {
+    /* Tactical Mode is greyed AND locked off-title (a run's mode is fixed). Window Scale / Fullscreen
+     * are greyed to show the inactive display mode, but stay INTERACTIVE -- toggling the greyed one is
+     * how you switch to it (locked = NULL). Return to Title is greyed AND locked at the title. */
     { "TACTICAL MODE",   OVL_TOGGLE, &gTacticalMode,  "tactical", "VH_TACTICAL",
-      "OFF", "ON",            0, 0, 0, NULL, apply_tactical,      NULL,           dis_notAtTitle },
+      "OFF", "ON",            0, 0, 0, NULL, apply_tactical,      NULL,           dis_notAtTitle, dis_notAtTitle },
     { "WINDOW SCALE",    OVL_CHOICE, &g_vhScale,      "video",  "VH_SCALE",
-      NULL, NULL,             1, 8, 1, "X",  PC_GpuSetScale,      NULL,           dis_whenFullscreen },
+      NULL, NULL,             1, 8, 1, "X",  PC_GpuSetScale,      NULL,           dis_whenFullscreen, NULL },
     { "FULLSCREEN",      OVL_TOGGLE, &g_vhFullscreen, "video",  "VH_FULLSCREEN",
-      "OFF", "ON",            0, 0, 0, NULL, PC_GpuSetFullscreen, NULL,           dis_whenWindowed },
+      "OFF", "ON",            0, 0, 0, NULL, PC_GpuSetFullscreen, NULL,           dis_whenWindowed, NULL },
     { "CAMERA X-AXIS",   OVL_TOGGLE, &g_camInvertX,   "camera", "VH_CAM_INVERT_X",
-      "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL },
+      "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
     { "CAMERA Y-AXIS",   OVL_TOGGLE, &g_camInvertY,   "camera", "VH_CAM_INVERT_Y",
-      "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL },
+      "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
     { "SAVE MANAGEMENT", OVL_ACTION, NULL, NULL, NULL,
-      NULL, NULL,             0, 0, 0, NULL, NULL,                act_enterSaves, NULL },
+      NULL, NULL,             0, 0, 0, NULL, NULL,                act_enterSaves, NULL, NULL },
     { "RETURN TO TITLE", OVL_ACTION, NULL, NULL, NULL,
-      NULL, NULL,             0, 0, 0, NULL, NULL,                act_returnToTitle, dis_atTitle },
+      NULL, NULL,             0, 0, 0, NULL, NULL,                act_returnToTitle, dis_atTitle, dis_atTitle },
 };
 #define N_ITEMS ((int)(sizeof(s_items) / sizeof(s_items[0])))
 
@@ -137,7 +141,7 @@ static void mainMove(int d)   { s_sel += d; if (s_sel < 0) s_sel = N_ITEMS - 1; 
 
 static void mainAdjust(int d) {
     const Item *it = &s_items[s_sel];
-    if (it->disabled && it->disabled()) return;   /* greyed items are read-only (e.g. mode off-title) */
+    if (it->locked && it->locked()) return;   /* locked items are read-only (e.g. Tactical Mode off-title) */
     if (it->kind == OVL_TOGGLE) { int nv = (d < 0) ? 0 : 1; if (*it->value != nv) setValue(it, nv); }
     else if (it->kind == OVL_CHOICE) {
         int nv = *it->value + d * it->step;
@@ -148,7 +152,7 @@ static void mainAdjust(int d) {
 
 static void mainActivate(void) {
     const Item *it = &s_items[s_sel];
-    if (it->disabled && it->disabled()) return;   /* greyed items are read-only (e.g. mode off-title) */
+    if (it->locked && it->locked()) return;   /* locked items are read-only (e.g. Tactical Mode off-title) */
     if (it->kind == OVL_TOGGLE) setValue(it, !*it->value);
     else if (it->kind == OVL_CHOICE) { int nv = *it->value + it->step; if (nv > it->maxv) nv = it->minv; setValue(it, nv); }
     else if (it->action) it->action();
@@ -304,7 +308,13 @@ const char *PC_OverlayConfirmMsg(void) {
 int PC_OverlayConfirmCount(void) { return confCount(); }
 int PC_OverlayConfirmSelected(void) { return s_confSel; }
 const char *PC_OverlayConfirmTarget(void) { return s_confLabel; }   /* the archive label being acted on */
-int PC_OverlayConfirmTargetWarn(void) { return s_confKind == CONF_RETURN_TITLE; }  /* red = a warning */
+/* A destructive confirm gets ONE red "eye-catch" line, on the element that matters most:
+ *  - DELETE / RESTORE -> the QUESTION line; the target is the backup date (neutral). DELETE removes a
+ *    backup for good; RESTORE overwrites the current card ("Restore only" loses it if not backed up --
+ *    the back-up-then-restore default mitigates but doesn't remove the risk).
+ *  - RETURN TO TITLE  -> the TARGET line, which is itself the stakes warning ("UNSAVED PROGRESS LOST"). */
+int PC_OverlayConfirmMsgWarn(void)    { return s_confKind == CONF_DELETE || s_confKind == CONF_RESTORE; }
+int PC_OverlayConfirmTargetWarn(void) { return s_confKind == CONF_RETURN_TITLE; }  /* red = a warning line */
 const char *PC_OverlayConfirmOption(int i) {
     static const char *RESTORE[3] = { "BACK UP THEN RESTORE", "RESTORE ONLY", "CANCEL" };
     static const char *DELETE_[2] = { "DELETE", "CANCEL" };

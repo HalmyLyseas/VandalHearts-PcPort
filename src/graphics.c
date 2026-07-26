@@ -1271,7 +1271,20 @@ void RenderField(void) {
       } else if (gRedAttackGridPtr[iz][ix] != 0) {
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
       } else if (gBlueMovementGridPtr[iz][ix] != 0) {
+#ifdef PC_FEAT
+         /* Stage 3 (1.1B): mirror the interior loop's threat handling on the map's edge row/column.
+          * Without it, a genuinely enemy-threatened boundary tile lost its purple at camera angles
+          * where the edge loop (not the interior loop) draws that row -- the overlay flickered off on
+          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns yellow. */
+         if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
+            RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_YELLOW);
+         } else
+#endif
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
+#ifdef PC_FEAT
+      } else if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
+         RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_PURPLE);
+#endif
       } else {
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_NONE);
       }
@@ -1284,7 +1297,20 @@ void RenderField(void) {
       } else if (gRedAttackGridPtr[iz][ix] != 0) {
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
       } else if (gBlueMovementGridPtr[iz][ix] != 0) {
+#ifdef PC_FEAT
+         /* Stage 3 (1.1B): mirror the interior loop's threat handling on the map's edge row/column.
+          * Without it, a genuinely enemy-threatened boundary tile lost its purple at camera angles
+          * where the edge loop (not the interior loop) draws that row -- the overlay flickered off on
+          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns yellow. */
+         if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
+            RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_YELLOW);
+         } else
+#endif
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
+#ifdef PC_FEAT
+      } else if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
+         RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_PURPLE);
+#endif
       } else {
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_NONE);
       }
@@ -1380,10 +1406,15 @@ void RenderMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                   poly->b0 = 0;
 #ifdef PC_FEAT
                } else if (gridColor == GRID_COLOR_PURPLE) {
-                  /* Stage 3 (1.1) enemy threat: pulsing magenta (red+blue), distinct from all three. */
-                  poly->r0 = gGridColorOscillation;
-                  poly->g0 = 40;
-                  poly->b0 = gGridColorOscillation;
+                  /* Stage 3 (1.1) enemy threat: pulsing purple, distinct from blue/red/yellow. It drives
+                   * TWO channels (red+blue), so at the shared oscillation's 255 peak it reads as a neon
+                   * fluorescent magenta -- eye-tiring over a large danger zone (bugreport 2026-07-26).
+                   * Soften it: halve the pulse amplitude (peak ~148 not 255) and keep green below r/b so
+                   * it desaturates into a calmer purple that still stays clearly purple at the trough. */
+                  int soft = 40 + ((gGridColorOscillation - 40) >> 1);   /* ~47..148 vs 55..255 */
+                  poly->r0 = soft;
+                  poly->g0 = 30 + (soft >> 2);                            /* muted, not neon */
+                  poly->b0 = soft;
 #endif
                }
             }
@@ -1479,6 +1510,15 @@ void RenderEdgeMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                poly->r0 = gGridColorOscillation;
                poly->g0 = gGridColorOscillation;
                poly->b0 = 0;
+#ifdef PC_FEAT
+            } else if (gridColor == GRID_COLOR_PURPLE) {
+               /* Stage 3 (1.1): enemy-threat tint on an edge tile -- the same softened purple as the
+                * interior RenderMapTile (halved pulse, muted green; see the note there). */
+               int soft = 40 + ((gGridColorOscillation - 40) >> 1);
+               poly->r0 = soft;
+               poly->g0 = 30 + (soft >> 2);
+               poly->b0 = soft;
+#endif
             }
          }
 
