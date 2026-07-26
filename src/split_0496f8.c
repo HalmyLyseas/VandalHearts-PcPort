@@ -365,7 +365,13 @@ void SetupPartyBattleUnit(u8 partyIdx, u8 z, u8 x, u8 direction) {
          class = 7;
       }
       unit->mp = gClassMpMultiplier[class] * unit->level;
-      if (unit->class == CLASS_MONK) {
+      if (unit->class == CLASS_MONK
+#ifdef PC_FEAT
+          /* GAP 5 (Tactical): drop the Monk/Ninja +advLevelFirst MP bonus for exact caster parity --
+           * one of THREE sites that add it (also battle_0190dc.c + SyncPartyUnit below). */
+          && !gTacticalMode
+#endif
+         ) {
          //? I guess monks can get a small mp boost by delaying advancement?
          unit->mp += gPartyMembers[partyIdx].advLevelFirst;
       }
@@ -436,7 +442,13 @@ void SyncPartyUnit(u8 partyIdx) {
       class = 7;
    }
    unit->mp = gClassMpMultiplier[class] * unit->level;
-   if (unit->class == CLASS_MONK) {
+   if (unit->class == CLASS_MONK
+#ifdef PC_FEAT
+       /* GAP 5 (Tactical): drop the Monk/Ninja +advLevelFirst MP bonus for exact caster parity (the
+        * 3rd of the three sites; see battle_0190dc.c and the battle-unit setup above). */
+       && !gTacticalMode
+#endif
+      ) {
       unit->mp += gPartyMembers[partyIdx].advLevelFirst;
    }
    if (unit->mp > 99) {
