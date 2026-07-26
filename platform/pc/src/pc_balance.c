@@ -148,9 +148,13 @@ static void addDescSwap(int id, const char *flavor) {
 /* Build the patch list + snapshot originals, once. Lazily invoked by PC_SyncBalance so it runs
  * after generated_data.c has populated the tables. */
 static void ensureInit(void) {
-    /* C4 -- Guardsman/Dragoon mobility (step). Player Armored units: Clint/Grog/Dolan, both forms. */
-    static const int GUARDSMAN[] = { 26, 31, 32 };            /* step 1 -> 2 */
-    static const int DRAGOON[]   = { 50, 55, 56 };            /* step 4 -> 6 */
+    /* C4 -- Guardsman/Dragoon mobility (step). Player Armored units: Clint/Grog/Dolan, both forms.
+     * step indexes a whole movement profile (MOVE + climb + terrain cost), see docs/game-mechanics/
+     * classes.md. Goal: keep the Armored line's role but fix its impractical mobility.
+     *   Guardsman -> Bowman profile (step 5): MOVE stays 5, climb +1 -> +2 (better verticality only).
+     *   Dragoon   -> Sniper profile (step 6): MOVE 5 -> 6 and climb +2. */
+    static const int GUARDSMAN[] = { 26, 31, 32 };            /* step 1 -> 5 (Bowman) */
+    static const int DRAGOON[]   = { 50, 55, 56 };            /* step 4 -> 6 (Sniper) */
     /* A1 -- Monk/Ninja magic resistance. Player caster-path-B units (Eleni/Huxley/Sara/Zohar). */
     static const int MONKNINJA[] = { 28, 29, 34, 35, 52, 53, 58, 59 };  /* magSusc 3 -> 2 */
     int i;
@@ -158,8 +162,8 @@ static void ensureInit(void) {
     if (s_inited) return;
     s_inited = 1;
 
-    for (i = 0; i < 3; i++) addPatch(&gUnitInfo[GUARDSMAN[i]].step, 1, 2);
-    for (i = 0; i < 3; i++) addPatch(&gUnitInfo[DRAGOON[i]].step, 1, 6);
+    for (i = 0; i < 3; i++) addPatch(&gUnitInfo[GUARDSMAN[i]].step, 1, 5);   /* Bowman profile */
+    for (i = 0; i < 3; i++) addPatch(&gUnitInfo[DRAGOON[i]].step, 1, 6);     /* Sniper profile */
     for (i = 0; i < 8; i++) addPatch(&gUnitInfo[MONKNINJA[i]].magicSusceptibility, 1, 2);
 
     addPatch(&gClassMpMultiplier[CLASS_MONK], 1, 2);                      /* A3  MP mult 1 -> 2 */
