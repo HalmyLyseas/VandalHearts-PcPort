@@ -10,6 +10,14 @@
 #include "card.h"
 #include "window.h"
 
+#ifdef PC_FEAT
+/* Stage 3 1.3 GAP 9/10 -- Trial rewards (pc_balance.c). Applied only to trial maps (mapNum <= 5) in
+ * Tactical mode; Normal keeps the retail per-map tables verbatim. */
+extern int gTacticalMode;
+extern int TrialExpScalingLevel(int chapter);
+extern int TrialGoldReward(int chapter);
+#endif
+
 u8 gBattleSceneId[50] = {96, 97, 98, 99, 100, 101, 0,  0,  102, 95, 1,  4,  8,  11, 15, 17, 19,
                          21, 24, 27, 29, 32,  35,  38, 40, 43,  46, 48, 49, 53, 55, 60, 63, 65,
                          69, 71, 74, 77, 78,  82,  84, 85, 90,  92, 0,  0,  0,  0,  0,  0};
@@ -145,6 +153,14 @@ s32 State_Battle(void) {
          gState.lastSelectedUnit = 1;
          gState.mapCursorOutOfRange = 0;
          gState.expScalingLevel = gBattleExpScalingLevels[gState.mapNum];
+#ifdef PC_FEAT
+         /* GAP 9: trial attack-XP scales with the chapter (retail trial expScalingLevel is a flat 10,
+          * and trial enemies carry expMulti 0 -> attacks paid nothing). Pairs with the expMulti set in
+          * the trial spawn hook (split_0496f8.c). */
+         if (gTacticalMode && gState.mapNum <= 5) {
+            gState.expScalingLevel = TrialExpScalingLevel(gState.chapter);
+         }
+#endif
 
          if (gState.useDefaultUnits) {
             SetDefaultStatsForParty();
@@ -164,7 +180,17 @@ s32 State_Battle(void) {
          ct = 0;
          for (i = 0; i < ARRAY_COUNT(gSlainUnits); i++) {
             if (gSpriteStripUnitIds[i] > UNIT_ID_END_OF_PARTY) {
+#ifdef PC_FEAT
+               /* GAP 10: trial gold scales per-chapter (retail flat 10). Every trial kill, boss
+                * included, uses the regular per-chapter value (no 2x boss tier -- user's call). */
+               if (gTacticalMode && gState.mapNum <= 5) {
+                  gSlainUnits[ct].reward = TrialGoldReward(gState.chapter);
+               } else {
+                  gSlainUnits[ct].reward = gBattleUnitRewards[gState.mapNum][i];
+               }
+#else
                gSlainUnits[ct].reward = gBattleUnitRewards[gState.mapNum][i];
+#endif
                gSlainUnits[ct].unitId = gSpriteStripUnitIds[i];
                ct++;
             }

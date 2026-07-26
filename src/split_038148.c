@@ -6,6 +6,13 @@
 #include "state.h"
 #include "audio.h"
 
+#ifdef PC_FEAT
+/* Stage 3 1.3 GAP 10 -- Trial rewards (pc_balance.c): per-chapter gold penalty per lost unit on trial
+ * maps (mapNum <= 5) in Tactical. Normal keeps the retail gBattlePenalties table. */
+extern int gTacticalMode;
+extern int TrialGoldPenalty(int chapter);
+#endif
+
 void CommitPartyStatus(void) {
    s32 i;
    UnitStatus *pUnit = &gUnits[1];
@@ -135,7 +142,17 @@ void Objf594_BattleResults(Object *obj) {
          rewardObj->d.objf593.unitId = gSpriteStripUnitIds[s_i_80123284];
          rewardObj->d.objf593.slot = s_slot_80123288++;
          rewardObj->d.objf593.isPenalty = 1;
+#ifdef PC_FEAT
+         /* GAP 10: a careless trial run now costs gold per lost unit, scaled per chapter (retail trial
+          * penalty is a flat 10). Matches the raised trial reward so trials carry real stakes. */
+         if (gTacticalMode && gState.mapNum <= 5) {
+            s_currentReward_80123298 -= TrialGoldPenalty(gState.chapter);
+         } else {
+            s_currentReward_80123298 -= gBattlePenalties[gState.mapNum];
+         }
+#else
          s_currentReward_80123298 -= gBattlePenalties[gState.mapNum];
+#endif
          s_delay_8012328c = 10;
          obj->state2++;
 

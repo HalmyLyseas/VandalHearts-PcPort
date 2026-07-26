@@ -83,6 +83,20 @@ int TacticalCap(int chapter) {
     return cap[chapter];
 }
 
+/* --- GAP 9/10: Trial Rewards (Tactical) --------------------------------------------------------
+ * Design (user 2026-07-26): a cleared Trial pays like *that chapter's final battle*. Values are the
+ * chapter-final battle's real numbers, read straight from the byte-exact binary (see
+ * exchange/features1.3/trialsReward): expScalingLevel + regular-enemy expMulti drive attack XP;
+ * reward is per-kill gold; penalty is gold lost per player-unit death (careless runs now cost).
+ * Bosses use the regular value (no 2x tier) -- user's call, "mental-battle" framing. Every value is
+ * indexed by gState.chapter (one trial map replays across chapters), clamped to [1,6]. These are read
+ * ONLY from the PC_FEAT trial hooks, always under a gTacticalMode && mapNum<=5 guard. */
+#define CLAMP_CH(c) ((c) < 1 ? 1 : ((c) > 6 ? 6 : (c)))
+int TrialExpScalingLevel(int chapter) { static const int v[7] = { 9,  9, 14, 17, 21, 26, 29 }; return v[CLAMP_CH(chapter)]; }
+int TrialEnemyExpMulti(int chapter)   { static const int v[7] = { 12, 12, 15, 16, 15, 12, 21 }; return v[CLAMP_CH(chapter)]; }
+int TrialGoldReward(int chapter)      { static const int v[7] = { 170,170,330,660,1040,1820,2700 }; return v[CLAMP_CH(chapter)]; }
+int TrialGoldPenalty(int chapter)     { static const int v[7] = { 110,110,220,440,700,1200,1800 }; return v[CLAMP_CH(chapter)]; }
+
 /* --- Restorable, idempotent scalar-table patch -------------------------------------------------- */
 
 typedef struct {

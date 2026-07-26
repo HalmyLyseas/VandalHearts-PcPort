@@ -14,6 +14,7 @@
 /* Stage-3 1.3: pc_balance.c -- gTacticalMode + the per-chapter cap (GAP 2 Trials, GAP 3 PLASMA_WAVE). */
 extern int gTacticalMode;
 extern int TacticalCap(int chapter);
+extern int TrialEnemyExpMulti(int chapter);   /* GAP 9: per-chapter trial attack-XP multiplier */
 #endif
 
 void ClearPortraitSet(void);
@@ -271,6 +272,23 @@ void PopulateUnitSpellList(UnitStatus *unit) {
          }
       }
 #ifdef PC_FEAT
+      /* GAP 11 (Tactical): a Ninja -- 2nd promotion on path B (advLevelSecond set, advChosePathB==1) --
+       * sheds the 3 inherited base-class spells, i.e. the reqLv<=10 ones shared with the Bishop/
+       * Sorcerer path. A Monk (1st promotion only) keeps them as "past-life baggage"; the full
+       * commitment at the 2nd promotion drops them for a pure Monk/Ninja specialist kit. By L20 the
+       * basics are obsolete anyway (power scales them into irrelevance; Cure Wide already covers group
+       * cure before 20; Perfect Guard strictly beats Mystic Shield; Spellbind is kept by the mage-path
+       * sibling + the early Mad Book), so no real coverage is lost -- it just clears dead entries and
+       * sharpens the class identity. Path A (Bishop/Archbishop) is untouched. Non-caster path-B units
+       * (e.g. Dragoon) have empty spell lists, so this is a no-op for them. */
+      if (gTacticalMode && gPartyMembers[partyIdx].advChosePathB == 1 &&
+          gPartyMembers[partyIdx].advLevelSecond != 0) {
+         for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
+            if (unit->spells[i] != SPELL_NULL && gSpellLevelRequirement[unit->spells[i]] <= 10) {
+               unit->spells[i] = SPELL_NULL;
+            }
+         }
+      }
       /* GAP 3: in Tactical, re-grant PLASMA_WAVE to Ash's de-godmoded Vandalier ONLY (weapon ==
        * V_HEART_2). Set directly into the first free slot -- Vandalier-exclusive (doesn't leak to Ash's
        * other promotions like the doc's gSpellLists-append would), and it never indexes
@@ -925,6 +943,10 @@ void SetupBattleUnit(s16 stripIdx, u8 z, u8 x, s8 level, u8 team, u8 direction, 
             gTempUnitPtr->experience[i] = gExperienceLevels[lvl - 1][i];
          }
          gTempUnitPtr->level = lvl;
+         /* GAP 9: retail trial enemies carry expMulti 0, so physical attacks paid no XP (only support
+          * did). Restore a per-chapter multiplier so clearing a trial rewards attackers too; the level
+          * cap keeps the total bounded. Paired with expScalingLevel in battle_eval.c. */
+         gTempUnitPtr->expMulti = TrialEnemyExpMulti(gState.chapter);
       } else {
 #endif
       for (i = 0; i < 8; i++) {

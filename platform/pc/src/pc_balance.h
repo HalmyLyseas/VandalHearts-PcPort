@@ -25,6 +25,15 @@ int PC_AtTitleMenu(void);
  * index -> 10; see GAP 2). */
 int TacticalCap(int chapter);
 
+/* GAP 9/10: per-chapter Trial reward parameters (Tactical). Each maps gState.chapter (clamped [1,6])
+ * to that chapter's final-battle value, read from the byte-exact binary. Consumed only by the PC_FEAT
+ * trial hooks (XP scaling + multiplier, per-kill gold, per-death penalty), always under a
+ * gTacticalMode && gState.mapNum <= 5 guard. See exchange/features1.3/trialsReward. */
+int TrialExpScalingLevel(int chapter);  /* attack-XP base tier */
+int TrialEnemyExpMulti(int chapter);    /* attack-XP per-enemy multiplier (retail trial value is 0) */
+int TrialGoldReward(int chapter);       /* gold per trial kill (retail flat 10) */
+int TrialGoldPenalty(int chapter);      /* gold lost per player-unit death (retail flat 10) */
+
 /* Apply or restore the mutable-table balance patch to satisfy  patchApplied == gTacticalMode .
  * Idempotent. Snapshots the pristine tables lazily on first call (which happens post-constructor
  * and before the first patch, so the snapshot captures retail values). Call after every mode change. */
