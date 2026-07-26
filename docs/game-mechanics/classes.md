@@ -69,8 +69,13 @@ Stat growth is linear in level: `stat = (base + (base/3)·(level−2) + (base/3)
 (`var100 = 80..119`, rolled per unit) — but since the stats it grows are cosmetic, only the
 `gClassBlockChance` and MP columns carry into play.
 
-`gClassMpMultiplier`: MP = `mult × level` (capped 99). **MAGE = 2, PRIEST = 2, MONK = 1** — the
-Monk/Ninja hybrid caster runs at *half* a caster's MP rate.
+`gClassMpMultiplier`: maxMp = `mult × level`, capped 99 (`battle_0190dc.c:882`). **MAGE = 2, PRIEST = 2,
+MONK = 1.** There is one extra term, easy to miss: **CLASS_MONK (Monk *and* Ninja) also adds
+`advLevelFirst`** — the level at which the unit first promoted (`:884`). So the Monk isn't flatly at
+half rate: `1 × level + advLevelFirst` *starts* at parity right after promotion (e.g. promote at 10,
+level 10 → `10 + 10 = 20`, same as a Sorcerer's `2 × 10`) and only falls toward half as it out-levels
+the fixed bonus. (Tactical Mode raises MONK to `mult 2` **and** drops that `+advLevelFirst` bonus so the
+Monk/Ninja sits at exact `2 × level` caster parity — otherwise the two would stack and overshoot.)
 
 ## What actually matters (the short list)
 

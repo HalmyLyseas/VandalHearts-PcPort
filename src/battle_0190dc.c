@@ -6,6 +6,10 @@
 #include "field.h"
 #include "window.h"
 
+#ifdef PC_FEAT
+extern int gTacticalMode;   /* Stage 3 1.3 -- GAP 5 Monk/Ninja MP parity (pc_balance.c) */
+#endif
+
 void EmbedIntAsSjis(s32, u8 *, u8);
 void EmbedExp(s32, s8 *, u8);
 u8 GetItemNameLength(u8);
@@ -880,7 +884,15 @@ void DetermineMaxMpAndStatVariance(UnitStatus *unit) {
          unitClass = CLASS_7;
       }
       unit->maxMp = gClassMpMultiplier[unitClass] * unit->level;
-      if (unit->class == CLASS_MONK) {
+      if (unit->class == CLASS_MONK
+#ifdef PC_FEAT
+          /* GAP 5 (Tactical): retail gives the Monk +advLevelFirst to compensate for its half MP rate
+           * (mult 1). Tactical fixes the rate at the source (mult 2 = caster parity), so keeping this
+           * compensation would double-dip and push Monk/Ninja ABOVE the pure casters. Drop it in
+           * Tactical so maxMp == 2*level, identical to Mage/Priest/Sorcerer. (Ninja is also CLASS_MONK.) */
+          && !gTacticalMode
+#endif
+         ) {
          unit->maxMp += gPartyMembers[unit->name].advLevelFirst;
       }
       if (unit->maxMp > 99) {

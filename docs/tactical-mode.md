@@ -114,7 +114,9 @@ pass: it's a hybrid (inherently harder to balance), and almost everything in ret
 
 **Foundation changes:**
 
-- **MP pool** brought in line with the other casters — `gClassMpMultiplier` **1 → 2**.
+- **MP pool** brought to exact caster parity (`2 × level`) — `gClassMpMultiplier` **1 → 2**, and the
+  retail Monk-only `+advLevelFirst` promotion bonus (which existed to soften the half rate) is dropped
+  in Tactical so the two don't stack and overshoot.
 - **Magic resistance** improved to sit between the caster and frontline tiers — `magicSusceptibility`
   **3 → 2** (weaker than Priest/Mage, stronger than Swordsman/Duelist).
 - **Claws** raised to match their tier's other weapons — Panzer Claw real power **10 → 12**, Dragon Claw
