@@ -272,38 +272,15 @@ void PopulateUnitSpellList(UnitStatus *unit) {
          }
       }
 #ifdef PC_FEAT
-      /* GAP 11 (Tactical): a Ninja -- 2nd promotion on path B (advLevelSecond set, advChosePathB==1) --
-       * sheds the 3 inherited base-class spells, i.e. the reqLv<=10 ones shared with the Bishop/
-       * Sorcerer path. A Monk (1st promotion only) keeps them as "past-life baggage"; the full
-       * commitment at the 2nd promotion drops them for a pure Monk/Ninja specialist kit. By L20 the
-       * basics are obsolete anyway (power scales them into irrelevance; Cure Wide already covers group
-       * cure before 20; Perfect Guard strictly beats Mystic Shield; Spellbind is kept by the mage-path
-       * sibling + the early Mad Book), so no real coverage is lost -- it just clears dead entries and
-       * sharpens the class identity. Path A (Bishop/Archbishop) is untouched. Non-caster path-B units
-       * (e.g. Dragoon) have empty spell lists, so this is a no-op for them. */
-      if (gTacticalMode && gPartyMembers[partyIdx].advChosePathB == 1 &&
-          gPartyMembers[partyIdx].advLevelSecond != 0) {
-         s32 w = 0;
-         for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
-            if (unit->spells[i] != SPELL_NULL && gSpellLevelRequirement[unit->spells[i]] <= 10) {
-               unit->spells[i] = SPELL_NULL;
-            }
-         }
-         /* bugreport-05: GAP 11 nulls spells IN PLACE, leaving gaps -- the shed base spells sit BEFORE
-          * the surviving specialists (e.g. [0,0,0,26,27,28,29,...]). The SKILL menu + battle iterate
-          * until the first SPELL_NULL, so a leading gap hides everything after it and the Ninja reads
-          * as having ZERO spells. Compact: shift survivors to the front, NULL-fill the tail, restoring
-          * the contiguous NULL-terminated invariant the UI relies on. (The retail step-2 filter only
-          * nulls the reqLv-ordered tail, so it never needs this -- only GAP 11's front-null does.) */
-         for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
-            if (unit->spells[i] != SPELL_NULL) {
-               unit->spells[w++] = unit->spells[i];
-            }
-         }
-         for (; w < ARRAY_COUNT(unit->spells); w++) {
-            unit->spells[w] = SPELL_NULL;
-         }
-      }
+      /* GAP 11 (Tactical): REVERTED. The original idea shed the 3 inherited reqLv<=10 base spells on
+       * the 2nd path-B promotion (Ninja/etc.) for a "pure specialist" kit. Flavorful, but in practice
+       * it's a nerf to a path that doesn't need one -- and the inherited spells retain real niche
+       * value past L20: the mage-path sibling keeps Spellbind (a longer/odd-range magic poke Spread
+       * Force + Thunder Flash can't replicate), and the Bishop-path sibling keeps a cheap single-unit
+       * top-off heal, a longer-range single-target cure, and a mini defense buff. Minor by L20 but not
+       * dead weight, so the base spells are now KEPT. (This also retires the bugreport-05 compaction
+       * pass: without GAP 11's front-nulling, the retail step-2 filter only nulls the reqLv-ordered
+       * tail, so the list stays contiguous and NULL-terminated on its own.) */
       /* GAP 3: in Tactical, re-grant PLASMA_WAVE to Ash's de-godmoded Vandalier ONLY (weapon ==
        * V_HEART_2). Set directly into the first free slot -- Vandalier-exclusive (doesn't leak to Ash's
        * other promotions like the doc's gSpellLists-append would), and it never indexes
@@ -316,9 +293,9 @@ void PopulateUnitSpellList(UnitStatus *unit) {
             }
          }
       }
-      /* bugreport-05 diagnostic (VH_SPELL_DUMP=1): read-only dump of the advancement state that drove
-       * this spell list -- to see why a Ninja ends empty (advFirst==0 -> retail gate strips reqLv>10,
-       * then GAP 11 strips reqLv<=10). No behavior change. */
+      /* Spell-list diagnostic (VH_SPELL_DUMP=1): read-only dump of the advancement state that drove
+       * this spell list -- handy for auditing which spells a given promotion resolves to. No behavior
+       * change. */
       { extern void PC_SpellListDump(int, int, int, int, int, int, const void *);
         PC_SpellListDump((int)unit->name, (int)unit->class, (int)unit->level,
                          (int)gPartyMembers[partyIdx].advChosePathB,

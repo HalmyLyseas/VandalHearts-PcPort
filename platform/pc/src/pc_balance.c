@@ -116,12 +116,13 @@ int TrialGoldPenalty(int chapter)     { static const int v[7] = { 110,110,220,44
 
 typedef struct {
     void          *addr;      /* target location in a mutable global table */
-    unsigned char  size;      /* 1/2/4/8 bytes */
-    unsigned long  tac;       /* the Tactical value (low `size` bytes used; host is little-endian) */
-    unsigned char  orig[8];   /* pristine snapshot */
+    unsigned char  size;      /* 1/2/4/8 bytes for scalars; up to sizeof(orig) for string patches */
+    unsigned long  tac;       /* scalar Tactical value (size<=8; host is little-endian) */
+    const void    *tacptr;    /* byte/string source when size>8 (addStrPatch); NULL for scalars */
+    unsigned char  orig[24];  /* pristine snapshot */
 } Patch;
 
-#define MAX_PATCH 128
+#define MAX_PATCH 160
 static Patch s_patch[MAX_PATCH];
 static int   s_nPatch  = 0;
 static int   s_inited  = 0;
@@ -134,7 +135,22 @@ static void addPatch(void *addr, unsigned char size, unsigned long tac) {
     p->addr = addr;
     p->size = size;
     p->tac  = tac;
+    p->tacptr = 0;
     memcpy(p->orig, addr, size);   /* snapshot the pristine bytes now (tables untouched pre-patch) */
+}
+
+/* In-place fixed-width string patch (e.g. gSpellNames[] -- a char[][21] array, NOT a pointer table,
+ * so it can't be repointed like gSpellDescriptions). Copies s (incl. NUL) over addr; restorable. */
+static void addStrPatch(void *addr, const char *s) {
+    Patch *p;
+    unsigned int n = (unsigned int)strlen(s) + 1;
+    if (s_nPatch >= MAX_PATCH || n > sizeof p->orig) return;
+    p = &s_patch[s_nPatch++];
+    p->addr = addr;
+    p->size = (unsigned char)n;
+    p->tac  = 0;
+    p->tacptr = s;
+    memcpy(p->orig, addr, n);
 }
 
 /* gItemDescriptions is declared in units.h (s8*); gItemDescriptions2 only in supplies.c. Both defined in
@@ -181,18 +197,42 @@ static void ensureInit(void) {
     addPatch(&gItemEquipmentPower[ITEM_P_CLAWS], 1, 12);                  /* B3  P.claws 10 -> 12 */
     addPatch(&gItemEquipmentPower[ITEM_D_CLAWS], 1, 13);                  /* B3  D.claws 12 -> 13 */
 
-    /* B -- Monk/Ninja spell-list rework (gSpells[26-32]; only the changed fields, per the GAP 5 table). */
-    addPatch(&gSpells[26].power,     1, 8);  addPatch(&gSpells[26].mpCost,    1, 7);   /* STONE_SHOWER  */
-    addPatch(&gSpells[26].fieldSize, 1, 2);  /* C3-2 playtest: field 1->2 for reach (casting is 2D Manhattan, no elevation term) */
-    addPatch(&gSpells[27].fieldSize, 1, 3);  addPatch(&gSpells[27].mpCost,    1, 6);   /* CURE_WIDE     */
+    /* B -- Monk/Ninja + mage caster-spell rework (exchange/features1.3/spellsRework, 2026-07-28).
+     * The melee-caster tax is repaid in spell efficiency so the Monk mage-path is a real alternative,
+     * not a trap. Two swaps make spells 13/26 class-EXCLUSIVE, so their stats+reqLv tune freely:
+     *   - Monk (path B): STONE_SHOWER(26) -> real SPREAD_FORCE(13) -- better FX, self-centred melee AOE.
+     *   - Mage (path A): SPREAD_FORCE(13) -> THUNDER_BALL (copied into learnable slot 26; ranged nuke).
+     * STONE_SHOWER is discarded in Tactical only -- no enemy/item/code casts it (gUnitInfo scan clean).
+     * Monk damage spells follow "1 power = 1 mana". */
+
+    /* Monk gets Spread Force(13): nerfed, now Monk-exclusive, unlocks at 12 (Stone Shower's old slot). */
+    addPatch(&gSpells[13].power, 1, 8);  addPatch(&gSpells[13].mpCost, 1, 8);   /* 13/7 -> 8/8 (rng0 fld3 kept) */
+    addPatch(&gSpellLevelRequirement[13], 1, 12);                              /* was 21 (mage tier) -> Monk @12 */
+
+    /* Slot 26 repurposed as THUNDER_BALL for the mage: long-range small AOE, keeps old Spread Force pow 13.
+     * FX/effect copied from spell 41 (item-cast-only, so id 41 itself stays untouched for enemy unit 124). */
+    addPatch(&gSpells[26].range, 1, 5);  addPatch(&gSpells[26].fieldSize, 1, 1);
+    addPatch(&gSpells[26].power, 1, 13); addPatch(&gSpells[26].mpCost,   1, 10);   /* area/tgt already AOE/enemy-grp */
+    addPatch(&gSpellsEx[26][SPELL_EX_OBJF_MAIN],   2, 224);
+    addPatch(&gSpellsEx[26][SPELL_EX_OBJF_TARGET], 2, 128);
+    addPatch(&gSpellsEx[26][SPELL_EX_OBJF_DEFEAT], 2, 129);
+    addPatch(&gSpellLevelRequirement[26], 1, 21);                              /* mage learns it @21 (Spread Force's slot) */
+    addStrPatch(gSpellNames[26], "Thunder Ball");                             /* was "Stone Shower" */
+
+    /* Spell-list swaps (gSpellLists[party][path][slot], s32). Monk path=1 slot 3; mage path=0 slot 7. */
+    addPatch(&gSpellLists[4][1][3],  4, 13); addPatch(&gSpellLists[5][1][3],  4, 13);  /* Eleni/Huxley Monk -> Spread Force */
+    addPatch(&gSpellLists[10][1][3], 4, 13); addPatch(&gSpellLists[11][1][3], 4, 13);  /* Sara/Zohar  Monk -> Spread Force */
+    addPatch(&gSpellLists[4][0][7],  4, 26); addPatch(&gSpellLists[11][0][7], 4, 26);  /* Eleni/Zohar Mage -> Thunder Ball */
+
+    /* Remaining Monk/Ninja spells (all path-B exclusive). */
+    addPatch(&gSpells[27].fieldSize, 1, 3);  addPatch(&gSpells[27].mpCost,    1, 6);   /* CURE_WIDE      */
     addPatch(&gSpells[28].fieldSize, 1, 3);  addPatch(&gSpells[28].power,     1, 20);
-    addPatch(&gSpells[28].mpCost,    1, 7);                                            /* HEALING_CIRCLE */
-    addPatch(&gSpells[29].range,     1, 7);                                            /* PERFECT_GUARD  */
-    addPatch(&gSpells[30].fieldSize, 1, 2);  addPatch(&gSpells[30].power,     1, 17);  /* C3-2: field 1->2 (was lowered to 1; base is 2) */
-    addPatch(&gSpells[30].mpCost,    1, 9);                                            /* THUNDER_FLASH  */
-    addPatch(&gSpells[31].fieldSize, 1, 3);                                            /* HEALING_WAVE   */
-    /* MYSTIC_ENERGY: single->AOE ally-group, rng 0, field 3, mp 30. The defBoosted/magSusc effect is a
-     * separate PC_FEAT logic hook (added with the other logic hooks), NOT a gSpells field. */
+    addPatch(&gSpells[28].mpCost,    1, 8);                                            /* HEALING_CIRCLE mp 7->8 (heals shouldn't out-cost the Bishop path) */
+    addPatch(&gSpells[29].range,     1, 6);                                            /* PERFECT_GUARD  rng ->6 */
+    addPatch(&gSpells[30].fieldSize, 1, 3);  addPatch(&gSpells[30].power,     1, 14);
+    addPatch(&gSpells[30].mpCost,    1, 14);                                           /* THUNDER_FLASH fld3/pow14/mp14 */
+    addPatch(&gSpells[31].fieldSize, 1, 3);  addPatch(&gSpells[31].mpCost,    1, 12);  /* HEALING_WAVE  mp 10->12 */
+    /* MYSTIC_ENERGY: single->AOE ally-group, rng 0, field 3, mp 30 (defBoosted/magSusc is a PC_FEAT hook). */
     addPatch(&gSpells[32].area,      1, SPELL_AREA_AOE);
     addPatch(&gSpells[32].targeting, 1, SPELL_TARGET_ALLY_GROUP);
     addPatch(&gSpells[32].range,     1, 0);  addPatch(&gSpells[32].fieldSize, 1, 3);
@@ -228,13 +268,14 @@ static void ensureInit(void) {
 
     /* bugreport-03 -- sync the spell-info bar text with the GAP-5/C3-2 balance (display-only; the real
      * gSpells fields are already patched above). Format/spacing copied from the retail strings. */
-    addSpellDescSwap(26, "Attack magic  Rng:0  Fld:2  MP:7");    /* STONE_SHOWER   Fld 1->2, MP 10->7 */
-    addSpellDescSwap(27, "Cure Status  Rng:0  Fld:3  MP:6");     /* CURE_WIDE      Fld 1->3, MP 4->6  */
-    addSpellDescSwap(28, "Healing Magic  Rng:0  Fld:3  MP:7");   /* HEALING_CIRCLE Fld 1->3, MP 6->7  */
-    addSpellDescSwap(29, "Protect Magic  Rng:7  F:0  MP:15");    /* PERFECT_GUARD  Rng 4->7           */
-    addSpellDescSwap(30, "Attack Magic  Rng:0  Fld:2  MP:9");    /* THUNDER_FLASH  MP 12->9           */
-    addSpellDescSwap(31, "Healing Magic  Rng:0  F:3  MP:10");    /* HEALING_WAVE   Fld 2->3           */
-    addSpellDescSwap(32, "DEF,AT Up  Rng:0  Fld:3  MP:30");      /* MYSTIC_ENERGY  Rng 4->0, Fld 0->3, MP 15->30 */
+    addSpellDescSwap(13, "Attack magic  Rng:0  Fld:3  MP:8");    /* SPREAD_FORCE   (Monk) fld3 pow8 mp8 */
+    addSpellDescSwap(26, "Attack Magic  Rng:5  Fld:1  MP:10");   /* THUNDER_BALL   (mage) ranged nuke  */
+    addSpellDescSwap(27, "Cure Status  Rng:0  Fld:3  MP:6");     /* CURE_WIDE                          */
+    addSpellDescSwap(28, "Healing Magic  Rng:0  Fld:3  MP:8");   /* HEALING_CIRCLE MP 7->8             */
+    addSpellDescSwap(29, "Protect Magic  Rng:6  F:0  MP:15");    /* PERFECT_GUARD  Rng 7->6            */
+    addSpellDescSwap(30, "Attack Magic  Rng:0  Fld:3  MP:14");   /* THUNDER_FLASH  Fld3 MP14           */
+    addSpellDescSwap(31, "Healing Magic  Rng:0  F:3  MP:12");    /* HEALING_WAVE   MP 10->12           */
+    addSpellDescSwap(32, "DEF,AT Up  Rng:0  Fld:3  MP:30");      /* MYSTIC_ENERGY                      */
 }
 
 void PC_BalanceBoot(void) {
@@ -248,8 +289,10 @@ void PC_SyncBalance(void) {
     int i;
     ensureInit();
     if (gTacticalMode && !s_applied) {
-        for (i = 0; i < s_nPatch; i++)
-            memcpy(s_patch[i].addr, &s_patch[i].tac, s_patch[i].size);
+        for (i = 0; i < s_nPatch; i++) {
+            const void *src = s_patch[i].tacptr ? s_patch[i].tacptr : (const void *)&s_patch[i].tac;
+            memcpy(s_patch[i].addr, src, s_patch[i].size);
+        }
         s_applied = 1;
         if (getenv("VH_BALANCE_DUMP")) {   /* diagnostic: runtime gSpells after apply */
             fprintf(stderr, "[baldump] nPatch=%d  26(f=%d p=%d mp=%d) 27(f=%d mp=%d) 28(f=%d p=%d mp=%d) 30(f=%d p=%d mp=%d)\n",
