@@ -32,6 +32,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "PsyQ/libgte.h"
 
@@ -575,7 +576,27 @@ int RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
 int RotAverage4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
                   int *sxy0, int *sxy1, int *sxy2, int *sxy3,
                   int *p, int *flag) {
-    return RotTransPers4(v0, v1, v2, v3, sxy0, sxy1, sxy2, sxy3, p, flag);
+    int r = RotTransPers4(v0, v1, v2, v3, sxy0, sxy1, sxy2, sxy3, p, flag);
+    /* VH_GTE_LOG=1: for each AddObjPrim4 quad, dump the input SVECTOR height (vy) of the bottom
+     * (v0) and top (v2) verts vs the projected screen Y. bugreport-02: the thunder-ray cylinder
+     * wall has Δvy≈256 (0x800>>3) between bottom/top and should give a tall on-screen wall; if the
+     * output Δsy stays ~0 while a comparable Δsx is large, the GTE is collapsing the height. Screen
+     * coords are PackSXY(x=lo16, y=hi16), both signed shorts. Env checked once. */
+    {
+        static int s_gteLog = -1;
+        if (s_gteLog < 0) s_gteLog = getenv("VH_GTE_LOG") ? 1 : 0;
+        if (s_gteLog) {
+            extern unsigned s_drawFrame;
+            int y0 = (short)((*sxy0 >> 16) & 0xFFFF), y2 = (short)((*sxy2 >> 16) & 0xFFFF);
+            int x0 = (short)(*sxy0 & 0xFFFF),        x2 = (short)(*sxy2 & 0xFFFF);
+            fprintf(stderr,
+                "[gte4] f=%u inVxyz0=(%d,%d,%d) inVxyz2=(%d,%d,%d) out0=(%d,%d) out2=(%d,%d) "
+                "dVy=%d dSy=%d dSx=%d\n",
+                s_drawFrame, v0->vx, v0->vy, v0->vz, v2->vx, v2->vy, v2->vz,
+                x0, y0, x2, y2, v2->vy - v0->vy, y2 - y0, x2 - x0);
+        }
+    }
+    return r;
 }
 
 int VectorNormalS(VECTOR *v0, SVECTOR *v1) {

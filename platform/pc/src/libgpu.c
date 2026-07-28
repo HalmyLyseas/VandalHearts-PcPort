@@ -25,6 +25,7 @@
  * "Clut Attribute"/"VRAM Overview" sections, not guessed.
  */
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,7 @@
 #define VRAM_H 512
 
 static unsigned short s_vram[VRAM_H][VRAM_W];
+unsigned s_drawFrame = 0; /* incremented per DrawOTag; ties prim log to VRAM dumps + libgte VH_GTE_LOG */
 
 static DRAWENV s_drawEnv;
 static DISPENV s_dispEnv;
@@ -465,12 +467,69 @@ void AddPrim(void *ot, void *p) {
     ((P_TAG *)ot)->tag = PC_OtMint(p, 0);
 }
 
+/* VRAM snapshot probe: write the full 1024x512 VRAM as a binary PPM (BGR555 ->
+ * RGB888) so a graphics bug can be inspected as an image -- texture pages, CLUT
+ * rows, staging. The blue effect samples tpage 0x0036 (page origin 384,256) via
+ * CLUT 0x7d28 (VRAM 640,500); the dump shows whether that region holds valid
+ * texture/palette or garbage. Two triggers:
+ *   - On demand (preferred for a long lead-in): `kill -USR2 <pid>` snaps the
+ *     current frame. Unlimited; the signal handler just sets a flag (the write
+ *     itself happens here, in the frame loop, since fopen/fwrite aren't
+ *     async-signal-safe).
+ *   - Periodic: VH_VRAM_DUMP=N dumps every N frames, capped at VH_VRAM_DUMP_MAX
+ *     files (default 2000) to bound disk use. */
+static volatile sig_atomic_t s_vramDumpReq = 0;
+static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; }
+
+static void PC_WriteVramPpm(int idx) {
+    char path[64];
+    FILE *f;
+    int x, y;
+    sprintf(path, "vh_vram_%05d_f%06u.ppm", idx, s_drawFrame);
+    f = fopen(path, "wb");
+    if (!f) return;
+    fprintf(f, "P6\n%d %d\n255\n", VRAM_W, VRAM_H);
+    for (y = 0; y < VRAM_H; y++)
+        for (x = 0; x < VRAM_W; x++) {
+            int r, g, b;
+            UnpackColor(s_vram[y][x], &r, &g, &b);
+            fputc(r, f); fputc(g, f); fputc(b, f);
+        }
+    fclose(f);
+    fprintf(stderr, "[vramdump] wrote %s\n", path);
+}
+
+static void PC_MaybeDumpVram(void) {
+    static int s_init = 0;
+    static int s_interval = 0;
+    static int s_max = 2000;
+    static int s_frame = 0;
+    static int s_dumped = 0;
+    if (!s_init) {
+        const char *e = getenv("VH_VRAM_DUMP");
+        const char *m = getenv("VH_VRAM_DUMP_MAX");
+        s_interval = (e && atoi(e) > 0) ? atoi(e) : 0;
+        if (m && atoi(m) > 0) s_max = atoi(m);
+        signal(SIGUSR2, PC_VramDumpSignal); /* on-demand trigger, always armed */
+        s_init = 1;
+    }
+    if (s_vramDumpReq) { /* on-demand: unlimited, distinct 900xx index range */
+        static int s_onDemand = 90000;
+        s_vramDumpReq = 0;
+        PC_WriteVramPpm(s_onDemand++);
+    }
+    if (s_interval == 0 || s_dumped >= s_max) return;
+    if ((s_frame++ % s_interval) != 0) return;
+    PC_WriteVramPpm(s_dumped++);
+}
+
 void DrawOTag(unsigned int *p) {
     /* VH_GPU_PRIM_LOG=1: dump "anomalous" primitives (our SetSemiTrans 0x80 bit set, or a code that
      * decodes to an unrecognized type) -- the fx SetSemiTrans-without-SetPolyFT4 effect polys we hunt.
      * Env checked once. */
     static int s_primLog = -1;
     u32 nextTok = ((P_TAG *)p)->tag;
+    s_drawFrame++;
     if (s_primLog < 0) s_primLog = getenv("VH_GPU_PRIM_LOG") ? 1 : 0;
     while (nextTok) {
         int isBucket = 0;
@@ -498,12 +557,29 @@ void DrawOTag(unsigned int *p) {
             int semi = PC_GPU_IS_SEMI((P_TAG *)cur) ? 1 : 0;
 
             if (s_primLog) {
-                unsigned char code = getcode((P_TAG *)cur);
-                if ((code & 0x80) || type < 1 || type > 5) {   /* the anomalies we're chasing */
-                    POLY_FT4 *q = (POLY_FT4 *)cur;   /* raw field dump; offsets fine for the FT4 case */
+                /* Log every semi-transparent prim + any unrecognized type, with blend mode (abr) and
+                 * UVs -- so a wrong effect instance and a correct one both appear and can be diffed.
+                 * (u0/v0/tpage are only meaningful for textured types; harmless raw dump otherwise.) */
+                if (semi || type < 1 || type > 5) {
+                    unsigned char code = getcode((P_TAG *)cur);
+                    POLY_FT4 *q = (POLY_FT4 *)cur;
+                    int abr = ((unsigned)q->tpage >> 5) & 3;
+                    int tp = ((unsigned)q->tpage >> 7) & 3;
+                    /* STP scan: which of the 16 CLUT entries carry bit15 (per-pixel
+                     * semi-transparency). A textured semi poly only blends where the
+                     * texel's STP is set -- if this mask is 0 the effect draws opaque.
+                     * Reads raw s_vram (bit15 intact), unlike the RGB PPM dump. */
+                    int clutX = ((unsigned)q->clut & 0x3f) * 16;
+                    int clutY = ((unsigned)q->clut >> 6) & 0x1ff;
+                    unsigned stp = 0; int i;
+                    for (i = 0; i < 16; i++)
+                        if (s_vram[clutY][clutX + i] & 0x8000) stp |= (1u << i);
                     fprintf(stderr,
-                        "[gpuprim] code=0x%02x -> type=%d semi=%d  tpage=0x%04x clut=0x%04x rgb=(%d,%d,%d)\n",
-                        code, type, semi, (unsigned)q->tpage, (unsigned)q->clut, q->r0, q->g0, q->b0);
+                        "[gpuprim] f=%u code=0x%02x type=%d semi=%d abr=%d tp=%d tpage=0x%04x clut=0x%04x "
+                        "uv0=(%u,%u) xy=(%d,%d)-(%d,%d) rgb=(%d,%d,%d) clutStp=0x%04x tw=mask(%d,%d)off(%d,%d)\n",
+                        s_drawFrame, code, type, semi, abr, tp, (unsigned)q->tpage, (unsigned)q->clut,
+                        q->u0, q->v0, q->x0, q->y0, q->x2, q->y2, q->r0, q->g0, q->b0, stp,
+                        s_twMaskX, s_twMaskY, s_twOffX, s_twOffY);
                 }
             }
 
@@ -561,6 +637,7 @@ void DrawOTag(unsigned int *p) {
      * recent PutDispEnv call recorded, matching every real call site's
      * PutDispEnv-then-DrawOTag pairing. */
     PC_UpdateCamOsd(); /* refresh the debug pose label to match this frame (VH_CAM_OSD) */
+    PC_MaybeDumpVram(); /* VH_VRAM_DUMP=N: snapshot VRAM to PPM for texture/CLUT triage */
     PC_GpuPresent(&s_vram[0][0], VRAM_W, VRAM_H,
                   s_dispEnv.disp.x, s_dispEnv.disp.y, s_dispEnv.disp.w, s_dispEnv.disp.h);
 }
