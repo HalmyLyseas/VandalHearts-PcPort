@@ -80,3 +80,10 @@ vh_*.wav
 /platform/pc/src/pc_item_descriptions.c
 /platform/pc/src/pc_evt_entities.c
 /platform/pc/src/pc_string_table.c
+
+# ---- runtime diagnostic output (env-gated probes) ----
+# Captured locally when debugging via the VH_* env probes (VH_GPU_PRIM_LOG, VH_GTE_LOG,
+# VH_SPELL_DUMP, VH_BALANCE_DUMP -> *.log; VH_VRAM_DUMP / kill -USR2 -> vh_vram_*.ppm).
+# Local-only, never committed.
+*.log
+vh_vram_*.ppm
