@@ -34,6 +34,10 @@ int TrialEnemyExpMulti(int chapter);    /* attack-XP per-enemy multiplier (retai
 int TrialGoldReward(int chapter);       /* gold per trial kill (retail flat 10) */
 int TrialGoldPenalty(int chapter);      /* gold lost per player-unit death (retail flat 10) */
 
+/* bugreport-05 diagnostic: VH_SPELL_DUMP=1 logs a unit's advancement state + resulting spell list
+ * whenever PopulateUnitSpellList runs. Read-only; no behavior change. `spells` = u8[10]. */
+void PC_SpellListDump(int name, int cls, int lvl, int pathB, int advF, int advS, const void *spells);
+
 /* Apply or restore the mutable-table balance patch to satisfy  patchApplied == gTacticalMode .
  * Idempotent. Snapshots the pristine tables lazily on first call (which happens post-constructor
  * and before the first patch, so the snapshot captures retail values). Call after every mode change. */

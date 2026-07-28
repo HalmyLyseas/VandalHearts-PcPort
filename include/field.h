@@ -78,6 +78,10 @@ typedef enum GridColor {
 /* Stage 3 (1.1): purple enemy-threat overlay. A macro, not an enum member, so the matching
  * build's GridColor is byte-for-byte unchanged (no trailing-comma / value-set difference). */
 #define GRID_COLOR_PURPLE 4
+/* Stage 3 (1.3): orange for a reachable-AND-threatened tile, so the threat warning is distinct from
+ * the native yellow attack/AoE target grid (bugreport-04). Macro (not enum) for the same byte-exact
+ * reason as PURPLE. */
+#define GRID_COLOR_ORANGE 5
 #endif
 
 /*typedef struct ImpededStep {

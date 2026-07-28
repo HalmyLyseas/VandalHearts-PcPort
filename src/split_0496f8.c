@@ -283,10 +283,25 @@ void PopulateUnitSpellList(UnitStatus *unit) {
        * (e.g. Dragoon) have empty spell lists, so this is a no-op for them. */
       if (gTacticalMode && gPartyMembers[partyIdx].advChosePathB == 1 &&
           gPartyMembers[partyIdx].advLevelSecond != 0) {
+         s32 w = 0;
          for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
             if (unit->spells[i] != SPELL_NULL && gSpellLevelRequirement[unit->spells[i]] <= 10) {
                unit->spells[i] = SPELL_NULL;
             }
+         }
+         /* bugreport-05: GAP 11 nulls spells IN PLACE, leaving gaps -- the shed base spells sit BEFORE
+          * the surviving specialists (e.g. [0,0,0,26,27,28,29,...]). The SKILL menu + battle iterate
+          * until the first SPELL_NULL, so a leading gap hides everything after it and the Ninja reads
+          * as having ZERO spells. Compact: shift survivors to the front, NULL-fill the tail, restoring
+          * the contiguous NULL-terminated invariant the UI relies on. (The retail step-2 filter only
+          * nulls the reqLv-ordered tail, so it never needs this -- only GAP 11's front-null does.) */
+         for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
+            if (unit->spells[i] != SPELL_NULL) {
+               unit->spells[w++] = unit->spells[i];
+            }
+         }
+         for (; w < ARRAY_COUNT(unit->spells); w++) {
+            unit->spells[w] = SPELL_NULL;
          }
       }
       /* GAP 3: in Tactical, re-grant PLASMA_WAVE to Ash's de-godmoded Vandalier ONLY (weapon ==
@@ -301,6 +316,14 @@ void PopulateUnitSpellList(UnitStatus *unit) {
             }
          }
       }
+      /* bugreport-05 diagnostic (VH_SPELL_DUMP=1): read-only dump of the advancement state that drove
+       * this spell list -- to see why a Ninja ends empty (advFirst==0 -> retail gate strips reqLv>10,
+       * then GAP 11 strips reqLv<=10). No behavior change. */
+      { extern void PC_SpellListDump(int, int, int, int, int, int, const void *);
+        PC_SpellListDump((int)unit->name, (int)unit->class, (int)unit->level,
+                         (int)gPartyMembers[partyIdx].advChosePathB,
+                         (int)gPartyMembers[partyIdx].advLevelFirst,
+                         (int)gPartyMembers[partyIdx].advLevelSecond, unit->spells); }
 #endif
    }
 }

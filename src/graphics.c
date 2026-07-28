@@ -1241,13 +1241,14 @@ void RenderField(void) {
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
          } else if (gBlueMovementGridPtr[iz][ix] != 0) {
 #ifdef PC_FEAT
-            /* Stage 3 (1.1B): a reachable tile that is ALSO enemy-threatened -> warn in yellow, so
-             * the player still sees their own extra movement AND the danger (bugreport-02 #3).
+            /* Stage 3 (1.1B): a reachable tile that is ALSO enemy-threatened -> warn in orange, so
+             * the player still sees their own extra movement AND the danger (bugreport-02 #3), and the
+             * warning stays distinct from the native yellow attack/AoE target grid (bugreport-04).
              * Hidden while control is suppressed (mid-animation): during a unit walk / crate push the
              * board is changing, so a not-yet-recomputed overlay would be stale -- show nothing and
              * let it reappear correct when control returns (bugreport-02 #2 3rd check). */
             if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
-               RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_YELLOW);
+               RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_ORANGE);
             } else
 #endif
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
@@ -1275,9 +1276,10 @@ void RenderField(void) {
          /* Stage 3 (1.1B): mirror the interior loop's threat handling on the map's edge row/column.
           * Without it, a genuinely enemy-threatened boundary tile lost its purple at camera angles
           * where the edge loop (not the interior loop) draws that row -- the overlay flickered off on
-          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns yellow. */
+          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns orange
+          * (distinct from the native yellow attack/AoE grid -- bugreport-04). */
          if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
-            RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_YELLOW);
+            RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_ORANGE);
          } else
 #endif
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
@@ -1301,9 +1303,10 @@ void RenderField(void) {
          /* Stage 3 (1.1B): mirror the interior loop's threat handling on the map's edge row/column.
           * Without it, a genuinely enemy-threatened boundary tile lost its purple at camera angles
           * where the edge loop (not the interior loop) draws that row -- the overlay flickered off on
-          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns yellow. */
+          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns orange
+          * (distinct from the native yellow attack/AoE grid -- bugreport-04). */
          if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
-            RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_YELLOW);
+            RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_ORANGE);
          } else
 #endif
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
@@ -1415,6 +1418,15 @@ void RenderMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                   poly->r0 = soft;
                   poly->g0 = 30 + (soft >> 2);                            /* muted, not neon */
                   poly->b0 = soft;
+               } else if (gridColor == GRID_COLOR_ORANGE) {
+                  /* Stage 3 (1.3): reachable-AND-threatened warning. Orange (red, ~half green, no blue)
+                   * reads clearly apart from the native YELLOW attack/AoE grid (where r==g). Pulse
+                   * softened the same way as PURPLE -- halved amplitude (peak ~148 not 255) -- so it's
+                   * flat, not neon (bugreport-04). */
+                  int soft = 40 + ((gGridColorOscillation - 40) >> 1);   /* ~47..148 vs 55..255 */
+                  poly->r0 = soft;
+                  poly->g0 = soft >> 1;                                   /* ~23..74 -> orange hue */
+                  poly->b0 = 0;
 #endif
                }
             }
@@ -1518,6 +1530,13 @@ void RenderEdgeMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                poly->r0 = soft;
                poly->g0 = 30 + (soft >> 2);
                poly->b0 = soft;
+            } else if (gridColor == GRID_COLOR_ORANGE) {
+               /* Stage 3 (1.3): reachable-AND-threatened warning on an edge tile -- orange, matching
+                * the interior RenderMapTile (softened/halved pulse; see note there; bugreport-04). */
+               int soft = 40 + ((gGridColorOscillation - 40) >> 1);
+               poly->r0 = soft;
+               poly->g0 = soft >> 1;
+               poly->b0 = 0;
 #endif
             }
          }
