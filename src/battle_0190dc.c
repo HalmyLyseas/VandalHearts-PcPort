@@ -8,6 +8,10 @@
 
 #ifdef PC_FEAT
 extern int gTacticalMode;   /* Stage 3 1.3 -- GAP 5 Monk/Ninja MP parity (pc_balance.c) */
+#ifdef PC_FEAT
+extern int TrialExpScalingLevel(int chapter);   /* GAP 9 -- per-chapter trial XP scaling / multiplier */
+extern int TrialEnemyExpMulti(int chapter);
+#endif
 #endif
 
 void EmbedIntAsSjis(s32, u8 *, u8);
@@ -605,6 +609,21 @@ s16 CalculateAttackDamage(UnitStatus *attacker, UnitStatus *defender) {
             expBuffer3[i] = 0;
          }
          if (damage != 0) {
+#ifdef PC_FEAT
+            /* GAP 9 fallback (2026-07-29): the FINAL Trial's enemies are set up through a path where
+             * gState.chapter/mapNum are still in flux, so the spawn-time expMulti override AND the
+             * battle_eval expScalingLevel override both read stale values -> trial enemies keep
+             * expMulti 0 (no attack XP) and expScalingLevel lands on a wrong chapter. At XP-computation
+             * time chap/map are stable + correct, so force the trial values here -- catches every trial
+             * enemy regardless of spawn path. Mutating the enemy's expMulti + the global scaling level
+             * is a persistent, harmless correction (both only feed XP). Normal mode untouched. */
+            if (gTacticalMode && gState.mapNum <= 5) {
+               gState.expScalingLevel = TrialExpScalingLevel(gState.chapter);
+               if (defender->expMulti == 0) {
+                  defender->expMulti = TrialEnemyExpMulti(gState.chapter);
+               }
+            }
+#endif
             // expBuffer1 = SLm1
             for (i = 0; i < 8; i++) {
                expBuffer1[i] = gExperienceLevels[gState.expScalingLevel - 1][i];
