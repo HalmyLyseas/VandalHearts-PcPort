@@ -90,8 +90,13 @@ void PC_AdoptSaveMode(void) {
 }
 
 int TacticalCap(int chapter) {
-    /* [0] is a dead clamp slot; real caps are 1..6 = {10,15,20,25,27,30} (GAP 1/2, finalized). */
-    static const int cap[7] = { 10, 10, 15, 20, 25, 27, 30 };
+    /* [0] is a dead clamp slot; real caps are 1..6 = {10,15,19,24,28,32} (GAP 1/2; retuned 2026-07-28
+     * after the full ch1-5 playtest). Progression smooths to a steady +4/chapter after the +5 opener:
+     * 5(start:Diego/Clint L5,Ash L6) ->10 ->15 ->19 ->24 ->28 ->32(=final-boss level). The +5/step early
+     * curve let the party fall behind (ch3-4 ended 2-3 under cap); the old +2/+3 late steps then let the
+     * AOE casters slam the cap mid-chapter, wasting the ch5 Trials/last-battle XP. Uniform +4 fixes both
+     * ends: ch3/4 -1 (20->19, 25->24), ch5 +1 (27->28), ch6 +2 (30->32, matches the L32 final boss). */
+    static const int cap[7] = { 10, 10, 15, 19, 24, 28, 32 };
     if (!gTacticalMode) return 50;              /* Normal: the retail cap. */
     if (chapter < 1) chapter = 1;
     if (chapter > 6) chapter = 6;
@@ -226,9 +231,10 @@ static void ensureInit(void) {
 
     /* Remaining Monk/Ninja spells (all path-B exclusive). */
     addPatch(&gSpells[27].fieldSize, 1, 3);  addPatch(&gSpells[27].mpCost,    1, 6);   /* CURE_WIDE      */
-    addPatch(&gSpells[28].fieldSize, 1, 3);  addPatch(&gSpells[28].power,     1, 20);
-    addPatch(&gSpells[28].mpCost,    1, 8);                                            /* HEALING_CIRCLE mp 7->8 (heals shouldn't out-cost the Bishop path) */
+    addPatch(&gSpells[28].fieldSize, 1, 3);                                            /* HEALING_CIRCLE field 1->3 (kept); power stays retail 15 -- pow 20 out-classed Healing Wave (28@10mp) */
+    addPatch(&gSpells[28].mpCost,    1, 6);                                            /* HEALING_CIRCLE mp 7->6: cheap efficient top-up heal, clearly below Healing Wave (28pow/12mp) */
     addPatch(&gSpells[29].range,     1, 6);                                            /* PERFECT_GUARD  rng ->6 */
+    addPatch(&gSpells[29].mpCost,    1, 12);                                           /* PERFECT_GUARD  mp 15->12: single-target/1-turn, and half a Mystic Energy (30) is too steep for its niche */
     addPatch(&gSpells[30].fieldSize, 1, 3);  addPatch(&gSpells[30].power,     1, 14);
     addPatch(&gSpells[30].mpCost,    1, 14);                                           /* THUNDER_FLASH fld3/pow14/mp14 */
     addPatch(&gSpells[31].fieldSize, 1, 3);  addPatch(&gSpells[31].mpCost,    1, 12);  /* HEALING_WAVE  mp 10->12 */
@@ -237,6 +243,22 @@ static void ensureInit(void) {
     addPatch(&gSpells[32].targeting, 1, SPELL_TARGET_ALLY_GROUP);
     addPatch(&gSpells[32].range,     1, 0);  addPatch(&gSpells[32].fieldSize, 1, 3);
     addPatch(&gSpells[32].mpCost,    1, 30);                                           /* MYSTIC_ENERGY  */
+    /* Retail Mystic Energy is single-target, so its per-target hit sound gSpellSounds2[32]==0 -- the
+     * cast sound (gSpellSounds[32]==911) fires once and never repeats. Now that it's an AOE ally-group
+     * buff, the per-target loop (battle_013b94.c) plays gSpellSounds2 once per ally, so give it a value
+     * -- mirror its own cast sound (911), the same Sounds1==Sounds2 pattern Cure Wide uses. The per-ally
+     * visual aura already multi-fires (OBJF_TARGET path); this just makes the sound track it. */
+    addPatch(&gSpellSounds2[32], 2, 911);
+    /* Per-ally aura: retail Mystic Energy uses OBJF 113 (green casting-stat-buff swirl). Now that the
+     * spell is a defensive group buff, recolor it blue by pointing OBJF_TARGET at OBJF 112 -- the
+     * identical lightweight OBJF_CASTING_STAT_BUFF object Mystic Shield uses, only CLUT_BLUES instead of
+     * CLUT_GREENS. Same object => still AOE-safe (no shared-buffer risk, unlike Perfect Guard's 192).
+     * OBJF_DEFEAT (143) is left alone: an ally buff never hits the "defeated target" path.
+     * BONUS: the floating stat-up text is keyed off the aura CLUT (Objf681_StatBuffFx) -- BLUES => a
+     * single "DF up!", REDS => "AT up!", GREENS => BOTH icons. So green->blue also drops the misleading
+     * "AT up!" (retail Mystic Energy was green=both), leaving just "DF up!", which honestly matches the
+     * GAP 5 defense-only mechanics. One value fixes visual + label together. */
+    addPatch(&gSpellsEx[32][SPELL_EX_OBJF_TARGET], 2, 112);
 
     /* 1.3.x playtest tuning (chapter-3/4 findings, exchange/65). */
     addPatch(&gSpells[11].power, 1, 9);  /* C3-3 ROMAN_FIRE power 7->9: on par w/ PHASE_SHIFT (learned ~2 lvls later, half MP -> niche = clustered foes + MP economy) */
@@ -271,8 +293,8 @@ static void ensureInit(void) {
     addSpellDescSwap(13, "Attack magic  Rng:0  Fld:3  MP:8");    /* SPREAD_FORCE   (Monk) fld3 pow8 mp8 */
     addSpellDescSwap(26, "Attack Magic  Rng:5  Fld:1  MP:10");   /* THUNDER_BALL   (mage) ranged nuke  */
     addSpellDescSwap(27, "Cure Status  Rng:0  Fld:3  MP:6");     /* CURE_WIDE                          */
-    addSpellDescSwap(28, "Healing Magic  Rng:0  Fld:3  MP:8");   /* HEALING_CIRCLE MP 7->8             */
-    addSpellDescSwap(29, "Protect Magic  Rng:6  F:0  MP:15");    /* PERFECT_GUARD  Rng 7->6            */
+    addSpellDescSwap(28, "Healing Magic  Rng:0  Fld:3  MP:6");   /* HEALING_CIRCLE MP 7->6             */
+    addSpellDescSwap(29, "Protect Magic  Rng:6  F:0  MP:12");    /* PERFECT_GUARD  Rng 7->6, MP 15->12 */
     addSpellDescSwap(30, "Attack Magic  Rng:0  Fld:3  MP:14");   /* THUNDER_FLASH  Fld3 MP14           */
     addSpellDescSwap(31, "Healing Magic  Rng:0  F:3  MP:12");    /* HEALING_WAVE   MP 10->12           */
     addSpellDescSwap(32, "DEF,AT Up  Rng:0  Fld:3  MP:30");      /* MYSTIC_ENERGY                      */
@@ -301,6 +323,11 @@ void PC_SyncBalance(void) {
                 gSpells[27].fieldSize, gSpells[27].mpCost,
                 gSpells[28].fieldSize, gSpells[28].power, gSpells[28].mpCost,
                 gSpells[30].fieldSize, gSpells[30].power, gSpells[30].mpCost);
+            fprintf(stderr, "[baldump] 32(area=%d tgt=%d rng=%d fld=%d mp=%d | objMain=%d objTgt=%d objDef=%d eff=%d)\n",
+                gSpells[32].area, gSpells[32].targeting, gSpells[32].range,
+                gSpells[32].fieldSize, gSpells[32].mpCost,
+                gSpellsEx[32][SPELL_EX_OBJF_MAIN], gSpellsEx[32][SPELL_EX_OBJF_TARGET],
+                gSpellsEx[32][SPELL_EX_OBJF_DEFEAT], gSpellsEx[32][SPELL_EX_EFFECT]);
             for (i = 0; i < s_nPatch; i++)
                 if (s_patch[i].addr == (void *)&gSpells[26].mpCost || s_patch[i].addr == (void *)&gSpells[26].fieldSize)
                     fprintf(stderr, "[baldump] patch#%d addr=%p size=%u tac=%lu orig=%u cur=%u\n",

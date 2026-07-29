@@ -5,6 +5,9 @@
 #include "field.h"
 
 extern void ApplyMaskEffect(s16, s16, s16, s16, s16, s16, s16, s16, s16, s16);
+#ifdef PC_FEAT
+extern int gTacticalMode;   /* Stage 3 1.3 -- Tactical-only Avalanche ice re-skin (pc_balance.c) */
+#endif
 
 static s16 sImpactAnimData_800ff18c[18] = {5, GFX_IMPACT_1, 2, GFX_IMPACT_2, 2, GFX_IMPACT_3,
                                            2, GFX_IMPACT_4, 2, GFX_IMPACT_5, 2, GFX_IMPACT_6,
@@ -451,6 +454,19 @@ void Objf211_Avalanche_Boulder(Object *obj) {
       obj_s2->functionIndex = OBJF_NOOP;
       obj_s2->d.sprite.gfxIdx = GFX_TILED_STONE;
       obj_s2->d.sprite.clut = CLUT_GRAYS;
+#ifdef PC_FEAT
+      /* Tactical cosmetic re-skin: turn Avalanche's boulder to ice. Texture -> GFX_TILED_ICE (the
+       * crystalline pattern Ice Storm uses, Objf189), palette -> CLUT_GRAYS for a frosty WHITE read
+       * (Ice Storm pairs it with CLUT_BLUES, but at boulder scale blue looked like water; there is no
+       * CLUT_WHITES, and GRAYS is the white/light ramp -- same one the retail stone used). Retail stays
+       * grey stone (GFX_TILED_STONE + CLUT_GRAYS) in Normal mode. NOTE: only the boulder recolors -- the
+       * tumbling GFX_ROCK_* debris and GFX_PUFF dust are baked-palette sprites with no settable CLUT, so
+       * they stay rocky until snow sprites are drawn. */
+      if (gTacticalMode) {
+         obj_s2->d.sprite.gfxIdx = GFX_TILED_ICE;
+         obj_s2->d.sprite.clut = CLUT_GRAYS;
+      }
+#endif
 
       iVar8s = OBJ.todo_x4c;
       PushMatrix();
@@ -508,6 +524,16 @@ void Objf211_Avalanche_Boulder(Object *obj) {
 
             AddObjPrim4(gGraphicsPtr->ot, obj_s2);
             poly = &gGraphicsPtr->quads[gQuadIndex - 1];
+#ifdef PC_FEAT
+            /* Tactical ice re-skin: lift the boulder's grey directional shading toward white so the ice
+             * reads snowier. Retail shades faces in [32..128] (128 = GPU-neutral, darker faces down to
+             * 32); +64 pushes lit faces above neutral (~192) while keeping the per-face contrast. iVar10s
+             * is recomputed to 128 each face, so this never accumulates. Boulder-only + Tactical-only --
+             * no other SFX or Normal-mode Avalanche is touched (pairs with the gfxIdx/clut swap above). */
+            if (gTacticalMode) {
+               iVar10s += 64;
+            }
+#endif
             setRGB0(poly, iVar10s, iVar10s, iVar10s);
          }
       }
