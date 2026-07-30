@@ -479,7 +479,9 @@ void AddPrim(void *ot, void *p) {
  *   - Periodic: VH_VRAM_DUMP=N dumps every N frames, capped at VH_VRAM_DUMP_MAX
  *     files (default 2000) to bound disk use. */
 static volatile sig_atomic_t s_vramDumpReq = 0;
+#ifdef SIGUSR2   /* on-demand VRAM dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2 */
 static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; }
+#endif
 
 static void PC_WriteVramPpm(int idx) {
     char path[64];
@@ -510,7 +512,9 @@ static void PC_MaybeDumpVram(void) {
         const char *m = getenv("VH_VRAM_DUMP_MAX");
         s_interval = (e && atoi(e) > 0) ? atoi(e) : 0;
         if (m && atoi(m) > 0) s_max = atoi(m);
-        signal(SIGUSR2, PC_VramDumpSignal); /* on-demand trigger, always armed */
+#ifdef SIGUSR2
+        signal(SIGUSR2, PC_VramDumpSignal); /* on-demand trigger, always armed (POSIX only) */
+#endif
         s_init = 1;
     }
     if (s_vramDumpReq) { /* on-demand: unlimited, distinct 900xx index range */
