@@ -121,6 +121,7 @@ Byte-exact decomp check: `make check` rebuilds `SLUS_004.47` and md5-compares it
 
 Full developer and user documentation is in **[`docs/`](docs/)**:
 
+- [Known issues](docs/known_issues.md) — current defects and limitations we're already aware of
 - [Architecture](docs/architecture.md) — the two-layer design and how the port avoids breaking the match
 - [Building](docs/building.md) · [Configuration & running](docs/configuration.md)
 - [PC-port internals](docs/pc-port/overview.md) and per-subsystem deep-dives
