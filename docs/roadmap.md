@@ -46,10 +46,28 @@ byte-for-byte the original, and Tactical saves are kept separate. Full player gu
 
 > **Tactical Mode is opt-in and validated** across a full playthrough. It stays a living design, so a few
 > balance numbers may still be fine-tuned in later point releases. This only affects the opt-in mode —
-> the normal experience is unaffected.
+> the normal experience is unaffected. The **1.3.1** point release folded in the full-playthrough balance
+> tuning and endgame fixes.
 
-## Beyond
+## Next — 1.4 (planned)
 
-Ideas under consideration, not scheduled: higher video quality, and higher internal resolution /
-sprite detail. (Bundled "collector" extras such as artwork or manuals are unlikely — that material is
-copyrighted.)
+The 1.4 line continues the "things only a source-level port can do" theme — changes to game logic and the
+port layer, with no new artwork required:
+
+- **Faster battles** — a battle-only fast-forward (2× / 3×, on the shoulder triggers) for quicker play,
+  with outcomes **identical** to normal speed.
+- **Controller-aware prompts** — the port's own overlay button hints adapt to your controller
+  (PlayStation or Xbox labels), auto-detected with a manual override.
+- **Smarter Tactical AI** — enemy spellcasters weigh magic resistance when choosing targets, so
+  positioning and defensive buffs (like Mystic Energy / Perfect Guard) matter on defense too. **Tactical
+  Mode only.**
+- **Unused-content investigation** — a few maps are referenced in the game data but never reachable in
+  normal play; we'll look into what they are and restore any that turn out to be complete, coherent
+  battles.
+
+## Beyond — 1.5 and later
+
+A dedicated **higher-quality graphics** track, kept separate because it's asset-heavy and best done in
+stages: upscaled full-motion videos, then higher internal rendering resolution, and eventually
+higher-detail textures and sprites — likely offered as an optional "Improved" graphics mode. (Bundled
+"collector" extras such as artwork or manuals are unlikely — that material is copyrighted.)
