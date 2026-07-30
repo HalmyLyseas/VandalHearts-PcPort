@@ -34,11 +34,14 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    whole-card backups via `saves/.archive/`, restore/delete with a "back up first" safe default, a
    `(*)` active-card marker, and a Start-to-inspect detail view of each backup's 3 slots). The overlay
    is now a small menu system (`platform/pc/src/pc_overlay.c` + `pc_saves.c`; screens MAIN/SAVES/
-   CONFIRM/DETAIL). Public roadmap in [`docs/roadmap.md`](docs/roadmap.md); the working plan with
-   implementation risks is the gitignored `exchange/61-stage3-roadmap.md`. Note: the "zero `src/`
-   edits" ideal was the *balance-package* rule — other Stage-3 features need gated `src/` hooks.
-   **Next: 1.3** (opt-in balance mode), DESIGN-GATED on re-deriving the damage model — the class stat
-   tables are cosmetic (see `docs/` / the class-balance analysis).
+   CONFIRM/DETAIL). **v1.3.0 + v1.3.1 released** — **Tactical Mode**, a large opt-in rebalance
+   (per-chapter level cap, Trials that reward gold + XP, class reworks, a reined-in Vandalier, clarified
+   item text), validated across a full playthrough; normal mode stays byte-for-byte retail. Player guide
+   [`docs/tactical-mode.md`](docs/tactical-mode.md), [`docs/known_issues.md`](docs/known_issues.md),
+   roadmap [`docs/roadmap.md`](docs/roadmap.md). Note: the "zero `src/` edits" ideal was the
+   *balance-package* rule — other Stage-3 features need gated `src/` hooks. **Next: 1.4** — battle-speed
+   fast-forward, controller-aware overlay prompts, magic-resistance-aware Tactical AI, and an unused-map
+   probe; higher-quality graphics deferred to 1.5.
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates

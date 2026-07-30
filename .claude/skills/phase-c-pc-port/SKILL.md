@@ -146,6 +146,48 @@ ambiguity faster than static reasoning.
   matches. Likewise compare **scene content** (objects/sprites present), never colour palette — both
   render the same tileset, so any two frames share tones regardless of whether they show the same place.
 
+## Getting a port save into an emulator (DuckStation) — the save→memory-card converter
+
+Some reference checks need a *specific save state*, not just the demo intro (e.g. casting a late-game
+spell to diff its rendering). The port stores each save as a raw PS1 save-block file (`saves/` or
+`saves_tactical/BASLUS-00447VH`, ~14 KB, starts with `SC`). Wrap it in a valid 128 KB PS1 memory-card
+image and load it in an emulator.
+
+- **Use DuckStation, not BizHawk, for this.** BizHawk repeatedly refused to mount the converted card;
+  DuckStation loads it fine and is easier to drive for save-state-specific captures.
+- **DuckStation wants the `.mcd` extension** (its native raw card format), **not** `.mcr`. Same 128 KB raw
+  bytes either way — only the extension differs. Name the output `*.mcd`.
+
+Card layout (verified byte-for-byte against a real card): block 0 = directory — frame 0 `MC` header;
+frame 1 the `BASLUS-00447VH` entry (state `0x51`, filesize 16384 = **2 blocks**, next-link idx 1); frame 2
+state `0x53` last-link; frames 3-15 free `0xA0`; **frames 16-35 all-`0xFF`** (broken-sector list = none);
+36-63 zero. Data blocks 1-2 at `0x2000` = the port save, zero-padded to 16384. Frame checksum = XOR of
+bytes 0-126, stored at byte 127. Self-contained generator (no template needed):
+
+```python
+import struct
+def build_card(save_path, out_path):          # out_path MUST end .mcd for DuckStation
+    save = open(save_path, "rb").read()
+    assert save[:2] == b"SC" and len(save) <= 0x4000     # PS1 save block, <= 2 blocks
+    card = bytearray(131072)
+    def put(n, data):
+        f = bytearray(128); f[:len(data)] = data
+        ck = 0
+        for b in f[:127]: ck ^= b
+        f[127] = ck; card[n*128:(n+1)*128] = f
+    put(0, b"MC")
+    e = bytearray(0x0A); e[0] = 0x51; e[4:8] = struct.pack("<I", 0x4000); e[8:10] = struct.pack("<H", 1)
+    put(1, bytes(e) + b"BASLUS-00447VH")
+    put(2, bytes([0x53,0,0,0]) + struct.pack("<I",0) + struct.pack("<H",0xFFFF))
+    for n in range(3,16):  put(n, bytes([0xA0,0,0,0]) + struct.pack("<I",0) + struct.pack("<H",0xFFFF))
+    for n in range(16,36): card[n*128:(n+1)*128] = b"\xff" * 128    # broken-sector list = none
+    card[0x2000:0x2000+len(save)] = save                            # data blocks 1-2
+    open(out_path, "wb").write(card)
+```
+
+All three save slots survive (the whole save file is copied in). In DuckStation: Settings → Memory Cards
+→ point a slot at the `.mcd`, boot the retail disc, Load Game.
+
 ## Memory-safety tooling
 
 Three complementary checks, each catching a class the others miss (detail in `docs/memory-safety.md`
