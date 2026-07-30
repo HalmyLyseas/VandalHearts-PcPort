@@ -242,7 +242,7 @@ static void ensureInit(void) {
     addPatch(&gSpells[32].area,      1, SPELL_AREA_AOE);
     addPatch(&gSpells[32].targeting, 1, SPELL_TARGET_ALLY_GROUP);
     addPatch(&gSpells[32].range,     1, 0);  addPatch(&gSpells[32].fieldSize, 1, 3);
-    addPatch(&gSpells[32].mpCost,    1, 30);                                           /* MYSTIC_ENERGY  */
+    addPatch(&gSpells[32].mpCost,    1, 35);                                           /* MYSTIC_ENERGY mp 35: >half of L32 Huxley's 64 pool -> a 2nd back-to-back cast needs an MP refill item; still castable on acquisition at L25 */
     /* Retail Mystic Energy is single-target, so its per-target hit sound gSpellSounds2[32]==0 -- the
      * cast sound (gSpellSounds[32]==911) fires once and never repeats. Now that it's an AOE ally-group
      * buff, the per-target loop (battle_013b94.c) plays gSpellSounds2 once per ally, so give it a value
@@ -297,7 +297,7 @@ static void ensureInit(void) {
     addSpellDescSwap(29, "Protect Magic  Rng:6  F:0  MP:12");    /* PERFECT_GUARD  Rng 7->6, MP 15->12 */
     addSpellDescSwap(30, "Attack Magic  Rng:0  Fld:3  MP:14");   /* THUNDER_FLASH  Fld3 MP14           */
     addSpellDescSwap(31, "Healing Magic  Rng:0  F:3  MP:12");    /* HEALING_WAVE   MP 10->12           */
-    addSpellDescSwap(32, "DEF,AT Up  Rng:0  Fld:3  MP:30");      /* MYSTIC_ENERGY                      */
+    addSpellDescSwap(32, "DEF,AT Up  Rng:0  Fld:3  MP:35");      /* MYSTIC_ENERGY  mp 30->35           */
 }
 
 void PC_BalanceBoot(void) {

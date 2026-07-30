@@ -1368,6 +1368,16 @@ void Objf028_UnitCasting(Object *obj) {
                CalculateSupportSpellExp(s_targetUnit_801231a8);
             }
             s_targetUnit_801231a8->aglBoosted = 1;
+#ifdef PC_FEAT
+            /* Tactical: PERFECT_GUARD (an agility/evasion buff) ALSO grants magic resistance
+             * (magSusc=1) to its single target -- a niche "dodge + anti-magic" shield for a key or
+             * exposed unit (its description is already "Protect Magic"). Keyed on gCurrentSpell so any
+             * other BOOST_AGL spell keeps retail behaviour. No reset hook needed: the same team-turn
+             * clear loop that restores MYSTIC_ENERGY's magSusc (from gUnitInfo) covers this too. */
+            if (gTacticalMode && gCurrentSpell == SPELL_PERFECT_GUARD) {
+               s_targetUnit_801231a8->magicSusceptibility = 1;
+            }
+#endif
             break;
 
          case SPELL_EFFECT_RESTORE_MP:
