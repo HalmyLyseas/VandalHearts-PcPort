@@ -33,3 +33,6 @@ Three whole systems show the player an inflated or entirely cosmetic number:
   equipment is a *progression* axis, not a class one.
 - **[spells-and-items.md](spells-and-items.md)** — the full spell + consumable table (range, field,
   power, MP, effect, who learns it) with mechanical effect summaries.
+- **[ai-decision-making.md](ai-decision-making.md)** — how enemy units choose actions: the two-stage
+  caster logic (spell first, target second), the target-scoring formulas, the movement-dominated
+  cast-position choice, and why a much-stronger party becomes "invisible" to enemy casters.
