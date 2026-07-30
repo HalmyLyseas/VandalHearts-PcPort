@@ -7,6 +7,16 @@
 
 #include "PsyQ/kernel.h"
 
+#ifdef PC_FEAT
+extern int gTacticalMode;   /* Stage 3 1.4 -- F3 AI magic-susceptibility awareness */
+/* F3 tuning constant: weight for the AI magic-susceptibility term in func_800569A0. K=30 tuned in-game
+ * (2026-07-30; fixture + validation in the 1.4 scope doc). At K=30 the per-magSusc-tier step is 30 pts:
+ * resistant (magSusc 1/2) get -60/-30 and are reliably avoided; weak (4/5) get +30/+60 and are preferred
+ * -- but only by a 30-pt edge over neutral (3), so base factors (advantage/HP/terrain) stay live as
+ * tiebreakers (a well-matched neutral can still be picked over a weak unit). Re-tune here + rebuild. */
+#define PC_AI_MAGSUSC_K 30
+#endif
+
 void Objf570_AI_TBD(Object *);
 s32 func_800560F8(UnitStatus *);
 s32 IsLagging(void);
@@ -517,6 +527,9 @@ void func_800569A0(UnitStatus *unit) {
    UnitStatus *otherUnit;
    Object *sprite;
    s16 sVar4;
+#ifdef PC_FEAT
+   s16 magTerm = 0;   /* F3: AI magic-susceptibility term (Tactical); applied + logged */
+#endif
 
    for (i = 1; i < UNIT_CT; i++) {
       otherUnit = &gUnits[i];
@@ -534,9 +547,21 @@ void func_800569A0(UnitStatus *unit) {
                sVar4 -= (otherUnit->hpFrac / 125);
                sVar4 -= gAdvantage[unit->advantage][otherUnit->advantage];
                sVar4 -= gTerrainPreference[OBJ_TERRAIN(sprite).s.terrain] / 100;
+#ifdef PC_FEAT
+               /* F3 (Tactical): magic-susceptibility awareness. magSusc 1 = resistant -> LOWER score,
+                * 5 = weak -> RAISE, so the AI prefers magic-weak targets and avoids resistant ones.
+                * No magic-only gate needed: this DAMAGE branch is reached only for magic spells (physical
+                * uses func_80056C30, and every SPELL_EFFECT_DAMAGE already scales with magSusc in the
+                * damage formula). Weight PC_AI_MAGSUSC_K is defined above. */
+               magTerm = 0;
+               if (gTacticalMode) {
+                  magTerm = (s16)((otherUnit->magicSusceptibility - 3) * PC_AI_MAGSUSC_K);
+                  sVar4 += magTerm;
+               }
+#endif
 #ifdef PC_DEBUG_AI_LOG
                { extern void PC_DebugAiTargetLog(int, int, int, int, int, int, int, int,
-                                                 int, int, int, int, int, int);
+                                                 int, int, int, int, int, int, int, int);
                  PC_DebugAiTargetLog(unit->name, unit->advantage, unit->level,
                                      otherUnit->name, otherUnit->class, otherUnit->advantage,
                                      otherUnit->level, otherUnit->hpFrac,
@@ -545,7 +570,7 @@ void func_800569A0(UnitStatus *unit) {
                                      -gAdvantage[unit->advantage][otherUnit->advantage],
                                      gAdvantage[unit->advantage][otherUnit->advantage],
                                      -(gTerrainPreference[OBJ_TERRAIN(sprite).s.terrain] / 100),
-                                     sVar4); }
+                                     otherUnit->magicSusceptibility, magTerm, sVar4); }
 #endif
             }
             break;

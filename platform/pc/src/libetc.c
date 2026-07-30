@@ -147,7 +147,8 @@ void PC_DebugEvtEntityLog(int objIdx, int tileX, int tileZ, const void *base, co
 static FILE *s_aiLogFile = NULL;
 void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
                          int tgtName, int tgtClass, int tgtAdv, int tgtLvl, int tgtHpFrac,
-                         int lvlTerm, int hpTerm, int advTerm, int advRaw, int terrTerm, int score) {
+                         int lvlTerm, int hpTerm, int advTerm, int advRaw, int terrTerm,
+                         int magSusc, int magTerm, int score) {
     static int enabled = -1;
     if (enabled < 0) enabled = (getenv("VH_AI_LOG") != NULL) ? 1 : 0;
     if (!enabled) return;
@@ -155,12 +156,14 @@ void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
         s_aiLogFile = fopen("vh_ai_log.txt", "w");
         if (s_aiLogFile == NULL) { enabled = 0; return; }
     }
+    /* magSusc: 1=resistant .. 5=weak. magTerm = F3 (magSusc-3)*K applied to the score (0 if K unset /
+     * Normal mode). SCORE already includes magTerm. */
     fprintf(s_aiLogFile,
             "f=%ld caster[name=%d adv=%d lvl=%d] -> target[name=%d class=%d adv=%d lvl=%d hpFrac=%d]"
-            "  terms: base=+280 lvl=%+d hp=%+d ADV=%+d(gAdv=%d) terr=%+d  = SCORE %d\n",
+            "  terms: base=+280 lvl=%+d hp=%+d ADV=%+d(gAdv=%d) terr=%+d magSusc=%d magTerm=%+d  = SCORE %d\n",
             s_vblankCount, casterName, casterAdv, casterLvl,
             tgtName, tgtClass, tgtAdv, tgtLvl, tgtHpFrac,
-            lvlTerm, hpTerm, advTerm, advRaw, terrTerm, score);
+            lvlTerm, hpTerm, advTerm, advRaw, terrTerm, magSusc, magTerm, score);
     fflush(s_aiLogFile);
 }
 
