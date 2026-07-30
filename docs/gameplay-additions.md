@@ -165,6 +165,14 @@ symbols (□ ○ △ ✕). It defaults to Xbox — the common PC controller — 
 once; the choice is saved to `vandalhearts.ini`. This is deliberately limited to the port's **own**
 overlay (save management, options) — the game's in-battle prompts are left exactly as the original.
 
+### Finer camera elevation
+
+The battle camera's up/down viewing angle (right stick) now has **5 evenly-spaced stops** (11.25° to
+78.75°, including a clean **45°**) instead of the original 4 — an extra angle and a better mid-tilt for
+reading maps with tall or stepped terrain, without adding a lot of near-identical steps to click through.
+Purely a camera convenience: it changes nothing about the game, and 90° rotation is unchanged (finer
+rotation would need new eight-direction sprite art, a later release).
+
 ## Planned
 
 See the [roadmap](roadmap.md).

@@ -218,14 +218,29 @@ void UpdatePlayerCamera(void) {
       mapXRotationSpeed = 0x20;
    }
 
+#ifdef PC_FEAT
+   /* Stage-3 (1.4 F6): 5-stop elevation. Rest points vx = 0x80 + k*0xC0 (k=0..4) =
+    * 11.25 / 28.125 / 45 / 61.875 / 78.75 deg -- the clamped 11.25..78.75 range split into 4 equal
+    * 16.875-deg (0xC0) intervals. Every stop lands exactly on the 1/4096-deg angle grid and it includes
+    * a clean 45. (A 0x80 bitmask gives 7 stops -- too many, near-redundant; a 5-stop split needs an
+    * explicit interval, since the retail `(vx+0x80)&mask` trick only produces power-of-2 spacing.)
+    * Pitch (vx) is NOT quadrant-coupled (only yaw is), and every auto-camera (cutscene/SFX) drives vx by
+    * raw values + save/restore, so this stays isolated to player control. Speed 0x20 divides 0xC0, so
+    * taps land exactly on the stops. */
+   gCameraRotation.vx += mapXRotationSpeed;
+   if (((gCameraRotation.vx - 0x80) % 0xC0) == 0) {
+      mapXRotationSpeed = 0;
+   }
+   gCameraRotation.vx = CLAMP(gCameraRotation.vx, 0x80, 0x380);
+#else
    gCameraRotation.vx += 0x80;
    gCameraRotation.vx += mapXRotationSpeed;
    if ((gCameraRotation.vx & 0xff) == 0) {
       mapXRotationSpeed = 0;
    }
-
    gCameraRotation.vx -= 0x80;
    gCameraRotation.vx = CLAMP(gCameraRotation.vx, 0x80, 0x380);
+#endif
 
    gCameraRotation.vy += DEG(45);
    gCameraRotation.vy += mapYRotationSpeed;

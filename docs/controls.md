@@ -49,6 +49,11 @@ the **right analog stick** — push left/right to rotate, up/down to raise or lo
 which frees the physical shoulders for the unit-cycle and the triggers for battle fast-forward. On the
 keyboard, **Q / E** still rotate the camera, so no-right-stick setups keep the original rotate feel.
 
+*(1.4)* The up/down **elevation** gains an extra, evenly-spread stop — **5 viewing angles** (11.25° to
+78.75°, 16.875° apart, now including a level **45°**) instead of the original 4 — so you can find a
+readable angle on stepped terrain. Rotation stays at 90° quadrants (finer rotation needs new artwork — a
+later release).
+
 ## Battle fast-forward (PC addition, 1.4)
 
 During a battle, tap **R2** (or the `.` key) to run at **2× speed**; **L2** (or `,`) drops back to
