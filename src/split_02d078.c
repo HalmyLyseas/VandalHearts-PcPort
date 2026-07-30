@@ -78,7 +78,12 @@ Object *GetUnitSpriteAtPosition(u8 z, u8 x) {
    Object *unitSprite;
    u8 unitIdx = gMapUnitsPtr[z][x].s.unitIdx;
 
-   if (unitIdx == 0) {
+   if (unitIdx == 0
+#ifdef PC_PORT
+       || unitIdx >= UNIT_CT   /* latent retail OOB: a stale / off-map grid cell can hold an idx past
+                                * gUnits[UNIT_CT] (PSX reads in-arena garbage; PC faults). Treat as empty. */
+#endif
+      ) {
       unitSprite = NULL;
    } else {
       unitSprite = gUnits[unitIdx].sprite;

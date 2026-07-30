@@ -431,6 +431,14 @@ void Objf052_AttackInfoMarker(Object *obj) {
    switch (obj->state) {
    case 0:
       OBJ.unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
+#ifdef PC_PORT
+      /* If the marker's cell has no valid unit (stale / off-map coord -> GetUnitSpriteAtPosition NULL),
+       * retail's case 1 would dereference the NULL sprite. Kill the marker instead of crashing. */
+      if (OBJ.unitSprite == NULL) {
+         obj->functionIndex = OBJF_NULL;
+         break;
+      }
+#endif
 
       markerSprite = Obj_GetUnused();
       OBJ.sprite = markerSprite;
