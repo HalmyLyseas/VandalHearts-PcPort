@@ -4,6 +4,55 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.1] — Tactical Mode tuning + fixes
+
+The full campaign has now been playtested end to end; this release folds in the resulting balance tuning
+and fixes, plus two rendering/stability fixes that apply to both modes. Normal mode remains byte-for-byte
+the original.
+
+### Fixed (both modes)
+- **Spell & cutscene effects** — certain textured effects (energy rays, dissolve/fade planes, warp
+  surfaces) were rendering as flat semi-transparent shapes with their texture dropped; they now show
+  their proper textured appearance.
+- Fixed a rare crash when the on-screen attack marker (miss / support / poison) appeared over certain
+  map tiles — most likely on the long, narrow Trials corridor.
+
+### Quality of life (both modes)
+- **Enemy threat overlay** — reachable-and-threatened tiles now show in a distinct **orange** (they
+  previously shared yellow with spell/attack targeting), so a spell's AoE preview stays readable even
+  inside a danger zone. Overlay tints were also softened for easier reading over any terrain.
+
+### Tactical Mode (opt-in)
+
+**Progression**
+- **Level-cap curve retuned** to **10 / 15 / 19 / 24 / 28 / 32** — a smoother, steady climb that keeps
+  the party a step under the cap heading into each chapter's Trials and lands the endgame party right on
+  the final boss's level. (Validated across a full playthrough.)
+- **Trials of Toroah** — fixed the final Trial not awarding attack experience.
+
+**Casters & spells**
+- **Monk / Ninja rework** — the path now learns a genuine **Spread Force** and a retuned **Thunder
+  Flash**, and *keeps* its inherited base spells through both promotions (they're no longer shed at
+  Ninja), so the class stays flexible rather than losing utility.
+- **Mystic Energy** reworked into an **area-of-effect party buff** — a defensive group screen that
+  raises defense and grants **magic resistance** to every ally in the field, with a new icy-blue aura and
+  a per-ally cast effect. Cost tuned so a second back-to-back cast needs an MP refill.
+- **Thunder Ball** added to the mage kit — a long-range, small-area attack spell — and **Roman Fire**
+  buffed (power 7 → 9) so it's a real pick alongside Phase Shift rather than strictly outclassed.
+- **Perfect Guard** — cheaper (**12 MP**) and now also grants **magic resistance**, making it a
+  single-unit "evasion + anti-magic" shield.
+- **Healing Circle / Healing Wave** retuned into distinct roles — Circle is a cheap, efficient group
+  top-up; Wave is the heavy group heal.
+- Fixed **Monk / Ninja maximum MP** overshooting its intended value.
+
+**Visuals**
+- **Avalanche** re-skinned as an *ice* avalanche in Tactical (an icy boulder), matching the spell's
+  intended theme.
+
+**Changed since 1.3.0**
+- The two "restored cut weapons" from 1.3.0 have been **removed** — they turned out to be unique enemy
+  boss weapons, so they stay boss-exclusive. (Restored item description text is unchanged.)
+
 ## [1.3.0] — Tactical Mode + fixes
 
 ### Fixed (both modes)

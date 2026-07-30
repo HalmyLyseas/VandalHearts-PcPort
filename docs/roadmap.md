@@ -40,13 +40,13 @@ For **all players**: fixes two crashes latent since 1.2 (item transfer, certain 
 the options overlay and the enemy-threat overlay. It also adds a **Return to Title** overlay
 convenience. And it introduces **Tactical Mode** — a large, **opt-in** rebalance for a more varied
 tactical experience (per-chapter level cap, Trials that scale to your chapter and reward gold + XP,
-class reworks, a reined-in Vandalier, restored item descriptions and two cut weapons). Normal mode stays
+class reworks, a reined-in Vandalier, and clarified item descriptions). Normal mode stays
 byte-for-byte the original, and Tactical saves are kept separate. Full player guide:
 **[tactical-mode.md](tactical-mode.md)**; per-release detail in the [changelog](../CHANGELOG.md).
 
-> **Tactical Mode is in testing (beta).** It's playable end-to-end, but later chapters are still being
-> validated in playtest; its balance numbers may change in 1.3.x point releases. This only affects the
-> opt-in mode — the normal experience is unaffected.
+> **Tactical Mode is opt-in and validated** across a full playthrough. It stays a living design, so a few
+> balance numbers may still be fine-tuned in later point releases. This only affects the opt-in mode —
+> the normal experience is unaffected.
 
 ## Beyond
 

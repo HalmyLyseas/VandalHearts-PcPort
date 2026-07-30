@@ -28,18 +28,23 @@ over any terrain.)
 
 Before — a normal battle view:
 
-![A normal battle view before toggling the overlay](images/features-1.3-EnemyOverlay-01.png)
+![A normal battle view before toggling the overlay](images/features-1.3.1-EnemyOverlay-01.png)
 
 After pressing **Square** — every enemy's combined move-and-attack danger zone appears at once:
 
-![The threat overlay showing the enemies' combined danger zone](images/features-1.3-EnemyOverlay-02.png)
+![The threat overlay showing the enemies' combined danger zone](images/features-1.3.1-EnemyOverlay-02.png)
 
-- **Layering:** the overlay sits *below* your own previews, so it never hides what you're doing. When
-  you select a unit to move, its blue movement range stays visible — and any of its reachable tiles
-  that are *also* under threat turn **yellow** (reachable **and** dangerous). When you target a spell
-  or attack, that preview shows on top of the threat.
+- **Layering & colors:** the overlay sits *below* your own previews, so it never hides what you're
+  doing. When you select a unit to move, its **blue** movement range stays visible, and any of its
+  reachable tiles that are *also* under threat turn **orange** (reachable **and** dangerous), with pure
+  enemy threat beyond in **purple**.
 
-  ![With a unit selected: blue movement range, yellow where it overlaps the threat, purple enemy threat beyond](images/features-1.3-EnemyOverlay-03.png)
+  ![With a unit selected: blue movement range, orange where it overlaps the threat, purple enemy threat beyond](images/features-1.3.1-EnemyOverlay-03.png)
+- **Distinct from spell targeting:** when you aim a spell or attack, its **yellow** AoE preview draws on
+  top — and because reachable-and-threatened is now orange (previously it shared yellow), you can read a
+  spell's target area cleanly even inside a danger zone.
+
+  ![A spell's yellow AoE preview clearly distinct from the orange reachable-threat tiles](images/features-1.3.1-EnemyOverlay-04.png)
 - **Stays current:** the overlay refreshes automatically when the board changes — a unit moves, a
   crate is pushed, an enemy dies — so it always reflects the real danger. (It updates while you're
   planning at the cursor; during an action animation it hides and reappears, correct, when the action
@@ -105,10 +110,10 @@ load/save screens.
 
 ## Shipped (1.3)
 
-1.3 adds **Tactical Mode** — a large, opt-in gameplay rebalance (shipped as an **in-testing beta**) —
-plus two general overlay conveniences. The rebalance is its own topic; this section covers the
-overlay-facing additions. The full player guide to what Tactical Mode changes (level cap, class
-rebalancing, restored content, save isolation) is in **[tactical-mode.md](tactical-mode.md)**.
+1.3 adds **Tactical Mode** — a large, opt-in gameplay rebalance — plus two general overlay conveniences.
+The rebalance is its own topic; this section covers the overlay-facing additions. The full player guide
+to what Tactical Mode changes (level cap, class rebalancing, clarified item content, save isolation) is
+in **[tactical-mode.md](tactical-mode.md)**.
 
 ![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/features-1.3-OverlayNewEntries.png)
 
