@@ -157,6 +157,14 @@ On a gamepad this reuses the physical **L2 / R2 triggers**. Vanilla used those f
 port had already moved the camera to the right stick, so the triggers were free — nothing is lost, and
 the right stick still raises/lowers the view. See [controls.md](controls.md#battle-fast-forward-pc-addition-14).
 
+### Controller-aware overlay labels
+
+The port overlay's own button hints now match your controller. A **Button labels** setting (in the
+Select + Start overlay) switches the footers between **Xbox** letters (A / B / X / Y) and **PlayStation**
+symbols (□ ○ △ ✕). It defaults to Xbox — the common PC controller — and a PlayStation player flips it
+once; the choice is saved to `vandalhearts.ini`. This is deliberately limited to the port's **own**
+overlay (save management, options) — the game's in-battle prompts are left exactly as the original.
+
 ## Planned
 
 See the [roadmap](roadmap.md).

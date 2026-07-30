@@ -634,6 +634,14 @@ void PadInit(int mode) {
 static SDL_GameController *s_pad = NULL;
 static int s_gcSubsysReady = -1; /* -1 untried, 0 failed, 1 ready */
 
+/* Stage-3 (1.4 F2): overlay button-label style (0=PLAYSTATION, 1=XBOX). Xbox-layout pads are the large
+ * majority on PC, so it defaults to XBOX when unset -- a PlayStation player flips it once in the overlay
+ * and it persists. Only the port's own overlay footers use this; the game's own prompts are untouched. */
+enum { BTN_PLAYSTATION = 0, BTN_XBOX = 1 };
+int g_btnLabels = BTN_XBOX;
+
+int PC_ButtonLabelStyle(void) { return g_btnLabels; }
+
 static void pc_pad_ensure_open(void) {
     int i, n;
     if (s_gcSubsysReady == -1) {
@@ -671,6 +679,9 @@ static void PC_LoadCamInvert(void) {
      * tilt the view down). An explicit VH_CAM_INVERT_Y=0 (env or the shipped ini) restores normal. */
     e = getenv("VH_CAM_INVERT_X"); g_camInvertX = (e && e[0] == '1') ? 1 : 0;
     e = getenv("VH_CAM_INVERT_Y"); g_camInvertY = e ? (e[0] == '1' ? 1 : 0) : 1;
+    /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 1=XBOX); default XBOX when the ini is silent. */
+    e = getenv("VH_BUTTON_LABELS");
+    if (e) { int v = e[0] - '0'; g_btnLabels = (v == BTN_PLAYSTATION || v == BTN_XBOX) ? v : BTN_XBOX; }
 }
 
 static unsigned int pc_pad_read(void) {

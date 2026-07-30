@@ -24,6 +24,10 @@
  * mapping. Video (pc_gpu_window.c) is applied via the apply() callback below. */
 extern int g_camInvertX;
 extern int g_camInvertY;
+extern int g_btnLabels;   /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 1=XBOX) */
+
+/* CHOICE value labels for BUTTON LABELS, indexed by g_btnLabels. */
+static const char *const s_btnLabelText[] = { "PLAYSTATION", "XBOX" };
 
 /* Stage-3 1.3: applying the Tactical Mode toggle -- set the mode and re-sync the balance patch
  * (idempotent). The save folder follows automatically (PC_SaveDir reads gTacticalMode). */
@@ -45,6 +49,7 @@ typedef struct {
     void      (*action)(void);              /* OVL_ACTION: run on activate                */
     int       (*disabled)(void);            /* optional: 1 => greyed (visual only); may be NULL */
     int       (*locked)(void);              /* optional: 1 => read-only (blocks edit/activate); may be NULL */
+    const char *const *choiceText;          /* CHOICE: value labels indexed by value (else numeric); NULL ok */
 } Item;
 
 /* Window scale and fullscreen are mutually-exclusive display modes; the INACTIVE one is greyed. */
@@ -75,6 +80,8 @@ static const Item s_items[] = {
       "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
     { "CAMERA Y-AXIS",   OVL_TOGGLE, &g_camInvertY,   "camera", "VH_CAM_INVERT_Y",
       "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
+    { "BUTTON LABELS",   OVL_CHOICE, &g_btnLabels,    "controls", "VH_BUTTON_LABELS",
+      NULL, NULL,             0, 1, 1, NULL, NULL,                NULL,           NULL, NULL, s_btnLabelText },
     { "SAVE MANAGEMENT", OVL_ACTION, NULL, NULL, NULL,
       NULL, NULL,             0, 0, 0, NULL, NULL,                act_enterSaves, NULL, NULL },
     { "RETURN TO TITLE", OVL_ACTION, NULL, NULL, NULL,
@@ -276,12 +283,32 @@ int PC_OverlayItem(int i, const char **label, const char **valueText) {
     if (label) *label = it->label;
     if (it->kind == OVL_TOGGLE) { if (valueText) *valueText = *it->value ? it->onText : it->offText; return 1; }
     if (it->kind == OVL_CHOICE) {
-        if (valueText) { snprintf(vbuf, sizeof(vbuf), "%s%d", it->prefix ? it->prefix : "", *it->value);
-                         *valueText = vbuf; }
+        if (valueText) {
+            if (it->choiceText) { *valueText = it->choiceText[*it->value]; }   /* text-labelled choice */
+            else { snprintf(vbuf, sizeof(vbuf), "%s%d", it->prefix ? it->prefix : "", *it->value);
+                   *valueText = vbuf; }
+        }
         return 1;
     }
     if (valueText) *valueText = NULL;         /* ACTION: label only */
     return 0;
+}
+
+/* Widest value string an item can display -- used ONLY to size the MAIN panel so it doesn't jump scale
+ * (or shrink into a blocky 2x) when a text-choice cycles between a long and short value (1.4 F2 #4). For
+ * a text-labelled CHOICE this is the longest choiceText entry; otherwise it's just the current value. */
+const char *PC_OverlayItemWidestValue(int i) {
+    const Item *it;
+    if (i < 0 || i >= N_ITEMS) return NULL;
+    it = &s_items[i];
+    if (it->kind == OVL_CHOICE && it->choiceText) {
+        const char *best = it->choiceText[it->minv];
+        int v;
+        for (v = it->minv + 1; v <= it->maxv; v++)
+            if (strlen(it->choiceText[v]) > strlen(best)) best = it->choiceText[v];
+        return best;
+    }
+    { const char *val = NULL; PC_OverlayItem(i, NULL, &val); return val; }
 }
 
 int PC_OverlayItemDisabled(int i) {

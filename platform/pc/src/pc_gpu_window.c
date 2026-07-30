@@ -50,6 +50,12 @@ static void glyphRows(char c, unsigned char out[7]) {
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
         {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
         {'?', {0x0E, 0x11, 0x01, 0x06, 0x04, 0, 0x04}},
+        /* 1.4 F2: PlayStation face-button glyphs (sentinel ASCII -> icon), used by the overlay footers:
+         * '$'=Square, '@'=Circle, '^'=Triangle, '~'=Cross. Monochrome outlines (the font is 1-colour). */
+        {'$', {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F}},   /* square */
+        {'@', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},   /* circle */
+        {'^', {0x04, 0x04, 0x0A, 0x0A, 0x11, 0x11, 0x1F}},   /* triangle */
+        {'~', {0x11, 0x0A, 0x04, 0x04, 0x04, 0x0A, 0x11}},   /* cross */
         {'A', {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
         {'B', {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}},
         {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
@@ -190,6 +196,12 @@ static void ovlPanelBox(int w, int h, int px, int py, int panelW, int panelH) {
 /* Pick scale 2 if a panel `base` px wide (scale-1) fits the native width with margins, else 1. */
 static int ovlPickScale(int w, int base) { return (2 * (base + 2 * OVL_PADX1) <= w - 8) ? 2 : 1; }
 
+/* 1.4 F2: overlay button-label style (1 == XBOX; see libetc.c PC_ButtonLabelStyle). Only the port
+ * overlay's own footers swap PlayStation symbols for Xbox letters; the game's prompts are untouched. */
+extern int PC_ButtonLabelStyle(void);
+extern const char *PC_OverlayItemWidestValue(int i);
+#define OVL_LABELS_XBOX (PC_ButtonLabelStyle() == 1)
+
 /* MAIN: the settings list. */
 static void drawMain(int w, int h) {
     const char *title = PC_OverlayTitle();
@@ -197,10 +209,11 @@ static void drawMain(int w, int h) {
     int scale, i, base = ovlTextPx(title, 1);
     int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
     for (i = 0; i < count; i++) {
-        const char *label, *val;
+        const char *label, *wv;
         int lw;
-        PC_OverlayItem(i, &label, &val);
-        lw = ovlTextPx(label, 1) + (val ? 12 + ovlTextPx(val, 1) : 0);
+        PC_OverlayItem(i, &label, NULL);
+        wv = PC_OverlayItemWidestValue(i);   /* size to the widest value, not the current one (1.4 F2 #4) */
+        lw = ovlTextPx(label, 1) + (wv ? 12 + ovlTextPx(wv, 1) : 0);
         if (lw > base) base = lw;
     }
     scale = ovlPickScale(w, base);
@@ -227,9 +240,10 @@ static void drawMain(int w, int h) {
 
 /* SAVES: the archive browser -- flat list (scrolls), a position line if long, and a 2-line legend. */
 static void drawSaves(int w, int h) {
-    static const char *L1 = "SQUARE: BACK UP   CIRCLE: RESTORE";
-    static const char *L2 = "TRIANGLE: DELETE   CROSS: BACK";
-    static const char *L3 = "START: INSPECT FILE CONTENT";
+    int xbox = OVL_LABELS_XBOX;   /* PS: $=Square @=Circle ^=Triangle ~=Cross (glyph font entries) */
+    const char *L1 = xbox ? "X: BACK UP   B: RESTORE"       : "$: BACK UP   @: RESTORE";
+    const char *L2 = xbox ? "Y: DELETE   A: BACK"           : "^: DELETE   ~: BACK";
+    const char *L3 = "START: INSPECT FILE CONTENT";  /* START is the same label on both */
     static const char *EMPTY = "(NO BACKUPS YET)";
     const int MAXVIS = 6;
     const char *title = PC_OverlayTitle();
@@ -337,7 +351,7 @@ static void drawConfirm(int w, int h) {
 
 /* DETAIL: the three regular slots inside the inspected archive. */
 static void drawDetail(int w, int h) {
-    static const char *LEG = "CROSS: BACK";
+    const char *LEG = OVL_LABELS_XBOX ? "A: BACK" : "~: BACK";   /* ~ = PS Cross glyph */
     const char *title = PC_OverlayDetailTitle();
     int scale, i, base, bodyLines;
     int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
