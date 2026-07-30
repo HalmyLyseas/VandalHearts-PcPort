@@ -19,7 +19,7 @@ Nintendo-style pads.
 | West (X) | Square | **(PC)** Toggle the enemy threat overlay |
 | **L1 / R1** (shoulders) | — | **(PC)** Cycle through your units — **L1** previous, **R1** next |
 | **Right stick** | — | **(PC)** Camera — horizontal = rotate, vertical = raise/lower the angle |
-| L2 / R2 (triggers) | L2 / R2 | Camera elevation (raise / lower the view angle) |
+| **L2 / R2** (triggers) | — | **(PC)** *(1.4)* Battle fast-forward — **R2** speed up to 2×, **L2** back to normal |
 | Start | Start | Battle menu / options; skips an intro movie |
 | **Select + Start** (chord) | — | **(PC)** Open / close the in-game options overlay |
 
@@ -37,6 +37,7 @@ Options, Save, Load).
 | **A** | Square | **(PC)** Toggle the enemy threat overlay |
 | **`[` / `]`** | — | **(PC)** Cycle through your units — `[` previous, `]` next |
 | **Q / E** | L1 / R1 | Camera rotate (left / right) |
+| **`,` / `.`** | — | **(PC)** *(1.4)* Battle fast-forward — `.` speed up to 2×, `,` back to normal |
 | Enter | Start | Battle menu / options; skips an intro movie |
 | Space | Select | Select — used only for the overlay chord below |
 | **Space + Enter** (chord) | — | **(PC)** Open / close the in-game options overlay |
@@ -45,8 +46,21 @@ Options, Save, Load).
 
 Vanilla rotates the battlefield camera with the shoulder buttons. The PC port moves camera control to
 the **right analog stick** — push left/right to rotate, up/down to raise or lower the viewing angle —
-which frees the physical shoulders for the unit-cycle above. The shoulder *buttons* and triggers still
-drive the camera too (rotate / elevation), so keyboard and no-right-stick pads keep the original feel.
+which frees the physical shoulders for the unit-cycle and the triggers for battle fast-forward. On the
+keyboard, **Q / E** still rotate the camera, so no-right-stick setups keep the original rotate feel.
+
+## Battle fast-forward (PC addition, 1.4)
+
+During a battle, tap **R2** (or the `.` key) to run at **2× speed**; **L2** (or `,`) drops back to
+normal. A small **`BATTLE SPEED X2`** indicator shows top-right while it's active. It only works inside a battle — menus, the world map, cutscenes and movies always play at normal
+speed — and it resets to 1× automatically whenever you leave a battle.
+
+Speed-up is *whole-tick*: the game runs complete update steps closer together, never skipping or
+fractioning one, so the AI, RNG and outcomes are **identical** to normal speed — only the wait between
+frames is compressed. It applies in both normal and [Tactical](tactical-mode.md) mode.
+
+> On a gamepad this reuses the physical **L2 / R2 triggers**, which vanilla used for camera elevation —
+> the camera's up/down angle now lives on the **right stick** (above), so nothing is lost.
 
 ## Options overlay (PC addition)
 

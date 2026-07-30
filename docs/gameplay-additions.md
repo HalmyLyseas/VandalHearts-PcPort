@@ -136,6 +136,27 @@ confirmation first, with the warning shown in red and **Cancel** a button away:
 This one is available in **both** modes (it's a plain convenience, not a Tactical change). It's greyed
 out while you're already at the title screen.
 
+## In development (1.4)
+
+> **Status: in development** — implemented and in playtesting; will move to *Shipped* when 1.4 releases.
+
+### Battle fast-forward
+
+A battle-only **2× speed** for quicker play. During a battle, tap **R2** (or the `.` key) to run at
+double speed; **L2** (or `,`) returns to normal. A small **`BATTLE SPEED X2`** readout shows top-right
+while it's active. It works **only inside a battle** — menus, the world map, cutscenes and movies always
+play at normal speed — and it **resets to 1× automatically** when the battle ends, so it never carries
+into the next battle or the overworld.
+
+The speed-up is *whole-tick*: the game runs its complete update steps closer together in time, never
+skipping or splitting one, so **the AI, RNG and every outcome are identical to normal speed** — only the
+idle wait between frames is compressed. Because it changes nothing about what the game computes, it
+applies in **both** normal and Tactical mode (it isn't a balance change).
+
+On a gamepad this reuses the physical **L2 / R2 triggers**. Vanilla used those for camera elevation; the
+port had already moved the camera to the right stick, so the triggers were free — nothing is lost, and
+the right stick still raises/lowers the view. See [controls.md](controls.md#battle-fast-forward-pc-addition-14).
+
 ## Planned
 
 See the [roadmap](roadmap.md).

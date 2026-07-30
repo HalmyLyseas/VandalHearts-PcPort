@@ -92,7 +92,8 @@ static void glyphRows(char c, unsigned char out[7]) {
 /* Draw `text` into the RGB scratch at screen (sx,sy) top-left, `scale` px per
  * font cell. Scratch is stored bottom-up (row 0 = bottom), so we flip Y here.
  * Draws a black cell behind lit pixels for contrast against the scene. */
-static void osdDrawText(int w, int h, int sx, int sy, int scale, const char *text) {
+static void osdDrawText(int w, int h, int sx, int sy, int scale, const char *text,
+                        unsigned char fr, unsigned char fg, unsigned char fb, int drawBg) {
     int ci = 0;
     const char *p;
     for (p = text; *p; p++, ci++) {
@@ -112,8 +113,9 @@ static void osdDrawText(int w, int h, int sx, int sy, int scale, const char *tex
                         if (X < 0 || X >= w || Y < 0 || Y >= h) continue;
                         fy = h - 1 - Y;
                         o = &s_rgbaScratch[(fy * w + X) * 3];
-                        if (lit) { o[0] = 0x20; o[1] = 0xFF; o[2] = 0x20; } /* bright green */
-                        else { o[0] = o[0] >> 2; o[1] = o[1] >> 2; o[2] = o[2] >> 2; } /* dim bg */
+                        if (lit) { o[0] = fr; o[1] = fg; o[2] = fb; }
+                        else if (drawBg) { o[0] = o[0] >> 2; o[1] = o[1] >> 2; o[2] = o[2] >> 2; } /* dim */
+                        /* else: leave the scene pixel untouched (transparent background) */
                     }
                 }
             }
@@ -533,7 +535,24 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     {
         static int s_osdEnabled = -1;
         if (s_osdEnabled < 0) s_osdEnabled = (getenv("VH_CAM_OSD") != NULL) ? 1 : 0;
-        if (s_osdEnabled && g_camOsdText[0]) osdDrawText(w, h, 2, 2, 1, g_camOsdText);
+        if (s_osdEnabled && g_camOsdText[0]) osdDrawText(w, h, 2, 2, 1, g_camOsdText, 0x20, 0xFF, 0x20, 1);
+    }
+
+    /* Stage-3 (1.4 F1): battle fast-forward readout. PC_BattleSpeedGet() returns 1 outside a battle, so
+     * the "BATTLE SPEED X2" tag only shows while fast-forward is active. Uppercase (the OSD font has no
+     * lowercase glyphs). Top-right, scale 2. */
+    {
+        extern int PC_BattleSpeedGet(void);
+        int spd = PC_BattleSpeedGet();
+        if (spd > 1) {
+            static const char lbl[] = "BATTLE SPEED X";
+            char buf[sizeof(lbl) + 1];
+            int i = 0;
+            for (; lbl[i]; i++) buf[i] = lbl[i];
+            buf[i++] = (char)('0' + spd);
+            buf[i] = '\0';
+            osdDrawText(w, h, w - i * 6 * 2 - 4, 4, 2, buf, 0xFF, 0xFF, 0xFF, 0); /* white, transparent bg */
+        }
     }
 
     if (PC_OverlayIsOpen()) PC_GpuDrawOverlay(w, h);   /* Stage-3 (1.1C) options overlay, on top */

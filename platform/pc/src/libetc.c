@@ -706,9 +706,11 @@ static unsigned int pc_pad_read(void) {
     if (GC_BTN(SDL_CONTROLLER_BUTTON_BACK))          p |= PADselect;
     /* (L3/R3 are analog-pad only; VH reads a digital pad, so they're unmapped.) */
 #undef GC_BTN
-    /* Analog triggers -> L2/R2. */
-    if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERLEFT)  > AXIS_DZ) p |= PADL2;
-    if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > AXIS_DZ) p |= PADR2;
+    /* Analog triggers -> pad-2 (high word) L2/R2 for the 1.4 battle fast-forward, mirroring the
+     * L1/R1 ally-cycle decouple above. The game never reads pad-2 L2/R2 in normal play; right-stick
+     * vertical (below) keeps low-word L2/R2 = camera pitch, so no camera control is lost. */
+    if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERLEFT)  > AXIS_DZ) p |= (unsigned)PADL2 << 16;
+    if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > AXIS_DZ) p |= (unsigned)PADR2 << 16;
     /* Left analog stick also drives the D-pad, so movement works either way. */
     {
         int lx = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTX);
@@ -793,6 +795,45 @@ static unsigned int PC_OverlayFilterPad(unsigned int raw) {
     return out;
 }
 
+/* ---- Stage-3 (1.4 F1): battle-only fast-forward -------------------------------------------------
+ * A whole-tick speed multiplier: VSync() divides the inter-frame idle wait by the factor, so the game
+ * runs N *complete* UpdateEngine() ticks in the wall-clock of one. AI/RNG stay byte-identical -- only
+ * the idle time between ticks is compressed; never a fractional or skipped tick. Effective ONLY in an
+ * active battle (STATE_27 / LOAD_IN_BATTLE_SAVE); menus, world map, FMV and dialogue always run 1x.
+ *
+ * Input: the physical L2/R2 triggers are routed to the game's unused "pad 2" (high word) L2/R2 bits
+ * in pc_pad_read() -- the same decouple the 1.1 ally-cycle uses for L1/R1 -- so the right stick keeps
+ * camera pitch and no in-game control is stolen (the game never reads pad-2 L2/R2 outside three
+ * debug-only object handlers). R2 = faster, L2 = slower (1x/2x, clamped). Keyboard: '.'/','.
+ * Not a balance change and it never alters outcomes, so it applies in both Normal and Tactical mode.
+ *
+ * 2x only: the host renders a full battle frame in ~8ms (~120fps ceiling), so 2x is reached by every
+ * tick still rendering; 3x would need frame-skipping the software rasterizer (strobing, poor UX) for no
+ * worthwhile gain, so it was dropped. 2x is already a large, smooth speed-up. */
+#define VH_BATTLE_SPEED_MAX 2
+static int s_battleSpeed = 1;   /* 1..MAX; reset to 1x on leaving battle (see VSync) */
+
+static int PC_InActiveBattle(void) {
+    return gState.primary == STATE_27 || gState.primary == STATE_LOAD_IN_BATTLE_SAVE;
+}
+
+/* Effective speed for the OSD indicator: 1 when not in a battle so the readout hides. */
+int PC_BattleSpeedGet(void) {
+    return PC_InActiveBattle() ? s_battleSpeed : 1;
+}
+
+/* Edge-detect the pad-2 (high-word) L2/R2 bits and step the speed. Fed the full 32-bit pad word from
+ * PadRead(). Only adjustable in an active battle with the options overlay closed. */
+static void PC_BattleSpeedInput(unsigned int pad) {
+    static unsigned int prev = 0;
+    unsigned int hi = pad >> 16;                     /* pad 2 lives in the high word */
+    unsigned int newpress = hi & ~prev;              /* rising edges -> one step per tap */
+    prev = hi;
+    if (!PC_InActiveBattle() || PC_OverlayIsOpen()) return;
+    if ((newpress & PADR2) && s_battleSpeed < VH_BATTLE_SPEED_MAX) s_battleSpeed++;
+    if ((newpress & PADL2) && s_battleSpeed > 1)                   s_battleSpeed--;
+}
+
 unsigned int PadRead(int id) {
     (void)id;
 
@@ -817,6 +858,10 @@ unsigned int PadRead(int id) {
     if (keys[SDL_SCANCODE_RIGHTBRACKET]) p1 |= (unsigned)PADR1 << 16;   /* cycle next */
     if (keys[SDL_SCANCODE_RETURN]) p1 |= PADstart;
     if (keys[SDL_SCANCODE_SPACE])  p1 |= PADselect;
+    /* Stage 3 (1.4 F1): battle fast-forward on ',' / '.' -> pad-2 (high word) L2/R2, mirroring the
+     * gamepad triggers below. ',' = slower, '.' = faster. */
+    if (keys[SDL_SCANCODE_COMMA])  p1 |= (unsigned)PADL2 << 16;
+    if (keys[SDL_SCANCODE_PERIOD]) p1 |= (unsigned)PADR2 << 16;
 
     /* OR in any connected gamepad. */
     p1 |= pc_pad_read();
@@ -825,6 +870,7 @@ unsigned int PadRead(int id) {
      * in the low 16 bits, port 1 in the high 16); the original code reads
      * player 2 via `PadRead(0/1) >> 0x10`. No second controller mapped
      * yet, so the high half stays zero. */
+    PC_BattleSpeedInput(p1);          /* Stage-3 (1.4 F1): battle fast-forward, pad-2 L2/R2 */
     return PC_OverlayFilterPad(p1);   /* Stage-3 (1.1C): chord/overlay input filter */
 }
 
@@ -844,9 +890,15 @@ int VSync(int mode) {
     }
 
     int waits = (mode == 0) ? 1 : mode;
+    /* Stage-3 (1.4 F1): fast-forward resets to 1x on leaving battle, so it never carries into the next
+     * battle or an overworld save -- each battle starts at normal speed. */
+    if (!PC_InActiveBattle()) s_battleSpeed = 1;
+    /* Divide the per-tick idle wait by the speed factor so N whole ticks fit the wall-clock of one --
+     * outside battle PC_BattleSpeedGet() returns 1 (no-op). */
+    double frameMs = FRAME_MS_F / (double)PC_BattleSpeedGet();
     for (int i = 0; i < waits; i++) {
         Uint32 now = SDL_GetTicks();
-        s_nextVBlankMs += FRAME_MS_F;         /* fractional deadline: accumulates the 0.68ms/frame */
+        s_nextVBlankMs += frameMs;            /* fractional deadline: accumulates the sub-ms remainder */
         if ((double)now < s_nextVBlankMs) {
             SDL_Delay((Uint32)(s_nextVBlankMs - now));
         } else {
