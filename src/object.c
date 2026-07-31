@@ -416,6 +416,10 @@ void AddObjPrim3(u32 *ot, Object *obj) {
          } else {
             poly->tpage = gGfxTPageIds[gfx];
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+            { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+              PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
          }
 
          AddPrim(&ot[otIdx], poly);
@@ -474,6 +478,10 @@ void AddObjPrim4(u32 *ot, Object *obj) {
          } else {
             poly->tpage = gGfxTPageIds[gfx];
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+            { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+              PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
          }
 
          AddPrim(&ot[otIdx], poly);
@@ -531,6 +539,10 @@ void AddObjPrim5(u32 *ot, Object *obj) {
          } else {
             poly->tpage = gGfxTPageIds[gfx];
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+            { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+              PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
          }
 
          AddPrim(&ot[otIdx], poly);
@@ -595,6 +607,10 @@ void AddObjPrim6(u32 *ot, Object *obj, s32 useMapElevation) {
          } else {
             poly->tpage = gGfxTPageIds[gfx];
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+            { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+              PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
          }
 
          AddPrim(&ot[otIdx], poly);
@@ -663,6 +679,10 @@ void AddObjPrim7(u32 *ot, Object *obj, s32 useMapElevation) {
          } else {
             poly->tpage = gGfxTPageIds[gfx];
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+            { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+              PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
          }
 
          AddPrim(&ot[otIdx], poly);
@@ -740,6 +760,10 @@ void AddObjPrim8(u32 *ot, Object *obj, s32 useMapElevation) {
          } else {
             poly->tpage = gGfxTPageIds[gfx];
             poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+            { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+              PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
          }
 
          AddPrim(&ot[otIdx], poly);
@@ -1107,6 +1131,10 @@ void AddObjPrim_Gui(u32 *ot, Object *obj) {
       } else {
          poly->tpage = gGfxTPageIds[gfx];
          poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+         { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+           PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
       }
 
       AddPrim(&ot[otIdx], poly);
@@ -1164,6 +1192,10 @@ void AddObjPrim2(u32 *ot, Object *obj) {
       } else {
          poly->tpage = gGfxTPageIds[gfx];
          poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+         { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+           PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
       }
 
       AddPrim(&ot[otIdx], poly);
@@ -1199,6 +1231,10 @@ void AddObjPrim_Panorama(u32 *ot, Object *obj) {
    setRGB0(poly, 0x80, 0x80, 0x80);
    poly->tpage = gGfxTPageIds[gfx];
    poly->code = GPU_CODE_POLY_FT4;
+#ifdef PC_DEBUG_SPRITE_LOG
+   { extern void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy);
+     PC_DebugOpaqueGfx(gfx, poly->tpage, obj->functionIndex, poly->x0, poly->y0); }
+#endif
 
    AddPrim(&ot[0], poly);
    gQuadIndex++;

@@ -528,6 +528,26 @@ void PC_DebugObjPrim4Log(int gfx, int otz, int otIdx, int sx, int sy, int otOfs)
     fflush(s_op4File);
 }
 
+/* Opaque-sprite gfx diagnostic (casting-blob investigation). object.c's AddObjPrim* variants take
+ * the OPAQUE branch (poly->tpage = gGfxTPageIds[gfx]) when d.sprite.semiTrans==0; the blob is a mesh
+ * of those, some resolving to tpage 0x0000 (gGfxTPageIds[gfx]==0 -> samples framebuffer page 0). This
+ * logs gfx + resolved tpage + owning effect functionIndex + screen pos, so we can (a) filter by the
+ * blob's screen location to read its gfx, and (b) find which gfx's gGfxTPageIds is 0 and why. Env-gated
+ * VH_OPAQUE_GFX_LOG; call site is #ifdef PC_DEBUG_SPRITE_LOG so the matching build is untouched. */
+static FILE *s_opgFile = NULL;
+void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy) {
+    static int enabled = -1;
+    if (enabled < 0) enabled = (getenv("VH_OPAQUE_GFX_LOG") != NULL) ? 1 : 0;
+    if (!enabled) return;
+    if (s_opgFile == NULL) {
+        s_opgFile = fopen("vh_opaque_gfx.csv", "w");
+        if (s_opgFile == NULL) return;
+        fprintf(s_opgFile, "frame,gfx,tpage,fn,sx,sy\n");
+    }
+    fprintf(s_opgFile, "%ld,%d,0x%04x,%d,%d,%d\n", s_vblankCount, gfx, tpage & 0xffff, fn, sx, sy);
+    fflush(s_opgFile);
+}
+
 /* Terrain projection diagnostic (terrain-collapse / pull-to-center investigation). RenderMapTile
  * calls this with a tile's 4 input model vertices right after the 4 corners are projected; we read
  * back what each corner projected to from the GTE ring (PC_GteProjEntry) plus H/OFX/OFY, so we can

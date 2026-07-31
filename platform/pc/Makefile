@@ -304,7 +304,12 @@ endif
 # and forget the compile-time switch. (It first went inside the SPRITE_LOG ifeq above by
 # mistake, so the hooks silently were not compiled and the probe produced no log at all.)
 $(BUILD_DIR)/src/window.o: GAME_C_FLAGS += -DPC_DEBUG_UI_LOG
-$(BUILD_DIR)/src/object.o: GAME_C_FLAGS += -DPC_DEBUG_UI_LOG
+# NB: object.o also gets -DPC_DEBUG_SPRITE_LOG here (not just on line ~298). GNU Make's SECOND
+# target-specific `+=` for the same target appends only to the GLOBAL value, dropping the first
+# one -- so an unconditional UI_LOG line here silently clobbered the (conditional) SPRITE_LOG line,
+# leaving object.o's SPRITE_LOG hooks (PC_DebugObjPrim4Log, PC_DebugOpaqueGfx) never compiled.
+# Both are runtime-gated (VH_OBJPRIM4_LOG / VH_OPAQUE_GFX_LOG), so always-compiling them is free.
+$(BUILD_DIR)/src/object.o: GAME_C_FLAGS += -DPC_DEBUG_UI_LOG -DPC_DEBUG_SPRITE_LOG
 $(BUILD_DIR)/src/main_menu.o: GAME_C_FLAGS += -DPC_DEBUG_UI_LOG
 $(BUILD_DIR)/src/window.o: FORCE
 $(BUILD_DIR)/src/object.o: FORCE
