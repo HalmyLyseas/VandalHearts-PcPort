@@ -58,6 +58,7 @@ isn't already set. Applied keys are echoed at startup (`PC_Config: KEY=VALUE (fr
 |---|---|---|
 | `VH_DISC_IMAGE` | auto-detect (see above) | Full path to the game disc `.bin`. |
 | `VH_SCALE` | `2` | Integer window scale of the native 320×240 (2 = 640×480). Upscaled nearest-neighbour, so pixel art stays crisp. |
+| `VH_ACCURATE` | `1` (on) | PSX-accurate software rasterizer — round-to-nearest texture sampling, ordered dithering, 5-bit semi-transparency blend. The intended, hardware-faithful look. Set `0` for the legacy renderer (no dithering, slightly softer); advanced users only. |
 
 The everyday knobs are few by design. There are also **compatibility** and **audio-tuning** keys whose
 defaults reproduce real-hardware behaviour and shouldn't normally be touched — they're documented in

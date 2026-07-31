@@ -101,14 +101,17 @@ static unsigned short PackColorDither(int r, int g, int b, int x, int y) {
     return PackColor(r, g, b);   /* PackColor clamps to [0,255] then truncates to 5-bit */
 }
 
-/* G1 (1.5) PSX-accurate rasterization, opt-in via VH_ACCURATE=1 while it's validated against the
- * DuckStation VRAM oracle (platform/pc/tools/raster_harness). Rolled out one rule at a time so each
- * can be scored independently against the DuckStation VRAM oracle. When all rules land + no
- * opaque-frame regression, this becomes the default. Runtime gate (not #ifdef) so the harness
- * (platform/pc/tools/raster_harness) can A/B one binary. */
+/* G1 (1.5) PSX-accurate rasterization: UV round-to-nearest, front-colour dither, 5-bit blargg blend.
+ * Validated against a DuckStation VRAM oracle (platform/pc/tools/raster_harness): 27.17 -> 4.96 mean
+ * abs-diff, 96.4% pixel-exact. **Default ON** (the preferred, hardware-faithful look) -- set
+ * VH_ACCURATE=0 (vandalhearts.ini or env) to fall back to the legacy renderer (advanced users only).
+ * Runtime gate (not #ifdef) so the harness can A/B one binary: pass VH_ACCURATE=0 for the legacy path. */
 static int AccurateEnabled(void) {
     static int e = -1;
-    if (e < 0) e = getenv("VH_ACCURATE") ? 1 : 0;
+    if (e < 0) {
+        const char *v = getenv("VH_ACCURATE");
+        e = (v && v[0] == '0') ? 0 : 1;   /* default ON; only an explicit VH_ACCURATE=0 disables */
+    }
     return e;
 }
 
