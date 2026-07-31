@@ -246,8 +246,181 @@ static unsigned short SampleTexture(int tpage, int clut, int u, int v) {
 
 typedef struct { double x, y, u, v; } RVert;
 
+/* ===================== VH_DDA (experimental): fixed-point integer triangle DDA =====================
+ * Faithful port of DuckStation's Mednafen rasterizer (external/duckstation gpu_sw_rasterizer.inl:
+ * DrawTriangle / DrawTrianglePart / DrawSpan / UVStepper). Unlike our barycentric FillTriangle -- which
+ * samples COVERAGE at the pixel centre (x+0.5,y+0.5) but UV at the corner (x,y) -- the DDA evaluates
+ * BOTH at the pixel's INTEGER position in 64-bit fixed point (edges) + 24-frac-bit UV, so there is no
+ * centre/corner mismatch: the source of our tile-edge seams AND the opaque-UV extrapolation (fuzzy
+ * stones / fragmented water). Per-pixel shading (texture sample, modulate, dither, blend) stays ours.
+ * Opt-in via VH_DDA=1 while validated on the harness; folds into VH_ACCURATE once proven multi-scene. */
+static int DdaEnabled(void) {
+    static int e = -1;
+    if (e < 0) { const char *v = getenv("VH_DDA"); e = (v && v[0] != '0') ? 1 : 0; }
+    return e;
+}
+#define DDA_ASHIFT 12
+#define DDA_APOST  12
+typedef struct { unsigned u, v; } DdaUV;
+typedef struct { unsigned dudx, dvdx, dudy, dvdy; } DdaUVStep;
+typedef struct { int start_y, end_y; long long start_x[2], step_x[2]; int upside_down; } DdaPart;
+typedef struct {
+    int r, g, bcol, textured, tpage, clut, semiTrans, abr;
+    int clipL, clipR, clipT, clipB;   /* inclusive drawing area */
+    DdaUVStep step;
+} DdaCtx;
+
+static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
+static long long dda_makestep(int dx, int dy) {
+    long long bias = (dx < 0) ? -(long long)(dy - 1) : ((dx > 0) ? (long long)(dy - 1) : 0);
+    return (((long long)dx << 32) + bias) / dy;
+}
+static int dda_unfp(long long xfp) { return (int)((unsigned long long)xfp >> 32); }
+static void dda_uv_init(DdaUV *s, int us, int vs) {
+    s->u = (((unsigned)us << DDA_ASHIFT) + (1u << (DDA_ASHIFT - 1))) << DDA_APOST;
+    s->v = (((unsigned)vs << DDA_ASHIFT) + (1u << (DDA_ASHIFT - 1))) << DDA_APOST;
+}
+static int dda_getu(const DdaUV *s) { return (int)((s->u >> (DDA_ASHIFT + DDA_APOST)) & 0xFF); }
+static int dda_getv(const DdaUV *s) { return (int)((s->v >> (DDA_ASHIFT + DDA_APOST)) & 0xFF); }
+static void dda_stepx_n(DdaUV *s, const DdaUVStep *st, int n) {
+    s->u += (unsigned)((int)st->dudx * n); s->v += (unsigned)((int)st->dvdx * n);
+}
+static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
+    s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
+}
+
+static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv) {
+    int width = x_bound - x_start;         /* fill [x_start, x_bound): left-inclusive, right-exclusive */
+    int current_x = x_start;
+    if (current_x < cx->clipL) { int d = cx->clipL - current_x; x_start += d; current_x += d; width -= d; }
+    if (current_x + width > cx->clipR + 1) width = cx->clipR + 1 - current_x;
+    if (width <= 0) return;
+    if (cx->textured) dda_stepx_n(&uv, &cx->step, x_start);   /* seed UV to the span's start x */
+    do {
+        if (cx->textured) {
+            unsigned short texel = SampleTexture(cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
+            if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
+                int tr, tg, tb; UnpackColor(texel, &tr, &tg, &tb);
+                tr = (tr * cx->r) / 128; tg = (tg * cx->g) / 128; tb = (tb * cx->bcol) / 128;
+                PutPixel(current_x, y,
+                         (AccurateEnabled() && s_drawModeDither) ? PackColorG1Front(tr, tg, tb, current_x, y)
+                                                                 : PackColor(tr, tg, tb),
+                         cx->abr, cx->semiTrans && (texel & 0x8000), 1);
+            }
+        } else {
+            PutPixel(current_x, y,
+                     (AccurateEnabled() && s_drawModeDither) ? PackColorG1Front(cx->r, cx->g, cx->bcol, current_x, y)
+                                                             : PackColor(cx->r, cx->g, cx->bcol),
+                     cx->abr, cx->semiTrans, 0);
+        }
+        current_x++;
+        if (cx->textured) { uv.u += cx->step.dudx; uv.v += cx->step.dvdx; }
+    } while (--width > 0);
+}
+
+static void dda_part(const DdaCtx *cx, const DdaPart *tp, DdaUV origin) {
+    long long left_x = tp->start_x[0], right_x = tp->start_x[1];
+    long long lstep = tp->step_x[0], rstep = tp->step_x[1];
+    int y = tp->start_y, end_y = tp->end_y;
+    DdaUV luv = origin;
+    if (tp->upside_down) {
+        if (y <= end_y) return;
+        if (cx->textured) dda_stepy_n(&luv, &cx->step, y);
+        do {
+            y--; left_x -= lstep; right_x -= rstep;
+            if (y < cx->clipT) break;
+            if (cx->textured) { luv.u -= cx->step.dudy; luv.v -= cx->step.dvdy; }
+            if (y > cx->clipB) continue;
+            dda_span(cx, y, dda_unfp(left_x), dda_unfp(right_x), luv);
+        } while (y > end_y);
+    } else {
+        if (y >= end_y) return;
+        if (cx->textured) dda_stepy_n(&luv, &cx->step, y);
+        do {
+            if (y > cx->clipB) break;
+            if (y >= cx->clipT) dda_span(cx, y, dda_unfp(left_x), dda_unfp(right_x), luv);
+            y++; left_x += lstep; right_x += rstep;
+            if (cx->textured) { luv.u += cx->step.dudy; luv.v += cx->step.dvdy; }
+        } while (y < end_y);
+    }
+}
+
+static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol,
+                            int textured, int tpage, int clut, int semiTrans, int abr) {
+    int ox = s_drawEnv.ofs[0], oy = s_drawEnv.ofs[1];
+    int vx[3], vy[3], vu[3], vv[3], i;
+    RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rc;
+    for (i = 0; i < 3; i++) {
+        vx[i] = (int)lround(rv[i].x) + ox; vy[i] = (int)lround(rv[i].y) + oy;
+        vu[i] = (int)lround(rv[i].u);      vv[i] = (int)lround(rv[i].v);
+    }
+#define DDA_SWAP(p, q) do { int t; \
+    t=vx[p];vx[p]=vx[q];vx[q]=t; t=vy[p];vy[p]=vy[q];vy[q]=t; \
+    t=vu[p];vu[p]=vu[q];vu[q]=t; t=vv[p];vv[p]=vv[q];vv[q]=t; } while (0)
+    /* sort v0=top v1=mid v2=bottom by y, tracking which is the top-left vertex (`tl`) */
+    unsigned tl;
+    if (vx[1] <= vx[0]) tl = (vx[2] <= vx[1]) ? 4 : 2;
+    else if (vx[2] < vx[0]) tl = 4; else tl = 1;
+    if (vy[2] < vy[1]) { DDA_SWAP(1, 2); tl = ((tl >> 1) & 0x2) | ((tl << 1) & 0x4) | (tl & 0x1); }
+    if (vy[1] < vy[0]) { DDA_SWAP(0, 1); tl = ((tl >> 1) & 0x1) | ((tl << 1) & 0x2) | (tl & 0x4); }
+    if (vy[2] < vy[1]) { DDA_SWAP(1, 2); tl = ((tl >> 1) & 0x2) | ((tl << 1) & 0x4) | (tl & 0x1); }
+    tl >>= 1;
+    if (vy[0] == vy[2]) return;                        /* zero-height: nothing to fill */
+
+    long long base_coord = dda_makefp(vx[0]);
+    long long base_step  = dda_makestep(vx[2] - vx[0], vy[2] - vy[0]);
+    long long bound_us   = (vy[1] == vy[0]) ? 0 : dda_makestep(vx[1] - vx[0], vy[1] - vy[0]);
+    long long bound_ls   = (vy[2] == vy[1]) ? 0 : dda_makestep(vx[2] - vx[1], vy[2] - vy[1]);
+    unsigned vo = (tl != 0) ? 1u : 0u;
+    unsigned vp = (tl == 2) ? 3u : 0u;
+    int right_facing = (vy[1] == vy[0]) ? (vx[1] > vx[0]) : (bound_us > base_step);
+    unsigned rfi = right_facing ? 1u : 0u, ofi = right_facing ? 0u : 1u;
+
+    long long det = (long long)(vx[1] - vx[0]) * (vy[2] - vy[1])
+                  - (long long)(vx[2] - vx[1]) * (vy[1] - vy[0]);
+    if (det == 0) return;
+
+    DdaPart parts[2];
+    DdaPart *tpo = &parts[vo], *tpp = &parts[vo ^ 1];
+    tpo->start_y = vy[0 ^ vo]; tpo->end_y = vy[1 ^ vo];
+    tpp->start_y = vy[1 ^ vp]; tpp->end_y = vy[2 ^ vp];
+    tpo->start_x[rfi] = dda_makefp(vx[0 ^ vo]); tpo->step_x[rfi] = bound_us;
+    tpo->start_x[ofi] = base_coord + (long long)(vy[vo] - vy[0]) * base_step; tpo->step_x[ofi] = base_step;
+    tpo->upside_down = (int)vo;
+    tpp->start_x[rfi] = dda_makefp(vx[1 ^ vp]); tpp->step_x[rfi] = bound_ls;
+    tpp->start_x[ofi] = base_coord + (long long)(vy[1 ^ vp] - vy[0]) * base_step; tpp->step_x[ofi] = base_step;
+    tpp->upside_down = (vp != 0) ? 1 : 0;
+
+    DdaCtx cx;
+    cx.r = r; cx.g = g; cx.bcol = bcol; cx.textured = textured;
+    cx.tpage = tpage; cx.clut = clut; cx.semiTrans = semiTrans; cx.abr = abr;
+    cx.clipL = s_drawEnv.clip.x; cx.clipR = s_drawEnv.clip.x + s_drawEnv.clip.w - 1;
+    cx.clipT = s_drawEnv.clip.y; cx.clipB = s_drawEnv.clip.y + s_drawEnv.clip.h - 1;
+    DdaUV origin; origin.u = origin.v = 0;
+    if (textured) {
+        /* ATTRIB_STEP(A,B) = (u32)(det(A,B)*(1<<12)/det) << 12, det(A,B)=(v1.A-v0.A)(v2.B-v1.B)-(v2.A-v1.A)(v1.B-v0.B) */
+        long long d_uy = (long long)(vu[1]-vu[0])*(vy[2]-vy[1]) - (long long)(vu[2]-vu[1])*(vy[1]-vy[0]);
+        long long d_vy = (long long)(vv[1]-vv[0])*(vy[2]-vy[1]) - (long long)(vv[2]-vv[1])*(vy[1]-vy[0]);
+        long long d_xu = (long long)(vx[1]-vx[0])*(vu[2]-vu[1]) - (long long)(vx[2]-vx[1])*(vu[1]-vu[0]);
+        long long d_xv = (long long)(vx[1]-vx[0])*(vv[2]-vv[1]) - (long long)(vx[2]-vx[1])*(vv[1]-vv[0]);
+        cx.step.dudx = (unsigned)((d_uy * 4096) / det) << 12;
+        cx.step.dvdx = (unsigned)((d_vy * 4096) / det) << 12;
+        cx.step.dudy = (unsigned)((d_xu * 4096) / det) << 12;
+        cx.step.dvdy = (unsigned)((d_xv * 4096) / det) << 12;
+        dda_uv_init(&origin, vu[tl], vv[tl]);        /* seed at top-left vertex, then back to (0,0) */
+        dda_stepx_n(&origin, &cx.step, -vx[tl]);
+        dda_stepy_n(&origin, &cx.step, -vy[tl]);
+    } else {
+        cx.step.dudx = cx.step.dvdx = cx.step.dudy = cx.step.dvdy = 0;
+    }
+    dda_part(&cx, &parts[0], origin);
+    dda_part(&cx, &parts[1], origin);
+#undef DDA_SWAP
+}
+
 static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
                           int textured, int tpage, int clut, int semiTrans, int abr) {
+    if (DdaEnabled()) { FillTriangleDDA(a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr); return; }
     int ox = s_drawEnv.ofs[0], oy = s_drawEnv.ofs[1];
     int minX, maxX, minY, maxY;
     int x, y;
