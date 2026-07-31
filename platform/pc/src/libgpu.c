@@ -77,6 +77,30 @@ static void UnpackColor(unsigned short c, int *r, int *g, int *b) {
     *b = ((c >> 10) & 0x1F) << 3;
 }
 
+/* PSX GPU ordered dither (GP0(E1h).9). The hardware adds this 4x4 signed offset to the 24-bit R/G/B
+ * *after* texture-blend + semi-transparency and *before* the 24->15-bit truncation, breaking hard 5-bit
+ * steps into a fine stipple that reads as a smooth gradient. Our backend never did this, so blended
+ * gradients (e.g. the additive casting-ray effect) show hard "blocky" steps where hardware looks smooth.
+ * Experimental / opt-in via VH_DITHER=1 while we evaluate it (known-issues casting-ray residual). */
+static const signed char DITHER4[4][4] = {
+    { -4,  0, -3,  1 },
+    {  2, -2,  3, -1 },
+    { -3,  1, -4,  0 },
+    {  3, -1,  2, -2 },
+};
+static int DitherEnabled(void) {
+    static int e = -1;
+    if (e < 0) e = getenv("VH_DITHER") ? 1 : 0;
+    return e;
+}
+static unsigned short PackColorDither(int r, int g, int b, int x, int y) {
+    if (DitherEnabled()) {
+        int d = DITHER4[y & 3][x & 3];
+        r += d; g += d; b += d;
+    }
+    return PackColor(r, g, b);   /* PackColor clamps to [0,255] then truncates to 5-bit */
+}
+
 static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans) {
     if (x < 0 || x >= VRAM_W || y < 0 || y >= VRAM_H) return;
     if (semiTrans) {
@@ -89,7 +113,7 @@ static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans) {
         case 2: r = br - r; g = bg - g; b = bb - b; break;
         case 3: r = br + r / 4; g = bg + g / 4; b = bb + b / 4; break;
         }
-        s_vram[y][x] = PackColor(r, g, b);
+        s_vram[y][x] = PackColorDither(r, g, b, x, y);
     } else {
         s_vram[y][x] = c;
     }
@@ -584,6 +608,33 @@ void DrawOTag(unsigned int *p) {
                         s_drawFrame, code, type, semi, abr, tp, (unsigned)q->tpage, (unsigned)q->clut,
                         q->u0, q->v0, q->x0, q->y0, q->x2, q->y2, q->r0, q->g0, q->b0, stp,
                         s_twMaskX, s_twMaskY, s_twOffX, s_twOffY);
+                }
+            }
+
+            /* VH_RAYLOG=1: targeted casting-ray diagnostic (bugreport-02 follow-up). For each semi
+             * POLY_FT4 quad, print full corners + the coverage/sampling ratio: |screen area| (shoelace)
+             * vs |texel area| (shoelace over UVs). ratio>1 => MAGNIFY (few texels stretched over many
+             * pixels -> streaks); ratio<1 => MINIFY (texels dropped -> sparkle). Directly tests whether
+             * our blue over-fills vs hardware. Small output: only fires on the effect's own quads. */
+            {
+                static int s_rayLog = -1;
+                if (s_rayLog < 0) s_rayLog = getenv("VH_RAYLOG") ? 1 : 0;
+                if (s_rayLog && semi && type == PC_GPU_PRIM_POLY_FT4) {
+                    POLY_FT4 *q = (POLY_FT4 *)cur;
+                    /* PSX FT4 verts are Z-order (TL,TR,BL,BR); quad area = 0.5*|diag(3-0) x diag(2-1)|. */
+                    double sa = 0.5 * fabs((double)(q->x3 - q->x0) * (q->y2 - q->y1)
+                                         - (double)(q->y3 - q->y0) * (q->x2 - q->x1));
+                    double ta = 0.5 * fabs((double)(q->u3 - q->u0) * (q->v2 - q->v1)
+                                         - (double)(q->v3 - q->v0) * (q->u2 - q->u1));
+                    fprintf(stderr,
+                        "[raylog] f=%u tpage=0x%04x clut=0x%04x abr=%d rgb=(%d,%d,%d) "
+                        "uv=(%u,%u)(%u,%u)(%u,%u)(%u,%u) xy=(%d,%d)(%d,%d)(%d,%d)(%d,%d) "
+                        "screenArea=%.1f texelArea=%.1f ratio=%.2f\n",
+                        s_drawFrame, (unsigned)q->tpage, (unsigned)q->clut,
+                        ((unsigned)q->tpage >> 5) & 3, q->r0, q->g0, q->b0,
+                        q->u0, q->v0, q->u1, q->v1, q->u2, q->v2, q->u3, q->v3,
+                        q->x0, q->y0, q->x1, q->y1, q->x2, q->y2, q->x3, q->y3,
+                        sa, ta, ta > 0.0 ? sa / ta : 0.0);
                 }
             }
 
