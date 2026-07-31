@@ -267,27 +267,45 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
 
     for (y = minY; y < maxY; y++) {
         for (x = minX; x < maxX; x++) {
-            double px = x + 0.5, py = y + 0.5;
-            double w0 = ((b.x - px) * (c.y - py) - (b.y - py) * (c.x - px)) / area;
-            double w1 = ((c.x - px) * (a.y - py) - (c.y - py) * (a.x - px)) / area;
-            double w2 = 1.0 - w0 - w1;
-            if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+            double w0, w1, w2;
+            if (AccurateEnabled()) {
+                /* Rule 1 (gotcha #1): the real GPU's DDA evaluates coverage at the pixel's INTEGER
+                 * position (scanline top / left edge), left/top-inclusive & right/bottom-exclusive
+                 * (top-left fill rule) -- NOT at the pixel centre. Our centre-sample (x+0.5,y+0.5)
+                 * sits half a pixel off, which mis-assigns shared tile edges = the seam residual.
+                 * Sample the barycentric edge functions at the corner (x,y) instead; these same
+                 * corner weights also feed the Rule-2 +0.5-round UV below (one evaluation, and it's
+                 * the integer-vertex reference the GPU's UV DDA steps from). Top-left tie-break on
+                 * the w==0 boundary handled just after. */
+                double s = (area >= 0.0) ? 1.0 : -1.0;
+                /* top-left fill rule: a pixel on a shared edge (w==0) belongs to exactly one
+                 * triangle -- the GPU fills spans left/top-inclusive, right/bottom-exclusive. Include
+                 * the w==0 boundary only on top-left edges (edge vector points up, or is horizontal
+                 * pointing left, accounting for winding s); exclude it on right/bottom edges via a
+                 * tiny bias. Edge i is the one OPPOSITE vertex i. Kills the doubled right/bottom seam
+                 * (e.g. the text-box border) without a full DDA. */
+                double b0 = ((c.y - b.y) * s < 0.0 || ((c.y - b.y) == 0.0 && (c.x - b.x) * s > 0.0)) ? 0.0 : 1e-7;
+                double b1 = ((a.y - c.y) * s < 0.0 || ((a.y - c.y) == 0.0 && (a.x - c.x) * s > 0.0)) ? 0.0 : 1e-7;
+                double b2 = ((b.y - a.y) * s < 0.0 || ((b.y - a.y) == 0.0 && (b.x - a.x) * s > 0.0)) ? 0.0 : 1e-7;
+                w0 = ((b.x - x) * (c.y - y) - (b.y - y) * (c.x - x)) / area;
+                w1 = ((c.x - x) * (a.y - y) - (c.y - y) * (a.x - x)) / area;
+                w2 = 1.0 - w0 - w1;
+                if (w0 < b0 || w1 < b1 || w2 < b2) continue;
+            } else {
+                double px = x + 0.5, py = y + 0.5;
+                w0 = ((b.x - px) * (c.y - py) - (b.y - py) * (c.x - px)) / area;
+                w1 = ((c.x - px) * (a.y - py) - (c.y - py) * (a.x - px)) / area;
+                w2 = 1.0 - w0 - w1;
+                if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+            }
 
             if (textured) {
                 int u, v;
                 if (AccurateEnabled()) {
-                    /* Rule 2 (gotcha #2): the real GPU steps the UV DDA from the INTEGER vertex,
-                     * seeded with a +0.5-texel bias ((ustart<<12)+(1<<11)) and truncated on readout
-                     * = round-to-nearest of the affine UV sampled at the pixel's integer position.
-                     * Our coverage weights (w*) are at the pixel CENTRE (x+0.5,y+0.5), which already
-                     * carries a 0.5*(du/dx+du/dy) texel offset; re-evaluate the affine UV at the
-                     * integer corner (cw*) so the only bias is the intended +0.5. Wrap to 0..255
-                     * (Truncate8) like the hardware texcoord latch. */
-                    double cw0 = ((b.x - x) * (c.y - y) - (b.y - y) * (c.x - x)) / area;
-                    double cw1 = ((c.x - x) * (a.y - y) - (c.y - y) * (a.x - x)) / area;
-                    double cw2 = 1.0 - cw0 - cw1;
-                    u = (int)floor(cw0 * a.u + cw1 * b.u + cw2 * c.u + 0.5) & 0xFF;
-                    v = (int)floor(cw0 * a.v + cw1 * b.v + cw2 * c.v + 0.5) & 0xFF;
+                    /* Rule 2 (gotcha #2): UV = round-to-nearest of the affine coord at the integer
+                     * vertex position -- the +0.5-texel DDA seed. w* are already the corner weights. */
+                    u = (int)floor(w0 * a.u + w1 * b.u + w2 * c.u + 0.5) & 0xFF;
+                    v = (int)floor(w0 * a.v + w1 * b.v + w2 * c.v + 0.5) & 0xFF;
                 } else {
                     u = (int)(w0 * a.u + w1 * b.u + w2 * c.u);
                     v = (int)(w0 * a.v + w1 * b.v + w2 * c.v);
