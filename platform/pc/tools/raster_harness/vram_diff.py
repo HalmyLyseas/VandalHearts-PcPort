@@ -35,12 +35,17 @@ def main(ds_png, ours_ppm):
     d = ds[Y0:Y0 + H, X0:X0 + W]
     o = ours[Y0:Y0 + H, X0:X0 + W]
 
-    adiff = np.abs(d - o).max(axis=2)               # 8-bit max-channel abs diff
+    # Headline is expansion-normalized: re-expand BOTH sides from native 5-bit via <<3 so a
+    # <<3-vs-bit-replicate display-expansion mismatch (our old PPM vs DuckStation's dump) can't
+    # inflate the number -- this measures true rasterization error, not a screen-output convention.
+    adiff = np.abs(((d >> 3) << 3) - ((o >> 3) << 3)).max(axis=2)
+    raw = np.abs(d - o).max(axis=2)                 # raw 8-bit (includes any expansion mismatch)
     lvl = np.abs((d >> 3) - (o >> 3)).max(axis=2)   # 5-bit native level diff
     tot = lvl.size
     diff = lvl > 0
 
-    print(f"draw area {W}x{H} @ ({X0},{Y0})  |  mean 8-bit abs-diff = {adiff.mean():.2f}  (HEADLINE)")
+    print(f"draw area {W}x{H} @ ({X0},{Y0})  |  mean 8-bit abs-diff = {adiff.mean():.2f}  (HEADLINE, "
+          f"expansion-normalized; raw = {raw.mean():.2f})")
     print(f"identical (5-bit): {100*(lvl==0).mean():.2f}%   differing: {100*diff.mean():.2f}%")
     print("level histogram:", "  ".join(f"{L}:{100*(lvl==L).mean():.1f}%" for L in range(6)),
           f" >=6:{100*(lvl>=6).mean():.1f}%")

@@ -540,9 +540,14 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         for (px = 0; px < w; px++) {
             unsigned short c = vram[(y + py) * vramW + (x + px)];
             unsigned char *out = &s_rgbaScratch[((h - 1 - py) * w + px) * 3];
-            out[0] = (unsigned char)((c & 0x1F) << 3);
-            out[1] = (unsigned char)(((c >> 5) & 0x1F) << 3);
-            out[2] = (unsigned char)(((c >> 10) & 0x1F) << 3);
+            /* Display expansion 5-bit -> 8-bit by BIT-REPLICATION ((v<<3)|(v>>2)), matching real
+             * hardware / DuckStation's output: a full 5-bit channel (31) maps to 255, not 248, so
+             * whites reach full brightness. Purely a screen-output convention -- the internal render
+             * (s_vram, UnpackColor, blends) stays native 5-bit and is unaffected. */
+            int r5 = c & 0x1F, g5 = (c >> 5) & 0x1F, b5 = (c >> 10) & 0x1F;
+            out[0] = (unsigned char)((r5 << 3) | (r5 >> 2));
+            out[1] = (unsigned char)((g5 << 3) | (g5 >> 2));
+            out[2] = (unsigned char)((b5 << 3) | (b5 >> 2));
         }
     }
 

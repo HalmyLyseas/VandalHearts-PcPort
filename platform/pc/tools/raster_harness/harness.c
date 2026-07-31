@@ -142,8 +142,12 @@ static void dump_ppm(const char *path, int x0, int y0, int w, int h) {
     FILE *f = fopen(path, "wb"); if (!f) { perror(path); return; }
     fprintf(f, "P6\n%d %d\n255\n", w, h);
     for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
-        int r, g, b; UnpackColor(s_vram[(y0 + y) & 511][(x0 + x) & 1023], &r, &g, &b);
-        fputc(r, f); fputc(g, f); fputc(b, f);
+        /* display expansion 5->8 by bit-replication ((v<<3)|(v>>2)) -- matches the real present path
+         * (pc_gpu_window.c) AND DuckStation's VRAM dump, so the diff measures true rasterization error
+         * (not a <<3-vs-replicate expansion mismatch). Internal UnpackColor stays <<3 for blend math. */
+        unsigned short c = s_vram[(y0 + y) & 511][(x0 + x) & 1023];
+        int r5 = c & 0x1F, g5 = (c >> 5) & 0x1F, b5 = (c >> 10) & 0x1F;
+        fputc((r5 << 3) | (r5 >> 2), f); fputc((g5 << 3) | (g5 >> 2), f); fputc((b5 << 3) | (b5 >> 2), f);
     }
     fclose(f);
 }
