@@ -92,6 +92,27 @@ at the 0x38 `animData` slot).** *Fix (`PC_PORT_LP64`-gated):* rewrite `_675`/`_7
 the padded one too, and those stay broken until you look.** Found by a user's visual A/B, not a
 sanitizer (the wrong texture is a valid in-bounds read of a garbage index).
 
+**3c. The same leading-pointer shift, but a *cross-type reinterpret* — the struct itself was fine.**
+The Chapter-2 Dolf casting cutscene drew its blue **lightning** as a solid garbage **blob** — ~17k
+quads sampling VRAM page 0 (the framebuffer). Same leading-pointer mechanism as #3b, but with a twist
+that makes it a *different* bug to fix. `func_800ABFB8` (the lightning builder, `src/split_09a268.c`)
+reads `obj->d.sprite.gfxIdx` (offset 0x28) from callers that pass a **non-sprite** object —
+`Objf319_Map67_Scn34_TBD` passes *its own* object, whose struct has a leading pointer at 0x24. It has an
+existing `if (gfxIdx == GFX_NULL) gfxIdx = GFX_LIGHTNING_5` fallback, and at 32-bit offset 0x28 reads a
+clean **0** (`GFX_NULL`), so the fallback selects the lightning texture. At LP64 the 0x24 pointer grows
+to 8 bytes (0x24–0x2B) and the read lands *inside* it → a **constant** garbage index (`21977` — the
+port's fixed `0x80000000` RAM arena makes the pointer's low half stable) → slips past the `== GFX_NULL`
+test → OOB `gGfxTPageIds[21977]` → `tpage = 0` → the quads sample VRAM page 0 = the framebuffer =
+garbage blob. **Crucially, unlike #3b, `Objf319`'s struct is *correct for its own use*** (`OBJ.entitySprite`
+reads fine) — so the #3b-style "realign the struct" fix does *not* apply. The defect is the **cross-type
+reinterpret** in the shared helper, which relies on a union-aliased field reading 0 on PSX. *Fix
+(`PC_PORT`-gated, `split_09a268.c`):* extend the helper's own `GFX_NULL` fallback to treat any
+**out-of-range** index as `GFX_NULL`, restoring the intended `GFX_LIGHTNING_5`. Found by an every-frame
+VRAM dump → auto-locate the peak-blob frame → a frame-correlated per-quad log of `gfx` + resolved
+`tpage` + owning `functionIndex` (`VH_OPAQUE_GFX_LOG`, all 9 `AddObjPrim*` opaque branches) → filter
+`tpage=0x0000` → the wild `gfx=21977` → source trace. No sanitizer sees it (a valid in-bounds sample of
+a garbage-indexed texture page).
+
 **4. A function returning a pointer through `s32`.** `Krom2RawAdd` (BIOS kanji-glyph lookup,
 `platform/pc/src/libkernel.c:612`) was declared `s32` returning `(s32)(intptr_t)&glyph` — its own
 comment said *"as s32, matching the -m32 pointer width."* Callers dereference it → SIGSEGV in
@@ -164,6 +185,12 @@ Distilled from the whole 2.3 effort — these are the transferable ones:
 - **Typed aliasing between union members is invisible to grep.** The marker is "member A writes field
   X, shared code reads it via member B." Others may still lurk; watch for wrong-looking rendered
   geometry.
+- **A cross-type reinterpret can be broken even when the struct is correct.** #3c is the subtle case:
+  the struct read *as itself* is fine, but a shared helper reads *another* union member off it and
+  relies on an aliased field being 0 on PSX. A leading pointer's LP64 growth makes that field garbage.
+  The fix belongs in the **helper** (validate the value), not the struct (realigning it would break its
+  own correct use). When a "0 means default" fallback exists, harden it to "0 *or out of range* means
+  default" — the port often manifests "unset" as a stable-arena pointer's low half, not a clean 0.
 - **When a representation changes, the function is not enough** — every macro / inline / alternate
   spelling of that operation must move with it (the `AddPrim` function was converted to the token
   bridge but the lowercase `addPrim` macro was not, and silently dropped all UI for a while).
