@@ -39,9 +39,11 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    item text), validated across a full playthrough; normal mode stays byte-for-byte retail. Player guide
    [`docs/tactical-mode.md`](docs/tactical-mode.md), [`docs/known_issues.md`](docs/known_issues.md),
    roadmap [`docs/roadmap.md`](docs/roadmap.md). Note: the "zero `src/` edits" ideal was the
-   *balance-package* rule — other Stage-3 features need gated `src/` hooks. **Next: 1.4** — battle-speed
-   fast-forward, controller-aware overlay prompts, magic-resistance-aware Tactical AI, and an unused-map
-   probe; higher-quality graphics deferred to 1.5.
+   *balance-package* rule — other Stage-3 features need gated `src/` hooks. **v1.4.0 released 2026-07-31**
+   — a QoL pass: battle fast-forward (2×), controller-aware overlay labels (Xbox/PlayStation), magic-
+   resistance-aware Tactical AI, finer camera elevation (incl. keyboard R/F). **Next: 1.5** — a
+   higher-fidelity graphics track, anchored on a **PSX-accurate software rasterizer** (the casting-ray
+   render residual root-caused as minification-aliasing; see `docs/known_issues.md`).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates
