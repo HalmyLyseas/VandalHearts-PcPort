@@ -101,19 +101,84 @@ static unsigned short PackColorDither(int r, int g, int b, int x, int y) {
     return PackColor(r, g, b);   /* PackColor clamps to [0,255] then truncates to 5-bit */
 }
 
-static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans) {
+/* G1 (1.5) PSX-accurate rasterization, opt-in via VH_ACCURATE=1 while it's validated against the
+ * DuckStation VRAM oracle (platform/pc/tools/raster_harness). Rolled out one rule at a time so each
+ * can be scored independently against the DuckStation VRAM oracle. When all rules land + no
+ * opaque-frame regression, this becomes the default. Runtime gate (not #ifdef) so the harness
+ * (platform/pc/tools/raster_harness) can A/B one binary. */
+static int AccurateEnabled(void) {
+    static int e = -1;
+    if (e < 0) e = getenv("VH_ACCURATE") ? 1 : 0;
+    return e;
+}
+
+/* Rule 4 (gotcha #4): the GPU dithers the FRONT colour in the 24->15 truncation (BEFORE any
+ * semi-transparency blend), on modulated/untextured polygons only, matrix indexed [y&3][x&3].
+ * Same DITHER4 offsets as DuckStation's DITHER_MATRIX; PackColor's clamp-then->>3 reproduces the
+ * hardware dither LUT (clamp((v+off)>>3,0,31)). The blend result itself is written un-dithered. */
+static unsigned short PackColorG1Front(int r, int g, int b, int x, int y) {
+    int d = DITHER4[y & 3][x & 3];
+    return PackColor(r + d, g + d, b + d);
+}
+
+/* Rule 5 (gotcha #5): the GPU's semi-transparency is blargg's parallel 5-bit BGR555 bit-math on
+ * the packed front/back halfwords (per-channel 5-bit add/sub with saturation), not the 8-bit
+ * per-channel blend we used to unpack/blend/repack. Ported verbatim from DuckStation's ShadePixel.
+ * `fg` carries bit15 set (this is a blending pixel); for untextured polys bit15 is cleared after. */
+static unsigned short BlendG1(unsigned fg, unsigned bg, int abr, int textured) {
+    unsigned color = 0;
+    switch (abr) {
+    case 0: /* 0.5*B + 0.5*F */
+        bg |= 0x8000u;
+        color = ((fg + bg) - ((fg ^ bg) & 0x0421u)) >> 1;
+        break;
+    case 1: { /* B + F */
+        unsigned sum, carry;
+        bg &= ~0x8000u;
+        sum = fg + bg;
+        carry = (sum - ((fg ^ bg) & 0x8421u)) & 0x8420u;
+        color = (sum - carry) | (carry - (carry >> 5));
+        break;
+    }
+    case 2: { /* B - F */
+        unsigned diff, borrow;
+        bg |= 0x8000u; fg &= ~0x8000u;
+        diff = bg - fg + 0x108420u;
+        borrow = (diff - ((bg ^ fg) & 0x108420u)) & 0x108420u;
+        color = (diff - borrow) & (borrow - (borrow >> 5));
+        break;
+    }
+    case 3: { /* B + 0.25*F */
+        unsigned sum, carry;
+        bg &= ~0x8000u;
+        fg = ((fg >> 2) & 0x1CE7u) | 0x8000u;
+        sum = fg + bg;
+        carry = (sum - ((fg ^ bg) & 0x8421u)) & 0x8420u;
+        color = (sum - carry) | (carry - (carry >> 5));
+        break;
+    }
+    }
+    if (!textured) color &= ~0x8000u;
+    return (unsigned short)(color & 0xFFFFu);
+}
+
+static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
     if (x < 0 || x >= VRAM_W || y < 0 || y >= VRAM_H) return;
     if (semiTrans) {
-        int r, g, b, br, bg, bb;
-        UnpackColor(c, &r, &g, &b);
-        UnpackColor(s_vram[y][x], &br, &bg, &bb);
-        switch (abr) {
-        case 0: r = (br + r) / 2; g = (bg + g) / 2; b = (bb + b) / 2; break;
-        case 1: r = br + r; g = bg + g; b = bb + b; break;
-        case 2: r = br - r; g = bg - g; b = bb - b; break;
-        case 3: r = br + r / 4; g = bg + g / 4; b = bb + b / 4; break;
+        if (AccurateEnabled()) {
+            s_vram[y][x] = BlendG1((unsigned)c | 0x8000u, s_vram[y][x], abr, textured);
+        } else {
+            int r, g, b, br, bg, bb;
+            UnpackColor(c, &r, &g, &b);
+            UnpackColor(s_vram[y][x], &br, &bg, &bb);
+            switch (abr) {
+            case 0: r = (br + r) / 2; g = (bg + g) / 2; b = (bb + b) / 2; break;
+            case 1: r = br + r; g = bg + g; b = bb + b; break;
+            case 2: r = br - r; g = bg - g; b = bb - b; break;
+            case 3: r = br + r / 4; g = bg + g / 4; b = bb + b / 4; break;
+            }
+            s_vram[y][x] = PackColorDither(r, g, b, x, y);
         }
-        s_vram[y][x] = PackColorDither(r, g, b, x, y);
     } else {
         s_vram[y][x] = c;
     }
@@ -199,16 +264,38 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
             if (w0 < 0 || w1 < 0 || w2 < 0) continue;
 
             if (textured) {
-                int u = (int)(w0 * a.u + w1 * b.u + w2 * c.u);
-                int v = (int)(w0 * a.v + w1 * b.v + w2 * c.v);
+                int u, v;
+                if (AccurateEnabled()) {
+                    /* Rule 2 (gotcha #2): the real GPU steps the UV DDA from the INTEGER vertex,
+                     * seeded with a +0.5-texel bias ((ustart<<12)+(1<<11)) and truncated on readout
+                     * = round-to-nearest of the affine UV sampled at the pixel's integer position.
+                     * Our coverage weights (w*) are at the pixel CENTRE (x+0.5,y+0.5), which already
+                     * carries a 0.5*(du/dx+du/dy) texel offset; re-evaluate the affine UV at the
+                     * integer corner (cw*) so the only bias is the intended +0.5. Wrap to 0..255
+                     * (Truncate8) like the hardware texcoord latch. */
+                    double cw0 = ((b.x - x) * (c.y - y) - (b.y - y) * (c.x - x)) / area;
+                    double cw1 = ((c.x - x) * (a.y - y) - (c.y - y) * (a.x - x)) / area;
+                    double cw2 = 1.0 - cw0 - cw1;
+                    u = (int)floor(cw0 * a.u + cw1 * b.u + cw2 * c.u + 0.5) & 0xFF;
+                    v = (int)floor(cw0 * a.v + cw1 * b.v + cw2 * c.v + 0.5) & 0xFF;
+                } else {
+                    u = (int)(w0 * a.u + w1 * b.u + w2 * c.u);
+                    v = (int)(w0 * a.v + w1 * b.v + w2 * c.v);
+                }
                 unsigned short texel = SampleTexture(tpage, clut, u, v);
                 int tr, tg, tb;
                 if (texel == 0) continue; /* real hw: 0000h texel = transparent */
                 UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * r) / 128; tg = (tg * g) / 128; tb = (tb * bcol) / 128;
-                PutPixel(x, y, PackColor(tr, tg, tb), abr, semiTrans && (texel & 0x8000));
+                PutPixel(x, y,
+                         AccurateEnabled() ? PackColorG1Front(tr, tg, tb, x, y)
+                                           : PackColor(tr, tg, tb),
+                         abr, semiTrans && (texel & 0x8000), 1);
             } else {
-                PutPixel(x, y, PackColor(r, g, bcol), abr, semiTrans);
+                PutPixel(x, y,
+                         AccurateEnabled() ? PackColorG1Front(r, g, bcol, x, y)
+                                           : PackColor(r, g, bcol),
+                         abr, semiTrans, 0);
             }
         }
     }
@@ -237,7 +324,7 @@ static void FillRect(int x0, int y0, int w, int h, int r, int g, int b) {
 
     for (y = minY; y < maxY; y++)
         for (x = minX; x < maxX; x++)
-            PutPixel(x, y, c, 0, 0);
+            PutPixel(x, y, c, 0, 0, 0);
 }
 
 /* ClearImage maps to the raw "Quick Rectangle Fill" GPU command, which
@@ -710,8 +797,8 @@ void SetSprt(SPRT *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_SPRT); }
 void SetTile(TILE *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_TILE); }
 
 /* ---- TIM texture file parsing --------------------------------------------
- * Format per exchange/09-phase-c-gpu-backend.md (psx-spx cdromfileformats.md
- * "TIM Format"): 4-byte magic (10h), 4-byte mode (bit3 = has-CLUT, bits0-2 =
+ * Format per psx-spx cdromfileformats.md
+ * "TIM Format": 4-byte magic (10h), 4-byte mode (bit3 = has-CLUT, bits0-2 =
  * pixel type), then a CLUT section (if present) and a pixel section, each
  * shaped { unsigned int size; unsigned int destCoord (YyyyXxxxh); unsigned int whWord
  * (YsizXsizh); pixel data }.
