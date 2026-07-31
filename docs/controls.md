@@ -37,6 +37,7 @@ Options, Save, Load).
 | **A** | Square | **(PC)** Toggle the enemy threat overlay |
 | **`[` / `]`** | — | **(PC)** Cycle through your units — `[` previous, `]` next |
 | **Q / E** | L1 / R1 | Camera rotate (left / right) |
+| **R / F** | L2 / R2 | **(PC)** Camera elevation — **R** raise the view angle, **F** lower it |
 | **`,` / `.`** | — | **(PC)** *(1.4)* Battle fast-forward — `.` speed up to 2×, `,` back to normal |
 | Enter | Start | Battle menu / options; skips an intro movie |
 | Space | Select | Select — used only for the overlay chord below |
@@ -47,7 +48,8 @@ Options, Save, Load).
 Vanilla rotates the battlefield camera with the shoulder buttons. The PC port moves camera control to
 the **right analog stick** — push left/right to rotate, up/down to raise or lower the viewing angle —
 which frees the physical shoulders for the unit-cycle and the triggers for battle fast-forward. On the
-keyboard, **Q / E** still rotate the camera, so no-right-stick setups keep the original rotate feel.
+keyboard, **Q / E** rotate the camera and **R / F** raise / lower the viewing angle — so keyboard-only
+players have full camera control too, including the finer elevation below.
 
 *(1.4)* The up/down **elevation** gains an extra, evenly-spread stop — **5 viewing angles** (11.25° to
 78.75°, 16.875° apart, now including a level **45°**) instead of the original 4 — so you can find a

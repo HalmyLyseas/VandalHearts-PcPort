@@ -862,6 +862,11 @@ unsigned int PadRead(int id) {
     if (keys[SDL_SCANCODE_D])      p1 |= PADRright;    /* Circle */
     if (keys[SDL_SCANCODE_Q])      p1 |= PADL1;                 /* camera rotate (low word) */
     if (keys[SDL_SCANCODE_E])      p1 |= PADR1;
+    /* Camera elevation (low-word L2/R2) -- the keyboard equivalent of the gamepad right-stick vertical.
+     * R raises the view angle (toward overhead), F lowers it (toward horizontal). Distinct from the
+     * ,/. fast-forward keys, which drive the *high-word* (pad-2) L2/R2. */
+    if (keys[SDL_SCANCODE_R])      p1 |= PADR2;
+    if (keys[SDL_SCANCODE_F])      p1 |= PADL2;
     /* Stage 3 (1.1): keyboard ally-cycle on [ / ] -> high word (pad 2), mirroring the
      * gamepad shoulders. Keeps keyboard functional after Square is freed for the overlay.
      * Full keyboard layout is documented/refined in docs/controls.md. */
