@@ -42,6 +42,11 @@ unsigned s_drawFrame = 0; /* incremented per DrawOTag; ties prim log to VRAM dum
 static DRAWENV s_drawEnv;
 static DISPENV s_dispEnv;
 static int s_drawModeAbr = 0;   /* last SetDrawMode-configured semi-trans mode */
+static int s_drawModeDither = 0;/* GP0(E1h).9 dither-enable, from DRAWENV.dtd / SetDrawMode / DR_MODE.
+                                 * The game runs the battle field with dtd=0 (split_0496f8.c:1083) so
+                                 * terrain/UI must NOT be dithered; only dtd=1 scenes (e.g. some fx) are.
+                                 * DuckStation gates dither on this exact bit -- honouring it stops us
+                                 * over-dithering (fuzzy walls, fragmented water-tile edges). */
 static int s_drawModeTPage = 0; /* last SetDrawMode-configured tpage -- SPRT/TILE
                                   * have no tpage field of their own on real hw
                                   * (unlike POLY_FT4), they use this instead */
@@ -275,14 +280,21 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
 
             if (textured) {
                 int u, v;
-                if (AccurateEnabled()) {
-                    /* Rule 2 (gotcha #2): the real GPU steps the UV DDA from the INTEGER vertex,
-                     * seeded with a +0.5-texel bias ((ustart<<12)+(1<<11)) and truncated on readout
-                     * = round-to-nearest of the affine UV sampled at the pixel's integer position.
-                     * Our coverage weights (w*) are at the pixel CENTRE (x+0.5,y+0.5), which already
-                     * carries a 0.5*(du/dx+du/dy) texel offset; re-evaluate the affine UV at the
-                     * integer corner (cw*) so the only bias is the intended +0.5. Wrap to 0..255
-                     * (Truncate8) like the hardware texcoord latch. */
+                /* Rule 2 (gotcha #2), scoped to semi-transparent effects only. The corner-round UV
+                 * (round-to-nearest via the pixel's INTEGER corner + a +0.5-texel bias -- the GPU's
+                 * DDA seed) is the casting-ray density fix. But our coverage is CENTRE-sampled
+                 * (x+0.5,y+0.5) while this UV is corner-sampled, so on an OPAQUE tile edge a pixel
+                 * whose centre is inside but corner is outside the triangle gets extrapolated
+                 * corner-weights -> UV past the tile -> a wrong/neighbour texel = fuzzy stones,
+                 * fragmented water mortar, compass bleed (user-validated 2026-07-31). Thin additive
+                 * effect quads hide that; abutting opaque tiles do not. So opaque textured polys use
+                 * the centre-consistent UV below (same as the legacy path -- no extrapolation).
+                 * Trade-off accepted: this is NOT VRAM-faithful to DuckStation for opaque terrain
+                 * (DuckStation corner-rounds everything; the one-frame cutscene metric drops to ~54%),
+                 * but it renders the battle field correctly, which is what the default must do. A full
+                 * fixed-point integer DDA (coverage + UV both at the integer position, no float
+                 * extrapolation) is the only way to be both faithful and clean -- deferred. */
+                if (AccurateEnabled() && semiTrans) {
                     double cw0 = ((b.x - x) * (c.y - y) - (b.y - y) * (c.x - x)) / area;
                     double cw1 = ((c.x - x) * (a.y - y) - (c.y - y) * (a.x - x)) / area;
                     double cw2 = 1.0 - cw0 - cw1;
@@ -298,13 +310,13 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
                 UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * r) / 128; tg = (tg * g) / 128; tb = (tb * bcol) / 128;
                 PutPixel(x, y,
-                         AccurateEnabled() ? PackColorG1Front(tr, tg, tb, x, y)
-                                           : PackColor(tr, tg, tb),
+                         (AccurateEnabled() && s_drawModeDither) ? PackColorG1Front(tr, tg, tb, x, y)
+                                                                 : PackColor(tr, tg, tb),
                          abr, semiTrans && (texel & 0x8000), 1);
             } else {
                 PutPixel(x, y,
-                         AccurateEnabled() ? PackColorG1Front(r, g, bcol, x, y)
-                                           : PackColor(r, g, bcol),
+                         (AccurateEnabled() && s_drawModeDither) ? PackColorG1Front(r, g, bcol, x, y)
+                                                                 : PackColor(r, g, bcol),
                          abr, semiTrans, 0);
             }
         }
@@ -416,6 +428,7 @@ DISPENV *PutDispEnv(DISPENV *env) {
 
 DRAWENV *PutDrawEnv(DRAWENV *env) {
     s_drawEnv = *env;
+    s_drawModeDither = env->dtd ? 1 : 0;   /* GP0(E1h).9 -- persistent dither-enable state */
     return env;
 }
 
@@ -429,19 +442,21 @@ void SetDrawMode(DR_MODE *p, int dfe, int dtd, int tpage, RECT *tw) {
      * unchanged", matching PsyQ SetDrawMode(...,NULL). RECT.w/h are the window
      * size in pixels -> Mask = (256-size)>>3 (psx-spx tiling table: 32px -> 0x1c
      * -> wrap u&31); RECT.x/y are the window offset in pixels -> Offset = >>3. */
-    if (tw) {
-        u32 mx = ((u32)(256 - tw->w) >> 3) & 0x1f;
-        u32 my = ((u32)(256 - tw->h) >> 3) & 0x1f;
-        u32 ox = ((u32)tw->x >> 3) & 0x1f;
-        u32 oy = ((u32)tw->y >> 3) & 0x1f;
-        u32 packed = 0x800000u | mx | (my << 5) | (ox << 10) | (oy << 15);
+    /* bit 22 = dither-enable (dtd), always carried; bit 23 = texture-window present (below). */
+    {
+        u32 packed = dtd ? 0x400000u : 0;
+        if (tw) {
+            u32 mx = ((u32)(256 - tw->w) >> 3) & 0x1f;
+            u32 my = ((u32)(256 - tw->h) >> 3) & 0x1f;
+            u32 ox = ((u32)tw->x >> 3) & 0x1f;
+            u32 oy = ((u32)tw->y >> 3) & 0x1f;
+            packed |= 0x800000u | mx | (my << 5) | (ox << 10) | (oy << 15);
+        }
         p->r0 = (u_char)(packed & 0xff);
         p->g0 = (u_char)((packed >> 8) & 0xff);
         p->b0 = (u_char)((packed >> 16) & 0xff);
-    } else {
-        p->r0 = p->g0 = p->b0 = 0;
     }
-    (void)dfe; (void)dtd;
+    (void)dfe;
 }
 
 /* ---- VRAM transfers ------------------------------------------------------ */
@@ -814,6 +829,7 @@ void DrawOTag(unsigned int *p) {
                 u32 tw = (u32)m->r0 | ((u32)m->g0 << 8) | ((u32)m->b0 << 16);
                 s_drawModeAbr = (int)((m->tpage >> 5) & 3);
                 s_drawModeTPage = (int)m->tpage;
+                s_drawModeDither = (int)((tw >> 22) & 1);  /* dtd carried in bit 22 */
                 if (tw & 0x800000u) { /* texture window present -> update state */
                     s_twMaskX = tw & 0x1f;
                     s_twMaskY = (tw >> 5) & 0x1f;

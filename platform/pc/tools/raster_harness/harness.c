@@ -29,7 +29,8 @@ void PC_UpdateCamOsd(void) {}
 #include "../../src/libgpu.c"   /* real rasterizer: s_vram, FillQuad, SampleTexture, s_drawEnv, ... */
 
 /* ---- GP0 state ------------------------------------------------------------------------------- */
-static void set_drawmode(u32 w) { s_drawModeTPage = w & 0x3FFF; s_drawModeAbr = (w >> 5) & 3; }
+static void set_drawmode(u32 w) { s_drawModeTPage = w & 0x3FFF; s_drawModeAbr = (w >> 5) & 3;
+    s_drawModeDither = (w >> 9) & 1; }   /* GP0(E1h).9 dither-enable */
 static void set_texwindow(u32 w) { s_twMaskX = w & 0x1F; s_twMaskY = (w >> 5) & 0x1F;
     s_twOffX = (w >> 10) & 0x1F; s_twOffY = (w >> 15) & 0x1F; }
 static void set_area_tl(u32 w) { s_drawEnv.clip.x = w & 0x3FF; s_drawEnv.clip.y = (w >> 10) & 0x1FF; }
