@@ -68,10 +68,16 @@ artwork required:
 
 ## Next — 1.5 and later
 
-A dedicated **higher-quality graphics** track, kept separate because it's asset- and engine-heavy. Its
-anchor is a **more hardware-accurate software renderer** — matching the PS1 GPU's exact texture sampling
-and coverage so translucent spell/casting effects render like the original (the remaining casting-ray
-difference in [known issues](known_issues.md) is the motivating case). On top of that: upscaled full-motion
-videos, higher internal rendering resolution, and eventually higher-detail textures and sprites — likely
-offered as an optional "Improved" graphics mode. (Bundled "collector" extras such as artwork or manuals are
-unlikely — that material is copyrighted.)
+A **graphics fidelity** track, kept deliberately conservative — the goal is to *sharpen without
+reinterpreting* the game. Two pieces:
+
+- **A more hardware-accurate software renderer** — matching the PS1 GPU's exact texture sampling and
+  coverage so translucent spell/casting effects render like the original (the remaining casting-ray
+  difference in [known issues](known_issues.md) is the motivating case).
+- **Higher internal rendering resolution** — drawing the 3D at a denser sample rate for crisper terrain
+  and edges, most likely as an optional "Enhanced" mode alongside the pixel-accurate one. **No assets are
+  re-authored:** the game's own sprites, textures, videos and UI are untouched.
+
+Deliberately **out of scope:** upscaled/re-encoded videos, redrawn or AI-upscaled sprites, and camera
+changes like finer rotation — they'd re-author the art or alter the game's feel, which this project avoids.
+(Bundled "collector" extras such as artwork or manuals are also out — that material is copyrighted.)
