@@ -924,7 +924,18 @@ void func_800ABFB8(Object *sprite) {
    sprite_s0->d.sprite.gfxIdx = sprite->d.sprite.gfxIdx;
    sprite_s0->d.sprite.clut = sprite->d.sprite.clut;
    sprite_s0->d.sprite.semiTrans = sprite->d.sprite.semiTrans;
-   if (sprite_s0->d.sprite.gfxIdx == GFX_NULL) {
+   if (sprite_s0->d.sprite.gfxIdx == GFX_NULL
+#ifdef PC_PORT
+       /* Some callers pass a NON-sprite object (e.g. Objf319_Map67_Scn34_TBD) whose d.sprite.gfxIdx
+        * aliases their own struct. On PSX that offset reads 0 (GFX_NULL), so this fallback selects the
+        * lightning gfx. On LP64 a leading pointer in the caller's struct occupies 0x24..0x2B and shifts
+        * the read into the pointer, yielding a garbage index (a fixed-arena pointer's low half) that
+        * slips past the ==GFX_NULL test -> OOB gGfxTPageIds[] read -> tpage 0 -> the effect samples
+        * VRAM page 0 (the framebuffer) = a solid garbage "blob". Treat any out-of-range index as
+        * GFX_NULL, restoring the intended GFX_LIGHTNING_5. */
+       || (unsigned int)sprite_s0->d.sprite.gfxIdx >= (unsigned int)GFX_CT
+#endif
+   ) {
       sprite_s0->d.sprite.gfxIdx = GFX_LIGHTNING_5;
    }
    if (sprite_s0->d.sprite.clut == CLUT_NULL) {
