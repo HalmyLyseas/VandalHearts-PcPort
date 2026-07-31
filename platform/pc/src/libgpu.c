@@ -112,6 +112,13 @@ static int AccurateEnabled(void) {
     return e;
 }
 
+static int imin4(int a, int b, int c, int d) {
+    int m = a; if (b < m) m = b; if (c < m) m = c; if (d < m) m = d; return m;
+}
+static int imax4(int a, int b, int c, int d) {
+    int m = a; if (b > m) m = b; if (c > m) m = c; if (d > m) m = d; return m;
+}
+
 /* Rule 4 (gotcha #4): the GPU dithers the FRONT colour in the 24->15 truncation (BEFORE any
  * semi-transparency blend), on modulated/untextured polygons only, matrix indexed [y&3][x&3].
  * Same DITHER4 offsets as DuckStation's DITHER_MATRIX; PackColor's clamp-then->>3 reproduces the
@@ -695,6 +702,40 @@ void DrawOTag(unsigned int *p) {
                         s_drawFrame, code, type, semi, abr, tp, (unsigned)q->tpage, (unsigned)q->clut,
                         q->u0, q->v0, q->x0, q->y0, q->x2, q->y2, q->r0, q->g0, q->b0, stp,
                         s_twMaskX, s_twMaskY, s_twOffX, s_twOffY);
+                }
+            }
+
+            /* VH_FXALL=1: comprehensive casting-effect region log. Every handled primitive type
+             * (F4/FT4/SPRT/TILE), semi OR opaque, whose screen bbox lies in the effect area --
+             * correctly decoding each type's own geometry/colour (unlike VH_GPU_PRIM_LOG, which
+             * always reads a POLY_FT4). Finds the blue-blob primitive that VH_RAYLOG (semi-FT4
+             * only) misses -- the port's logged FT4 quads are the magenta sparkles, not the blob. */
+            {
+                static int s_fxAll = -1;
+                if (s_fxAll < 0) s_fxAll = getenv("VH_FXALL") ? 1 : 0;
+                if (s_fxAll) {
+                    int bx0 = 0, by0 = 0, bx1 = -1, by1 = -1, r = 0, g = 0, b = 0, tpg = -1, cl = -1;
+                    const char *tn = 0;
+                    if (type == PC_GPU_PRIM_POLY_F4) { POLY_F4 *q = (POLY_F4 *)cur; tn = "F4";
+                        bx0 = imin4(q->x0,q->x1,q->x2,q->x3); bx1 = imax4(q->x0,q->x1,q->x2,q->x3);
+                        by0 = imin4(q->y0,q->y1,q->y2,q->y3); by1 = imax4(q->y0,q->y1,q->y2,q->y3);
+                        r = q->r0; g = q->g0; b = q->b0;
+                    } else if (type == PC_GPU_PRIM_POLY_FT4) { POLY_FT4 *q = (POLY_FT4 *)cur; tn = "FT4";
+                        bx0 = imin4(q->x0,q->x1,q->x2,q->x3); bx1 = imax4(q->x0,q->x1,q->x2,q->x3);
+                        by0 = imin4(q->y0,q->y1,q->y2,q->y3); by1 = imax4(q->y0,q->y1,q->y2,q->y3);
+                        r = q->r0; g = q->g0; b = q->b0; tpg = q->tpage; cl = q->clut;
+                    } else if (type == PC_GPU_PRIM_SPRT) { SPRT *s = (SPRT *)cur; tn = "SPRT";
+                        bx0 = s->x0; by0 = s->y0; bx1 = s->x0 + s->w; by1 = s->y0 + s->h;
+                        r = s->r0; g = s->g0; b = s->b0; cl = s->clut;
+                    } else if (type == PC_GPU_PRIM_TILE) { TILE *t = (TILE *)cur; tn = "TILE";
+                        bx0 = t->x0; by0 = t->y0; bx1 = t->x0 + t->w; by1 = t->y0 + t->h;
+                        r = t->r0; g = t->g0; b = t->b0;
+                    }
+                    if (tn && bx1 >= 60 && bx0 <= 270 && by1 >= 90 && by0 <= 230)
+                        fprintf(stderr, "[fxall] f=%u %-4s semi=%d bbox=(%d,%d)-(%d,%d) %dx%d "
+                                "rgb=(%d,%d,%d) tpage=0x%04x clut=0x%04x\n",
+                                s_drawFrame, tn, semi, bx0, by0, bx1, by1, bx1 - bx0, by1 - by0,
+                                r, g, b, tpg & 0xffff, cl & 0xffff);
                 }
             }
 

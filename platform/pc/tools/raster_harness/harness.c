@@ -57,6 +57,8 @@ static void fill_rect(const u32 *w) {
     int dx = w[1] & 0x3F0, dy = (w[1] >> 16) & 0x1FF, ww = ((w[2] & 0x3FF) + 0xF) & ~0xF, hh = (w[2] >> 16) & 0x1FF;
     for (int y = 0; y < hh; y++) for (int x = 0; x < ww; x++) s_vram[(dy + y) & 511][(dx + x) & 1023] = c;
 }
+int g_curFrame = 0;   /* set in main's frame loop; used only by the VH_FXLOG dump */
+
 static void draw_polygon(const u32 *w) {
     u8 op = w[0] >> 24; int gouraud = (op >> 4) & 1, quad = (op >> 3) & 1, textured = (op >> 2) & 1;
     int semi = (op >> 1) & 1, raw = op & 1, nv = quad ? 4 : 3, frgb = w[0] & 0xFFFFFF;
@@ -71,6 +73,35 @@ static void draw_polygon(const u32 *w) {
     }
     int mr = raw ? 128 : (frgb & 0xFF), mg = raw ? 128 : ((frgb >> 8) & 0xFF), mb = raw ? 128 : ((frgb >> 16) & 0xFF);
     int abr = textured ? ((tpage >> 5) & 3) : s_drawModeAbr;
+
+    /* VH_FXLOG=1: ground-truth dump of the effect layer from the trace — every semi-transparent
+     * polygon (the casting-ray / SFX quads), with screen bbox (incl. draw offset), blend mode,
+     * texture page/clut, modulation colour, and UV span. Lets us characterise what hardware
+     * actually draws for the effect vs what our port's GTE/primitive path emits. */
+    {
+        static int fxlog = -1;
+        if (fxlog < 0) fxlog = getenv("VH_FXLOG") ? atoi(getenv("VH_FXLOG")) : 0;
+        /* VH_FXLOG logs semi quads; VH_FXLOG=2 also logs OPAQUE textured quads whose page is 6
+         * (x=384) -- the blob's tpage family 0x0006/0x0036 -- to see if hardware draws the blob
+         * quad opaque or semi. */
+        int wantOpaquePage6 = fxlog >= 2 && textured && !semi && ((tpage & 0x8F) == 0x06 || (tpage & 0xF) == 6);
+        if (fxlog && (semi || wantOpaquePage6)) {
+            int ox = s_drawEnv.ofs[0], oy = s_drawEnv.ofs[1];
+            double xmn = 1e9, xmx = -1e9, ymn = 1e9, ymx = -1e9;
+            int umn = 255, umx = 0, vmn = 255, vmx = 0;
+            for (int i = 0; i < nv; i++) {
+                double sx = v[i].x + ox, sy = v[i].y + oy;
+                if (sx < xmn) xmn = sx; if (sx > xmx) xmx = sx;
+                if (sy < ymn) ymn = sy; if (sy > ymx) ymx = sy;
+                if (textured) { int u=(int)v[i].u,vv=(int)v[i].v;
+                    if(u<umn)umn=u; if(u>umx)umx=u; if(vv<vmn)vmn=vv; if(vv>vmx)vmx=vv; }
+            }
+            fprintf(stderr, "[fx] f%d %s%s abr%d tpage=0x%04x clut=0x%04x col=(%d,%d,%d) "
+                    "screen=[%.0f..%.0f x %.0f..%.0f] %dx%d uv=[%d..%d,%d..%d]\n",
+                    g_curFrame, quad?"Q":"T", textured?"T":"F", abr, tpage, clut, mr, mg, mb,
+                    xmn, xmx, ymn, ymx, (int)(xmx-xmn), (int)(ymx-ymn), umn, umx, vmn, vmx);
+        }
+    }
     if (quad) FillQuad(v[0], v[1], v[2], v[3], mr, mg, mb, textured, tpage, clut, semi, abr);
     else      FillTriangle(v[0], v[1], v[2], mr, mg, mb, textured, tpage, clut, semi, abr);
 }
@@ -143,6 +174,7 @@ int main(int argc, char **argv) {
     size_t i = 0; int frame = 0, npoly = 0;
     while (i < gp0n) {
         while (frame < nvsync && (long)i >= vsync[frame]) {
+            g_curFrame = frame;
             char p[64]; snprintf(p, sizeof(p), "/tmp/harness_frame%d.ppm", frame);
             int y0 = s_drawEnv.clip.y > 16 ? s_drawEnv.clip.y - 16 : 0;
             dump_ppm(p, 0, y0, 384, 288);
@@ -164,5 +196,34 @@ int main(int argc, char **argv) {
     }
     dump_ppm("/tmp/harness_vram.ppm", 0, 0, 1024, 512);
     fprintf(stderr, "[harness] done: %d polygons replayed.\n", npoly);
+
+    /* VH_OVERLAY_QUADS=<raylog.txt> VH_OVERLAY_FRAME=<f>: after the trace has populated VRAM
+     * (textures + CLUTs), redraw the PORT's logged effect quads for one frame ON TOP of a cleared
+     * effect region, so we can see the SHAPE the port's own primitives make (ribbon vs blob) using
+     * the proven-accurate rasterizer. Parses [raylog] lines: tpage/clut/abr/uv/xy (Z-order). */
+    const char *ovf = getenv("VH_OVERLAY_QUADS");
+    if (ovf) {
+        int tf = getenv("VH_OVERLAY_FRAME") ? atoi(getenv("VH_OVERLAY_FRAME")) : -1;
+        FILE *lf = fopen(ovf, "rb"); if (!lf) { perror(ovf); return 1; }
+        for (int y = 90; y < 230; y++) for (int x = 60; x < 280; x++) s_vram[y][x] = 0; /* black canvas */
+        s_drawEnv.ofs[0] = s_drawEnv.ofs[1] = 0;
+        s_drawEnv.clip.x = 0; s_drawEnv.clip.y = 0; s_drawEnv.clip.w = VRAM_W; s_drawEnv.clip.h = VRAM_H;
+        char ln[512]; int drew = 0;
+        while (fgets(ln, sizeof ln, lf)) {
+            int f, tpage, clut, abr, r,g,b;
+            int u0,v0,u1,v1,u2,v2,u3,v3, x0,y0,x1,y1,x2,y2,x3,y3;
+            if (sscanf(ln, "[raylog] f=%d tpage=0x%x clut=0x%x abr=%d rgb=(%d,%d,%d) "
+                       "uv=(%d,%d)(%d,%d)(%d,%d)(%d,%d) xy=(%d,%d)(%d,%d)(%d,%d)(%d,%d)",
+                       &f,&tpage,&clut,&abr,&r,&g,&b,&u0,&v0,&u1,&v1,&u2,&v2,&u3,&v3,
+                       &x0,&y0,&x1,&y1,&x2,&y2,&x3,&y3) != 23) continue;
+            if (tf >= 0 && f != tf) continue;
+            RVert a={x0,y0,u0,v0}, bb={x1,y1,u1,v1}, c={x2,y2,u2,v2}, d={x3,y3,u3,v3};
+            FillQuad(a, bb, c, d, r, g, b, 1, tpage, clut, 1, (tpage>>5)&3);
+            drew++;
+        }
+        fclose(lf);
+        dump_ppm("/tmp/overlay_quads.ppm", 60, 90, 220, 140);
+        fprintf(stderr, "[harness] overlay: drew %d port quads for frame %d -> /tmp/overlay_quads.ppm\n", drew, tf);
+    }
     return 0;
 }
