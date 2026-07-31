@@ -595,17 +595,22 @@ void AddPrim(void *ot, void *p) {
  *     itself happens here, in the frame loop, since fopen/fwrite aren't
  *     async-signal-safe).
  *   - Periodic: VH_VRAM_DUMP=N dumps every N frames, capped at VH_VRAM_DUMP_MAX
- *     files (default 2000) to bound disk use. */
+ *     files (default 2000; set to 0 = UNLIMITED for a brute-force every-frame capture).
+ *     VH_VRAM_DUMP_DIR=<path> writes the .ppm files there (default: cwd). */
 static volatile sig_atomic_t s_vramDumpReq = 0;
+static const char *s_vramDumpDir = NULL;
 #ifdef SIGUSR2   /* on-demand VRAM dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2 */
 static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; }
 #endif
 
 static void PC_WriteVramPpm(int idx) {
-    char path[64];
+    char path[512];
     FILE *f;
     int x, y;
-    sprintf(path, "vh_vram_%05d_f%06u.ppm", idx, s_drawFrame);
+    if (s_vramDumpDir && s_vramDumpDir[0])
+        sprintf(path, "%.480s/vh_vram_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
+    else
+        sprintf(path, "vh_vram_%05d_f%06u.ppm", idx, s_drawFrame);
     f = fopen(path, "wb");
     if (!f) return;
     fprintf(f, "P6\n%d %d\n255\n", VRAM_W, VRAM_H);
@@ -629,10 +634,15 @@ static void PC_MaybeDumpVram(void) {
         const char *e = getenv("VH_VRAM_DUMP");
         const char *m = getenv("VH_VRAM_DUMP_MAX");
         s_interval = (e && atoi(e) > 0) ? atoi(e) : 0;
-        if (m && atoi(m) > 0) s_max = atoi(m);
+        if (m) s_max = atoi(m);            /* <= 0 => UNLIMITED (brute-force every-frame capture) */
+        s_vramDumpDir = getenv("VH_VRAM_DUMP_DIR");
 #ifdef SIGUSR2
         signal(SIGUSR2, PC_VramDumpSignal); /* on-demand trigger, always armed (POSIX only) */
 #endif
+        if (s_interval > 0)
+            fprintf(stderr, "[vramdump] armed: every %d frame(s), max=%s, dir=%s "
+                    "(~1.5 MB/frame)\n", s_interval, (s_max > 0) ? "capped" : "UNLIMITED",
+                    (s_vramDumpDir && s_vramDumpDir[0]) ? s_vramDumpDir : "cwd");
         s_init = 1;
     }
     if (s_vramDumpReq) { /* on-demand: unlimited, distinct 900xx index range */
@@ -640,7 +650,8 @@ static void PC_MaybeDumpVram(void) {
         s_vramDumpReq = 0;
         PC_WriteVramPpm(s_onDemand++);
     }
-    if (s_interval == 0 || s_dumped >= s_max) return;
+    if (s_interval == 0) return;
+    if (s_max > 0 && s_dumped >= s_max) return;   /* s_max <= 0 = unlimited */
     if ((s_frame++ % s_interval) != 0) return;
     PC_WriteVramPpm(s_dumped++);
 }
@@ -732,10 +743,10 @@ void DrawOTag(unsigned int *p) {
                         r = t->r0; g = t->g0; b = t->b0;
                     }
                     if (tn && bx1 >= 60 && bx0 <= 270 && by1 >= 90 && by0 <= 230)
-                        fprintf(stderr, "[fxall] f=%u %-4s semi=%d bbox=(%d,%d)-(%d,%d) %dx%d "
+                        fprintf(stderr, "[fxall] f=%u %-4s code=0x%02x semi=%d bbox=(%d,%d)-(%d,%d) %dx%d "
                                 "rgb=(%d,%d,%d) tpage=0x%04x clut=0x%04x\n",
-                                s_drawFrame, tn, semi, bx0, by0, bx1, by1, bx1 - bx0, by1 - by0,
-                                r, g, b, tpg & 0xffff, cl & 0xffff);
+                                s_drawFrame, tn, getcode((P_TAG *)cur), semi, bx0, by0, bx1, by1,
+                                bx1 - bx0, by1 - by0, r, g, b, tpg & 0xffff, cl & 0xffff);
                 }
             }
 
