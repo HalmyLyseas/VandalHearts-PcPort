@@ -71,12 +71,15 @@ artwork required:
 A **graphics fidelity** track, kept deliberately conservative — the goal is to *sharpen without
 reinterpreting* the game. Two pieces:
 
-- **A more hardware-accurate software renderer** — matching the PS1 GPU's exact texture sampling and
-  coverage so translucent spell/casting effects render like the original (the remaining casting-ray
-  difference in [known issues](known_issues.md) is the motivating case).
-- **Higher internal rendering resolution** — drawing the 3D at a denser sample rate for crisper terrain
-  and edges, most likely as an optional "Enhanced" mode alongside the pixel-accurate one. **No assets are
-  re-authored:** the game's own sprites, textures, videos and UI are untouched.
+- **A more hardware-accurate software renderer — DONE (`VH_ACCURATE`, on by default).** A fixed-point
+  integer DDA that evaluates coverage *and* texture UVs at the exact pixel position the PS1 GPU does, plus
+  ordered dithering (gated on the GPU dither-enable bit) and 5-bit semi-transparency blend. Validated
+  ~99.8–99.99% pixel-exact against a DuckStation VRAM capture across effect and battle scenes; the
+  casting-ray difference that motivated it is resolved. `VH_ACCURATE=0` keeps the legacy renderer.
+- **Higher internal rendering resolution — next.** Drawing the 3D at a denser sample rate for crisper
+  terrain and edges, most likely as an optional "Enhanced" mode alongside the pixel-accurate one. **No
+  assets are re-authored:** the game's own sprites, textures, videos and UI are untouched. (The accurate
+  DDA above is the foundation this builds on.)
 
 Deliberately **out of scope:** upscaled/re-encoded videos, redrawn or AI-upscaled sprites, and camera
 changes like finer rotation — they'd re-author the art or alter the game's feel, which this project avoids.
