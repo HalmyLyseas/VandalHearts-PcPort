@@ -49,7 +49,7 @@ byte-for-byte the original, and Tactical saves are kept separate. Full player gu
 > the normal experience is unaffected. The **1.3.1** point release folded in the full-playthrough balance
 > tuning and endgame fixes.
 
-## Next — 1.4 (planned)
+### 1.4 — Quality of life ✅ (released 2026-07-31)
 
 1.4 is a quality-of-life pass. Most of it — the fast-forward, the controller-matched prompts, the camera
 tweak — is convenience an emulator or launcher could offer too; the one change that genuinely needs the
@@ -66,7 +66,7 @@ artwork required:
 - **Finer camera elevation** — an extra, evenly-spaced up/down camera angle (including a level 45°) for
   reading maps with stepped terrain.
 
-## Beyond — 1.5 and later
+## Next — 1.5 and later
 
 A dedicated **higher-quality graphics** track, kept separate because it's asset- and engine-heavy. Its
 anchor is a **more hardware-accurate software renderer** — matching the PS1 GPU's exact texture sampling
