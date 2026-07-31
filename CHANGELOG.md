@@ -4,6 +4,33 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.0] — Quality of life: fast-forward, controller labels, smarter AI, camera
+
+A quality-of-life release. Everything here is either a convenience that applies to both modes or, for the
+one AI change, a Tactical-only improvement. Normal mode stays byte-for-byte the original.
+
+### Quality of life (both modes)
+- **Battle fast-forward** — during a battle, tap **R2** (or the `.` key) to run at **2× speed**; **L2**
+  (or `,`) returns to normal, with a small `BATTLE SPEED X2` readout while it's active. It only speeds up
+  battles (menus, world map and cutscenes stay normal) and resets to 1× when the battle ends. It runs
+  *whole* game steps closer together, so the AI, RNG and every outcome are **identical** to normal speed.
+- **Controller-aware overlay labels** — the port's own overlay (save management / options) now shows
+  button prompts that match your controller: **Xbox** letters (A / B / X / Y) or **PlayStation** symbols
+  (□ ○ △ ✕), switchable in the overlay and saved to `vandalhearts.ini`. The game's own prompts are
+  untouched.
+- **Finer camera elevation** — the battle camera's up/down angle (right stick) gains a fifth,
+  evenly-spaced stop **including a clean 45°**, for finding a readable angle on stepped terrain.
+
+### Tactical Mode (opt-in)
+- **Magic-aware enemy AI** — enemy spellcasters now weigh **magic resistance** when picking targets,
+  preferring magic-weak units and avoiding resistant or buffed ones. Retail's AI ignores this entirely;
+  the change lets the magic rebalance's resistances and defensive buffs actually matter to the enemy.
+
+### Notes
+- The Chapter 2 casting-ray effect still reads slightly denser than hardware at native resolution — now
+  root-caused (see [known issues](docs/known_issues.md)); the fix is a higher-fidelity rasterizer pass
+  planned for a later release.
+
 ## [1.3.1] — Tactical Mode tuning + fixes
 
 The full campaign has now been playtested end to end; this release folds in the resulting balance tuning

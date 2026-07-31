@@ -1,4 +1,4 @@
-# Tactical Mode (1.3.1)
+# Tactical Mode (1.4)
 
 **Tactical Mode is an optional, opt-in rebalance of Vandal Hearts** — a second way to play for people
 who want a tighter, more deliberate tactical experience than the retail game offers. It is **off by
@@ -257,6 +257,21 @@ magic item" blurbs are rewritten to name their actual effect.
 | Wyrmfang | Attack magic item | Huge rings of fire |
 | Shiv Book | `??????????` | Casts Dagger Storm |
 | Necklace | `??????????` | Casts Dark Hurricane |
+
+### Magic-aware enemy casters *(added in 1.4)*
+
+Everything above makes magic resistance *matter* — the `magicSusceptibility` rebalance, and the resistance
+that **Perfect Guard** and **Mystic Energy** now grant. But retail's enemy AI is **blind** to it: it scores
+targets without any magic-resistance term, so it will happily fire a spell straight into your most
+resistant unit, and the buffs you spend a turn setting up do nothing to deter it.
+
+Tactical Mode closes that gap. Enemy spellcasters now **weigh magic resistance when choosing a target** —
+biasing toward magic-weak units and away from resistant or buffed ones. So a shielded backliner or a
+Mystic Energy'd cluster genuinely reads as a *worse* target to the enemy, and the defensive tools this mode
+adds finally pull their weight on defense. It's a bias layered on top of the original targeting math, not a
+rewrite, and it's **Tactical-only** — normal mode's AI is untouched. The full targeting model (and why
+retail behaves the way it does) is in
+[game-mechanics/ai-decision-making.md](game-mechanics/ai-decision-making.md).
 
 ## A note on the numbers
 

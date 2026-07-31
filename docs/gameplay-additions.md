@@ -136,9 +136,11 @@ confirmation first, with the warning shown in red and **Cancel** a button away:
 This one is available in **both** modes (it's a plain convenience, not a Tactical change). It's greyed
 out while you're already at the title screen.
 
-## In development (1.4)
+## Shipped (1.4)
 
-> **Status: in development** — implemented and in playtesting; will move to *Shipped* when 1.4 releases.
+1.4 is a quality-of-life release: a battle fast-forward, controller-aware overlay prompts, a magic-aware
+Tactical AI, and a finer battle-camera elevation. All four apply in both modes except the AI change, which
+is Tactical-only.
 
 ### Battle fast-forward
 
@@ -147,6 +149,8 @@ double speed; **L2** (or `,`) returns to normal. A small **`BATTLE SPEED X2`** r
 while it's active. It works **only inside a battle** — menus, the world map, cutscenes and movies always
 play at normal speed — and it **resets to 1× automatically** when the battle ends, so it never carries
 into the next battle or the overworld.
+
+![A battle with the BATTLE SPEED X2 readout shown top-right](images/features-1.4-BattleSpeed.png)
 
 The speed-up is *whole-tick*: the game runs its complete update steps closer together in time, never
 skipping or splitting one, so **the AI, RNG and every outcome are identical to normal speed** — only the
@@ -165,6 +169,10 @@ symbols (□ ○ △ ✕). It defaults to Xbox — the common PC controller — 
 once; the choice is saved to `vandalhearts.ini`. This is deliberately limited to the port's **own**
 overlay (save management, options) — the game's in-battle prompts are left exactly as the original.
 
+| Xbox labels | PlayStation labels |
+|---|---|
+| ![Save-management footer with Xbox A/B/X/Y letters](images/features-1.4-Layout-XBOX-02.png) | ![Save-management footer with PlayStation square/circle/triangle/cross symbols](images/features-1.4-Layout-PSX-02.png) |
+
 ### Finer camera elevation
 
 The battle camera's up/down viewing angle (right stick) now has **5 evenly-spaced stops** (11.25° to
@@ -172,6 +180,20 @@ The battle camera's up/down viewing angle (right stick) now has **5 evenly-space
 reading maps with tall or stepped terrain, without adding a lot of near-identical steps to click through.
 Purely a camera convenience: it changes nothing about the game, and 90° rotation is unchanged (finer
 rotation would need new eight-direction sprite art, a later release).
+
+| Low (~11°) | The new 45° | High (~79°) |
+|---|---|---|
+| ![Battle camera at a low, near-horizontal elevation](images/features-1.4-Elevation-Step-01.png) | ![Battle camera at the new 45-degree elevation](images/features-1.4-Elevation-Step-03.png) | ![Battle camera at a high, near-overhead elevation](images/features-1.4-Elevation-Step-05.png) |
+
+### Magic-aware enemy AI *(Tactical Mode only)*
+
+In Tactical Mode, enemy spellcasters now **weigh magic resistance** when choosing a target — preferring
+magic-weak units and shying away from resistant or magically-buffed ones. Retail's AI is blind to this
+(it will happily fire a spell at your most magic-resistant unit), which undercut the magic-matters rebalance
+1.3 built; this closes that gap so the resistances and defensive buffs actually influence enemy decisions.
+It's a bias layered on top of the original targeting logic, not a rewrite. Normal mode is unaffected. The
+underlying targeting model is documented in
+[game-mechanics/ai-decision-making.md](game-mechanics/ai-decision-making.md).
 
 ## Planned
 

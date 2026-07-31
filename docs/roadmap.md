@@ -51,23 +51,27 @@ byte-for-byte the original, and Tactical saves are kept separate. Full player gu
 
 ## Next — 1.4 (planned)
 
-The 1.4 line continues the "things only a source-level port can do" theme — changes to game logic and the
-port layer, with no new artwork required:
+1.4 is a quality-of-life pass. Most of it — the fast-forward, the controller-matched prompts, the camera
+tweak — is convenience an emulator or launcher could offer too; the one change that genuinely needs the
+game's source is the **smarter Tactical AI**, which reaches into the enemy's own targeting logic. No new
+artwork required:
 
-- **Faster battles** — a battle-only fast-forward (2× / 3×, on the shoulder triggers) for quicker play,
-  with outcomes **identical** to normal speed.
-- **Controller-aware prompts** — the port's own overlay button hints adapt to your controller
-  (PlayStation or Xbox labels), auto-detected with a manual override.
+- **Faster battles** — a battle-only **2×** fast-forward on the triggers for quicker play, with outcomes
+  **identical** to normal speed.
+- **Controller-aware prompts** — the port's own overlay button hints show **Xbox** letters or
+  **PlayStation** symbols, switchable in the overlay (defaults to Xbox).
 - **Smarter Tactical AI** — enemy spellcasters weigh magic resistance when choosing targets, so
   positioning and defensive buffs (like Mystic Energy / Perfect Guard) matter on defense too. **Tactical
   Mode only.**
-- **Unused-content investigation** — a few maps are referenced in the game data but never reachable in
-  normal play; we'll look into what they are and restore any that turn out to be complete, coherent
-  battles.
+- **Finer camera elevation** — an extra, evenly-spaced up/down camera angle (including a level 45°) for
+  reading maps with stepped terrain.
 
 ## Beyond — 1.5 and later
 
-A dedicated **higher-quality graphics** track, kept separate because it's asset-heavy and best done in
-stages: upscaled full-motion videos, then higher internal rendering resolution, and eventually
-higher-detail textures and sprites — likely offered as an optional "Improved" graphics mode. (Bundled
-"collector" extras such as artwork or manuals are unlikely — that material is copyrighted.)
+A dedicated **higher-quality graphics** track, kept separate because it's asset- and engine-heavy. Its
+anchor is a **more hardware-accurate software renderer** — matching the PS1 GPU's exact texture sampling
+and coverage so translucent spell/casting effects render like the original (the remaining casting-ray
+difference in [known issues](known_issues.md) is the motivating case). On top of that: upscaled full-motion
+videos, higher internal rendering resolution, and eventually higher-detail textures and sprites — likely
+offered as an optional "Improved" graphics mode. (Bundled "collector" extras such as artwork or manuals are
+unlikely — that material is copyrighted.)
