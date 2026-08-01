@@ -51,7 +51,6 @@ unsigned s_drawFrame = 0; /* incremented per DrawOTag; ties prim log to VRAM dum
 #define HIRES_MAXSCALE 4
 int g_vhInternalScale = -1;              /* 1 (off) .. HIRES_MAXSCALE; -1 = unresolved (env not read yet) */
 static unsigned short *s_hires = NULL;   /* allocated at HIRES_MAXSCALE so the scale can change live */
-static int g_rtHires = 0;                /* current raster target: 0 = s_vram (native), 1 = s_hires */
 
 static int InternalScale(void) {
     if (g_vhInternalScale < 0) {
@@ -246,6 +245,20 @@ static unsigned short BlendG1(unsigned fg, unsigned bg, int abr, int textured) {
     return (unsigned short)(color & 0xFFFFu);
 }
 
+/* Per-pass render context (Stage-3 1.5/P1 re-entrancy). The mutable rasterizer state the pixel/texture
+ * path reads: clip band, draw offset, dither-enable, texture window, and the target (native s_vram vs the
+ * Sx hi-res s_hires). Passed EXPLICITLY through the fill path instead of read from globals, so the hi-res
+ * pass can later be split into per-band worker threads, each with its own ctx. The OT walk (DrawOTag)
+ * still tracks the DR_MODE state in globals and snapshots it into a ctx per draw. */
+typedef struct {
+    int clipX, clipY, clipW, clipH;   /* drawing area, native units (y/h become the band under threading) */
+    int ofsX, ofsY;                   /* draw offset, native units */
+    int dither;                       /* dither-enable (GP0 E1h.9) */
+    int twMaskX, twMaskY, twOffX, twOffY;  /* texture window (GP0 E2h) */
+    int target;                       /* 0 = native s_vram, 1 = hi-res s_hires */
+    int scale;                        /* geometry x scale when target==1 (else effectively 1) */
+} RenderCtx;
+
 /* Blend/write one colour into a target pixel (native s_vram or s_hires). x,y are target-space, used
  * only for the dither matrix. */
 static void WritePixel(unsigned short *px, int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
@@ -269,9 +282,9 @@ static void WritePixel(unsigned short *px, int x, int y, unsigned short c, int a
     }
 }
 
-static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
-    if (g_rtHires) {                       /* G2: write the supersampled target (coords already scaled) */
-        int W = VRAM_W * g_vhInternalScale, H = VRAM_H * g_vhInternalScale;
+static void PutPixel(const RenderCtx *rc, int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
+    if (rc->target) {                      /* G2: write the supersampled target (coords already scaled) */
+        int W = VRAM_W * rc->scale, H = VRAM_H * rc->scale;
         if (x < 0 || x >= W || y < 0 || y >= H) return;
         WritePixel(&s_hires[(size_t)y * W + x], x, y, c, abr, semiTrans, textured);
         return;
@@ -297,15 +310,15 @@ static void TPageOrigin(int tpage, int *x, int *y, int *tp) {
     *tp = (tpage >> 7) & 3;
 }
 
-static unsigned short SampleTexture(int tpage, int clut, int u, int v) {
+static unsigned short SampleTexture(const RenderCtx *rc, int tpage, int clut, int u, int v) {
     int tpX, tpY, tp;
     int clutX = (clut & 0x3F) * 16;
     int clutY = (clut >> 6) & 0x1FF;
     unsigned short raw;
 
     /* Apply the active texture window (GP0(E2h)); mask 0 leaves u/v untouched. */
-    u = (u & ~(s_twMaskX * 8)) | ((s_twOffX & s_twMaskX) * 8);
-    v = (v & ~(s_twMaskY * 8)) | ((s_twOffY & s_twMaskY) * 8);
+    u = (u & ~(rc->twMaskX * 8)) | ((rc->twOffX & rc->twMaskX) * 8);
+    v = (v & ~(rc->twMaskY * 8)) | ((rc->twOffY & rc->twMaskY) * 8);
 
     TPageOrigin(tpage, &tpX, &tpY, &tp);
 
@@ -346,6 +359,7 @@ typedef struct {
     int r, g, bcol, textured, tpage, clut, semiTrans, abr;
     int clipL, clipR, clipT, clipB;   /* inclusive drawing area */
     DdaUVStep step;
+    const RenderCtx *rc;              /* per-pass state: dither, texture window, target/scale (P1) */
 } DdaCtx;
 
 static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
@@ -376,19 +390,19 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     if (cx->textured) dda_stepx_n(&uv, &cx->step, x_start);   /* seed UV to the span's start x */
     do {
         if (cx->textured) {
-            unsigned short texel = SampleTexture(cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
+            unsigned short texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
             if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
                 int tr, tg, tb; UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * cx->r) / 128; tg = (tg * cx->g) / 128; tb = (tb * cx->bcol) / 128;
-                PutPixel(current_x, y,
-                         (AccurateEnabled() && s_drawModeDither) ? PackColorG1Front(tr, tg, tb, current_x, y)
-                                                                 : PackColor(tr, tg, tb),
+                PutPixel(cx->rc, current_x, y,
+                         (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(tr, tg, tb, current_x, y)
+                                                               : PackColor(tr, tg, tb),
                          cx->abr, cx->semiTrans && (texel & 0x8000), 1);
             }
         } else {
-            PutPixel(current_x, y,
-                     (AccurateEnabled() && s_drawModeDither) ? PackColorG1Front(cx->r, cx->g, cx->bcol, current_x, y)
-                                                             : PackColor(cx->r, cx->g, cx->bcol),
+            PutPixel(cx->rc, current_x, y,
+                     (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(cx->r, cx->g, cx->bcol, current_x, y)
+                                                           : PackColor(cx->r, cx->g, cx->bcol),
                      cx->abr, cx->semiTrans, 0);
         }
         current_x++;
@@ -423,16 +437,16 @@ static void dda_part(const DdaCtx *cx, const DdaPart *tp, DdaUV origin) {
     }
 }
 
-static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol,
+static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, int r, int g, int bcol,
                             int textured, int tpage, int clut, int semiTrans, int abr) {
     /* G2: when rasterizing into the hires target, scale geometry (vertices/offset/clip) by S but keep
      * UVs native. The DDA's own UV-step math then advances the native texture at 1/S the rate across the
      * S-times-wider span, i.e. one native-texture sample per hi-res pixel -- coverage AND texture at Sx
-     * density (this is the sharp, per-hires-pixel path; the native pass, g_rtHires=0, uses S=1). */
-    int S = g_rtHires ? g_vhInternalScale : 1;
-    int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
+     * density (this is the sharp, per-hires-pixel path; the native pass, rc->target=0, uses S=1). */
+    int S = rc->target ? rc->scale : 1;
+    int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int vx[3], vy[3], vu[3], vv[3], i;
-    RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rc;
+    RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rvc;
     for (i = 0; i < 3; i++) {
         vx[i] = (int)lround(rv[i].x) * S + ox; vy[i] = (int)lround(rv[i].y) * S + oy;
         vu[i] = (int)lround(rv[i].u);          vv[i] = (int)lround(rv[i].v);
@@ -489,8 +503,9 @@ static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol
     DdaCtx cx;
     cx.r = r; cx.g = g; cx.bcol = bcol; cx.textured = textured;
     cx.tpage = tpage; cx.clut = clut; cx.semiTrans = semiTrans; cx.abr = abr;
-    cx.clipL = s_drawEnv.clip.x * S; cx.clipR = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S - 1;
-    cx.clipT = s_drawEnv.clip.y * S; cx.clipB = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S - 1;
+    cx.clipL = rc->clipX * S; cx.clipR = (rc->clipX + rc->clipW) * S - 1;
+    cx.clipT = rc->clipY * S; cx.clipB = (rc->clipY + rc->clipH) * S - 1;
+    cx.rc = rc;
     DdaUV origin; origin.u = origin.v = 0;
     if (textured) {
         /* ATTRIB_STEP(A,B) = (u32)(det(A,B)*(1<<12)/det) << 12, det(A,B)=(v1.A-v0.A)(v2.B-v1.B)-(v2.A-v1.A)(v1.B-v0.B) */
@@ -525,14 +540,14 @@ static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol
 #undef DDA_SWAP
 }
 
-static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
+static void FillTriangle(const RenderCtx *rc, RVert a, RVert b, RVert c, int r, int g, int bcol,
                           int textured, int tpage, int clut, int semiTrans, int abr) {
     /* VH_ACCURATE (default) rasterizes via the fixed-point integer DDA -- coverage + UV at the integer
      * position, VRAM-faithful to DuckStation. The barycentric path below is only the VH_ACCURATE=0
      * legacy fallback (centre-sample coverage, floor UV, no dither). */
-    if (AccurateEnabled()) { FillTriangleDDA(a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr); return; }
-    int S = g_rtHires ? g_vhInternalScale : 1;   /* G2: scale geometry by S, keep UVs native */
-    int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
+    if (AccurateEnabled()) { FillTriangleDDA(rc, a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr); return; }
+    int S = rc->target ? rc->scale : 1;   /* G2: scale geometry by S, keep UVs native */
+    int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int minX, maxX, minY, maxY;
     int x, y;
     double area;
@@ -546,10 +561,10 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
     minY = (int)floor(a.y < b.y ? (a.y < c.y ? a.y : c.y) : (b.y < c.y ? b.y : c.y));
     maxY = (int)ceil(a.y > b.y ? (a.y > c.y ? a.y : c.y) : (b.y > c.y ? b.y : c.y));
 
-    if (minX < s_drawEnv.clip.x * S) minX = s_drawEnv.clip.x * S;
-    if (minY < s_drawEnv.clip.y * S) minY = s_drawEnv.clip.y * S;
-    if (maxX > (s_drawEnv.clip.x + s_drawEnv.clip.w) * S) maxX = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S;
-    if (maxY > (s_drawEnv.clip.y + s_drawEnv.clip.h) * S) maxY = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S;
+    if (minX < rc->clipX * S) minX = rc->clipX * S;
+    if (minY < rc->clipY * S) minY = rc->clipY * S;
+    if (maxX > (rc->clipX + rc->clipW) * S) maxX = (rc->clipX + rc->clipW) * S;
+    if (maxY > (rc->clipY + rc->clipH) * S) maxY = (rc->clipY + rc->clipH) * S;
 
     area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     if (area == 0) return;
@@ -566,44 +581,44 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
             if (textured) {
                 int u = (int)(w0 * a.u + w1 * b.u + w2 * c.u);
                 int v = (int)(w0 * a.v + w1 * b.v + w2 * c.v);
-                unsigned short texel = SampleTexture(tpage, clut, u, v);
+                unsigned short texel = SampleTexture(rc, tpage, clut, u, v);
                 int tr, tg, tb;
                 if (texel == 0) continue; /* real hw: 0000h texel = transparent */
                 UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * r) / 128; tg = (tg * g) / 128; tb = (tb * bcol) / 128;
-                PutPixel(x, y, PackColor(tr, tg, tb), abr, semiTrans && (texel & 0x8000), 1);
+                PutPixel(rc, x, y, PackColor(tr, tg, tb), abr, semiTrans && (texel & 0x8000), 1);
             } else {
-                PutPixel(x, y, PackColor(r, g, bcol), abr, semiTrans, 0);
+                PutPixel(rc, x, y, PackColor(r, g, bcol), abr, semiTrans, 0);
             }
         }
     }
 }
 
-static void FillQuad(RVert v0, RVert v1, RVert v2, RVert v3, int r, int g, int b,
+static void FillQuad(const RenderCtx *rc, RVert v0, RVert v1, RVert v2, RVert v3, int r, int g, int b,
                       int textured, int tpage, int clut, int semiTrans, int abr) {
     /* psx-spx: "Quads are internally processed as two triangles, the first
      * consisting of vertices 1,2,3, and the second of vertices 2,3,4." */
-    FillTriangle(v0, v1, v2, r, g, b, textured, tpage, clut, semiTrans, abr);
-    FillTriangle(v1, v2, v3, r, g, b, textured, tpage, clut, semiTrans, abr);
+    FillTriangle(rc, v0, v1, v2, r, g, b, textured, tpage, clut, semiTrans, abr);
+    FillTriangle(rc, v1, v2, v3, r, g, b, textured, tpage, clut, semiTrans, abr);
 }
 
 /* TILE's rect fill, subject to the current drawing offset/clip (it's a
  * regular render primitive, walked from the OT like any other). */
-static void FillRect(int x0, int y0, int w, int h, int r, int g, int b) {
-    int S = g_rtHires ? g_vhInternalScale : 1;   /* G2: scale geometry by S into the hires target */
-    int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
+static void FillRect(const RenderCtx *rc, int x0, int y0, int w, int h, int r, int g, int b) {
+    int S = rc->target ? rc->scale : 1;   /* G2: scale geometry by S into the hires target */
+    int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int x, y;
     int minX = x0 * S + ox, minY = y0 * S + oy, maxX = minX + w * S, maxY = minY + h * S;
     unsigned short c = PackColor(r, g, b);
 
-    if (minX < s_drawEnv.clip.x * S) minX = s_drawEnv.clip.x * S;
-    if (minY < s_drawEnv.clip.y * S) minY = s_drawEnv.clip.y * S;
-    if (maxX > (s_drawEnv.clip.x + s_drawEnv.clip.w) * S) maxX = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S;
-    if (maxY > (s_drawEnv.clip.y + s_drawEnv.clip.h) * S) maxY = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S;
+    if (minX < rc->clipX * S) minX = rc->clipX * S;
+    if (minY < rc->clipY * S) minY = rc->clipY * S;
+    if (maxX > (rc->clipX + rc->clipW) * S) maxX = (rc->clipX + rc->clipW) * S;
+    if (maxY > (rc->clipY + rc->clipH) * S) maxY = (rc->clipY + rc->clipH) * S;
 
     for (y = minY; y < maxY; y++)
         for (x = minX; x < maxX; x++)
-            PutPixel(x, y, c, 0, 0, 0);
+            PutPixel(rc, x, y, c, 0, 0, 0);
 }
 
 /* ClearImage maps to the raw "Quick Rectangle Fill" GPU command, which
@@ -1101,23 +1116,35 @@ void DrawOTag(unsigned int *p) {
                 }
             }
 
+            /* Build the per-pass render contexts from the current walk state (P1 re-entrancy): native
+             * (target 0) always, hi-res (target 1, geometry ×hiScale) when supersampling is on. The
+             * dual-write draws both. Snapshotting into a ctx here is what lets the hi-res pass later be
+             * split into per-band worker threads. */
+            RenderCtx rcn, rch;
+            int hires = (hiScale > 1 && s_hires);
+            rcn.clipX = s_drawEnv.clip.x; rcn.clipY = s_drawEnv.clip.y;
+            rcn.clipW = s_drawEnv.clip.w; rcn.clipH = s_drawEnv.clip.h;
+            rcn.ofsX = s_drawEnv.ofs[0];  rcn.ofsY = s_drawEnv.ofs[1];
+            rcn.dither = s_drawModeDither;
+            rcn.twMaskX = s_twMaskX; rcn.twMaskY = s_twMaskY; rcn.twOffX = s_twOffX; rcn.twOffY = s_twOffY;
+            rcn.target = 0; rcn.scale = 1;
+            rch = rcn; rch.target = 1; rch.scale = hiScale;
+
             switch (type) {
             case PC_GPU_PRIM_POLY_F4: {
                 POLY_F4 *q = (POLY_F4 *)cur;
                 RVert a = { q->x0, q->y0, 0, 0 }, b = { q->x1, q->y1, 0, 0 };
                 RVert c = { q->x2, q->y2, 0, 0 }, d = { q->x3, q->y3, 0, 0 };
-                FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
-                if (hiScale > 1 && s_hires) { g_rtHires = 1;
-                    FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr); g_rtHires = 0; }
+                FillQuad(&rcn, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
+                if (hires) FillQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
                 break;
             }
             case PC_GPU_PRIM_POLY_FT4: {
                 POLY_FT4 *q = (POLY_FT4 *)cur;
                 RVert a = { q->x0, q->y0, q->u0, q->v0 }, b = { q->x1, q->y1, q->u1, q->v1 };
                 RVert c = { q->x2, q->y2, q->u2, q->v2 }, d = { q->x3, q->y3, q->u3, q->v3 };
-                FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
-                if (hiScale > 1 && s_hires) { g_rtHires = 1;
-                    FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3); g_rtHires = 0; }
+                FillQuad(&rcn, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
+                if (hires) FillQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
                 break;
             }
             case PC_GPU_PRIM_SPRT: {
@@ -1126,16 +1153,14 @@ void DrawOTag(unsigned int *p) {
                 RVert b = { s->x0 + s->w, s->y0, s->u0 + s->w, s->v0 };
                 RVert c = { s->x0, s->y0 + s->h, s->u0, s->v0 + s->h };
                 RVert d = { s->x0 + s->w, s->y0 + s->h, s->u0 + s->w, s->v0 + s->h };
-                FillQuad(a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
-                if (hiScale > 1 && s_hires) { g_rtHires = 1;
-                    FillQuad(a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr); g_rtHires = 0; }
+                FillQuad(&rcn, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
+                if (hires) FillQuad(&rch, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
                 break;
             }
             case PC_GPU_PRIM_TILE: {
                 TILE *t = (TILE *)cur;
-                FillRect(t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
-                if (hiScale > 1 && s_hires) { g_rtHires = 1;
-                    FillRect(t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0); g_rtHires = 0; }
+                FillRect(&rcn, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
+                if (hires) FillRect(&rch, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
                 break;
             }
             case PC_GPU_PRIM_DR_MODE: {

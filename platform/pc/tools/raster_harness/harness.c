@@ -39,6 +39,19 @@ static void set_area_br(u32 w) { int x2 = w & 0x3FF, y2 = (w >> 10) & 0x1FF;
 static void set_offset(u32 w) { int ox = w & 0x7FF, oy = (w >> 11) & 0x7FF;
     s_drawEnv.ofs[0] = (ox & 0x400) ? ox - 0x800 : ox; s_drawEnv.ofs[1] = (oy & 0x400) ? oy - 0x800 : oy; }
 
+/* P1: build a native (target 0) render context from the harness's current GP0 state, mirroring what
+ * DrawOTag builds per draw. The harness only exercises the native path. */
+static RenderCtx harnessCtx(void) {
+    RenderCtx rc;
+    rc.clipX = s_drawEnv.clip.x; rc.clipY = s_drawEnv.clip.y;
+    rc.clipW = s_drawEnv.clip.w; rc.clipH = s_drawEnv.clip.h;
+    rc.ofsX = s_drawEnv.ofs[0];  rc.ofsY = s_drawEnv.ofs[1];
+    rc.dither = s_drawModeDither;
+    rc.twMaskX = s_twMaskX; rc.twMaskY = s_twMaskY; rc.twOffX = s_twOffX; rc.twOffY = s_twOffY;
+    rc.target = 0; rc.scale = 1;
+    return rc;
+}
+
 /* ---- VRAM transfers -------------------------------------------------------------------------- */
 static void cpu_to_vram(const u32 *w) {
     int dx = w[1] & 0x3FF, dy = (w[1] >> 16) & 0x1FF;
@@ -103,8 +116,11 @@ static void draw_polygon(const u32 *w) {
                     xmn, xmx, ymn, ymx, (int)(xmx-xmn), (int)(ymx-ymn), umn, umx, vmn, vmx);
         }
     }
-    if (quad) FillQuad(v[0], v[1], v[2], v[3], mr, mg, mb, textured, tpage, clut, semi, abr);
-    else      FillTriangle(v[0], v[1], v[2], mr, mg, mb, textured, tpage, clut, semi, abr);
+    {
+        RenderCtx rc = harnessCtx();
+        if (quad) FillQuad(&rc, v[0], v[1], v[2], v[3], mr, mg, mb, textured, tpage, clut, semi, abr);
+        else      FillTriangle(&rc, v[0], v[1], v[2], mr, mg, mb, textured, tpage, clut, semi, abr);
+    }
 }
 
 /* Word length of the GP0 command starting at w[]. -1 = unhandled -> stop. */
@@ -223,7 +239,8 @@ int main(int argc, char **argv) {
                        &x0,&y0,&x1,&y1,&x2,&y2,&x3,&y3) != 23) continue;
             if (tf >= 0 && f != tf) continue;
             RVert a={x0,y0,u0,v0}, bb={x1,y1,u1,v1}, c={x2,y2,u2,v2}, d={x3,y3,u3,v3};
-            FillQuad(a, bb, c, d, r, g, b, 1, tpage, clut, 1, (tpage>>5)&3);
+            RenderCtx rc = harnessCtx();
+            FillQuad(&rc, a, bb, c, d, r, g, b, 1, tpage, clut, 1, (tpage>>5)&3);
             drew++;
         }
         fclose(lf);
