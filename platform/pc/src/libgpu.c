@@ -387,8 +387,20 @@ typedef struct {
     int r, g, bcol, textured, tpage, clut, semiTrans, abr;
     int clipL, clipR, clipT, clipB;   /* inclusive drawing area */
     DdaUVStep step;
+    int uMin, uMax, vMin, vMax;      /* prim's texel bounds (for the hi-res edge inset) */
     const RenderCtx *rc;              /* per-pass state: dither, texture window, target/scale (P1) */
 } DdaCtx;
+
+/* Hi-res UV edge inset (VH_HIRES_INSET, default off; optional amount, default 1 texel). The lava/terrain
+ * tiles carry a dark "crust" texel at their texture-cell borders; native samples the tile INTERIORS, but
+ * hi-res' finer edge sampling lands on those border texels -> a dark grid along every tile seam (also the
+ * compass "dotted lines"). Clamping the hi-res sample to [uMin+n, uMax-n] makes tile edges sample the
+ * bright interior like native does, removing the grid. Hi-res pass only; native s_vram untouched. */
+static int HiresInsetAmt(void) {
+    static int a = -1;
+    if (a < 0) { const char *e = getenv("VH_HIRES_INSET"); a = e ? atoi(e) : 0; if (a < 0) a = 0; }
+    return a;   /* 0 = off; N = inset N texels */
+}
 
 static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
 static long long dda_makestep(int dx, int dy) {
@@ -464,6 +476,11 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     int texN = cx->textured && cx->rc->target && HiresTexNativeEnabled();
     int texBl = cx->textured && cx->rc->target && !texN && HiresBilinearEnabled();
     int S = cx->rc->scale, oy_u = 0, oy_v = 0;
+    /* Hi-res UV edge inset: clamp the sample to the prim's interior so tile edges don't hit the dark
+     * border/crust texels native skips (see HiresInsetAmt). Point-sample path only, hi-res pass only. */
+    int inset = (cx->textured && cx->rc->target && !texN && !texBl) ? HiresInsetAmt() : 0;
+    int iuLo = cx->uMin + inset, iuHi = cx->uMax - inset, ivLo = cx->vMin + inset, ivHi = cx->vMax - inset;
+    if (inset && (iuHi < iuLo || ivHi < ivLo)) inset = 0;   /* cell too small to inset */
     if (texN) { int oy = (S >> 1) - (y % S); oy_u = oy * (int)cx->step.dudy; oy_v = oy * (int)cx->step.dvdy; }
     do {
         if (cx->textured) {
@@ -475,8 +492,11 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
                                                                    : PackColor(tr, tg, tb),
                              cx->abr, cx->semiTrans, 1);
             } else {
-            unsigned short texel = texN ? dda_texel_native(cx, current_x, uv, S, oy_u, oy_v)
-                                        : SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
+            unsigned short texel;
+            if (texN) texel = dda_texel_native(cx, current_x, uv, S, oy_u, oy_v);
+            else { int su = dda_getu(&uv), sv = dda_getv(&uv);
+                   if (inset) { if (su<iuLo)su=iuLo; if (su>iuHi)su=iuHi; if (sv<ivLo)sv=ivLo; if (sv>ivHi)sv=ivHi; }
+                   texel = SampleTexture(cx->rc, cx->tpage, cx->clut, su, sv); }
             if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
                 UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * cx->r) / 128; tg = (tg * cx->g) / 128; tb = (tb * cx->bcol) / 128;
@@ -594,6 +614,10 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
     cx.clipL = rc->clipX * S; cx.clipR = (rc->clipX + rc->clipW) * S - 1;
     cx.clipT = rc->clipY * S; cx.clipB = (rc->clipY + rc->clipH) * S - 1;
     cx.rc = rc;
+    cx.uMin = cx.uMax = vu[0]; cx.vMin = cx.vMax = vv[0];   /* prim texel bounds (hi-res edge inset) */
+    { int k; for (k = 1; k < 3; k++) {
+        if (vu[k] < cx.uMin) cx.uMin = vu[k]; if (vu[k] > cx.uMax) cx.uMax = vu[k];
+        if (vv[k] < cx.vMin) cx.vMin = vv[k]; if (vv[k] > cx.vMax) cx.vMax = vv[k]; } }
     DdaUV origin; origin.u = origin.v = 0;
     if (textured) {
         /* ATTRIB_STEP(A,B) = (u32)(det(A,B)*(1<<12)/det) << 12, det(A,B)=(v1.A-v0.A)(v2.B-v1.B)-(v2.A-v1.A)(v1.B-v0.B) */
@@ -980,17 +1004,14 @@ void AddPrim(void *ot, void *p) {
  *     VH_VRAM_DUMP_DIR=<path> writes the .ppm files there (default: cwd). */
 static volatile sig_atomic_t s_vramDumpReq = 0;
 static volatile sig_atomic_t s_hiresDumpReq = 0;   /* same SIGUSR2 also dumps the hires buffer (matched pair) */
+static volatile sig_atomic_t s_tileLogReq = 0;     /* SIGUSR2 also latches a one-frame prim-list dump */
+static unsigned s_tileLogFrame = 0;                /* the frame SIGUSR2 latched (VH_TILELOG) */
 static const char *s_vramDumpDir = NULL;
-#ifdef SIGUSR2   /* on-demand dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2.
-                  * One signal writes a MATCHED native (vh_vram_900xx) + hires (vh_hires_900xx) pair,
-                  * sharing the same frame number in the filename, for native-vs-hires comparison. */
-static volatile sig_atomic_t s_tileLogReq = 0;    /* SIGUSR2 also latches a one-frame prim-list dump */
-static unsigned s_tileLogFrame = 0;               /* the frame SIGUSR2 latched (VH_TILELOG) */
-static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; s_hiresDumpReq = 1; s_tileLogReq = 1; }
 
 /* DEBUG (VH_TILELOG=1 + `kill -USR2`): dump EVERY primitive in DRAW ORDER whose bounding box overlaps a
- * small lava region, on the SIGUSR2 frame -- so the prim that paints the seam pixels dark is identifiable
- * (it's the last one over a seam pixel). Region is env-overridable via VH_TILELOG_BOX="x0,y0,x1,y1". */
+ * small region, on the SIGUSR2 frame -- so the prim that paints the seam pixels is identifiable (it's the
+ * last one over a seam pixel). Region env-overridable via VH_TILELOG_BOX="x0,y0,x1,y1". Portable (the
+ * SIGUSR2 trigger is POSIX-only; on Windows s_tileLogReq just stays 0 and this never fires). */
 static void PrimLog(const char *kind, int n, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3,
                     int tpage, int clut, int semi, int abr, int r, int g, int b) {
     static int s_pl = -1; static int bx0 = 130, by0 = 95, bx1 = 178, by1 = 140;
@@ -1008,6 +1029,10 @@ static void PrimLog(const char *kind, int n, int x0, int y0, int x1, int y1, int
               semi, abr, r, g, b, x0, y0, x1, y1, x2, y2, x3, y3);
     }
 }
+#ifdef SIGUSR2   /* on-demand dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2.
+                  * One signal writes a MATCHED native (vh_vram_900xx) + hires (vh_hires_900xx) pair,
+                  * sharing the same frame number in the filename, for native-vs-hires comparison. */
+static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; s_hiresDumpReq = 1; s_tileLogReq = 1; }
 #endif
 
 static void PC_WriteVramPpm(int idx) {
