@@ -25,6 +25,10 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 - **A/V fidelity: complete**, validated against real hardware (BizHawk): GTE/perspective and
   terrain/sprite rendering; a sample-accurate software SPU driving the SEQ music and VAG sound
   effects; CD-XA streamed audio; MDEC/STR video; and PS1 Shift-JIS/kanji text.
+- **Graphics fidelity (v1.5):** the software renderer is a PSX-accurate integer rasterizer (exact GPU
+  coverage + texture sampling, dithering, 5-bit blend; ~99.8–99.99% pixel-exact vs a reference-emulator
+  capture), with optional **internal-resolution supersampling** (1–4×) on a multithreaded high-res pass
+  for a sharper image with no re-authored art. The faithful look is the default.
 - **64-bit** is the default build. The port is memory-safe — it runs unprivileged (no root, no
   `setcap`) and has passed both an AddressSanitizer out-of-bounds sweep and a UBSan pass across the
   game, which together fixed seven real out-of-bounds bugs latent in the retail game.
@@ -37,8 +41,9 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 The two foundational stages — the byte-exact decompilation and the faithful native port — are
 **complete** (see *Status* above). **Stage 3** adds an optional layer of gameplay and quality-of-life
 enhancements: better controls (including an at-a-glance enemy threat overlay), an in-game options and
-save-management overlay, and an opt-in balance mode. The faithful experience is always preserved;
-gameplay-changing additions are opt-in.
+save-management overlay, an opt-in balance mode, and a higher-fidelity graphics layer (an accurate
+software rasterizer with optional internal-resolution supersampling). The faithful experience is always
+preserved; gameplay-changing additions are opt-in.
 
 Full breakdown — what's shipped vs. planned — is in **[docs/roadmap.md](docs/roadmap.md)**. These are
 plans, not commitments: this is a non-commercial hobby preservation project.
