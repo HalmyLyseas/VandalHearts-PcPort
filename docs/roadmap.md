@@ -76,10 +76,14 @@ reinterpreting* the game. Two pieces:
   ordered dithering (gated on the GPU dither-enable bit) and 5-bit semi-transparency blend. Validated
   ~99.8–99.99% pixel-exact against a DuckStation VRAM capture across effect and battle scenes; the
   casting-ray difference that motivated it is resolved. `VH_ACCURATE=0` keeps the legacy renderer.
-- **Higher internal rendering resolution — next.** Drawing the 3D at a denser sample rate for crisper
-  terrain and edges, most likely as an optional "Enhanced" mode alongside the pixel-accurate one. **No
-  assets are re-authored:** the game's own sprites, textures, videos and UI are untouched. (The accurate
-  DDA above is the foundation this builds on.)
+- **Higher internal rendering resolution — DONE (`VH_INTERNAL_SCALE`, off by default).** Draws the 3D at
+  1× (native), 2×, 3×, or 4× the sample rate for crisper terrain and edges — an optional supersampling
+  layer *on top of* the accurate DDA, which samples the same textures on a denser grid. **No assets are
+  re-authored:** the game's own sprites, textures, videos and UI are untouched. Set live in the options
+  overlay ("INTERNAL RES") and persisted.
+- **Multithreaded rasterizer — DONE (`VH_RASTER_THREADS`, auto).** The software renderer's hi-res pass is
+  split across CPU cores (disjoint scanline bands, lock-free, bit-identical output), so 4× internal
+  resolution holds the 30 fps cap and battle fast-forward stays effective on a multicore machine.
 
 Deliberately **out of scope:** upscaled/re-encoded videos, redrawn or AI-upscaled sprites, and camera
 changes like finer rotation — they'd re-author the art or alter the game's feel, which this project avoids.

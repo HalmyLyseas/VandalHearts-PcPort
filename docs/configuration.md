@@ -59,6 +59,8 @@ isn't already set. Applied keys are echoed at startup (`PC_Config: KEY=VALUE (fr
 | `VH_DISC_IMAGE` | auto-detect (see above) | Full path to the game disc `.bin`. |
 | `VH_SCALE` | `2` | Integer window scale of the native 320×240 (2 = 640×480). Upscaled nearest-neighbour, so pixel art stays crisp. |
 | `VH_ACCURATE` | `1` (on) | PSX-accurate software rasterizer — a fixed-point integer DDA that evaluates coverage and texture UVs at the exact pixel position the PS1 GPU does, plus ordered dithering (honouring the GPU dither-enable bit) and 5-bit semi-transparency blend. Validated ~99.8–99.99% pixel-exact vs a DuckStation VRAM capture. The intended, hardware-faithful look. Set `0` for the legacy renderer (softer edges, no dithering); advanced users only. |
+| `VH_INTERNAL_SCALE` | `1` (off) | Internal render resolution for the 3D — supersample at `1`× (native), `2`×, `3`×, or `4`×, for a sharper image with no change to the art, sprites, or camera (it samples the same textures on a denser grid). `2`× is essentially free; `3`×/`4`× are heavier (the rasterizer is multithreaded — see `VH_RASTER_THREADS`). Also settable live in the options overlay (**SELECT + START**), which writes your choice back to the INI. |
+| `VH_RASTER_THREADS` | auto (one per core) | Advanced: worker-thread count for the internal-resolution rasterizer. Default is automatic (online CPU count, capped). Set a number only to cap it — e.g. `4` to leave cores free for other work. Ignored at `1`× internal resolution (nothing to parallelize). |
 
 The everyday knobs are few by design. There are also **compatibility** and **audio-tuning** keys whose
 defaults reproduce real-hardware behaviour and shouldn't normally be touched — they're documented in
