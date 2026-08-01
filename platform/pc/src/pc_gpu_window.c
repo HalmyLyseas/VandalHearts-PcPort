@@ -202,6 +202,24 @@ extern int PC_ButtonLabelStyle(void);
 extern const char *PC_OverlayItemWidestValue(int i);
 #define OVL_LABELS_XBOX (PC_ButtonLabelStyle() == 1)
 
+/* ALL overlay screens share ONE scale = the one the MAIN settings list needs. The main list is the
+ * widest panel and the reference; without this a narrow panel (return-to-title confirm, save
+ * management, detail) picks a LARGER scale than the main menu and renders bigger/blockier than it --
+ * visible at internal res 1, where the wide main list is forced to scale 1 but the narrow panels fit
+ * scale 2. The main list's items are readable on every screen (PC_OverlayItem is the settings list
+ * regardless of the current sub-screen), so the reference width is always computable. */
+static int ovlSharedScale(int w) {
+    int i, count = PC_OverlayCount(), base = 0;
+    for (i = 0; i < count; i++) {
+        const char *label, *wv; int lw;
+        PC_OverlayItem(i, &label, NULL);
+        wv = PC_OverlayItemWidestValue(i);
+        lw = ovlTextPx(label, 1) + (wv ? 12 + ovlTextPx(wv, 1) : 0);
+        if (lw > base) base = lw;
+    }
+    return ovlPickScale(w, base);
+}
+
 /* MAIN: the settings list. */
 static void drawMain(int w, int h) {
     const char *title = PC_OverlayTitle();
@@ -216,7 +234,7 @@ static void drawMain(int w, int h) {
         lw = ovlTextPx(label, 1) + (wv ? 12 + ovlTextPx(wv, 1) : 0);
         if (lw > base) base = lw;
     }
-    scale = ovlPickScale(w, base);
+    scale = ovlSharedScale(w);   /* all screens use the main list's scale (consistent) */
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
     panelW = base * scale + 2 * padX;
     panelH = padY + OVL_GLY1 * scale + titleGap + count * lineH + padY;
@@ -269,7 +287,7 @@ static void drawSaves(int w, int h) {
     showPos = (count > MAXVIS) ? 1 : 0;
     bodyLines = visN + showPos + 1 /*separator*/ + 3 /*legend*/;
 
-    scale = ovlPickScale(w, base);
+    scale = ovlSharedScale(w);   /* all screens use the main list's scale (consistent) */
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
     panelW = base * scale + 2 * padX;
     panelH = padY + OVL_GLY1 * scale + titleGap + bodyLines * lineH + padY;
@@ -319,7 +337,7 @@ static void drawConfirm(int w, int h) {
     for (i = 0; i < n; i++) { int lw = ovlTextPx(PC_OverlayConfirmOption(i), 1); if (lw > base) base = lw; }
 
     bodyLines = 1 /*msg*/ + hasTgt + 1 /*separator*/ + n;
-    scale = ovlPickScale(w, base);
+    scale = ovlSharedScale(w);   /* all screens use the main list's scale (consistent) */
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
     panelW = base * scale + 2 * padX;
     panelH = padY + OVL_GLY1 * scale + titleGap + bodyLines * lineH + padY;
@@ -364,7 +382,7 @@ static void drawDetail(int w, int h) {
     if (ovlTextPx(LEG, 1) > base) base = ovlTextPx(LEG, 1);
     for (i = 0; i < 3; i++) { int lw = ovlTextPx(rows[i], 1); if (lw > base) base = lw; }
     bodyLines = 3 /*slots*/ + 1 /*separator*/ + 1 /*legend*/;
-    scale = ovlPickScale(w, base);
+    scale = ovlSharedScale(w);   /* all screens use the main list's scale (consistent) */
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
     panelW = base * scale + 2 * padX;
     panelH = padY + OVL_GLY1 * scale + titleGap + bodyLines * lineH + padY;
