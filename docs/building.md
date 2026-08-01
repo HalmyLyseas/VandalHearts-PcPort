@@ -82,6 +82,11 @@ baseline — see [memory-safety.md](memory-safety.md) for why, and why the 32-bi
 as an A/B reference. Both build systems run the mid-build data-segment generator; see
 [pc-port/data-segment.md](pc-port/data-segment.md).
 
+**Optimization.** Both build systems default to `-O0 -g` (unoptimized, for debugging). The internal-
+resolution rasterizer (1.5) needs optimization to hold the frame cap, so build with `-O2` for anything
+perf-sensitive: `make link CC="cc -O2"` or `cmake … -DCMAKE_C_FLAGS=-O2`. The **release packaging
+(`make-release.sh`) always builds `-O2`** on both platforms, so shipped binaries are optimized.
+
 Run it, and point it at your disc:
 
 ```sh

@@ -49,9 +49,13 @@ rm -rf "$STAGE"; mkdir -p "$STAGE"
 # ---- Windows: host MinGW-w64 cross-compile ----------------------------------
 if [ "$DO_WIN" = 1 ]; then
     command -v x86_64-w64-mingw32-gcc >/dev/null || die "MinGW-w64 toolchain not found (pacman -S mingw-w64-gcc)"
-    log "Windows: cross-compiling with MinGW-w64"
+    log "Windows: cross-compiling with MinGW-w64 (-O2)"
+    # Release binaries are optimized (-O2, matching the validated `build_opt`). The default CMake/Make
+    # build is -O0 -g for debugging; the internal-resolution rasterizer (1.5) needs -O2 to hold 30 fps,
+    # so the release MUST override it. -DCMAKE_C_FLAGS=-O2 adds -O2 on top of the default -g.
     ( cd "$PC_DIR"
-      cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake >/dev/null
+      cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
+            -DCMAKE_C_FLAGS=-O2 >/dev/null
       cmake --build build_win >/dev/null )
     WIN_EXE="$PC_DIR/build_win/vandalhearts_pc.exe"
     [ -f "$WIN_EXE" ] || die "Windows build produced no .exe"
@@ -75,7 +79,7 @@ if [ "$DO_LINUX" = 1 ]; then
     distrobox enter "$CONTAINER" -- bash -lc "
         set -e; export PATH=\"\$HOME/bin:\$PATH\"
         cd '$PC_DIR'
-        make link BUILD_DIR=build_deb >/dev/null
+        make link BUILD_DIR=build_deb CC='cc -O2' >/dev/null
         packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc >/dev/null"
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"
     [ -f "$APP" ] || die "container build produced no AppImage"
