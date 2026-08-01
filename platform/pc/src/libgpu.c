@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "PsyQ/libgpu.h"
 #include "pc_platform.h"
@@ -38,6 +39,57 @@
 
 static unsigned short s_vram[VRAM_H][VRAM_W];
 unsigned s_drawFrame = 0; /* incremented per DrawOTag; ties prim log to VRAM dumps + libgte VH_GTE_LOG */
+
+/* ---- G2: internal-resolution supersampling (VH_INTERNAL_SCALE) --------------------------------
+ * Each primitive is rasterized a SECOND time into an S-times-larger colour buffer (s_hires) with its
+ * geometry scaled by S but UVs left native, so the DDA samples the native-res texture once PER HI-RES
+ * PIXEL -- coverage and texture both at S x the density. s_vram stays native and byte-identical (all
+ * readback / blend / effect behaviour unchanged); present() blits s_hires when S>1. Bulk VRAM writes
+ * that bypass the rasterizer (ClearImage/LoadImage/MoveImage) are mirrored in as SxS nearest blocks.
+ * Backend-only, default OFF (S=1); set VH_INTERNAL_SCALE=2 to enable. */
+static int g_internalScale = -1;        /* 1 (off) .. 4; resolved from env once */
+static unsigned short *s_hires = NULL;   /* (VRAM_W*S) x (VRAM_H*S), lazily allocated when S>1 */
+static int g_rtHires = 0;                /* current raster target: 0 = s_vram (native), 1 = s_hires */
+
+static int InternalScale(void) {
+    if (g_internalScale < 0) {
+        const char *v = getenv("VH_INTERNAL_SCALE");
+        int s = v ? atoi(v) : 1;
+        if (s < 1) s = 1;
+        if (s > 4) s = 4;
+        g_internalScale = s;
+    }
+    return g_internalScale;
+}
+
+static void HiresEnsure(void) {
+    if (!s_hires && InternalScale() > 1) {
+        int S = g_internalScale;
+        s_hires = (unsigned short *)calloc((size_t)VRAM_W * S * VRAM_H * S, sizeof(unsigned short));
+    }
+}
+
+/* Mirror a native VRAM rect into s_hires as SxS nearest blocks (bulk writes bypass the rasterizer). */
+static void HiresMirrorRect(int x0, int y0, int w, int h) {
+    int S, x, y, sx, sy, W;
+    if (InternalScale() <= 1) return;
+    HiresEnsure();
+    if (!s_hires) return;
+    S = g_internalScale; W = VRAM_W * S;
+    for (y = 0; y < h; y++) {
+        int vy = y0 + y;
+        if (vy < 0 || vy >= VRAM_H) continue;
+        for (x = 0; x < w; x++) {
+            int vx = x0 + x;
+            unsigned short c;
+            if (vx < 0 || vx >= VRAM_W) continue;
+            c = s_vram[vy][vx];
+            for (sy = 0; sy < S; sy++)
+                for (sx = 0; sx < S; sx++)
+                    s_hires[(size_t)(vy * S + sy) * W + (vx * S + sx)] = c;
+        }
+    }
+}
 
 static DRAWENV s_drawEnv;
 static DISPENV s_dispEnv;
@@ -177,26 +229,38 @@ static unsigned short BlendG1(unsigned fg, unsigned bg, int abr, int textured) {
     return (unsigned short)(color & 0xFFFFu);
 }
 
-static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
-    if (x < 0 || x >= VRAM_W || y < 0 || y >= VRAM_H) return;
+/* Blend/write one colour into a target pixel (native s_vram or s_hires). x,y are target-space, used
+ * only for the dither matrix. */
+static void WritePixel(unsigned short *px, int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
     if (semiTrans) {
         if (AccurateEnabled()) {
-            s_vram[y][x] = BlendG1((unsigned)c | 0x8000u, s_vram[y][x], abr, textured);
+            *px = BlendG1((unsigned)c | 0x8000u, *px, abr, textured);
         } else {
             int r, g, b, br, bg, bb;
             UnpackColor(c, &r, &g, &b);
-            UnpackColor(s_vram[y][x], &br, &bg, &bb);
+            UnpackColor(*px, &br, &bg, &bb);
             switch (abr) {
             case 0: r = (br + r) / 2; g = (bg + g) / 2; b = (bb + b) / 2; break;
             case 1: r = br + r; g = bg + g; b = bb + b; break;
             case 2: r = br - r; g = bg - g; b = bb - b; break;
             case 3: r = br + r / 4; g = bg + g / 4; b = bb + b / 4; break;
             }
-            s_vram[y][x] = PackColorDither(r, g, b, x, y);
+            *px = PackColorDither(r, g, b, x, y);
         }
     } else {
-        s_vram[y][x] = c;
+        *px = c;
     }
+}
+
+static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
+    if (g_rtHires) {                       /* G2: write the supersampled target (coords already scaled) */
+        int W = VRAM_W * g_internalScale, H = VRAM_H * g_internalScale;
+        if (x < 0 || x >= W || y < 0 || y >= H) return;
+        WritePixel(&s_hires[(size_t)y * W + x], x, y, c, abr, semiTrans, textured);
+        return;
+    }
+    if (x < 0 || x >= VRAM_W || y < 0 || y >= VRAM_H) return;
+    WritePixel(&s_vram[y][x], x, y, c, abr, semiTrans, textured);
 }
 
 /* ---- GetTPage / GetClut (psx-spx "Texpage Attribute" / "Clut Attribute") */
@@ -344,12 +408,29 @@ static void dda_part(const DdaCtx *cx, const DdaPart *tp, DdaUV origin) {
 
 static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol,
                             int textured, int tpage, int clut, int semiTrans, int abr) {
-    int ox = s_drawEnv.ofs[0], oy = s_drawEnv.ofs[1];
+    /* G2: when rasterizing into the hires target, scale geometry (vertices/offset/clip) by S but keep
+     * UVs native. The DDA's own UV-step math then advances the native texture at 1/S the rate across the
+     * S-times-wider span, i.e. one native-texture sample per hi-res pixel -- coverage AND texture at Sx
+     * density (this is the sharp, per-hires-pixel path; the native pass, g_rtHires=0, uses S=1). */
+    int S = g_rtHires ? g_internalScale : 1;
+    int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
     int vx[3], vy[3], vu[3], vv[3], i;
     RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rc;
     for (i = 0; i < 3; i++) {
-        vx[i] = (int)lround(rv[i].x) + ox; vy[i] = (int)lround(rv[i].y) + oy;
-        vu[i] = (int)lround(rv[i].u);      vv[i] = (int)lround(rv[i].v);
+        vx[i] = (int)lround(rv[i].x) * S + ox; vy[i] = (int)lround(rv[i].y) * S + oy;
+        vu[i] = (int)lround(rv[i].u);          vv[i] = (int)lround(rv[i].v);
+    }
+    /* G2 seam fix (hires pass only): a full 256-wide/tall texture's EXCLUSIVE right/bottom edge sits at
+     * U/V==256, which the 32-bit UV fixed point can't hold (256<<24 overflows to 0), so the finer hires
+     * sampling tips the last pixel to texel 0 instead of the real edge texel 255 -- a dark seam on
+     * full-page background sprites. Clamp that exact edge to 255. Only single-page sprites (u0+w==256)
+     * have a vertex precisely at 256; tiled sprites (U past 256) wrap correctly via the natural overflow
+     * and never have a 256 vertex, so they're untouched. Native pass (S==1) never reaches U==256. */
+    if (S > 1) {
+        for (i = 0; i < 3; i++) {
+            if (vu[i] == 256) vu[i] = 255;
+            if (vv[i] == 256) vv[i] = 255;
+        }
     }
 #define DDA_SWAP(p, q) do { int t; \
     t=vx[p];vx[p]=vx[q];vx[q]=t; t=vy[p];vy[p]=vy[q];vy[q]=t; \
@@ -391,8 +472,8 @@ static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol
     DdaCtx cx;
     cx.r = r; cx.g = g; cx.bcol = bcol; cx.textured = textured;
     cx.tpage = tpage; cx.clut = clut; cx.semiTrans = semiTrans; cx.abr = abr;
-    cx.clipL = s_drawEnv.clip.x; cx.clipR = s_drawEnv.clip.x + s_drawEnv.clip.w - 1;
-    cx.clipT = s_drawEnv.clip.y; cx.clipB = s_drawEnv.clip.y + s_drawEnv.clip.h - 1;
+    cx.clipL = s_drawEnv.clip.x * S; cx.clipR = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S - 1;
+    cx.clipT = s_drawEnv.clip.y * S; cx.clipB = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S - 1;
     DdaUV origin; origin.u = origin.v = 0;
     if (textured) {
         /* ATTRIB_STEP(A,B) = (u32)(det(A,B)*(1<<12)/det) << 12, det(A,B)=(v1.A-v0.A)(v2.B-v1.B)-(v2.A-v1.A)(v1.B-v0.B) */
@@ -421,24 +502,25 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
      * position, VRAM-faithful to DuckStation. The barycentric path below is only the VH_ACCURATE=0
      * legacy fallback (centre-sample coverage, floor UV, no dither). */
     if (AccurateEnabled()) { FillTriangleDDA(a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr); return; }
-    int ox = s_drawEnv.ofs[0], oy = s_drawEnv.ofs[1];
+    int S = g_rtHires ? g_internalScale : 1;   /* G2: scale geometry by S, keep UVs native */
+    int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
     int minX, maxX, minY, maxY;
     int x, y;
     double area;
 
-    a.x += ox; a.y += oy;
-    b.x += ox; b.y += oy;
-    c.x += ox; c.y += oy;
+    a.x = a.x * S + ox; a.y = a.y * S + oy;
+    b.x = b.x * S + ox; b.y = b.y * S + oy;
+    c.x = c.x * S + ox; c.y = c.y * S + oy;
 
     minX = (int)floor(a.x < b.x ? (a.x < c.x ? a.x : c.x) : (b.x < c.x ? b.x : c.x));
     maxX = (int)ceil(a.x > b.x ? (a.x > c.x ? a.x : c.x) : (b.x > c.x ? b.x : c.x));
     minY = (int)floor(a.y < b.y ? (a.y < c.y ? a.y : c.y) : (b.y < c.y ? b.y : c.y));
     maxY = (int)ceil(a.y > b.y ? (a.y > c.y ? a.y : c.y) : (b.y > c.y ? b.y : c.y));
 
-    if (minX < s_drawEnv.clip.x) minX = s_drawEnv.clip.x;
-    if (minY < s_drawEnv.clip.y) minY = s_drawEnv.clip.y;
-    if (maxX > s_drawEnv.clip.x + s_drawEnv.clip.w) maxX = s_drawEnv.clip.x + s_drawEnv.clip.w;
-    if (maxY > s_drawEnv.clip.y + s_drawEnv.clip.h) maxY = s_drawEnv.clip.y + s_drawEnv.clip.h;
+    if (minX < s_drawEnv.clip.x * S) minX = s_drawEnv.clip.x * S;
+    if (minY < s_drawEnv.clip.y * S) minY = s_drawEnv.clip.y * S;
+    if (maxX > (s_drawEnv.clip.x + s_drawEnv.clip.w) * S) maxX = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S;
+    if (maxY > (s_drawEnv.clip.y + s_drawEnv.clip.h) * S) maxY = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S;
 
     area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     if (area == 0) return;
@@ -479,15 +561,16 @@ static void FillQuad(RVert v0, RVert v1, RVert v2, RVert v3, int r, int g, int b
 /* TILE's rect fill, subject to the current drawing offset/clip (it's a
  * regular render primitive, walked from the OT like any other). */
 static void FillRect(int x0, int y0, int w, int h, int r, int g, int b) {
-    int ox = s_drawEnv.ofs[0], oy = s_drawEnv.ofs[1];
+    int S = g_rtHires ? g_internalScale : 1;   /* G2: scale geometry by S into the hires target */
+    int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
     int x, y;
-    int minX = x0 + ox, minY = y0 + oy, maxX = minX + w, maxY = minY + h;
+    int minX = x0 * S + ox, minY = y0 * S + oy, maxX = minX + w * S, maxY = minY + h * S;
     unsigned short c = PackColor(r, g, b);
 
-    if (minX < s_drawEnv.clip.x) minX = s_drawEnv.clip.x;
-    if (minY < s_drawEnv.clip.y) minY = s_drawEnv.clip.y;
-    if (maxX > s_drawEnv.clip.x + s_drawEnv.clip.w) maxX = s_drawEnv.clip.x + s_drawEnv.clip.w;
-    if (maxY > s_drawEnv.clip.y + s_drawEnv.clip.h) maxY = s_drawEnv.clip.y + s_drawEnv.clip.h;
+    if (minX < s_drawEnv.clip.x * S) minX = s_drawEnv.clip.x * S;
+    if (minY < s_drawEnv.clip.y * S) minY = s_drawEnv.clip.y * S;
+    if (maxX > (s_drawEnv.clip.x + s_drawEnv.clip.w) * S) maxX = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S;
+    if (maxY > (s_drawEnv.clip.y + s_drawEnv.clip.h) * S) maxY = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S;
 
     for (y = minY; y < maxY; y++)
         for (x = minX; x < maxX; x++)
@@ -503,6 +586,7 @@ static void FillRectRaw(int x0, int y0, int w, int h, int r, int g, int b) {
     for (y = y0; y < y0 + h && y < VRAM_H; y++)
         for (x = x0; x < x0 + w && x < VRAM_W; x++)
             if (x >= 0 && y >= 0) s_vram[y][x] = c;
+    HiresMirrorRect(x0, y0, w, h);   /* G2: keep hires FB in sync (ClearImage / quick fill) */
 }
 
 /* ---- environment / init ------------------------------------------------- */
@@ -613,6 +697,7 @@ int LoadImage(RECT *rect, unsigned int *p) {
         for (x = 0; x < rect->w; x++)
             if (rect->y + y < VRAM_H && rect->x + x < VRAM_W)
                 s_vram[rect->y + y][rect->x + x] = src[y * rect->w + x];
+    HiresMirrorRect(rect->x, rect->y, rect->w, rect->h);   /* G2: keep hires FB in sync (backgrounds) */
     return 0;
 }
 
@@ -638,6 +723,7 @@ int MoveImage(RECT *rect, int x, int y) {
                 sx < VRAM_W && sy < VRAM_H && dx < VRAM_W && dy < VRAM_H)
                 s_vram[dy][dx] = s_vram[sy][sx];
         }
+    HiresMirrorRect(x, y, rect->w, rect->h);   /* G2: keep hires FB in sync (VRAM->VRAM blit) */
     return 0;
 }
 
@@ -787,6 +873,31 @@ static void PC_WriteVramPpm(int idx) {
     fprintf(stderr, "[vramdump] wrote %s\n", path);
 }
 
+/* Debug: dump the presented hires display region (VH_HIRES_DUMP=N, every N frames). */
+static void PC_MaybeDumpHires(int x, int y, int w, int h) {
+    static int s_init = 0, s_interval = 0, s_frame = 0, s_dumped = 0, s_max = 200;
+    char path[512]; FILE *f; int px, py, W = VRAM_W * g_internalScale;
+    if (!s_init) {
+        const char *e = getenv("VH_HIRES_DUMP");
+        s_interval = (e && atoi(e) > 0) ? atoi(e) : 0;
+        s_init = 1;
+    }
+    if (s_interval == 0 || !s_hires) return;
+    if (s_dumped >= s_max) return;
+    if ((s_frame++ % s_interval) != 0) return;
+    if (s_vramDumpDir && s_vramDumpDir[0])
+        sprintf(path, "%.470s/vh_hires_%05d_f%06u.ppm", s_vramDumpDir, s_dumped, s_drawFrame);
+    else sprintf(path, "vh_hires_%05d_f%06u.ppm", s_dumped, s_drawFrame);
+    f = fopen(path, "wb"); if (!f) return;
+    fprintf(f, "P6\n%d %d\n255\n", w, h);
+    for (py = 0; py < h; py++)
+        for (px = 0; px < w; px++) {
+            int r, g, b; UnpackColor(s_hires[(size_t)(y + py) * W + (x + px)], &r, &g, &b);
+            fputc(r, f); fputc(g, f); fputc(b, f);
+        }
+    fclose(f); s_dumped++;
+}
+
 static void PC_MaybeDumpVram(void) {
     static int s_init = 0;
     static int s_interval = 0;
@@ -825,7 +936,12 @@ void DrawOTag(unsigned int *p) {
      * Env checked once. */
     static int s_primLog = -1;
     u32 nextTok = ((P_TAG *)p)->tag;
+    int hiScale = InternalScale();          /* G2: >1 => also rasterize each prim into s_hires at Sx */
+    static int s_rtTime = -1; static clock_t s_rtAccum = 0; static unsigned s_rtFrames = 0; clock_t s_rtStart = 0;
     s_drawFrame++;
+    if (hiScale > 1) HiresEnsure();
+    if (s_rtTime < 0) s_rtTime = getenv("VH_RASTER_TIME") ? 1 : 0;
+    if (s_rtTime) s_rtStart = clock();
     if (s_primLog < 0) s_primLog = getenv("VH_GPU_PRIM_LOG") ? 1 : 0;
     while (nextTok) {
         int isBucket = 0;
@@ -946,6 +1062,8 @@ void DrawOTag(unsigned int *p) {
                 RVert a = { q->x0, q->y0, 0, 0 }, b = { q->x1, q->y1, 0, 0 };
                 RVert c = { q->x2, q->y2, 0, 0 }, d = { q->x3, q->y3, 0, 0 };
                 FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
+                if (hiScale > 1 && s_hires) { g_rtHires = 1;
+                    FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr); g_rtHires = 0; }
                 break;
             }
             case PC_GPU_PRIM_POLY_FT4: {
@@ -953,6 +1071,8 @@ void DrawOTag(unsigned int *p) {
                 RVert a = { q->x0, q->y0, q->u0, q->v0 }, b = { q->x1, q->y1, q->u1, q->v1 };
                 RVert c = { q->x2, q->y2, q->u2, q->v2 }, d = { q->x3, q->y3, q->u3, q->v3 };
                 FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
+                if (hiScale > 1 && s_hires) { g_rtHires = 1;
+                    FillQuad(a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3); g_rtHires = 0; }
                 break;
             }
             case PC_GPU_PRIM_SPRT: {
@@ -962,11 +1082,15 @@ void DrawOTag(unsigned int *p) {
                 RVert c = { s->x0, s->y0 + s->h, s->u0, s->v0 + s->h };
                 RVert d = { s->x0 + s->w, s->y0 + s->h, s->u0 + s->w, s->v0 + s->h };
                 FillQuad(a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
+                if (hiScale > 1 && s_hires) { g_rtHires = 1;
+                    FillQuad(a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr); g_rtHires = 0; }
                 break;
             }
             case PC_GPU_PRIM_TILE: {
                 TILE *t = (TILE *)cur;
                 FillRect(t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
+                if (hiScale > 1 && s_hires) { g_rtHires = 1;
+                    FillRect(t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0); g_rtHires = 0; }
                 break;
             }
             case PC_GPU_PRIM_DR_MODE: {
@@ -994,10 +1118,21 @@ void DrawOTag(unsigned int *p) {
      * comment on PutDispEnv for why. Uses whichever DISPENV the most
      * recent PutDispEnv call recorded, matching every real call site's
      * PutDispEnv-then-DrawOTag pairing. */
+    if (s_rtTime) { s_rtAccum += clock() - s_rtStart;
+        if (++s_rtFrames >= 120) { fprintf(stderr, "[raster] scale=%d  mean %.0f us/frame CPU (%u frames)\n",
+            hiScale, (double)s_rtAccum / CLOCKS_PER_SEC * 1e6 / s_rtFrames, s_rtFrames); s_rtAccum = 0; s_rtFrames = 0; } }
     PC_UpdateCamOsd(); /* refresh the debug pose label to match this frame (VH_CAM_OSD) */
     PC_MaybeDumpVram(); /* VH_VRAM_DUMP=N: snapshot VRAM to PPM for texture/CLUT triage */
-    PC_GpuPresent(&s_vram[0][0], VRAM_W, VRAM_H,
-                  s_dispEnv.disp.x, s_dispEnv.disp.y, s_dispEnv.disp.w, s_dispEnv.disp.h);
+    if (hiScale > 1 && s_hires) {          /* G2: present the supersampled display region */
+        int S = hiScale;
+        PC_MaybeDumpHires(s_dispEnv.disp.x * S, s_dispEnv.disp.y * S, s_dispEnv.disp.w * S, s_dispEnv.disp.h * S);
+        PC_GpuPresent(s_hires, VRAM_W * S, VRAM_H * S,
+                      s_dispEnv.disp.x * S, s_dispEnv.disp.y * S,
+                      s_dispEnv.disp.w * S, s_dispEnv.disp.h * S);
+    } else {
+        PC_GpuPresent(&s_vram[0][0], VRAM_W, VRAM_H,
+                      s_dispEnv.disp.x, s_dispEnv.disp.y, s_dispEnv.disp.w, s_dispEnv.disp.h);
+    }
 }
 
 /* ---- primitive initializers ---------------------------------------------- */
