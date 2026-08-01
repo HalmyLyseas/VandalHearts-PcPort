@@ -45,6 +45,10 @@ void PC_GpuSetFullscreen(int on);
 extern int g_vhInternalScale;
 void PC_GpuSetInternalScale(int scale);
 
+/* Tag the next run of AddPrim'd primitives to skip the hi-res UV edge inset (engine.c wraps the compass
+ * E/W/S/N glyph draw with 1/0). Captured per-prim at OT-mint time; default 0, reset each frame. */
+void PC_SetHiresNoInset(int on);
+
 /* Online CPU count, OS-agnostic (SDL_GetCPUCount under the hood, so it works identically on
  * Windows/Linux/macOS). Lives in the SDL-owning window layer so backends (libgpu.c's threaded
  * rasterizer) can size their thread pool without pulling in SDL or a per-OS sysconf/GetSystemInfo

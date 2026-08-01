@@ -363,6 +363,12 @@ void Objf019_Compass(Object *obj) {
       tpage = gGfxTPageIds[GFX_E];
       gfx = GFX_E;
       quadp = &compassLetterQuads[0];
+#ifdef PC_FEAT
+      /* The 4 E/W/S/N glyph quads are small high-contrast textures whose edge texel is the letter
+       * outline (not a tile crust), so the hi-res UV inset would fatten them ~1px. Tag them to opt out
+       * of the inset -- everything else (compass body, terrain, water) keeps it. See libgpu.c. */
+      { extern void PC_SetHiresNoInset(int); PC_SetHiresNoInset(1); }
+#endif
       for (i = 0; i < 4; i++, gfx++, quadp++) {
          compassPoly->clut = clut;
          compassPoly->tpage = tpage;
@@ -382,6 +388,9 @@ void Objf019_Compass(Object *obj) {
          compassPoly++;
          gQuadIndex++;
       }
+#ifdef PC_FEAT
+      { extern void PC_SetHiresNoInset(int); PC_SetHiresNoInset(0); }
+#endif
       SetGeomOffset(gGeomOffsetX, gGeomOffsetY);
       PopMatrix();
    }

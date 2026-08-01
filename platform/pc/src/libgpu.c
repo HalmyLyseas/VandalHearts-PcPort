@@ -258,6 +258,7 @@ typedef struct {
     int twMaskX, twMaskY, twOffX, twOffY;  /* texture window (GP0 E2h) */
     int target;                       /* 0 = native s_vram, 1 = hi-res s_hires */
     int scale;                        /* geometry x scale when target==1 (else effectively 1) */
+    int noInset;                      /* 1 = skip the hi-res UV edge inset (tagged prims, e.g. compass glyphs) */
 } RenderCtx;
 
 /* Blend/write one colour into a target pixel (native s_vram or s_hires). x,y are target-space, used
@@ -480,7 +481,7 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     int S = cx->rc->scale, oy_u = 0, oy_v = 0;
     /* Hi-res UV edge inset: clamp the sample to the prim's interior so tile edges don't hit the dark
      * border/crust texels native skips (see HiresInsetAmt). Point-sample path only, hi-res pass only. */
-    int inset = (cx->textured && cx->rc->target && !texN && !texBl) ? HiresInsetAmt() : 0;
+    int inset = (cx->textured && cx->rc->target && !texN && !texBl && !cx->rc->noInset) ? HiresInsetAmt() : 0;
     int iuLo = cx->uMin + inset, iuHi = cx->uMax - inset, ivLo = cx->vMin + inset, ivHi = cx->vMax - inset;
     if (inset && (iuHi < iuLo || ivHi < ivLo)) inset = 0;   /* cell too small to inset */
     if (texN) { int oy = (S >> 1) - (y % S); oy_u = oy * (int)cx->step.dudy; oy_v = oy * (int)cx->step.dvdy; }
@@ -922,10 +923,17 @@ int ClearImage(RECT *rect, u_char r, u_char g, u_char b) {
 
 static void *s_otPtr[PC_OT_MAX_TOKENS];
 static unsigned char s_otIsBucket[PC_OT_MAX_TOKENS];
+static unsigned char s_otNoInset[PC_OT_MAX_TOKENS];  /* per-prim "skip the hi-res UV inset" tag */
 static u32 s_otTokens;      /* highest token minted this frame; 0 = none */
 static int s_otOverflowed;  /* latched, so the warning prints once per frame */
 
-static void PC_OtResetTokens(void) { s_otTokens = 0; s_otOverflowed = 0; }
+/* Set by game code (engine.c, PC_FEAT) around a run of AddPrim calls to tag those prims "no hi-res UV
+ * inset" -- used to spare the small compass E/W/S/N glyphs, whose edge texel is the letter outline (not a
+ * tile crust) and so fatten under the inset. Captured per-token at mint time (see PC_OtMint). */
+static int s_hiresNoInset = 0;
+void PC_SetHiresNoInset(int on) { s_hiresNoInset = on ? 1 : 0; }
+
+static void PC_OtResetTokens(void) { s_otTokens = 0; s_otOverflowed = 0; s_hiresNoInset = 0; }
 
 /* Mint a token for `p`. Returns 0 (= end of chain) on overflow, which drops the
  * tail of that bucket rather than corrupting memory -- and says so loudly, since
@@ -943,6 +951,7 @@ static u32 PC_OtMint(void *p, int isBucket) {
     s_otTokens++;
     s_otPtr[s_otTokens] = p;
     s_otIsBucket[s_otTokens] = (unsigned char)isBucket;
+    s_otNoInset[s_otTokens] = (unsigned char)s_hiresNoInset;   /* capture the tag at mint time */
     return s_otTokens;
 }
 
@@ -1371,6 +1380,7 @@ void DrawOTag(unsigned int *p) {
             rcn.dither = s_drawModeDither;
             rcn.twMaskX = s_twMaskX; rcn.twMaskY = s_twMaskY; rcn.twOffX = s_twOffX; rcn.twOffY = s_twOffY;
             rcn.target = 0; rcn.scale = 1;
+            rcn.noInset = s_otNoInset[nextTok];   /* per-prim inset tag (compass glyphs opt out) */
             rch = rcn; rch.target = 1; rch.scale = hiScale;
 
             switch (type) {
