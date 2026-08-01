@@ -219,12 +219,24 @@ options overlay (**Select + Start → INTERNAL RES**, also saved to `vandalheart
 
 ![The options overlay with INTERNAL RES set to X4](images/features-1.5-MenuInternalResolution.png)
 
-The difference is clearest on stepped terrain and tile edges. Native versus 4×:
+The difference is clearest on stepped terrain and tile edges. Each pair below is native (1×) then the
+same view at 4×, shown full-width so the detail isn't downscaled:
 
-| Native (1×) | Supersampled (4×) |
-|---|---|
-| ![Battle field rendered at native internal resolution](images/features-1.5-Scene1-x1.png) | ![The same battle field rendered at 4× internal resolution](images/features-1.5-Scene1-x4.png) |
-| ![A second scene at native internal resolution](images/features-1.5-Scene2-x1.png) | ![The same second scene at 4× internal resolution](images/features-1.5-Scene2-x4.png) |
+*Battle field — native (1×):*
+
+![Battle field rendered at native internal resolution](images/features-1.5-Scene1-x1.png)
+
+*Battle field — supersampled (4×):*
+
+![The same battle field rendered at 4× internal resolution](images/features-1.5-Scene1-x4.png)
+
+*Overworld — native (1×):*
+
+![Overworld map at native internal resolution](images/features-1.5-Scene2-x1.png)
+
+*Overworld — supersampled (4×):*
+
+![The same overworld map at 4× internal resolution](images/features-1.5-Scene2-x4.png)
 
 Tile seams are handled by built-in *crust-free* sampling: the denser grid samples each tile's bright
 interior the way the reference renderer does, so no dark grid appears along terrain/lava/water seams,
