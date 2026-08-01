@@ -391,15 +391,17 @@ typedef struct {
     const RenderCtx *rc;              /* per-pass state: dither, texture window, target/scale (P1) */
 } DdaCtx;
 
-/* Hi-res UV edge inset (VH_HIRES_INSET, default off; optional amount, default 1 texel). The lava/terrain
- * tiles carry a dark "crust" texel at their texture-cell borders; native samples the tile INTERIORS, but
- * hi-res' finer edge sampling lands on those border texels -> a dark grid along every tile seam (also the
- * compass "dotted lines"). Clamping the hi-res sample to [uMin+n, uMax-n] makes tile edges sample the
- * bright interior like native does, removing the grid. Hi-res pass only; native s_vram untouched. */
+/* Hi-res UV edge inset (VH_HIRES_INSET, default ON = 1 texel; 0 disables; N insets N texels). The
+ * lava/terrain tiles carry a dark "crust" texel at their texture-cell borders; native samples the tile
+ * INTERIORS, but hi-res' finer edge sampling lands on those border texels -> a dark grid along every tile
+ * seam (also the compass "dotted lines"). Clamping the hi-res sample to [uMin+n, uMax-n] makes tile edges
+ * sample the bright interior like native does, removing the grid. Hi-res pass only (rc->target), so it is
+ * automatically tied to VH_INTERNAL_SCALE > 1; native s_vram untouched. (Trade-off: small high-contrast
+ * glyphs like the compass E/W/S/N fatten ~1px; a documented minor cosmetic.) */
 static int HiresInsetAmt(void) {
     static int a = -1;
-    if (a < 0) { const char *e = getenv("VH_HIRES_INSET"); a = e ? atoi(e) : 0; if (a < 0) a = 0; }
-    return a;   /* 0 = off; N = inset N texels */
+    if (a < 0) { const char *e = getenv("VH_HIRES_INSET"); a = e ? atoi(e) : 1; if (a < 0) a = 0; }
+    return a;   /* default 1 (on); 0 = off; N = inset N texels */
 }
 
 static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
