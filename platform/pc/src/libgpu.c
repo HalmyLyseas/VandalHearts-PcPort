@@ -984,7 +984,30 @@ static const char *s_vramDumpDir = NULL;
 #ifdef SIGUSR2   /* on-demand dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2.
                   * One signal writes a MATCHED native (vh_vram_900xx) + hires (vh_hires_900xx) pair,
                   * sharing the same frame number in the filename, for native-vs-hires comparison. */
-static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; s_hiresDumpReq = 1; }
+static volatile sig_atomic_t s_tileLogReq = 0;    /* SIGUSR2 also latches a one-frame prim-list dump */
+static unsigned s_tileLogFrame = 0;               /* the frame SIGUSR2 latched (VH_TILELOG) */
+static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; s_hiresDumpReq = 1; s_tileLogReq = 1; }
+
+/* DEBUG (VH_TILELOG=1 + `kill -USR2`): dump EVERY primitive in DRAW ORDER whose bounding box overlaps a
+ * small lava region, on the SIGUSR2 frame -- so the prim that paints the seam pixels dark is identifiable
+ * (it's the last one over a seam pixel). Region is env-overridable via VH_TILELOG_BOX="x0,y0,x1,y1". */
+static void PrimLog(const char *kind, int n, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3,
+                    int tpage, int clut, int semi, int abr, int r, int g, int b) {
+    static int s_pl = -1; static int bx0 = 130, by0 = 95, bx1 = 178, by1 = 140;
+    if (s_pl < 0) { const char *e = getenv("VH_TILELOG"); s_pl = e ? 1 : 0;
+        const char *bb = getenv("VH_TILELOG_BOX"); if (bb) sscanf(bb, "%d,%d,%d,%d", &bx0, &by0, &bx1, &by1); }
+    if (!s_pl || !s_tileLogFrame || s_drawFrame != s_tileLogFrame) return;
+    { int xs[4] = {x0,x1,x2,x3}, ys[4] = {y0,y1,y2,y3}, i, mnx=99999, mxx=-99999, mny=99999, mxy=-99999;
+      for (i = 0; i < n; i++) { if (xs[i]<mnx)mnx=xs[i]; if (xs[i]>mxx)mxx=xs[i]; if (ys[i]<mny)mny=ys[i]; if (ys[i]>mxy)mxy=ys[i]; }
+      if (mxx < bx0 || mnx > bx1 || mxy < by0 || mny > by1) return;   /* no bbox overlap with region */
+    }
+    { static unsigned ord = 0, ordFrame = 0;
+      if (ordFrame != s_drawFrame) { ord = 0; ordFrame = s_drawFrame; }
+      fprintf(stderr, "[prim] ord=%u %-4s tpage=0x%04x clut=0x%04x semi=%d abr=%d rgb=(%d,%d,%d) "
+              "xy=(%d,%d)(%d,%d)(%d,%d)(%d,%d)\n", ord++, kind, (unsigned)tpage, (unsigned)clut,
+              semi, abr, r, g, b, x0, y0, x1, y1, x2, y2, x3, y3);
+    }
+}
 #endif
 
 static void PC_WriteVramPpm(int idx) {
@@ -1120,13 +1143,19 @@ static void HiresAppendRect(const RenderCtx *rch, int x, int y, int w, int h, in
  * disjoint rows. */
 static void HiresRasterizeBand(int clipY, int clipH) {
     int i;
+    /* DEBUG (VH_HIRES_DEBUG_OPAQUE=1): force every hi-res prim opaque. If the tile-seam dark lines vanish,
+     * they come from semi-transparent blending (double-blend at seams / blend against a dark under-layer),
+     * not coverage or texture. */
+    static int s_forceOpaque = -1;
+    if (s_forceOpaque < 0) s_forceOpaque = getenv("VH_HIRES_DEBUG_OPAQUE") ? 1 : 0;
     for (i = 0; i < s_hprimCount; i++) {
         HiresPrim *hp = &s_hprims[i];
         RenderCtx rc = hp->rc;
+        int semi = s_forceOpaque ? 0 : hp->semiTrans;
         rc.clipY = clipY; rc.clipH = clipH;
         if (hp->kind == 0)
             FillQuad(&rc, hp->v[0], hp->v[1], hp->v[2], hp->v[3], hp->r, hp->g, hp->b,
-                     hp->textured, hp->tpage, hp->clut, hp->semiTrans, hp->abr);
+                     hp->textured, hp->tpage, hp->clut, semi, hp->abr);
         else
             FillRect(&rc, hp->rx, hp->ry, hp->rw, hp->rh, hp->r, hp->g, hp->b);
     }
@@ -1184,6 +1213,7 @@ void DrawOTag(unsigned int *p) {
     int hiScale = InternalScale();          /* G2: >1 => also rasterize each prim into s_hires at Sx */
     static int s_rtTime = -1; static clock_t s_rtAccum = 0; static unsigned s_rtFrames = 0; clock_t s_rtStart = 0;
     s_drawFrame++;
+    if (s_tileLogReq) { s_tileLogFrame = s_drawFrame; s_tileLogReq = 0; }
     if (hiScale > 1) HiresEnsure();
     s_hprimCount = 0;                        /* P1: reset the per-frame hi-res display list */
     if (s_rtTime < 0) s_rtTime = getenv("VH_RASTER_TIME") ? 1 : 0;
@@ -1321,6 +1351,8 @@ void DrawOTag(unsigned int *p) {
                 POLY_F4 *q = (POLY_F4 *)cur;
                 RVert a = { q->x0, q->y0, 0, 0 }, b = { q->x1, q->y1, 0, 0 };
                 RVert c = { q->x2, q->y2, 0, 0 }, d = { q->x3, q->y3, 0, 0 };
+                PrimLog("F4", 4, q->x0,q->y0, q->x1,q->y1, q->x2,q->y2, q->x3,q->y3,
+                        0, 0, semi, s_drawModeAbr, q->r0, q->g0, q->b0);
                 FillQuad(&rcn, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
                 if (hires) HiresAppendQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
                 break;
@@ -1329,6 +1361,8 @@ void DrawOTag(unsigned int *p) {
                 POLY_FT4 *q = (POLY_FT4 *)cur;
                 RVert a = { q->x0, q->y0, q->u0, q->v0 }, b = { q->x1, q->y1, q->u1, q->v1 };
                 RVert c = { q->x2, q->y2, q->u2, q->v2 }, d = { q->x3, q->y3, q->u3, q->v3 };
+                PrimLog("FT4", 4, q->x0,q->y0, q->x1,q->y1, q->x2,q->y2, q->x3,q->y3,
+                        q->tpage, q->clut, semi, (q->tpage>>5)&3, q->r0, q->g0, q->b0);
                 FillQuad(&rcn, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
                 if (hires) HiresAppendQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
                 break;
@@ -1339,12 +1373,16 @@ void DrawOTag(unsigned int *p) {
                 RVert b = { s->x0 + s->w, s->y0, s->u0 + s->w, s->v0 };
                 RVert c = { s->x0, s->y0 + s->h, s->u0, s->v0 + s->h };
                 RVert d = { s->x0 + s->w, s->y0 + s->h, s->u0 + s->w, s->v0 + s->h };
+                PrimLog("SPRT", 4, s->x0,s->y0, s->x0+s->w,s->y0, s->x0,s->y0+s->h, s->x0+s->w,s->y0+s->h,
+                        s_drawModeTPage, s->clut, semi, s_drawModeAbr, s->r0, s->g0, s->b0);
                 FillQuad(&rcn, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
                 if (hires) HiresAppendQuad(&rch, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
                 break;
             }
             case PC_GPU_PRIM_TILE: {
                 TILE *t = (TILE *)cur;
+                PrimLog("TILE", 4, t->x0,t->y0, t->x0+t->w,t->y0, t->x0,t->y0+t->h, t->x0+t->w,t->y0+t->h,
+                        0, 0, 0, 0, t->r0, t->g0, t->b0);
                 FillRect(&rcn, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
                 if (hires) HiresAppendRect(&rch, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
                 break;
@@ -1368,6 +1406,21 @@ void DrawOTag(unsigned int *p) {
             }
         }
         nextTok = rawTagOfCur;
+    }
+
+    /* DEBUG (VH_HIRES_DEBUG_GAPS=1): paint the hi-res draw region magenta before the tile pass, so any
+     * pixel no quad covers stays magenta -> reveals coverage gaps (the tile-seam black lines) directly. */
+    if (hiScale > 1 && s_hires && s_hprimCount) {
+        static int s_gapDbg = -1;
+        if (s_gapDbg < 0) s_gapDbg = getenv("VH_HIRES_DEBUG_GAPS") ? 1 : 0;
+        if (s_gapDbg) {
+            int S = hiScale, W = VRAM_W * S;
+            int gx0 = s_drawEnv.clip.x * S, gy0 = s_drawEnv.clip.y * S;
+            int gx1 = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S, gy1 = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S;
+            int gx, gy;
+            for (gy = gy0; gy < gy1 && gy < VRAM_H * S; gy++)
+                for (gx = gx0; gx < gx1 && gx < W; gx++) s_hires[(size_t)gy * W + gx] = 0x7C1F; /* magenta */
+        }
     }
 
     /* P1: rasterize the deferred hi-res display list (the native pass drew inline above), fanned out
