@@ -363,6 +363,17 @@ static int HiresInsetAmt(void) {
     return a;   /* default 1 (on); 0 = off; N = inset N texels */
 }
 
+/* Experimental alternative to the inset (VH_HIRES_CRUSTFREE=1, default off while validating): instead of
+ * clamping the sample away from the crust texel (which softens magnified tiles by a texel), shift the
+ * hi-res sample +0.5 texel (by not subtracting the half-texel in the re-centre) so tile edges land on the
+ * interior texel -- exactly what the legacy renderer does. Removes the crust with NO softening and no
+ * compass-letter compromise; keeps the hardware dither. When on, the inset stands down. */
+static int HiresCrustFree(void) {
+    static int e = -1;
+    if (e < 0) { const char *v = getenv("VH_HIRES_CRUSTFREE"); e = (v && v[0] == '1') ? 1 : 0; }
+    return e;
+}
+
 static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
 static long long dda_makestep(int dx, int dy) {
     long long bias = (dx < 0) ? -(long long)(dy - 1) : ((dx > 0) ? (long long)(dy - 1) : 0);
@@ -393,7 +404,7 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     /* Hi-res UV edge inset: clamp the sample to the prim's interior so tile edges don't hit the dark
      * border/crust texels native skips -> removes the tile-seam grid at internal res (see HiresInsetAmt).
      * Hi-res pass only; skipped for prims tagged noInset (compass glyphs) and when the cell is too small. */
-    int inset = (cx->textured && cx->rc->target && !cx->rc->noInset) ? HiresInsetAmt() : 0;
+    int inset = (cx->textured && cx->rc->target && !cx->rc->noInset && !HiresCrustFree()) ? HiresInsetAmt() : 0;
     int iuLo = cx->uMin + inset, iuHi = cx->uMax - inset, ivLo = cx->vMin + inset, ivHi = cx->vMax - inset;
     if (inset && (iuHi < iuLo || ivHi < ivLo)) inset = 0;   /* cell too small to inset */
     do {
@@ -544,7 +555,11 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
              * Re-centre to the hi-res pixel: +0.5*(du/dx + du/dy) per axis. For MINIFIED textures
              * (terrain, >1 texel/pixel) this equals the +0.5 texel seed -> no change; for ~1:1 it becomes
              * +0.5/S texel, giving each source texel S evenly-spaced samples. Hi-res pass only. */
-            int half = 1 << (DDA_ASHIFT + DDA_APOST - 1);
+            /* "Crust for free" (VH_HIRES_CRUSTFREE): NOT subtracting the half-texel here shifts the hi-res
+             * sample +0.5 texel, which lands tile edges on the interior texel instead of the dark border
+             * "crust" -- reproducing exactly what the legacy renderer does (validated offline vs the real
+             * lava texture: gray-crust 598 -> 0, full detail kept). Replaces the UV inset; no softening. */
+            int half = HiresCrustFree() ? 0 : (1 << (DDA_ASHIFT + DDA_APOST - 1));
             origin.u += (unsigned)((((int)cx.step.dudx + (int)cx.step.dudy) / 2) - half);
             origin.v += (unsigned)((((int)cx.step.dvdx + (int)cx.step.dvdy) / 2) - half);
         }
