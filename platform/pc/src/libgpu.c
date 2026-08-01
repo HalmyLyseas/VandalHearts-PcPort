@@ -151,27 +151,19 @@ static void UnpackColor(unsigned short c, int *r, int *g, int *b) {
     *b = ((c >> 10) & 0x1F) << 3;
 }
 
-/* PSX GPU ordered dither (GP0(E1h).9). The hardware adds this 4x4 signed offset to the 24-bit R/G/B
- * *after* texture-blend + semi-transparency and *before* the 24->15-bit truncation, breaking hard 5-bit
- * steps into a fine stipple that reads as a smooth gradient. Our backend never did this, so blended
- * gradients (e.g. the additive casting-ray effect) show hard "blocky" steps where hardware looks smooth.
- * Experimental / opt-in via VH_DITHER=1 while we evaluate it (known-issues casting-ray residual). */
+/* PSX GPU ordered-dither matrix (GP0(E1h).9): a 4x4 signed offset added to 24-bit R/G/B before the
+ * 24->15-bit truncation, breaking hard 5-bit steps into a fine stipple. Used by the accurate DDA's
+ * PackColorG1Front (gated on the real dither-enable bit). */
 static const signed char DITHER4[4][4] = {
     { -4,  0, -3,  1 },
     {  2, -2,  3, -1 },
     { -3,  1, -4,  0 },
     {  3, -1,  2, -2 },
 };
-static int DitherEnabled(void) {
-    static int e = -1;
-    if (e < 0) e = getenv("VH_DITHER") ? 1 : 0;
-    return e;
-}
+/* Legacy-renderer pack (VH_ACCURATE=0): the legacy barycentric path packs straight, without dither.
+ * (The old VH_DITHER prototype dither on this path was superseded by the accurate G1 dither and removed.) */
 static unsigned short PackColorDither(int r, int g, int b, int x, int y) {
-    if (DitherEnabled()) {
-        int d = DITHER4[y & 3][x & 3];
-        r += d; g += d; b += d;
-    }
+    (void)x; (void)y;
     return PackColor(r, g, b);   /* PackColor clamps to [0,255] then truncates to 5-bit */
 }
 
@@ -187,13 +179,6 @@ static int AccurateEnabled(void) {
         e = (v && v[0] == '0') ? 0 : 1;   /* default ON; only an explicit VH_ACCURATE=0 disables */
     }
     return e;
-}
-
-static int imin4(int a, int b, int c, int d) {
-    int m = a; if (b < m) m = b; if (c < m) m = c; if (d < m) m = d; return m;
-}
-static int imax4(int a, int b, int c, int d) {
-    int m = a; if (b > m) m = b; if (c > m) m = c; if (d > m) m = d; return m;
 }
 
 /* Rule 4 (gotcha #4): the GPU dithers the FRONT colour in the 24->15 truncation (BEFORE any
@@ -1220,67 +1205,6 @@ void DrawOTag(unsigned int *p) {
                         s_drawFrame, code, type, semi, abr, tp, (unsigned)q->tpage, (unsigned)q->clut,
                         q->u0, q->v0, q->x0, q->y0, q->x2, q->y2, q->r0, q->g0, q->b0, stp,
                         s_twMaskX, s_twMaskY, s_twOffX, s_twOffY);
-                }
-            }
-
-            /* VH_FXALL=1: comprehensive casting-effect region log. Every handled primitive type
-             * (F4/FT4/SPRT/TILE), semi OR opaque, whose screen bbox lies in the effect area --
-             * correctly decoding each type's own geometry/colour (unlike VH_GPU_PRIM_LOG, which
-             * always reads a POLY_FT4). Finds the blue-blob primitive that VH_RAYLOG (semi-FT4
-             * only) misses -- the port's logged FT4 quads are the magenta sparkles, not the blob. */
-            {
-                static int s_fxAll = -1;
-                if (s_fxAll < 0) s_fxAll = getenv("VH_FXALL") ? 1 : 0;
-                if (s_fxAll) {
-                    int bx0 = 0, by0 = 0, bx1 = -1, by1 = -1, r = 0, g = 0, b = 0, tpg = -1, cl = -1;
-                    const char *tn = 0;
-                    if (type == PC_GPU_PRIM_POLY_F4) { POLY_F4 *q = (POLY_F4 *)cur; tn = "F4";
-                        bx0 = imin4(q->x0,q->x1,q->x2,q->x3); bx1 = imax4(q->x0,q->x1,q->x2,q->x3);
-                        by0 = imin4(q->y0,q->y1,q->y2,q->y3); by1 = imax4(q->y0,q->y1,q->y2,q->y3);
-                        r = q->r0; g = q->g0; b = q->b0;
-                    } else if (type == PC_GPU_PRIM_POLY_FT4) { POLY_FT4 *q = (POLY_FT4 *)cur; tn = "FT4";
-                        bx0 = imin4(q->x0,q->x1,q->x2,q->x3); bx1 = imax4(q->x0,q->x1,q->x2,q->x3);
-                        by0 = imin4(q->y0,q->y1,q->y2,q->y3); by1 = imax4(q->y0,q->y1,q->y2,q->y3);
-                        r = q->r0; g = q->g0; b = q->b0; tpg = q->tpage; cl = q->clut;
-                    } else if (type == PC_GPU_PRIM_SPRT) { SPRT *s = (SPRT *)cur; tn = "SPRT";
-                        bx0 = s->x0; by0 = s->y0; bx1 = s->x0 + s->w; by1 = s->y0 + s->h;
-                        r = s->r0; g = s->g0; b = s->b0; cl = s->clut;
-                    } else if (type == PC_GPU_PRIM_TILE) { TILE *t = (TILE *)cur; tn = "TILE";
-                        bx0 = t->x0; by0 = t->y0; bx1 = t->x0 + t->w; by1 = t->y0 + t->h;
-                        r = t->r0; g = t->g0; b = t->b0;
-                    }
-                    if (tn && bx1 >= 60 && bx0 <= 270 && by1 >= 90 && by0 <= 230)
-                        fprintf(stderr, "[fxall] f=%u %-4s code=0x%02x semi=%d bbox=(%d,%d)-(%d,%d) %dx%d "
-                                "rgb=(%d,%d,%d) tpage=0x%04x clut=0x%04x\n",
-                                s_drawFrame, tn, getcode((P_TAG *)cur), semi, bx0, by0, bx1, by1,
-                                bx1 - bx0, by1 - by0, r, g, b, tpg & 0xffff, cl & 0xffff);
-                }
-            }
-
-            /* VH_RAYLOG=1: targeted casting-ray diagnostic (bugreport-02 follow-up). For each semi
-             * POLY_FT4 quad, print full corners + the coverage/sampling ratio: |screen area| (shoelace)
-             * vs |texel area| (shoelace over UVs). ratio>1 => MAGNIFY (few texels stretched over many
-             * pixels -> streaks); ratio<1 => MINIFY (texels dropped -> sparkle). Directly tests whether
-             * our blue over-fills vs hardware. Small output: only fires on the effect's own quads. */
-            {
-                static int s_rayLog = -1;
-                if (s_rayLog < 0) s_rayLog = getenv("VH_RAYLOG") ? 1 : 0;
-                if (s_rayLog && semi && type == PC_GPU_PRIM_POLY_FT4) {
-                    POLY_FT4 *q = (POLY_FT4 *)cur;
-                    /* PSX FT4 verts are Z-order (TL,TR,BL,BR); quad area = 0.5*|diag(3-0) x diag(2-1)|. */
-                    double sa = 0.5 * fabs((double)(q->x3 - q->x0) * (q->y2 - q->y1)
-                                         - (double)(q->y3 - q->y0) * (q->x2 - q->x1));
-                    double ta = 0.5 * fabs((double)(q->u3 - q->u0) * (q->v2 - q->v1)
-                                         - (double)(q->v3 - q->v0) * (q->u2 - q->u1));
-                    fprintf(stderr,
-                        "[raylog] f=%u tpage=0x%04x clut=0x%04x abr=%d rgb=(%d,%d,%d) "
-                        "uv=(%u,%u)(%u,%u)(%u,%u)(%u,%u) xy=(%d,%d)(%d,%d)(%d,%d)(%d,%d) "
-                        "screenArea=%.1f texelArea=%.1f ratio=%.2f\n",
-                        s_drawFrame, (unsigned)q->tpage, (unsigned)q->clut,
-                        ((unsigned)q->tpage >> 5) & 3, q->r0, q->g0, q->b0,
-                        q->u0, q->v0, q->u1, q->v1, q->u2, q->v2, q->u3, q->v3,
-                        q->x0, q->y0, q->x1, q->y1, q->x2, q->y2, q->x3, q->y3,
-                        sa, ta, ta > 0.0 ? sa / ta : 0.0);
                 }
             }
 
