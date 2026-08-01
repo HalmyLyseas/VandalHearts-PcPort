@@ -795,9 +795,20 @@ static void PC_Bootstrap(void) {
         fprintf(stderr, "PC_Bootstrap: failed to open a window (no display, or SDL2 issue)\n");
     } else {
         int ww = SCREEN_WIDTH, wh = SCREEN_HEIGHT, sc = 1;
+        int isc = g_vhInternalScale > 0 ? g_vhInternalScale : 1;
         PC_GpuGetWindowSize(&ww, &wh, &sc);
-        fprintf(stderr, "PC_Bootstrap: opened a %dx%d window (%dx%d internal, VH_SCALE=%d)\n",
-                ww, wh, SCREEN_WIDTH, SCREEN_HEIGHT, sc);
+        /* Report all three distinct resolutions accurately: the fullscreen/windowed presentation, the
+         * native (logical) framebuffer, and -- when G2 supersampling is on -- the internal render size. */
+        if (g_vhFullscreen)
+            fprintf(stderr, "PC_Bootstrap: opened a fullscreen window (native %dx%d",
+                    SCREEN_WIDTH, SCREEN_HEIGHT);
+        else
+            fprintf(stderr, "PC_Bootstrap: opened a %dx%d window (VH_SCALE=%d, native %dx%d",
+                    ww, wh, sc, SCREEN_WIDTH, SCREEN_HEIGHT);
+        if (isc > 1)
+            fprintf(stderr, ", internal render %dx%d [VH_INTERNAL_SCALE=%d]",
+                    SCREEN_WIDTH * isc, SCREEN_HEIGHT * isc, isc);
+        fprintf(stderr, ")\n");
     }
 }
 
