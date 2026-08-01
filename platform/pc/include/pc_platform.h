@@ -40,6 +40,11 @@ extern int g_vhFullscreen;
 void PC_GpuSetScale(int scale);
 void PC_GpuSetFullscreen(int on);
 
+/* Stage-3 (1.5/G2) internal-resolution supersampling. g_vhInternalScale is the live overlay setting
+ * (1 = off .. 4); PC_GpuSetInternalScale changes it live (reallocation-free). Backend-only, default off. */
+extern int g_vhInternalScale;
+void PC_GpuSetInternalScale(int scale);
+
 /* Called by PutDispEnv() every frame: blits a VRAM sub-rect (BGR555, vramW
  * halfwords/line) to the window opened by PC_GpuInit(). No-ops if
  * PC_GpuInit() was never called. */

@@ -28,6 +28,8 @@ extern int g_btnLabels;   /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 
 
 /* CHOICE value labels for BUTTON LABELS, indexed by g_btnLabels. */
 static const char *const s_btnLabelText[] = { "PLAYSTATION", "XBOX" };
+/* INTERNAL RES labels, indexed by value (1..4). Index 0 unused (minv is 1). X1 reads as OFF. */
+static const char *const s_internalResText[] = { "", "OFF", "X2", "X3", "X4" };
 
 /* Stage-3 1.3: applying the Tactical Mode toggle -- set the mode and re-sync the balance patch
  * (idempotent). The save folder follows automatically (PC_SaveDir reads gTacticalMode). */
@@ -72,6 +74,8 @@ static const Item s_items[] = {
      * how you switch to it (locked = NULL). Return to Title is greyed AND locked at the title. */
     { "TACTICAL MODE",   OVL_TOGGLE, &gTacticalMode,  "tactical", "VH_TACTICAL",
       "OFF", "ON",            0, 0, 0, NULL, apply_tactical,      NULL,           dis_notAtTitle, dis_notAtTitle },
+    { "INTERNAL RES",    OVL_CHOICE, &g_vhInternalScale, "video", "VH_INTERNAL_SCALE",
+      NULL, NULL,             1, 4, 1, NULL, PC_GpuSetInternalScale, NULL,        NULL, NULL, s_internalResText },
     { "WINDOW SCALE",    OVL_CHOICE, &g_vhScale,      "video",  "VH_SCALE",
       NULL, NULL,             1, 8, 1, "X",  PC_GpuSetScale,      NULL,           dis_whenFullscreen, NULL },
     { "FULLSCREEN",      OVL_TOGGLE, &g_vhFullscreen, "video",  "VH_FULLSCREEN",

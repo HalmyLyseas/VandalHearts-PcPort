@@ -420,19 +420,22 @@ int PC_GpuInit(int width, int height, const char *title) {
      * so pixel art stays crisp). VH_SCALE overrides the integer factor (default 2
      * = 640x480). The window is resizable and the present path recomputes a
      * letterboxed, aspect-preserved viewport each frame, so live resize / maximise
-     * also work. This is DISPLAY resolution only -- true internal-resolution
-     * upscaling would mean rendering the 3D at higher density in the software GPU,
-     * a much larger change with little benefit for this sprite/UI-heavy game. */
+     * also work. This is DISPLAY resolution; true INTERNAL-resolution supersampling
+     * (rendering the software GPU at a denser sample rate) is the separate
+     * VH_INTERNAL_SCALE / "INTERNAL RES" option (1.5/G2), resolved here so the
+     * overlay setting is valid before the first frame. */
     {
         int scale = 2;
         const char *env = getenv("VH_SCALE");
-        const char *fs;
+        const char *fs, *isc;
         if (env) { scale = atoi(env); if (scale < 1) scale = 1; if (scale > 8) scale = 8; }
         width  *= scale;
         height *= scale;
         g_vhScale = scale;
         fs = getenv("VH_FULLSCREEN");
         g_vhFullscreen = (fs && fs[0] == '1') ? 1 : 0;
+        isc = getenv("VH_INTERNAL_SCALE");
+        PC_GpuSetInternalScale(isc ? atoi(isc) : 1);   /* resolve g_vhInternalScale (1 = off) */
     }
     s_window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                  width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);

@@ -46,26 +46,43 @@ unsigned s_drawFrame = 0; /* incremented per DrawOTag; ties prim log to VRAM dum
  * PIXEL -- coverage and texture both at S x the density. s_vram stays native and byte-identical (all
  * readback / blend / effect behaviour unchanged); present() blits s_hires when S>1. Bulk VRAM writes
  * that bypass the rasterizer (ClearImage/LoadImage/MoveImage) are mirrored in as SxS nearest blocks.
- * Backend-only, default OFF (S=1); set VH_INTERNAL_SCALE=2 to enable. */
-static int g_internalScale = -1;        /* 1 (off) .. 4; resolved from env once */
-static unsigned short *s_hires = NULL;   /* (VRAM_W*S) x (VRAM_H*S), lazily allocated when S>1 */
+ * Backend-only, default OFF (S=1); VH_INTERNAL_SCALE=N or the options overlay ("INTERNAL RES") set it,
+ * live and persisted. `g_vhInternalScale` is the overlay-facing setting (see pc_platform.h). */
+#define HIRES_MAXSCALE 4
+int g_vhInternalScale = -1;              /* 1 (off) .. HIRES_MAXSCALE; -1 = unresolved (env not read yet) */
+static unsigned short *s_hires = NULL;   /* allocated at HIRES_MAXSCALE so the scale can change live */
 static int g_rtHires = 0;                /* current raster target: 0 = s_vram (native), 1 = s_hires */
 
 static int InternalScale(void) {
-    if (g_internalScale < 0) {
+    if (g_vhInternalScale < 0) {
         const char *v = getenv("VH_INTERNAL_SCALE");
         int s = v ? atoi(v) : 1;
         if (s < 1) s = 1;
-        if (s > 4) s = 4;
-        g_internalScale = s;
+        if (s > HIRES_MAXSCALE) s = HIRES_MAXSCALE;
+        g_vhInternalScale = s;
     }
-    return g_internalScale;
+    return g_vhInternalScale;
 }
 
 static void HiresEnsure(void) {
-    if (!s_hires && InternalScale() > 1) {
-        int S = g_internalScale;
-        s_hires = (unsigned short *)calloc((size_t)VRAM_W * S * VRAM_H * S, sizeof(unsigned short));
+    /* Allocate at the MAX scale once, so the overlay can raise/lower the scale live without reallocating
+     * (each frame uses the current scale's stride within this buffer). */
+    if (!s_hires && InternalScale() > 1)
+        s_hires = (unsigned short *)calloc((size_t)VRAM_W * HIRES_MAXSCALE * VRAM_H * HIRES_MAXSCALE,
+                                           sizeof(unsigned short));
+}
+
+/* Overlay/live setter (pc_platform.h). Clamp, (re)allocate if needed, and clear so a scale change
+ * doesn't briefly show the previous scale's stride as garbage. */
+void PC_GpuSetInternalScale(int s) {
+    if (s < 1) s = 1;
+    if (s > HIRES_MAXSCALE) s = HIRES_MAXSCALE;
+    if (s == g_vhInternalScale) return;
+    g_vhInternalScale = s;
+    if (s > 1) {
+        HiresEnsure();
+        if (s_hires)
+            memset(s_hires, 0, (size_t)VRAM_W * HIRES_MAXSCALE * VRAM_H * HIRES_MAXSCALE * sizeof(unsigned short));
     }
 }
 
@@ -75,7 +92,7 @@ static void HiresMirrorRect(int x0, int y0, int w, int h) {
     if (InternalScale() <= 1) return;
     HiresEnsure();
     if (!s_hires) return;
-    S = g_internalScale; W = VRAM_W * S;
+    S = g_vhInternalScale; W = VRAM_W * S;
     for (y = 0; y < h; y++) {
         int vy = y0 + y;
         if (vy < 0 || vy >= VRAM_H) continue;
@@ -254,7 +271,7 @@ static void WritePixel(unsigned short *px, int x, int y, unsigned short c, int a
 
 static void PutPixel(int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
     if (g_rtHires) {                       /* G2: write the supersampled target (coords already scaled) */
-        int W = VRAM_W * g_internalScale, H = VRAM_H * g_internalScale;
+        int W = VRAM_W * g_vhInternalScale, H = VRAM_H * g_vhInternalScale;
         if (x < 0 || x >= W || y < 0 || y >= H) return;
         WritePixel(&s_hires[(size_t)y * W + x], x, y, c, abr, semiTrans, textured);
         return;
@@ -412,7 +429,7 @@ static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol
      * UVs native. The DDA's own UV-step math then advances the native texture at 1/S the rate across the
      * S-times-wider span, i.e. one native-texture sample per hi-res pixel -- coverage AND texture at Sx
      * density (this is the sharp, per-hires-pixel path; the native pass, g_rtHires=0, uses S=1). */
-    int S = g_rtHires ? g_internalScale : 1;
+    int S = g_rtHires ? g_vhInternalScale : 1;
     int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
     int vx[3], vy[3], vu[3], vv[3], i;
     RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rc;
@@ -514,7 +531,7 @@ static void FillTriangle(RVert a, RVert b, RVert c, int r, int g, int bcol,
      * position, VRAM-faithful to DuckStation. The barycentric path below is only the VH_ACCURATE=0
      * legacy fallback (centre-sample coverage, floor UV, no dither). */
     if (AccurateEnabled()) { FillTriangleDDA(a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr); return; }
-    int S = g_rtHires ? g_internalScale : 1;   /* G2: scale geometry by S, keep UVs native */
+    int S = g_rtHires ? g_vhInternalScale : 1;   /* G2: scale geometry by S, keep UVs native */
     int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
     int minX, maxX, minY, maxY;
     int x, y;
@@ -573,7 +590,7 @@ static void FillQuad(RVert v0, RVert v1, RVert v2, RVert v3, int r, int g, int b
 /* TILE's rect fill, subject to the current drawing offset/clip (it's a
  * regular render primitive, walked from the OT like any other). */
 static void FillRect(int x0, int y0, int w, int h, int r, int g, int b) {
-    int S = g_rtHires ? g_internalScale : 1;   /* G2: scale geometry by S into the hires target */
+    int S = g_rtHires ? g_vhInternalScale : 1;   /* G2: scale geometry by S into the hires target */
     int ox = s_drawEnv.ofs[0] * S, oy = s_drawEnv.ofs[1] * S;
     int x, y;
     int minX = x0 * S + ox, minY = y0 * S + oy, maxX = minX + w * S, maxY = minY + h * S;
@@ -890,7 +907,7 @@ static void PC_WriteVramPpm(int idx) {
 
 /* Write the presented hires display region to a PPM (idx picks the filename range). */
 static void PC_WriteHiresPpm(int idx, int x, int y, int w, int h) {
-    char path[512]; FILE *f; int px, py, W = VRAM_W * g_internalScale;
+    char path[512]; FILE *f; int px, py, W = VRAM_W * g_vhInternalScale;
     if (!s_hires) return;
     if (s_vramDumpDir && s_vramDumpDir[0])
         sprintf(path, "%.470s/vh_hires_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
