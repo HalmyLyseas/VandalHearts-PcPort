@@ -41,12 +41,16 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    roadmap [`docs/roadmap.md`](docs/roadmap.md). Note: the "zero `src/` edits" ideal was the
    *balance-package* rule — other Stage-3 features need gated `src/` hooks. **v1.4.0 released 2026-07-31**
    — a QoL pass: battle fast-forward (2×), controller-aware overlay labels (Xbox/PlayStation), magic-
-   resistance-aware Tactical AI, finer camera elevation (incl. keyboard R/F). **1.5 (in progress)** — a
-   higher-fidelity graphics track. The **PSX-accurate software rasterizer is done** (`VH_ACCURATE`,
-   default-on): a fixed-point integer DDA matching the PS1 GPU's exact coverage + texture UVs, ordered
-   dithering (gated on the GPU dither bit), 5-bit blend — validated ~99.8–99.99% pixel-exact vs a
-   DuckStation VRAM capture; it resolved the casting-ray difference. **Next: higher internal render
-   resolution** ("Enhanced" mode), built on that rasterizer.
+   resistance-aware Tactical AI, finer camera elevation (incl. keyboard R/F). **1.5 (feature-complete on
+   the branch `feat/1.5-g2-internal-res`, not yet released)** — a higher-fidelity graphics track. Three
+   pieces: (1) the **PSX-accurate software rasterizer** (`VH_ACCURATE`, default-on, already on master) — a
+   fixed-point integer DDA matching the PS1 GPU's exact coverage + texture UVs, ordered dithering (gated on
+   the GPU dither bit), 5-bit blend, ~99.8–99.99% pixel-exact vs a DuckStation VRAM capture; (2)
+   **internal-resolution supersampling** (`VH_INTERNAL_SCALE` 1–4×, off by default) layered on that DDA —
+   sharper 3D with no re-authored assets; (3) a **multithreaded rasterizer** (`VH_RASTER_THREADS`, auto) so
+   4× holds 30 fps and battle fast-forward stays effective. **Remaining before release:** the parked
+   water-tile aliasing decision, then merge → master + tag `v1.5.0`. Guiding principle: *sharpen without
+   reinterpreting* (no upscaled video, no redrawn sprites, no camera-feel changes).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates
