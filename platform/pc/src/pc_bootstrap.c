@@ -261,6 +261,12 @@ static void PC_LoadIniConfig(void) {
         end = key + strlen(key);                    /* trim trailing ws on key */
         while (end > key && (end[-1] == ' ' || end[-1] == '\t')) *--end = '\0';
         while (*val == ' ' || *val == '\t') val++;   /* trim leading ws on value */
+        /* Strip an inline comment: the first ';' or '#' that is whitespace-preceded (or at the very
+         * start) begins a comment (`VH_X=1 ; note` -> "1"). Requiring leading whitespace keeps a ';'/'#'
+         * that is genuinely part of a value (e.g. a path) intact. */
+        { char *c;
+          for (c = val; *c; c++)
+              if ((*c == ';' || *c == '#') && (c == val || c[-1] == ' ' || c[-1] == '\t')) { *c = '\0'; break; } }
         end = val + strlen(val);                     /* trim trailing ws/newline on value */
         while (end > val && (end[-1]=='\n'||end[-1]=='\r'||end[-1]==' '||end[-1]=='\t')) *--end = '\0';
         if (strncmp(key, "VH_", 3) != 0) continue;   /* only our own keys */
