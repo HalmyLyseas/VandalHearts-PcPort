@@ -990,6 +990,60 @@ static void PC_MaybeDumpVram(void) {
     PC_WriteVramPpm(s_dumped++);
 }
 
+/* ---- P1 step 2: deferred hi-res pass via a per-frame display list -------------------------------
+ * Instead of drawing each hi-res primitive inline during the OT walk, DrawOTag APPENDS it here (with a
+ * self-contained RenderCtx snapshot), then rasterizes the whole list AFTER the single-threaded native
+ * walk. Because the list is flat + read-only, it can be rasterized by N per-band worker threads (each
+ * clipped to a scanline band => disjoint hi-res pixels, lock-free). Reused across frames (count reset). */
+typedef struct {
+    int kind;                 /* 0 = quad (F4/FT4/SPRT), 1 = rect (TILE) */
+    RVert v[4];               /* quad vertices */
+    int rx, ry, rw, rh;       /* rect (TILE) */
+    int r, g, b, textured, tpage, clut, semiTrans, abr;
+    RenderCtx rc;             /* per-prim snapshot: target=1, scale, clip (full), dither, texture window */
+} HiresPrim;
+static HiresPrim *s_hprims = NULL;
+static int s_hprimCount = 0, s_hprimCap = 0;
+
+static HiresPrim *HiresPrimNext(void) {
+    if (s_hprimCount >= s_hprimCap) {
+        int nc = s_hprimCap ? s_hprimCap * 2 : 8192;
+        HiresPrim *np = (HiresPrim *)realloc(s_hprims, (size_t)nc * sizeof(HiresPrim));
+        if (!np) return NULL;
+        s_hprims = np; s_hprimCap = nc;
+    }
+    return &s_hprims[s_hprimCount++];
+}
+static void HiresAppendQuad(const RenderCtx *rch, RVert a, RVert b, RVert c, RVert d,
+                            int r, int g, int bcol, int textured, int tpage, int clut, int semi, int abr) {
+    HiresPrim *hp = HiresPrimNext(); if (!hp) return;
+    hp->kind = 0; hp->v[0] = a; hp->v[1] = b; hp->v[2] = c; hp->v[3] = d;
+    hp->r = r; hp->g = g; hp->b = bcol; hp->textured = textured;
+    hp->tpage = tpage; hp->clut = clut; hp->semiTrans = semi; hp->abr = abr; hp->rc = *rch;
+}
+static void HiresAppendRect(const RenderCtx *rch, int x, int y, int w, int h, int r, int g, int b) {
+    HiresPrim *hp = HiresPrimNext(); if (!hp) return;
+    hp->kind = 1; hp->rx = x; hp->ry = y; hp->rw = w; hp->rh = h;
+    hp->r = r; hp->g = g; hp->b = b; hp->rc = *rch;
+}
+
+/* Rasterize the appended hi-res prims into the scanline band [clipY, clipY+clipH) (native units; the
+ * fill functions scale by rc.scale). OT order preserved; overriding only clipY/clipH keeps threads on
+ * disjoint rows. */
+static void HiresRasterizeBand(int clipY, int clipH) {
+    int i;
+    for (i = 0; i < s_hprimCount; i++) {
+        HiresPrim *hp = &s_hprims[i];
+        RenderCtx rc = hp->rc;
+        rc.clipY = clipY; rc.clipH = clipH;
+        if (hp->kind == 0)
+            FillQuad(&rc, hp->v[0], hp->v[1], hp->v[2], hp->v[3], hp->r, hp->g, hp->b,
+                     hp->textured, hp->tpage, hp->clut, hp->semiTrans, hp->abr);
+        else
+            FillRect(&rc, hp->rx, hp->ry, hp->rw, hp->rh, hp->r, hp->g, hp->b);
+    }
+}
+
 void DrawOTag(unsigned int *p) {
     /* VH_GPU_PRIM_LOG=1: dump "anomalous" primitives (our SetSemiTrans 0x80 bit set, or a code that
      * decodes to an unrecognized type) -- the fx SetSemiTrans-without-SetPolyFT4 effect polys we hunt.
@@ -1000,6 +1054,7 @@ void DrawOTag(unsigned int *p) {
     static int s_rtTime = -1; static clock_t s_rtAccum = 0; static unsigned s_rtFrames = 0; clock_t s_rtStart = 0;
     s_drawFrame++;
     if (hiScale > 1) HiresEnsure();
+    s_hprimCount = 0;                        /* P1: reset the per-frame hi-res display list */
     if (s_rtTime < 0) s_rtTime = getenv("VH_RASTER_TIME") ? 1 : 0;
     if (s_rtTime) s_rtStart = clock();
     if (s_primLog < 0) s_primLog = getenv("VH_GPU_PRIM_LOG") ? 1 : 0;
@@ -1136,7 +1191,7 @@ void DrawOTag(unsigned int *p) {
                 RVert a = { q->x0, q->y0, 0, 0 }, b = { q->x1, q->y1, 0, 0 };
                 RVert c = { q->x2, q->y2, 0, 0 }, d = { q->x3, q->y3, 0, 0 };
                 FillQuad(&rcn, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
-                if (hires) FillQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
+                if (hires) HiresAppendQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 0, 0, 0, semi, s_drawModeAbr);
                 break;
             }
             case PC_GPU_PRIM_POLY_FT4: {
@@ -1144,7 +1199,7 @@ void DrawOTag(unsigned int *p) {
                 RVert a = { q->x0, q->y0, q->u0, q->v0 }, b = { q->x1, q->y1, q->u1, q->v1 };
                 RVert c = { q->x2, q->y2, q->u2, q->v2 }, d = { q->x3, q->y3, q->u3, q->v3 };
                 FillQuad(&rcn, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
-                if (hires) FillQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
+                if (hires) HiresAppendQuad(&rch, a, b, c, d, q->r0, q->g0, q->b0, 1, q->tpage, q->clut, semi, (q->tpage >> 5) & 3);
                 break;
             }
             case PC_GPU_PRIM_SPRT: {
@@ -1154,13 +1209,13 @@ void DrawOTag(unsigned int *p) {
                 RVert c = { s->x0, s->y0 + s->h, s->u0, s->v0 + s->h };
                 RVert d = { s->x0 + s->w, s->y0 + s->h, s->u0 + s->w, s->v0 + s->h };
                 FillQuad(&rcn, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
-                if (hires) FillQuad(&rch, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
+                if (hires) HiresAppendQuad(&rch, a, b, c, d, s->r0, s->g0, s->b0, 1, s_drawModeTPage, s->clut, semi, s_drawModeAbr);
                 break;
             }
             case PC_GPU_PRIM_TILE: {
                 TILE *t = (TILE *)cur;
                 FillRect(&rcn, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
-                if (hires) FillRect(&rch, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
+                if (hires) HiresAppendRect(&rch, t->x0, t->y0, t->w, t->h, t->r0, t->g0, t->b0);
                 break;
             }
             case PC_GPU_PRIM_DR_MODE: {
@@ -1183,6 +1238,11 @@ void DrawOTag(unsigned int *p) {
         }
         nextTok = rawTagOfCur;
     }
+
+    /* P1: rasterize the deferred hi-res display list (the native pass drew inline above). Single band =
+     * whole drawing area for now; step 2b fans this out across per-band worker threads. */
+    if (hiScale > 1 && s_hires && s_hprimCount)
+        HiresRasterizeBand(s_drawEnv.clip.y, s_drawEnv.clip.h);
 
     /* Present now, after this frame's rasterization is done -- see the
      * comment on PutDispEnv for why. Uses whichever DISPENV the most
