@@ -337,22 +337,20 @@ static unsigned short SampleTexture(const RenderCtx *rc, int tpage, int clut, in
     return raw;
 }
 
-/* ===================== Hi-res anisotropic texture AA (1.5/G2 minification fix) =====================
- * The internal-resolution hi-res pass point-samples ONE texel per hi-res pixel. On a heavily MINIFIED
- * textured surface (a flat quad seen near edge-on -- the compass, distant terrain, water at steep pitch),
- * a thin high-contrast texture feature is sampled only at some pixel phases, so it breaks into DASHES
- * (the compass "2 dotted lines", the water comb). This is minification aliasing, confirmed by matched
- * native+hires pairs (exchange compass analysis). Fix: where the per-pixel UV footprint spans >1 texel,
- * average the texels the footprint covers ALONG THE DOMINANT (crushed) axis and coverage-blend over the
- * background -- proper anisotropic downsampling, so the thin feature becomes a continuous dim line as
- * native effectively shows, instead of aliased dashes. The UV step is per-HI-RES pixel, so magnified
- * content (UI/text at Sx) has a sub-texel footprint: all 4 taps collapse to one texel -> the write is
- * bit-identical to point-sampling and nothing crisp softens. HI-RES PASS ONLY (rc->target) -- the native
- * s_vram stays byte-exact. Opaque textured only; semi-transparent falls back to point-sampling. Gated
- * VH_HIRES_TEXAA (default off for now, A/B). UV fixed-point: DDA_ASHIFT+DDA_APOST = 24 frac bits. */
-static int HiresTexAaEnabled(void) {
+/* ===================== Hi-res native-phase texture sampling (1.5/G2 grid-line fix) =================
+ * The internal-res hi-res pass samples the texture at each HI-RES pixel, so it resolves fine texture
+ * detail (thin dark cell-borders, 1-texel rings, the water lattice) that native-res -- one point-sample
+ * per native pixel -- undersamples away. That detail reads as spurious grid/dot lines at x2+ (the compass
+ * "dotted lines", the lava tile seams, the water comb). Confirmed by aligning native<->hires pixels: a
+ * native texel of solid red maps to a hi-res 2x2 of {white speck, black, black, black} -- hires simply
+ * hits texels native skips. FIX (native-phase): keep COVERAGE per hi-res pixel (sharp polygon edges) but
+ * sample the TEXTURE the way native does -- quantize the sample position to the native-pixel-block centre,
+ * so all SxS hi-res pixels in a native block fetch ONE texel = native's texel. Textures then match native
+ * exactly (no new aliasing); only the geometry is sharpened. HI-RES PASS ONLY (rc->target). Gated
+ * VH_HIRES_TEXNATIVE (default off for now, A/B). */
+static int HiresTexNativeEnabled(void) {
     static int e = -1;
-    if (e < 0) { const char *v = getenv("VH_HIRES_TEXAA"); e = (v && v[0] == '1') ? 1 : 0; }
+    if (e < 0) { const char *v = getenv("VH_HIRES_TEXNATIVE"); e = (v && v[0] == '1') ? 1 : 0; }
     return e;
 }
 
@@ -401,44 +399,16 @@ static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
     s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
 }
 
-/* Footprint (2x2 rotated-grid) supersample for one hi-res textured pixel (see the header above). The UV
- * step is per-HI-RES-pixel, so at internal scale S a thin (~1-texel) feature is sampled near 1:1 with a
- * diagonal gradient -> point-sampling catches it only at some phases -> DASHES. Sample the 4 corners of
- * the pixel's footprint (+-1/4 of each screen-axis UV gradient), average the non-transparent taps, and
- * coverage-blend the feature over the background. KEY: for MAGNIFIED content (UI/text at Sx: footprint
- * << 1 texel) all 4 taps fall in the SAME texel -> the average is that exact texel and coverage is 1 ->
- * the write is bit-identical to point-sampling, so nothing crisp softens. Only genuine sub-pixel
- * structure (thin features, edges) gets averaged. Returns 1 (always handles the pixel). */
-static int dda_texel_aa(const DdaCtx *cx, int x, int y, DdaUV uv) {
-    const DdaUVStep *st = &cx->step;
-    int dux = (int)st->dudx, dvx = (int)st->dvdx, duy = (int)st->dudy, dvy = (int)st->dvdy;
-    static const int sgn[2] = { -1, +1 };          /* +-1/4 footprint corner in each screen axis */
-    int i, j, sr = 0, sg = 0, sb = 0, cnt = 0;
-    int W, H, ar, ag, ab, br, bg, bb, cr, cg, cb;
-    unsigned short *px;
-    for (i = 0; i < 2; i++) for (j = 0; j < 2; j++) {
-        int ou = (sgn[i] * dux + sgn[j] * duy) / 4;
-        int ov = (sgn[i] * dvx + sgn[j] * dvy) / 4;
-        DdaUV s; unsigned short texel;
-        s.u = uv.u + (unsigned)ou; s.v = uv.v + (unsigned)ov;
-        texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&s), dda_getv(&s));
-        if (texel) { int tr, tg, tb; UnpackColor(texel, &tr, &tg, &tb); sr += tr; sg += tg; sb += tb; cnt++; }
-    }
-    if (cnt == 0) return 1;                         /* footprint fully transparent -> nothing to draw */
-    ar = ((sr / cnt) * cx->r) / 128; ag = ((sg / cnt) * cx->g) / 128; ab = ((sb / cnt) * cx->bcol) / 128;
-    W = VRAM_W * cx->rc->scale; H = VRAM_H * cx->rc->scale;
-    if (x < 0 || x >= W || y < 0 || y >= H) return 1;
-    px = &s_hires[(size_t)y * W + x];
-    if (cnt == 4) {                                /* full coverage -> exact colour, no background read */
-        *px = (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(ar, ag, ab, x, y) : PackColor(ar, ag, ab);
-        return 1;
-    }
-    UnpackColor(*px, &br, &bg, &bb);               /* background already drawn (compass is later in OT) */
-    cr = (ar * cnt + br * (4 - cnt)) / 4;           /* coverage-blend: feature avg over background */
-    cg = (ag * cnt + bg * (4 - cnt)) / 4;
-    cb = (ab * cnt + bb * (4 - cnt)) / 4;
-    *px = (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(cr, cg, cb, x, y) : PackColor(cr, cg, cb);
-    return 1;
+/* Native-phase texel for one hi-res textured pixel (see the header above). Quantize the sample position
+ * to the native-pixel block centre (offset +-(S/2 - phase) hi-res pixels in each axis via the UV
+ * gradients), so every hi-res pixel in a native block fetches the SAME texel native would. `oy_u`/`oy_v`
+ * are the constant per-scanline y-contribution; the caller adds the per-pixel x part. */
+static unsigned short dda_texel_native(const DdaCtx *cx, int current_x, DdaUV uv, int S, int oy_u, int oy_v) {
+    int ox = (S >> 1) - (current_x % S);           /* bring x to the native block centre */
+    DdaUV s;
+    s.u = uv.u + (unsigned)(ox * (int)cx->step.dudx + oy_u);
+    s.v = uv.v + (unsigned)(ox * (int)cx->step.dvdx + oy_v);
+    return SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&s), dda_getv(&s));
 }
 
 static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv) {
@@ -449,14 +419,16 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     if (width <= 0) return;
     if (cx->textured) dda_stepx_n(&uv, &cx->step, x_start);   /* seed UV to the span's start x */
     {
-    int texAa = cx->textured && cx->rc->target && !cx->semiTrans && HiresTexAaEnabled();
+    /* Hi-res native-phase texture sampling (see the header above): sample the texel native would, so
+     * hi-res doesn't reveal fine texels native undersamples (grid/dot lines). Geometry stays per-hi-res
+     * pixel. S=scale; oy_* = constant per-scanline y-quantization to the native block centre. */
+    int texN = cx->textured && cx->rc->target && HiresTexNativeEnabled();
+    int S = cx->rc->scale, oy_u = 0, oy_v = 0;
+    if (texN) { int oy = (S >> 1) - (y % S); oy_u = oy * (int)cx->step.dudy; oy_v = oy * (int)cx->step.dvdy; }
     do {
         if (cx->textured) {
-            unsigned short texel;
-            /* Hi-res minification AA (opaque only): anisotropic footprint average, coverage-blended. Native
-             * pass and semi-transparent prims fall through to the exact point-sample below. */
-            if (texAa && dda_texel_aa(cx, current_x, y, uv)) goto stepped;
-            texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
+            unsigned short texel = texN ? dda_texel_native(cx, current_x, uv, S, oy_u, oy_v)
+                                        : SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
             if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
                 int tr, tg, tb; UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * cx->r) / 128; tg = (tg * cx->g) / 128; tb = (tb * cx->bcol) / 128;
@@ -471,7 +443,6 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
                                                            : PackColor(cx->r, cx->g, cx->bcol),
                      cx->abr, cx->semiTrans, 0);
         }
-    stepped:
         current_x++;
         if (cx->textured) { uv.u += cx->step.dudx; uv.v += cx->step.dvdx; }
     } while (--width > 0);
