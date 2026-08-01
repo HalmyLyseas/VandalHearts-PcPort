@@ -230,13 +230,13 @@ same view at 4×, shown full-width so the detail isn't downscaled:
 
 ![The same battle field rendered at 4× internal resolution](images/features-1.5-Scene1-x4.png)
 
-*Overworld — native (1×):*
+*Battle field overhead — native (1×):*
 
-![Overworld map at native internal resolution](images/features-1.5-Scene2-x1.png)
+![Battle field from an overhead angle at native internal resolution](images/features-1.5-Scene2-x1.png)
 
-*Overworld — supersampled (4×):*
+*Battle field overhead — supersampled (4×):*
 
-![The same overworld map at 4× internal resolution](images/features-1.5-Scene2-x4.png)
+![The same overhead battle field at 4× internal resolution](images/features-1.5-Scene2-x4.png)
 
 Tile seams are handled by built-in *crust-free* sampling: the denser grid samples each tile's bright
 interior the way the reference renderer does, so no dark grid appears along terrain/lava/water seams,
