@@ -195,6 +195,45 @@ It's a bias layered on top of the original targeting logic, not a rewrite. Norma
 underlying targeting model is documented in
 [game-mechanics/ai-decision-making.md](game-mechanics/ai-decision-making.md).
 
+## Shipped (1.5)
+
+1.5 is a **graphics-fidelity** release, kept deliberately conservative — the aim is to *sharpen without
+reinterpreting* the game. Nothing about the art, sprites, videos, camera feel or gameplay changes; the
+same frames are simply rendered more precisely, and optionally at a higher internal resolution. All of it
+applies in both modes.
+
+### A more hardware-accurate renderer
+
+The port's software renderer is now a fixed-point integer rasterizer that evaluates pixel coverage **and**
+texture sampling at the exact positions the PlayStation's GPU does, with the same ordered dithering (gated
+on the GPU's dither-enable bit) and 5-bit transparency blend. It measures **~99.8–99.99% pixel-exact**
+against a reference emulator's video memory across battle and effect scenes, and it resolves the denser-
+than-hardware Chapter 2 casting-ray effect noted in 1.4. It's the default; a softer legacy renderer stays
+available via `VH_ACCURATE=0` in `vandalhearts.ini` for anyone who prefers it.
+
+### Internal-resolution supersampling
+
+The 3D can be rendered at **1× (native), 2×, 3× or 4×** the internal resolution for crisper terrain and
+edges — the same textures sampled on a denser grid, with **no re-authored art**. Set it live in the
+options overlay (**Select + Start → INTERNAL RES**, also saved to `vandalhearts.ini`):
+
+![The options overlay with INTERNAL RES set to X4](images/features-1.5-MenuInternalResolution.png)
+
+The difference is clearest on stepped terrain and tile edges. Native versus 4×:
+
+| Native (1×) | Supersampled (4×) |
+|---|---|
+| ![Battle field rendered at native internal resolution](images/features-1.5-Scene1-x1.png) | ![The same battle field rendered at 4× internal resolution](images/features-1.5-Scene1-x4.png) |
+| ![A second scene at native internal resolution](images/features-1.5-Scene2-x1.png) | ![The same second scene at 4× internal resolution](images/features-1.5-Scene2-x4.png) |
+
+Tile seams are handled by built-in *crust-free* sampling: the denser grid samples each tile's bright
+interior the way the reference renderer does, so no dark grid appears along terrain/lava/water seams,
+while 2D UI and text stay pixel-aligned. The higher-resolution pass is **multithreaded** across CPU cores,
+so even 4× holds the 30 fps cap and battle fast-forward stays effective on a multicore machine.
+
+Cost scales with the square of the factor (2× is nearly free; 3×/4× are heavier). See
+[configuration.md](configuration.md) for `VH_INTERNAL_SCALE`, `VH_RASTER_THREADS` and `VH_ACCURATE`.
+
 ## Planned
 
 See the [roadmap](roadmap.md).

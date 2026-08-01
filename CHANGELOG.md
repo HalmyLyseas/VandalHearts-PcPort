@@ -4,6 +4,32 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.0] — Graphics fidelity: accurate rasterizer + internal-resolution supersampling
+
+A graphics-fidelity release, kept deliberately conservative — *sharpen without reinterpreting*. The art,
+sprites, videos, camera feel and gameplay are untouched; the same frames are rendered more precisely, and
+optionally at a higher internal resolution. Everything here applies to both modes.
+
+### Added (both modes)
+- **Hardware-accurate software renderer** — a fixed-point integer rasterizer that evaluates coverage
+  *and* texture UVs at the exact GPU pixel positions, with ordered dithering (gated on the GPU dither-
+  enable bit) and a 5-bit transparency blend. ~99.8–99.99% pixel-exact vs a reference-emulator video-
+  memory capture. On by default (`VH_ACCURATE`); a softer legacy renderer remains via `VH_ACCURATE=0`.
+- **Internal-resolution supersampling** — render the 3D at **1× / 2× / 3× / 4×** for crisper terrain and
+  edges with no re-authored art, set live in the options overlay (**INTERNAL RES**) and saved to
+  `vandalhearts.ini` (`VH_INTERNAL_SCALE`). Built-in *crust-free* tile sampling removes the tile-seam grid
+  while keeping 2D UI/text pixel-aligned.
+- **Multithreaded rasterizer** — the higher-resolution pass is split across CPU cores (`VH_RASTER_THREADS`,
+  automatic), so 4× still holds the 30 fps cap and battle fast-forward stays effective on a multicore CPU.
+
+### Fixed (both modes)
+- The Chapter 2 casting-ray effect that read denser than hardware at native resolution (flagged in 1.4) is
+  resolved by the accurate rasterizer.
+
+### Notes
+- Cost scales ~N² with the factor: 2× is nearly free, 3×/4× are heavier. Normal mode stays byte-for-byte
+  the original. Configuration: [docs/configuration.md](docs/configuration.md).
+
 ## [1.4.0] — Quality of life: fast-forward, controller labels, smarter AI, camera
 
 A quality-of-life release. Everything here is either a convenience that applies to both modes or, for the
