@@ -488,6 +488,18 @@ static void FillTriangleDDA(RVert ra, RVert rb, RVert rc, int r, int g, int bcol
         dda_uv_init(&origin, vu[tl], vv[tl]);        /* seed at top-left vertex, then back to (0,0) */
         dda_stepx_n(&origin, &cx.step, -vx[tl]);
         dda_stepy_n(&origin, &cx.step, -vy[tl]);
+        if (S > 1) {
+            /* Sample at hi-res PIXEL centres, not native-pixel centres. dda_uv_init seeds +0.5 texel
+             * (right for the native grid); at Sx with a ~1:1 texture that lands the sub-samples exactly
+             * on texel boundaries (0.5,1.0,1.5,... at S=2), where fixed-point floor drops/duplicates
+             * whole columns -- text/UI vertical strokes vanish or shift (the x2-vs-x4 phase difference).
+             * Re-centre to the hi-res pixel: +0.5*(du/dx + du/dy) per axis. For MINIFIED textures
+             * (terrain, >1 texel/pixel) this equals the +0.5 texel seed -> no change; for ~1:1 it becomes
+             * +0.5/S texel, giving each source texel S evenly-spaced samples. Hi-res pass only. */
+            int half = 1 << (DDA_ASHIFT + DDA_APOST - 1);
+            origin.u += (unsigned)((((int)cx.step.dudx + (int)cx.step.dudy) / 2) - half);
+            origin.v += (unsigned)((((int)cx.step.dvdx + (int)cx.step.dvdy) / 2) - half);
+        }
     } else {
         cx.step.dudx = cx.step.dvdx = cx.step.dudy = cx.step.dvdy = 0;
     }
@@ -847,9 +859,12 @@ void AddPrim(void *ot, void *p) {
  *     files (default 2000; set to 0 = UNLIMITED for a brute-force every-frame capture).
  *     VH_VRAM_DUMP_DIR=<path> writes the .ppm files there (default: cwd). */
 static volatile sig_atomic_t s_vramDumpReq = 0;
+static volatile sig_atomic_t s_hiresDumpReq = 0;   /* same SIGUSR2 also dumps the hires buffer (matched pair) */
 static const char *s_vramDumpDir = NULL;
-#ifdef SIGUSR2   /* on-demand VRAM dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2 */
-static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; }
+#ifdef SIGUSR2   /* on-demand dump via `kill -USR2 <pid>` -- POSIX only; MinGW/Windows has no SIGUSR2.
+                  * One signal writes a MATCHED native (vh_vram_900xx) + hires (vh_hires_900xx) pair,
+                  * sharing the same frame number in the filename, for native-vs-hires comparison. */
+static void PC_VramDumpSignal(int sig) { (void)sig; s_vramDumpReq = 1; s_hiresDumpReq = 1; }
 #endif
 
 static void PC_WriteVramPpm(int idx) {
@@ -873,21 +888,13 @@ static void PC_WriteVramPpm(int idx) {
     fprintf(stderr, "[vramdump] wrote %s\n", path);
 }
 
-/* Debug: dump the presented hires display region (VH_HIRES_DUMP=N, every N frames). */
-static void PC_MaybeDumpHires(int x, int y, int w, int h) {
-    static int s_init = 0, s_interval = 0, s_frame = 0, s_dumped = 0, s_max = 200;
+/* Write the presented hires display region to a PPM (idx picks the filename range). */
+static void PC_WriteHiresPpm(int idx, int x, int y, int w, int h) {
     char path[512]; FILE *f; int px, py, W = VRAM_W * g_internalScale;
-    if (!s_init) {
-        const char *e = getenv("VH_HIRES_DUMP");
-        s_interval = (e && atoi(e) > 0) ? atoi(e) : 0;
-        s_init = 1;
-    }
-    if (s_interval == 0 || !s_hires) return;
-    if (s_dumped >= s_max) return;
-    if ((s_frame++ % s_interval) != 0) return;
+    if (!s_hires) return;
     if (s_vramDumpDir && s_vramDumpDir[0])
-        sprintf(path, "%.470s/vh_hires_%05d_f%06u.ppm", s_vramDumpDir, s_dumped, s_drawFrame);
-    else sprintf(path, "vh_hires_%05d_f%06u.ppm", s_dumped, s_drawFrame);
+        sprintf(path, "%.470s/vh_hires_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
+    else sprintf(path, "vh_hires_%05d_f%06u.ppm", idx, s_drawFrame);
     f = fopen(path, "wb"); if (!f) return;
     fprintf(f, "P6\n%d %d\n255\n", w, h);
     for (py = 0; py < h; py++)
@@ -895,7 +902,28 @@ static void PC_MaybeDumpHires(int x, int y, int w, int h) {
             int r, g, b; UnpackColor(s_hires[(size_t)(y + py) * W + (x + px)], &r, &g, &b);
             fputc(r, f); fputc(g, f); fputc(b, f);
         }
-    fclose(f); s_dumped++;
+    fclose(f);
+    fprintf(stderr, "[hiresdump] wrote %s\n", path);
+}
+
+/* Debug: dump the presented hires display region -- VH_HIRES_DUMP=N (every N frames) and/or the
+ * on-demand SIGUSR2 trigger (matched with the native VRAM dump). */
+static void PC_MaybeDumpHires(int x, int y, int w, int h) {
+    static int s_init = 0, s_interval = 0, s_frame = 0, s_dumped = 0, s_max = 200;
+    if (!s_init) {
+        const char *e = getenv("VH_HIRES_DUMP");
+        s_interval = (e && atoi(e) > 0) ? atoi(e) : 0;
+        s_init = 1;
+    }
+    if (s_hiresDumpReq) {   /* on-demand: same 900xx range + frame number as the native dump */
+        static int s_onDemand = 90000;
+        s_hiresDumpReq = 0;
+        PC_WriteHiresPpm(s_onDemand++, x, y, w, h);
+    }
+    if (s_interval == 0 || !s_hires) return;
+    if (s_dumped >= s_max) return;
+    if ((s_frame++ % s_interval) != 0) return;
+    PC_WriteHiresPpm(s_dumped++, x, y, w, h);
 }
 
 static void PC_MaybeDumpVram(void) {
@@ -1124,7 +1152,18 @@ void DrawOTag(unsigned int *p) {
     PC_UpdateCamOsd(); /* refresh the debug pose label to match this frame (VH_CAM_OSD) */
     PC_MaybeDumpVram(); /* VH_VRAM_DUMP=N: snapshot VRAM to PPM for texture/CLUT triage */
     if (hiScale > 1 && s_hires) {          /* G2: present the supersampled display region */
-        int S = hiScale;
+        int S = hiScale, W = VRAM_W * S;
+        int dx = s_dispEnv.disp.x * S, dy = s_dispEnv.disp.y * S;
+        int dw = s_dispEnv.disp.w * S, dh = s_dispEnv.disp.h * S;
+        /* Edge-clamp: the last presented hi-res column/row is a dead zone -- no primitive's scaled span
+         * quite reaches it, so it retains stale previous-frame content (a flickery 1px strip at the
+         * right/bottom edge). It is the 2nd sub-pixel of the same native edge pixel as its neighbour, so
+         * replicate the neighbour (correct-within-pixel, cheap). */
+        {
+            int i, lastx = dx + dw - 1, lasty = dy + dh - 1;
+            for (i = dy; i < dy + dh; i++) s_hires[(size_t)i * W + lastx] = s_hires[(size_t)i * W + lastx - 1];
+            for (i = dx; i < dx + dw; i++) s_hires[(size_t)lasty * W + i] = s_hires[(size_t)(lasty - 1) * W + i];
+        }
         PC_MaybeDumpHires(s_dispEnv.disp.x * S, s_dispEnv.disp.y * S, s_dispEnv.disp.w * S, s_dispEnv.disp.h * S);
         PC_GpuPresent(s_hires, VRAM_W * S, VRAM_H * S,
                       s_dispEnv.disp.x * S, s_dispEnv.disp.y * S,
