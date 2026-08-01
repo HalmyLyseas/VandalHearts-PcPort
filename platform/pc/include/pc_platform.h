@@ -45,6 +45,12 @@ void PC_GpuSetFullscreen(int on);
 extern int g_vhInternalScale;
 void PC_GpuSetInternalScale(int scale);
 
+/* Online CPU count, OS-agnostic (SDL_GetCPUCount under the hood, so it works identically on
+ * Windows/Linux/macOS). Lives in the SDL-owning window layer so backends (libgpu.c's threaded
+ * rasterizer) can size their thread pool without pulling in SDL or a per-OS sysconf/GetSystemInfo
+ * branch. Returns >= 1. */
+int PC_CpuCount(void);
+
 /* Called by PutDispEnv() every frame: blits a VRAM sub-rect (BGR555, vramW
  * halfwords/line) to the window opened by PC_GpuInit(). No-ops if
  * PC_GpuInit() was never called. */

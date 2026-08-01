@@ -26,6 +26,7 @@ typedef uint32_t u32; typedef uint16_t u16; typedef uint8_t u8; typedef int16_t 
 
 void PC_GpuPresent(u16 *v, int a, int b, int c, int d, int e, int f) { (void)v;(void)a;(void)b;(void)c;(void)d;(void)e;(void)f; }
 void PC_UpdateCamOsd(void) {}
+int  PC_CpuCount(void) { return 1; }   /* harness runs the rasterizer single-threaded for byte-diffing */
 
 #include "../../src/libgpu.c"   /* real rasterizer: s_vram, FillQuad, SampleTexture, s_drawEnv, ... */
 

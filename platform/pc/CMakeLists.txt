@@ -62,6 +62,11 @@ file(CREATE_LINK ${PC_DIR}/include/inline_gte.h ${STAGE_DIR}/inline_gte.h SYMBOL
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)   # data-file + data-segment generators
+# libgpu.c's threaded hi-res rasterizer (P1) uses pthreads. Threads::Threads resolves to -lpthread on
+# Linux, winpthreads on MinGW (bundled as libwinpthread-1.dll), nothing on macOS -- so the link is
+# correct on every target instead of relying on glibc>=2.34 folding libpthread into libc.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 find_library(OPENAL_LIB NAMES openal OpenAL32 REQUIRED)   # 'openal' on Linux, 'OpenAL32' on MinGW/Windows
 find_path(OPENAL_INCLUDE_DIR AL/al.h)
 
@@ -214,7 +219,7 @@ set_source_files_properties(${GENERATED_C} PROPERTIES GENERATED TRUE
 
 # ---- final executable -------------------------------------------------------------------------
 add_executable(vandalhearts_pc $<TARGET_OBJECTS:vh_objs> ${GENERATED_C})
-target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} OpenGL::GL m)
+target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} OpenGL::GL m Threads::Threads)
 if(NOT WIN32)
     # -rdynamic: the crash-dump backtrace in pc_bootstrap.c needs dynamic symbols. Linux/POSIX only
     # -- the Windows build has no backtrace()/signal path, and MinGW ld does not take -rdynamic.

@@ -30,8 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <pthread.h>     /* P1 step 2b: band-parallel hi-res rasterization */
-#include <unistd.h>      /* sysconf(_SC_NPROCESSORS_ONLN) for the default thread count */
+#include <pthread.h>     /* P1 step 2b: band-parallel hi-res rasterization (winpthreads on MinGW) */
 
 #include "PsyQ/libgpu.h"
 #include "pc_platform.h"
@@ -1059,7 +1058,7 @@ static int HiresThreadCount(void) {
     if (n < 0) {
         const char *e = getenv("VH_RASTER_THREADS");
         if (e && atoi(e) > 0) n = atoi(e);
-        else { long c = sysconf(_SC_NPROCESSORS_ONLN); n = (c > 1) ? (int)c : 1; }
+        else { int c = PC_CpuCount(); n = (c > 1) ? c : 1; }   /* OS-agnostic (SDL under the hood), see pc_platform.h */
         if (n > HIRES_MAX_THREADS) n = HIRES_MAX_THREADS;
         if (n < 1) n = 1;
         fprintf(stderr, "[raster] hi-res worker threads: %d%s\n", n, e ? " (VH_RASTER_THREADS)" : " (auto)");

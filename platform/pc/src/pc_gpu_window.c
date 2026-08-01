@@ -497,6 +497,14 @@ void PC_GpuGetWindowSize(int *w, int *h, int *scale) {
     if (scale) *scale = g_vhScale;
 }
 
+/* OS-agnostic online CPU count for the threaded rasterizer -- see pc_platform.h. SDL abstracts the
+ * per-platform query (sysconf on POSIX, GetSystemInfo on Windows), so libgpu.c stays SDL-free and
+ * needs no #ifdef. Never returns < 1. */
+int PC_CpuCount(void) {
+    int n = SDL_GetCPUCount();
+    return (n > 0) ? n : 1;
+}
+
 /* Stage-3 (1.2a) options-overlay setters. The present path already re-letterboxes to any window size
  * each frame, so these just resize / toggle the window -- no render changes. */
 void PC_GpuSetScale(int scale) {
