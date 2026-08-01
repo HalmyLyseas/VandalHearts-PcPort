@@ -435,9 +435,7 @@ int PC_GpuInit(int width, int height, const char *title) {
          * (PSX_NULL_MIRROR_BASE) to absorb transient NULL reads. Stage 2.2/2.3 removed that mapping
          * (NULL reads are handled by per-site PC_PORT guards + the fault handler, no page-0 mapping),
          * so the trigger is gone: verified by running native Wayland with the current build, full
-         * speed, no crash. The one case that could still hit it is the legacy VH_NULL_FIXUP=0 path
-         * (which re-maps page 0 and needs setcap) -- such a user on Wayland can set
-         * SDL_VIDEODRIVER=x11 themselves. See exchange/12-phase-c-bootstrap.md for the old derivation. */
+         * speed, no crash. */
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return 0;
     }
     /* Display-resolution scaling: the game renders a native 320x240 framebuffer;

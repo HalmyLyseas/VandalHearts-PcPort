@@ -113,7 +113,7 @@ GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PO
                    -I$(STAGE_DIR) -Iinclude -I../.. \
                    -include pc_forward_decls.h -g
 
-.PHONY: default stage clean sweep gen-data link setcap link-cap crash-trace asan asan32 ubsan
+.PHONY: default stage clean sweep gen-data link crash-trace asan asan32 ubsan
 default: $(GAME_O_FILES) $(BACKEND_OBJS)
 
 # Generates build/generated_data.c -- real definitions for the global
@@ -442,33 +442,6 @@ sweep: stage
 
 clean:
 	rm -rf $(BUILD_DIR)/src $(BUILD_DIR)/*.o $(STAGE_DIR)
-
-# NOT currently recommended -- kept for reference. Grants this binary
-# permission to mmap PS1's KUSEG NULL-mirror range (0x00000000) -- see
-# pc_bootstrap.c's PSX_NULL_MIRROR_BASE comment for why real, already-
-# decompiled game code needs that to be valid memory, and
-# exchange/12-phase-c-bootstrap.md for the full derivation. CONFIRMED (via a
-# clean A/B test, same binary with/without the capability) to break SDL2's
-# Wayland backend entirely -- no window opens at all, failing during EGL
-# setup with "Proxy and queue point to different wl_displays". Root cause:
-# any binary with file capabilities gets Linux's secure_exec/AT_SECURE
-# treatment (the same hardening setuid binaries get), which changes dynamic
-# linking/library init behavior in ways that broke Wayland here. Use
-# `sudo sysctl -w vm.mmap_min_addr=0` instead (system-wide, temporary, but
-# doesn't touch this binary's own capabilities so doesn't trigger
-# secure_exec). setcap's capability is stored in the binary's own
-# filesystem extended attributes, so IF this were used, it'd need
-# re-running after every rebuild (a fresh binary has none of the old one's
-# capabilities) -- confirmed real above, not a caveat carried over unread.
-setcap:
-	sudo setcap cap_sys_rawio+ep $(BUILD_DIR)/vandalhearts_pc
-
-# LEGACY (rarely needed now). The portable NULL-read fixup handler (pc_bootstrap.c) makes a plain
-# `make link` run cap-less -- transient PSX NULL/low-address reads are caught, emulated as reading 0,
-# logged (vh_null_reads.log), and stepped over, so no CAP_SYS_RAWIO / low-page mapping is required.
-# `setcap`/`link-cap` are only for the fallback path `VH_NULL_FIXUP=0` (which restores the old
-# privileged KUSEG NULL-mirror mapping + hard crash). Prefer bare `make link`.
-link-cap: link setcap
 
 # Resolve the game-code sites in vh_null_reads.log (the NULL-read fixup handler's list) to file:line.
 # Run the game cap-less, hit some battles, then: `make crash-trace`. Each logged site is `SYMBOL+0xOFF`;

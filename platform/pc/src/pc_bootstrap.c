@@ -147,23 +147,13 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
 #endif /* _WIN32 */
 }
 
-static int VhNullFixupEnabled(void);   /* defined below with the NULL-read fixup handler */
-
 __attribute__((constructor))
 static void PC_ReservePsxRam(void) {
     ReservePsxMemory(PSX_RAM_BASE, PSX_RAM_SIZE, "PSX RAM range");
     ReservePsxMemory(PSX_SCRATCHPAD_BASE, PSX_SCRATCHPAD_SIZE, "PSX Scratchpad RAM");
-    /* The KUSEG NULL-mirror (address 0) is only needed to absorb transient NULL/low-address reads.
-     * By default the NULL-read fixup handler (see PC_SigCrash) now handles those portably without
-     * privilege, so DON'T map address 0 -- letting the accesses fault is exactly what lets the
-     * handler log each site. Only fall back to the privileged low-page mapping if the fixup is
-     * explicitly disabled (VH_NULL_FIXUP=0). */
-    if (!VhNullFixupEnabled() &&
-        !ReservePsxMemory(PSX_NULL_MIRROR_BASE, PSX_NULL_MIRROR_SIZE, "PSX RAM's KUSEG NULL-mirror range")) {
-        fprintf(stderr, "  (VH_NULL_FIXUP=0 selected the legacy low-page mapping, which needs "
-                        "CAP_SYS_RAWIO -- run `make setcap`. Leave VH_NULL_FIXUP unset to use the "
-                        "portable fixup handler instead, which needs no privilege.)\n");
-    }
+    /* The KUSEG NULL-mirror (address 0) is deliberately NOT mapped: the portable NULL-read fixup
+     * handler (see PC_SigCrash) absorbs transient NULL/low-address reads without privilege, and
+     * letting the accesses fault is exactly what lets the handler log each site. */
 }
 
 /* The default disc path used to be a plain relative literal
@@ -239,7 +229,7 @@ int PC_GetDeployDir(char *out, size_t outSize) {
  * [section] headers and ';' / '#' comment lines are ignored (sections are cosmetic -- keys are the
  * VH_* names directly). Precedence is env var > .ini > built-in default: a KEY already present in
  * the real environment is NOT overridden, so scripts/power users still win, and the file only fills
- * in what's unset. Runs at constructor priority 101 -- before PC_ReservePsxRam (VH_NULL_FIXUP) and
+ * in what's unset. Runs at constructor priority 101 -- before PC_ReservePsxRam and
  * the window/audio init (VH_SCALE, ...) read anything. Absent file => silently all-defaults. */
 __attribute__((constructor(101)))
 static void PC_LoadIniConfig(void) {
@@ -483,13 +473,9 @@ static void PC_SigUsr1(int sig) { (void)sig; PC_DumpDiag("\n*** SIGUSR1: call st
  * and impossible on Windows/macOS), we catch the fault, emulate the access as reading 0 (identical to
  * what the old MAP_ANONYMOUS zero page returned) or discarding the store, step over the instruction,
  * log the site once, and continue. Un-guarded sites therefore no longer crash -- they surface in
- * vh_null_reads.log so they can be given an explicit source-level guard later. Set VH_NULL_FIXUP=0 to
- * disable (falls back to the old null-mirror mapping + hard crash). Currently x86-32 (-m32) only. */
-static int VhNullFixupEnabled(void) {
-    static int v = -1;
-    if (v < 0) { const char *e = getenv("VH_NULL_FIXUP"); v = (e && e[0] == '0') ? 0 : 1; }
-    return v;
-}
+ * vh_null_reads.log so they can be given an explicit source-level guard later. Currently x86-32
+ * (-m32) only. (The old privileged low-page-mapping fallback was retired -- this handler is the sole
+ * path; nothing runs privileged.) */
 
 #if defined(__i386__) && !defined(_WIN32)
 /* Decode the memory-access instruction at `ip` (the faulting one). Returns its length and, for a
@@ -634,8 +620,8 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
 #if defined(__i386__)
     /* PSX NULL-region (< 2MB main-RAM size) access: emulate reading 0 / discarding the store and
-     * carry on, instead of dying (see VhNullFixupEnabled above). */
-    if (VhNullFixupEnabled() && ucv && fault < PSX_NULL_MIRROR_SIZE) {
+     * carry on, instead of dying. */
+    if (ucv && fault < PSX_NULL_MIRROR_SIZE) {
         ucontext_t *uc = (ucontext_t *)ucv;
         greg_t *g = uc->uc_mcontext.gregs;
         unsigned char *ip = (unsigned char *)(uintptr_t)g[REG_EIP];

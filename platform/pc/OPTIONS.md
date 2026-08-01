@@ -23,22 +23,19 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 | `VH_CAM_INVERT_Y` | `1` | Invert the right-stick camera *vertical* axis (raise/lower angle). **Ships inverted** — the modern twin-stick convention (push up = tilt the view down); set `0` for a normal vertical axis. Also toggleable in the in-game options overlay. |
 | `VH_SEQ_MUTE` | off | `1` = mute only the SEQ **music**, keep VAG SFX + XA audible (useful for isolating sound effects). |
 
-> **Audio is calibration-fixed** — the software SPU matches real-hardware output at the authentic
-> values, so the tuning env vars are **not exposed** in `vandalhearts.ini` and are *not* user knobs.
-> They remain in code for developer A-B only: `VH_SPU_GAIN` (`1.012`, master trim RMS-matched to the
-> octoshock reference within 0.01 dB), `VH_SPU_SQUARE` (on = PsyQ's square volume law `VolL=L*L/16383`
-> at `0x800d6d8c` — the whole reason the mix has the right dynamic range; `0` is the old linear A-B and
-> drops gain to `0.24`), `VH_SPU_ANALOG` (off = legacy EQ tilt that over-corrects once the square law
-> is present: 2.20 dB → 4.27 dB mean error). See `exchange/57` for the derivation.
+> **Audio is calibration-fixed (hardwired, no knobs).** The software SPU matches real-hardware output at
+> the authentic values, so there are no tuning env vars — the settings are fixed in code: master trim
+> `1.012` (RMS-matched to the octoshock reference within 0.01 dB); PsyQ's square volume law
+> `VolL=L*L/16383` (`0x800d6d8c`) always on (the reason the mix has the right dynamic range); the legacy
+> EQ tilt off (it over-corrects once the square law is present, 2.20 → 4.27 dB mean error). Derivation:
+> `exchange/57`.
 
 ## Compatibility
 
-| Variable | Default | Effect |
-|---|---|---|
-| `VH_NULL_FIXUP` | on | The portable NULL-read / rodata-write fault handler that lets the game run **cap-less**. Set `0` only to fall back to the legacy privileged zero-page mapping (then `make setcap` is required, and un-guarded NULL reads hard-crash). Leave unset for normal use. |
-
-> With the fixup handler on (default), you do **not** need `setcap`. `make setcap` / `make link-cap`
-> are only for the `VH_NULL_FIXUP=0` fallback.
+The game runs **cap-less** (no `setcap`, no elevated rights): the portable NULL-read / rodata-write fault
+handler in `pc_bootstrap.c` catches transient PSX NULL/low-address accesses, emulates them (read 0 /
+discard store), logs each site, and steps over — so no page-0 mapping is needed. This is the sole path;
+the old privileged low-page-mapping fallback (and its `setcap` targets) was retired.
 
 ## Diagnostics — logging
 
@@ -51,7 +48,7 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 | `VH_SPRITE_LOG` | `SPRITE_LOG=1` | `vh_sprite_fate.csv` | Per-unit-sprite cull/projection/GTE state. |
 | `VH_TERRAIN_LOG` | `TERRAIN_LOG=1` | `vh_terrain_otz_pc.csv` | Per-frame terrain `otz` stats + black-tile counts. |
 | `VH_CAM_OSD` | — | on-screen | Camera-pose overlay (position/rotation/zoom) drawn in the window. |
-| `VH_NULL_FIXUP` handler | — | `vh_null_reads.log` | Auto: each NULL-region read / rodata-write the handler fixed up (see `make crash-trace`). |
+| NULL-read fixup handler | — | `vh_null_reads.log` | Auto: each NULL-region read / rodata-write the handler fixed up (see `make crash-trace`). |
 
 Advanced GTE/GPU render probes (developer, mostly gated by `SPRITE_LOG=1`): `VH_MTX_LOG`,
 `VH_OBJPRIM4_LOG`, `VH_SPRITE_QUAD_LOG`, `VH_TERRAINPROJ_LOG`.
@@ -67,7 +64,6 @@ twice before these existed (`exchange/57`); soloing settles it in one run.
 | `VH_SPU_MUTEPROG=N` | Silence VAB program `N`, keep the rest. Usually the faster test — if the offending sound vanishes, that's your instrument. |
 | `VH_SPU_DUMPVAG=1` | On VAB load, dump every decoded sample as `vh_vag_<vab>_<n>.wav` (44.1 kHz mono) plus `vh_vag_manifest.csv` (len / loopS / loopE). This is the PCM we *actually* play — use it instead of parsing the VAB body out of the disc image, which does not give the same offsets. |
 | `VH_SPU_TRACE=1` | Per-voice census to `vh_spu_voices_ours.csv` / `vh_spu_globals_ours.csv` (vag, prog, note, step, gains, ADSR level/phase, loop points). |
-| `VH_SPU_REVDEPTH` / `VH_SPU_REVOFF` | Override / disable the SPU reverb send, for isolating reverb from the dry mix. |
 
 ## Build flags (`make link <FLAG>=1`)
 
@@ -88,4 +84,3 @@ so the matching decomp build (`make check`) never sees them and stays byte-exact
 |---|---|
 | `make link` | Build the PC binary (cap-less; no setcap needed). |
 | `make crash-trace` | Resolve each site in `vh_null_reads.log` to `file:line` (nm + addr2line). |
-| `make setcap` / `make link-cap` | Legacy only — for the `VH_NULL_FIXUP=0` fallback. |

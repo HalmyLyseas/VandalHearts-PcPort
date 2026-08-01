@@ -135,13 +135,8 @@ static void PanFactors(int pan, float *l, float *r) {
  * doubled. Applied AFTER the pan stages on hardware, so pan factors are squared too. Our whole
  * linear chain was already algebraically identical to PsyQ's `lin`; this was the sole remaining
  * divergence, and it means we had been rendering the mix at half the hardware's dynamic range
- * in dB. See exchange/57. VH_SPU_SQUARE=0 reverts to the old linear behaviour for A/B. */
-static int SpuSquareLaw(void) {
-    static int on = -1;
-    if (on < 0) { const char *e = getenv("VH_SPU_SQUARE"); on = (e && e[0] == '0') ? 0 : 1; }
-    return on;
-}
-static float ApplyVolumeLaw(float g) { return SpuSquareLaw() ? g * g : g; }
+ * in dB. See exchange/57. Always applied now (the authentic law); the old linear A/B was removed. */
+static float ApplyVolumeLaw(float g) { return g * g; }
 extern void PC_SpuSetVoiceDebugId(int voice, int vag, int prog, int note);
 extern void PC_SpuKeyOff(int voice);
 extern void PC_SpuStopAll(void);
@@ -154,8 +149,8 @@ extern void PC_SpuSetReverb(int on, float depth);
 /* Master output trim for the software SPU path. The OpenAL-era SEQ_MASTER_GAIN=0.47 was
  * hand-tuned for OpenAL's per-source mixing and does NOT belong on a faithful software
  * mixer -- it left the mix ~2x hotter than the BizHawk reference (peak -0.2 dBFS, no
- * headroom for SFX). This value calibrates the SW mix to the reference RMS; VH_SPU_GAIN
- * overrides it for by-ear tuning. Applied only to the SW path (OpenAL path unchanged). */
+ * headroom for SFX). This value calibrates the SW mix to the reference RMS (fixed;
+ * the old VH_SPU_GAIN override was removed). Applied only to the SW path (OpenAL path unchanged). */
 static float SpuSeqGain(void) {
     static float g = -1.0f;
     /* 2026-07-20: re-derived for the square law (exchange/57), then CORRECTED against a real
@@ -166,15 +161,12 @@ static float SpuSeqGain(void) {
      * factor is 2.380 x 1.773 = 4.22 and the trim is 0.24 x 4.22 = 1.012. That puts our peak at
      * -5.6 dBFS against the reference's -5.9 dBFS, i.e. the same headroom hardware leaves for SFX.
      * LESSON: derive a LEVEL trim from the rendered output, not from a model of the inputs. */
-    if (g < 0.0f) { const char *e = getenv("VH_SPU_GAIN");
-                    g = e ? (float)atof(e) : (SpuSquareLaw() ? 1.012f : 0.24f);
-                    if (g < 0.0f) g = 0.0f; }
+    if (g < 0.0f) g = 1.012f;   /* calibrated for the (always-on) square law */
     return g;
 }
 
 /* Debug/QoL: VH_SEQ_MUTE=1 silences only the SEQ MUSIC (note-ons with ownSeq>=0), leaving VAG SFX
- * (ownSeq==-1) and the XA stream audible -- so a capture has SFX without the music masking them.
- * (VH_SPU_GAIN=0 instead mutes the whole SPU: music + VAG SFX, leaving only XA.) */
+ * (ownSeq==-1) and the XA stream audible -- so a capture has SFX without the music masking them. */
 static int SeqMuted(void) {
     static int m = -1;
     if (m < 0) { const char *e = getenv("VH_SEQ_MUTE"); m = (e && e[0] && e[0] != '0') ? 1 : 0; }

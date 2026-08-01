@@ -74,16 +74,13 @@ static float    s_masterL = 1.0f, s_masterR = 1.0f;
 
 static int Clamp16(int x) { return x < -32768 ? -32768 : (x > 32767 ? 32767 : x); }
 
-/* Reference-matching EQ tilt (VH_SPU_ANALOG=1).
+/* Reference-matching EQ tilt -- now HARDWIRED OFF (s_analogOn = 0); the code is kept but unreached.
  * CORRECTION (2026-07-17): this was originally believed to model the PS1 *analog output stage*,
  * but the octoshock reference is RAW DIGITAL -- spu.cpp sums voices+reverb, applies main volume,
  * clamps, and scales x0.75, with NO analog/lowpass filter anywhere. So this is NOT analog modeling;
- * it's a small spectral-tilt correction: our raw SPU mix comes out ~2 dB brighter / lighter in deep
- * bass than octoshock's raw mix, and this reconciles it (sub-bass lift ~70 Hz + treble roll-off
- * ~4.5 kHz). The *proper* fix lives in the raw mix itself (interpolation aliasing / ADSR-attack
- * brightness / reverb balance) -- deferred to stage 3; see memory spu_m1_progress. ON by default
- * (sounds right, matches the reference); VH_SPU_ANALOG=0 = the raw mix (with the residual tilt).
- * Strengths tunable via VH_SPU_BASS/TREB/BASSFC/TREBFC. */
+ * it's a small spectral-tilt correction. Once the square volume law landed it OVER-corrects (2.20 dB
+ * -> 4.27 dB mean error vs the reference), so it stays off; the proper fix lives in the raw mix itself
+ * (interpolation aliasing / ADSR-attack brightness / reverb balance). See memory spu_m1_progress. */
 static int   s_analogOn = -1;
 static float s_bassK = 2.0f, s_bassA, s_trebK = 0.6f, s_trebA;
 static float s_bassLP[2], s_trebLP[2];
@@ -94,9 +91,9 @@ static void AnalogInit(void) {
      * SQUARE LAW (see exchange/57). With the square law implemented the compensation OVER-corrects:
      * measured mean|error| vs the octoshock reference over 30 Hz-12 kHz is
      *     raw mix 2.20 dB   vs   raw mix + this filter 4.27 dB
-     * i.e. enabling it is now WORSE than the pre-fix build (3.21 dB). Keep the code -- it is a
-     * useful tilt knob -- but it must not be on by default any more. VH_SPU_ANALOG=1 re-enables. */
-    { const char *e = getenv("VH_SPU_ANALOG"); s_analogOn = (e && e[0] == '1') ? 1 : 0; }
+     * i.e. enabling it is now WORSE than the pre-fix build (3.21 dB). Now hardwired OFF -- the square
+     * law makes it an over-correction; the code path is kept (fed by s_bassK/s_trebK) but unreached. */
+    s_analogOn = 0;
     s_bassK = EnvF("VH_SPU_BASS", 2.0f);           /* sub-bass boost amount (fit: ~4->1.4dB) */
     s_trebK = EnvF("VH_SPU_TREB", 0.6f);           /* treble softening 0..1                   */
     s_bassA = 1.0f - (float)exp(-2.0 * 3.14159265 * EnvF("VH_SPU_BASSFC", 70.0f)  / SPU_RATE);
@@ -371,22 +368,11 @@ static struct {
 static int   s_revOn = 0;
 static float s_revDepth = 0.0f;         /* 0..1 wet mix, from SsUtSetReverbDepth */
 
-/* Reverb overrides for the bass-deficit investigation (exchange/57). The BizHawk PSX core does
- * not expose SPU MMIO to Lua, so the hardware ReverbVol register is unreadable; instead we test
- * the hypothesis directly by sweeping OUR wet level against the reference capture.
- *   VH_SPU_REVDEPTH=x  force the wet mix to x (0..2+), overriding SsUtSetReverbDepth
- *   VH_SPU_REVOFF=1    disable reverb entirely (isolates its contribution)
- * If the 20-120 Hz band barely moves across this sweep, reverb is NOT the missing bass. */
+/* Wet-mix reverb, driven by the game via SsUtSetReverbDepth. (The old VH_SPU_REVDEPTH/REVOFF debug
+ * overrides from the bass-deficit investigation, exchange/57, were removed once the mix was calibrated.) */
 void PC_SpuSetReverb(int on, float depth) {
-    static int init = 0; static float fixedDepth = -1.0f; static int forceOff = 0;
-    if (!init) {
-        const char *d = getenv("VH_SPU_REVDEPTH");
-        if (d) fixedDepth = (float)atof(d);
-        forceOff = getenv("VH_SPU_REVOFF") ? 1 : 0;
-        init = 1;
-    }
-    s_revOn = forceOff ? 0 : on;
-    s_revDepth = (fixedDepth >= 0.0f) ? fixedDepth : depth;
+    s_revOn = on;
+    s_revDepth = depth;
 }
 
 static int RevOff(short r){ return (int)((unsigned short)r) * 4; }
