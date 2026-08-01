@@ -41,16 +41,18 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    roadmap [`docs/roadmap.md`](docs/roadmap.md). Note: the "zero `src/` edits" ideal was the
    *balance-package* rule — other Stage-3 features need gated `src/` hooks. **v1.4.0 released 2026-07-31**
    — a QoL pass: battle fast-forward (2×), controller-aware overlay labels (Xbox/PlayStation), magic-
-   resistance-aware Tactical AI, finer camera elevation (incl. keyboard R/F). **1.5 (feature-complete on
-   the branch `feat/1.5-g2-internal-res`, not yet released)** — a higher-fidelity graphics track. Three
-   pieces: (1) the **PSX-accurate software rasterizer** (`VH_ACCURATE`, default-on, already on master) — a
-   fixed-point integer DDA matching the PS1 GPU's exact coverage + texture UVs, ordered dithering (gated on
-   the GPU dither bit), 5-bit blend, ~99.8–99.99% pixel-exact vs a DuckStation VRAM capture; (2)
+   resistance-aware Tactical AI, finer camera elevation (incl. keyboard R/F). **v1.5.0 released** — a
+   higher-fidelity graphics track. Three pieces: (1) the **PSX-accurate software rasterizer**
+   (`VH_ACCURATE`, default-on) — a fixed-point integer DDA matching the PS1 GPU's exact coverage + texture
+   UVs, ordered dithering (gated on the GPU dither bit), 5-bit blend, ~99.8–99.99% pixel-exact vs a
+   DuckStation VRAM capture (legacy renderer kept as `VH_ACCURATE=0`, an INI-only softer alternate); (2)
    **internal-resolution supersampling** (`VH_INTERNAL_SCALE` 1–4×, off by default) layered on that DDA —
-   sharper 3D with no re-authored assets; (3) a **multithreaded rasterizer** (`VH_RASTER_THREADS`, auto) so
-   4× holds 30 fps and battle fast-forward stays effective. **Remaining before release:** the parked
-   water-tile aliasing decision, then merge → master + tag `v1.5.0`. Guiding principle: *sharpen without
-   reinterpreting* (no upscaled video, no redrawn sprites, no camera-feel changes).
+   sharper 3D with no re-authored assets, with built-in *crust-free* tile sampling (biases the finer hi-res
+   sample onto tile interiors like the reference renderer, so no dark tile-seam grid; 2D UI/text auto-kept
+   pixel-aligned); (3) a **multithreaded rasterizer** (`VH_RASTER_THREADS`, auto) so 4× holds 30 fps and
+   battle fast-forward stays effective. The tile-seam grid, compass "dotted lines" and parked water-shimmer
+   were all resolved by crust-free sampling. Guiding principle: *sharpen without reinterpreting* (no
+   upscaled video, no redrawn sprites, no camera-feel changes).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates

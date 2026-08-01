@@ -66,10 +66,10 @@ artwork required:
 - **Finer camera elevation** — an extra, evenly-spaced up/down camera angle (including a level 45°) for
   reading maps with stepped terrain.
 
-## Next — 1.5 and later
+### 1.5 — Graphics fidelity ✅ (released 2026-08-01)
 
 A **graphics fidelity** track, kept deliberately conservative — the goal is to *sharpen without
-reinterpreting* the game. Two pieces:
+reinterpreting* the game. Three pieces:
 
 - **A more hardware-accurate software renderer — DONE (`VH_ACCURATE`, on by default).** A fixed-point
   integer DDA that evaluates coverage *and* texture UVs at the exact pixel position the PS1 GPU does, plus
