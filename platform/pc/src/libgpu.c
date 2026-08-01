@@ -337,6 +337,25 @@ static unsigned short SampleTexture(const RenderCtx *rc, int tpage, int clut, in
     return raw;
 }
 
+/* ===================== Hi-res anisotropic texture AA (1.5/G2 minification fix) =====================
+ * The internal-resolution hi-res pass point-samples ONE texel per hi-res pixel. On a heavily MINIFIED
+ * textured surface (a flat quad seen near edge-on -- the compass, distant terrain, water at steep pitch),
+ * a thin high-contrast texture feature is sampled only at some pixel phases, so it breaks into DASHES
+ * (the compass "2 dotted lines", the water comb). This is minification aliasing, confirmed by matched
+ * native+hires pairs (exchange compass analysis). Fix: where the per-pixel UV footprint spans >1 texel,
+ * average the texels the footprint covers ALONG THE DOMINANT (crushed) axis and coverage-blend over the
+ * background -- proper anisotropic downsampling, so the thin feature becomes a continuous dim line as
+ * native effectively shows, instead of aliased dashes. Magnified / ~1:1 footprints stay single-texel
+ * point-sampled (crisp UI/text/rose). HI-RES PASS ONLY (rc->target) -- the native s_vram stays byte-exact.
+ * Opaque textured only; semi-transparent falls back to point-sampling. Gated VH_HIRES_TEXAA (default off
+ * for now, A/B). UV step fixed-point has DDA_ASHIFT+DDA_APOST = 24 fractional bits (1 texel = 1<<24). */
+static int HiresTexAaEnabled(void) {
+    static int e = -1;
+    if (e < 0) { const char *v = getenv("VH_HIRES_TEXAA"); e = (v && v[0] == '1') ? 1 : 0; }
+    return e;
+}
+#define HIRES_AA_MAXTAPS 8
+
 /* ---- triangle rasterizer (flat or textured, affine UV, no perspective) -- */
 
 typedef struct { double x, y, u, v; } RVert;
@@ -382,6 +401,45 @@ static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
     s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
 }
 
+/* Anisotropic minification AA for one hi-res textured pixel (see the header above). uv is the pixel's
+ * point-sample UV; cx->step holds the per-pixel UV gradients. Samples N taps across the footprint's
+ * dominant axis, averages the non-transparent taps, and coverage-blends over the existing hi-res pixel.
+ * Returns 1 if it handled the pixel (wrote or transparent-skipped), 0 to let the caller point-sample. */
+static int dda_texel_aa(const DdaCtx *cx, int x, int y, DdaUV uv) {
+    const DdaUVStep *st = &cx->step;
+    int dux = (int)st->dudx, dvx = (int)st->dvdx, duy = (int)st->dudy, dvy = (int)st->dvdy;
+    long lx = (long)(dux < 0 ? -dux : dux) + (dvx < 0 ? -dvx : dvx);   /* footprint texel-length, X axis */
+    long ly = (long)(duy < 0 ? -duy : duy) + (dvy < 0 ? -dvy : dvy);   /*                        Y axis */
+    int domU, domV; long dom;
+    int N, k, sr = 0, sg = 0, sb = 0, cnt = 0;
+    int W, H, ar, ag, ab, br, bg, bb, cr, cg, cb;
+    unsigned short *px;
+    if (lx >= ly) { domU = dux; domV = dvx; dom = lx; } else { domU = duy; domV = dvy; dom = ly; }
+    N = (int)(dom >> 24);                          /* texels the footprint spans on the crushed axis */
+    if (N <= 1) return 0;                          /* magnified / ~1:1 -> caller point-samples (crisp) */
+    if (N > HIRES_AA_MAXTAPS) N = HIRES_AA_MAXTAPS;
+    for (k = 0; k < N; k++) {
+        int num = 2 * k + 1 - N;                   /* sub-position across (-0.5..+0.5)*dom, integer *2N */
+        int ou = (int)(((long long)domU * num) / (2 * N));
+        int ov = (int)(((long long)domV * num) / (2 * N));
+        DdaUV s; unsigned short texel;
+        s.u = uv.u + (unsigned)ou; s.v = uv.v + (unsigned)ov;
+        texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&s), dda_getv(&s));
+        if (texel) { int tr, tg, tb; UnpackColor(texel, &tr, &tg, &tb); sr += tr; sg += tg; sb += tb; cnt++; }
+    }
+    if (cnt == 0) return 1;                         /* footprint fully transparent -> nothing to draw */
+    ar = ((sr / cnt) * cx->r) / 128; ag = ((sg / cnt) * cx->g) / 128; ab = ((sb / cnt) * cx->bcol) / 128;
+    W = VRAM_W * cx->rc->scale; H = VRAM_H * cx->rc->scale;
+    if (x < 0 || x >= W || y < 0 || y >= H) return 1;
+    px = &s_hires[(size_t)y * W + x];
+    UnpackColor(*px, &br, &bg, &bb);               /* background already drawn (compass is later in OT) */
+    cr = (ar * cnt + br * (N - cnt)) / N;           /* coverage-blend: feature avg over background */
+    cg = (ag * cnt + bg * (N - cnt)) / N;
+    cb = (ab * cnt + bb * (N - cnt)) / N;
+    *px = (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(cr, cg, cb, x, y) : PackColor(cr, cg, cb);
+    return 1;
+}
+
 static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv) {
     int width = x_bound - x_start;         /* fill [x_start, x_bound): left-inclusive, right-exclusive */
     int current_x = x_start;
@@ -389,9 +447,15 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     if (current_x + width > cx->clipR + 1) width = cx->clipR + 1 - current_x;
     if (width <= 0) return;
     if (cx->textured) dda_stepx_n(&uv, &cx->step, x_start);   /* seed UV to the span's start x */
+    {
+    int texAa = cx->textured && cx->rc->target && !cx->semiTrans && HiresTexAaEnabled();
     do {
         if (cx->textured) {
-            unsigned short texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
+            unsigned short texel;
+            /* Hi-res minification AA (opaque only): anisotropic footprint average, coverage-blended. Native
+             * pass and semi-transparent prims fall through to the exact point-sample below. */
+            if (texAa && dda_texel_aa(cx, current_x, y, uv)) goto stepped;
+            texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&uv), dda_getv(&uv));
             if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
                 int tr, tg, tb; UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * cx->r) / 128; tg = (tg * cx->g) / 128; tb = (tb * cx->bcol) / 128;
@@ -406,9 +470,11 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
                                                            : PackColor(cx->r, cx->g, cx->bcol),
                      cx->abr, cx->semiTrans, 0);
         }
+    stepped:
         current_x++;
         if (cx->textured) { uv.u += cx->step.dudx; uv.v += cx->step.dvdx; }
     } while (--width > 0);
+    }
 }
 
 static void dda_part(const DdaCtx *cx, const DdaPart *tp, DdaUV origin) {
