@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>     /* P1 step 2b: band-parallel hi-res rasterization */
+#include <unistd.h>      /* sysconf(_SC_NPROCESSORS_ONLN) for the default thread count */
 
 #include "PsyQ/libgpu.h"
 #include "pc_platform.h"
@@ -1044,6 +1046,49 @@ static void HiresRasterizeBand(int clipY, int clipH) {
     }
 }
 
+/* P1 step 2b: rasterize the hi-res list across N worker threads, each owning a scanline band of the
+ * drawing area. Bands write DISJOINT hi-res rows -> lock-free; the list is read-only. VH_RASTER_THREADS
+ * overrides the count (default = online CPUs, capped). Falls back to single-threaded for a tiny list or
+ * one thread. All lazy statics in the fill path are already warm here (the native pass ran first). */
+#define HIRES_MAX_THREADS 32
+typedef struct { int clipY, clipH; } HiresBand;
+static void *HiresBandWorker(void *arg) { HiresBand *b = (HiresBand *)arg; HiresRasterizeBand(b->clipY, b->clipH); return NULL; }
+
+static int HiresThreadCount(void) {
+    static int n = -1;
+    if (n < 0) {
+        const char *e = getenv("VH_RASTER_THREADS");
+        if (e && atoi(e) > 0) n = atoi(e);
+        else { long c = sysconf(_SC_NPROCESSORS_ONLN); n = (c > 1) ? (int)c : 1; }
+        if (n > HIRES_MAX_THREADS) n = HIRES_MAX_THREADS;
+        if (n < 1) n = 1;
+        fprintf(stderr, "[raster] hi-res worker threads: %d%s\n", n, e ? " (VH_RASTER_THREADS)" : " (auto)");
+    }
+    return n;
+}
+
+static void HiresRasterizeThreaded(int clipY, int clipH) {
+    int nth = HiresThreadCount();
+    if (nth <= 1 || s_hprimCount < 64 || clipH < nth * 2) { HiresRasterizeBand(clipY, clipH); return; }
+    if (nth > clipH) nth = clipH;
+    {
+        pthread_t th[HIRES_MAX_THREADS];
+        HiresBand band[HIRES_MAX_THREADS];
+        int per = clipH / nth, rem = clipH % nth, y = clipY, i, spawned = 0;
+        (void)AccurateEnabled();                     /* warm the lazy cache before the parallel section */
+        for (i = 0; i < nth; i++) {                   /* contiguous bands tile [clipY, clipY+clipH) exactly */
+            int h = per + (i < rem ? 1 : 0);
+            band[i].clipY = y; band[i].clipH = h; y += h;
+        }
+        for (i = 0; i < nth - 1; i++) {               /* spawn all but the last band... */
+            if (pthread_create(&th[spawned], NULL, HiresBandWorker, &band[i]) == 0) spawned++;
+            else HiresRasterizeBand(band[i].clipY, band[i].clipH);   /* spawn failed -> inline */
+        }
+        HiresRasterizeBand(band[nth - 1].clipY, band[nth - 1].clipH);   /* ...run the last on this thread */
+        for (i = 0; i < spawned; i++) pthread_join(th[i], NULL);
+    }
+}
+
 void DrawOTag(unsigned int *p) {
     /* VH_GPU_PRIM_LOG=1: dump "anomalous" primitives (our SetSemiTrans 0x80 bit set, or a code that
      * decodes to an unrecognized type) -- the fx SetSemiTrans-without-SetPolyFT4 effect polys we hunt.
@@ -1239,10 +1284,10 @@ void DrawOTag(unsigned int *p) {
         nextTok = rawTagOfCur;
     }
 
-    /* P1: rasterize the deferred hi-res display list (the native pass drew inline above). Single band =
-     * whole drawing area for now; step 2b fans this out across per-band worker threads. */
+    /* P1: rasterize the deferred hi-res display list (the native pass drew inline above), fanned out
+     * across per-band worker threads (step 2b). */
     if (hiScale > 1 && s_hires && s_hprimCount)
-        HiresRasterizeBand(s_drawEnv.clip.y, s_drawEnv.clip.h);
+        HiresRasterizeThreaded(s_drawEnv.clip.y, s_drawEnv.clip.h);
 
     /* Present now, after this frame's rasterization is done -- see the
      * comment on PutDispEnv for why. Uses whichever DISPENV the most

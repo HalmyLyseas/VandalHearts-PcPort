@@ -10,7 +10,8 @@
  *
  * Build (from repo root):
  *   cc -std=gnu99 -O2 -Iplatform/pc/include -Iinclude \
- *      platform/pc/tools/raster_harness/harness.c -lm -o /tmp/raster_harness
+ *      platform/pc/tools/raster_harness/harness.c -lm -lpthread -o /tmp/raster_harness
+ *   (-lpthread: libgpu.c's hi-res pass is band-threaded; the harness uses the native path but links it.)
  * Run:  zstd -d "….psxgpu.zst" -o /tmp/trace.psxgpu ; /tmp/raster_harness /tmp/trace.psxgpu
  *
  * Harness limitation: our FillTriangle is flat-colour (no Gouraud interpolation) — Gouraud polys replay

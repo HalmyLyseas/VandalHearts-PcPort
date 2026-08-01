@@ -192,7 +192,7 @@ link: $(BUILD_DIR)/generated_data.o $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/p
 	    $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o \
 	    $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o $(BUILD_DIR)/pc_spell_descriptions.o \
 	    $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o \
-	    $(SDL2_LIBS) $(OPENAL_LIBS) -lGL -lm -rdynamic -o $(BUILD_DIR)/vandalhearts_pc
+	    $(SDL2_LIBS) $(OPENAL_LIBS) -lGL -lm -lpthread -rdynamic -o $(BUILD_DIR)/vandalhearts_pc
 	@cp -n vandalhearts.ini $(BUILD_DIR)/ 2>/dev/null || true   # ship config template (don't clobber an edited copy)
 
 $(BUILD_DIR)/generated_data.o: $(BUILD_DIR)/generated_data.c
