@@ -243,7 +243,6 @@ typedef struct {
     int twMaskX, twMaskY, twOffX, twOffY;  /* texture window (GP0 E2h) */
     int target;                       /* 0 = native s_vram, 1 = hi-res s_hires */
     int scale;                        /* geometry x scale when target==1 (else effectively 1) */
-    int noInset;                      /* 1 = skip the hi-res UV edge inset (tagged prims, e.g. compass glyphs) */
 } RenderCtx;
 
 /* Blend/write one colour into a target pixel (native s_vram or s_hires). x,y are target-space, used
@@ -346,33 +345,8 @@ typedef struct {
     int r, g, bcol, textured, tpage, clut, semiTrans, abr;
     int clipL, clipR, clipT, clipB;   /* inclusive drawing area */
     DdaUVStep step;
-    int uMin, uMax, vMin, vMax;      /* prim's texel bounds (for the hi-res edge inset) */
     const RenderCtx *rc;              /* per-pass state: dither, texture window, target/scale (P1) */
 } DdaCtx;
-
-/* Hi-res UV edge inset (VH_HIRES_INSET, default ON = 1 texel; 0 disables; N insets N texels). The
- * lava/terrain tiles carry a dark "crust" texel at their texture-cell borders; native samples the tile
- * INTERIORS, but hi-res' finer edge sampling lands on those border texels -> a dark grid along every tile
- * seam (also the compass "dotted lines"). Clamping the hi-res sample to [uMin+n, uMax-n] makes tile edges
- * sample the bright interior like native does, removing the grid. Hi-res pass only (rc->target), so it is
- * automatically tied to VH_INTERNAL_SCALE > 1; native s_vram untouched. (Trade-off: small high-contrast
- * glyphs like the compass E/W/S/N fatten ~1px; a documented minor cosmetic.) */
-static int HiresInsetAmt(void) {
-    static int a = -1;
-    if (a < 0) { const char *e = getenv("VH_HIRES_INSET"); a = e ? atoi(e) : 1; if (a < 0) a = 0; }
-    return a;   /* default 1 (on); 0 = off; N = inset N texels */
-}
-
-/* Experimental alternative to the inset (VH_HIRES_CRUSTFREE=1, default off while validating): instead of
- * clamping the sample away from the crust texel (which softens magnified tiles by a texel), shift the
- * hi-res sample +0.5 texel (by not subtracting the half-texel in the re-centre) so tile edges land on the
- * interior texel -- exactly what the legacy renderer does. Removes the crust with NO softening and no
- * compass-letter compromise; keeps the hardware dither. When on, the inset stands down. */
-static int HiresCrustFree(void) {
-    static int e = -1;
-    if (e < 0) { const char *v = getenv("VH_HIRES_CRUSTFREE"); e = (v && v[0] == '1') ? 1 : 0; }
-    return e;
-}
 
 static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
 static long long dda_makestep(int dx, int dy) {
@@ -401,17 +375,10 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     if (width <= 0) return;
     if (cx->textured) dda_stepx_n(&uv, &cx->step, x_start);   /* seed UV to the span's start x */
     {
-    /* Hi-res UV edge inset: clamp the sample to the prim's interior so tile edges don't hit the dark
-     * border/crust texels native skips -> removes the tile-seam grid at internal res (see HiresInsetAmt).
-     * Hi-res pass only; skipped for prims tagged noInset (compass glyphs) and when the cell is too small. */
-    int inset = (cx->textured && cx->rc->target && !cx->rc->noInset && !HiresCrustFree()) ? HiresInsetAmt() : 0;
-    int iuLo = cx->uMin + inset, iuHi = cx->uMax - inset, ivLo = cx->vMin + inset, ivHi = cx->vMax - inset;
-    if (inset && (iuHi < iuLo || ivHi < ivLo)) inset = 0;   /* cell too small to inset */
     do {
         if (cx->textured) {
             int tr, tg, tb, su = dda_getu(&uv), sv = dda_getv(&uv);
             unsigned short texel;
-            if (inset) { if (su<iuLo)su=iuLo; if (su>iuHi)su=iuHi; if (sv<ivLo)sv=ivLo; if (sv>ivHi)sv=ivHi; }
             texel = SampleTexture(cx->rc, cx->tpage, cx->clut, su, sv);
             if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
                 UnpackColor(texel, &tr, &tg, &tb);
@@ -461,7 +428,7 @@ static void dda_part(const DdaCtx *cx, const DdaPart *tp, DdaUV origin) {
 }
 
 static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, int r, int g, int bcol,
-                            int textured, int tpage, int clut, int semiTrans, int abr) {
+                            int textured, int tpage, int clut, int semiTrans, int abr, int flat2d) {
     /* G2: when rasterizing into the hires target, scale geometry (vertices/offset/clip) by S but keep
      * UVs native. The DDA's own UV-step math then advances the native texture at 1/S the rate across the
      * S-times-wider span, i.e. one native-texture sample per hi-res pixel -- coverage AND texture at Sx
@@ -474,6 +441,12 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
         vx[i] = (int)lround(rv[i].x) * S + ox; vy[i] = (int)lround(rv[i].y) * S + oy;
         vu[i] = (int)lround(rv[i].u);          vv[i] = (int)lround(rv[i].v);
     }
+    /* `flat2d` (from the whole quad, via FillQuad): the prim projects to an axis-aligned screen
+     * RECTANGLE (UI window / text glyph / billboard sprite). It scopes the "crust for free" +0.5-texel
+     * bias below -- applied to perspective tiles (lands sampling on the interior, off the dark border
+     * crust) but NOT to axis-aligned unit-mapped UI (there it shifts the sample half a texel and
+     * doubles/drops columns -- the 2D "vertical lines"). Decided per-QUAD so both triangles agree;
+     * a per-triangle decision splits one quad's halves and leaves a diagonal seam. */
     /* G2 seam fix (hires pass only): a full 256-wide/tall texture's EXCLUSIVE right/bottom edge sits at
      * U/V==256, which the 32-bit UV fixed point can't hold (256<<24 overflows to 0), so the finer hires
      * sampling tips the last pixel to texel 0 instead of the real edge texel 255 -- a dark seam on
@@ -529,10 +502,6 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
     cx.clipL = rc->clipX * S; cx.clipR = (rc->clipX + rc->clipW) * S - 1;
     cx.clipT = rc->clipY * S; cx.clipB = (rc->clipY + rc->clipH) * S - 1;
     cx.rc = rc;
-    cx.uMin = cx.uMax = vu[0]; cx.vMin = cx.vMax = vv[0];   /* prim texel bounds (hi-res edge inset) */
-    { int k; for (k = 1; k < 3; k++) {
-        if (vu[k] < cx.uMin) cx.uMin = vu[k]; if (vu[k] > cx.uMax) cx.uMax = vu[k];
-        if (vv[k] < cx.vMin) cx.vMin = vv[k]; if (vv[k] > cx.vMax) cx.vMax = vv[k]; } }
     DdaUV origin; origin.u = origin.v = 0;
     if (textured) {
         /* ATTRIB_STEP(A,B) = (u32)(det(A,B)*(1<<12)/det) << 12, det(A,B)=(v1.A-v0.A)(v2.B-v1.B)-(v2.A-v1.A)(v1.B-v0.B) */
@@ -555,11 +524,15 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
              * Re-centre to the hi-res pixel: +0.5*(du/dx + du/dy) per axis. For MINIFIED textures
              * (terrain, >1 texel/pixel) this equals the +0.5 texel seed -> no change; for ~1:1 it becomes
              * +0.5/S texel, giving each source texel S evenly-spaced samples. Hi-res pass only. */
-            /* "Crust for free" (VH_HIRES_CRUSTFREE): NOT subtracting the half-texel here shifts the hi-res
-             * sample +0.5 texel, which lands tile edges on the interior texel instead of the dark border
-             * "crust" -- reproducing exactly what the legacy renderer does (validated offline vs the real
-             * lava texture: gray-crust 598 -> 0, full detail kept). Replaces the UV inset; no softening. */
-            int half = HiresCrustFree() ? 0 : (1 << (DDA_ASHIFT + DDA_APOST - 1));
+            /* "Crust for free": for perspective prims (!flat2d) we do NOT subtract the half-texel, which
+             * shifts the hi-res sample +0.5 texel so tile edges land on the interior texel instead of the
+             * dark border "crust" -- reproducing exactly what the legacy renderer does, removing the
+             * tile-seam grid (and the compass "dotted lines") with NO softening, keeping the hardware
+             * dither. Validated offline vs the real lava texture (gray-crust 598 -> 0, full detail kept).
+             * Axis-aligned 2D UI/text (flat2d) keeps centre-sampling, so the bias never shifts glyph/
+             * border columns (that shift was the 2D "vertical lines"). Decided per-quad in FillQuad so a
+             * quad's two triangles always agree (a per-triangle split leaves a diagonal seam). */
+            int half = flat2d ? (1 << (DDA_ASHIFT + DDA_APOST - 1)) : 0;
             origin.u += (unsigned)((((int)cx.step.dudx + (int)cx.step.dudy) / 2) - half);
             origin.v += (unsigned)((((int)cx.step.dvdx + (int)cx.step.dvdy) / 2) - half);
         }
@@ -572,11 +545,11 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
 }
 
 static void FillTriangle(const RenderCtx *rc, RVert a, RVert b, RVert c, int r, int g, int bcol,
-                          int textured, int tpage, int clut, int semiTrans, int abr) {
+                          int textured, int tpage, int clut, int semiTrans, int abr, int flat2d) {
     /* VH_ACCURATE (default) rasterizes via the fixed-point integer DDA -- coverage + UV at the integer
      * position, VRAM-faithful to DuckStation. The barycentric path below is only the VH_ACCURATE=0
      * legacy fallback (centre-sample coverage, floor UV, no dither). */
-    if (AccurateEnabled()) { FillTriangleDDA(rc, a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr); return; }
+    if (AccurateEnabled()) { FillTriangleDDA(rc, a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr, flat2d); return; }
     int S = rc->target ? rc->scale : 1;   /* G2: scale geometry by S, keep UVs native */
     int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int minX, maxX, minY, maxY;
@@ -629,8 +602,17 @@ static void FillQuad(const RenderCtx *rc, RVert v0, RVert v1, RVert v2, RVert v3
                       int textured, int tpage, int clut, int semiTrans, int abr) {
     /* psx-spx: "Quads are internally processed as two triangles, the first
      * consisting of vertices 1,2,3, and the second of vertices 2,3,4." */
-    FillTriangle(rc, v0, v1, v2, r, g, b, textured, tpage, clut, semiTrans, abr);
-    FillTriangle(rc, v1, v2, v3, r, g, b, textured, tpage, clut, semiTrans, abr);
+    /* flat2d: does the whole quad project to an axis-aligned screen rectangle (UI/text/sprite)?
+     * i.e. its 4 vertices span exactly two distinct X and two distinct Y (rounded) screen coords.
+     * A perspective world tile is a diamond/parallelogram (>=3 distinct in one axis). Decided ONCE
+     * here so both triangles share it -- see the "crust for free" bias in FillTriangleDDA. */
+    int qx0 = (int)lround(v0.x), qx1 = (int)lround(v1.x), qx2 = (int)lround(v2.x), qx3 = (int)lround(v3.x);
+    int qy0 = (int)lround(v0.y), qy1 = (int)lround(v1.y), qy2 = (int)lround(v2.y), qy3 = (int)lround(v3.y);
+    int ndx = 1 + (qx1!=qx0) + ((qx2!=qx0)&&(qx2!=qx1)) + ((qx3!=qx0)&&(qx3!=qx1)&&(qx3!=qx2));
+    int ndy = 1 + (qy1!=qy0) + ((qy2!=qy0)&&(qy2!=qy1)) + ((qy3!=qy0)&&(qy3!=qy1)&&(qy3!=qy2));
+    int flat2d = (ndx == 2 && ndy == 2);
+    FillTriangle(rc, v0, v1, v2, r, g, b, textured, tpage, clut, semiTrans, abr, flat2d);
+    FillTriangle(rc, v1, v2, v3, r, g, b, textured, tpage, clut, semiTrans, abr, flat2d);
 }
 
 /* TILE's rect fill, subject to the current drawing offset/clip (it's a
@@ -839,17 +821,10 @@ int ClearImage(RECT *rect, u_char r, u_char g, u_char b) {
 
 static void *s_otPtr[PC_OT_MAX_TOKENS];
 static unsigned char s_otIsBucket[PC_OT_MAX_TOKENS];
-static unsigned char s_otNoInset[PC_OT_MAX_TOKENS];  /* per-prim "skip the hi-res UV inset" tag */
 static u32 s_otTokens;      /* highest token minted this frame; 0 = none */
 static int s_otOverflowed;  /* latched, so the warning prints once per frame */
 
-/* Set by game code (engine.c, PC_FEAT) around a run of AddPrim calls to tag those prims "no hi-res UV
- * inset" -- used to spare the small compass E/W/S/N glyphs, whose edge texel is the letter outline (not a
- * tile crust) and so fatten under the inset. Captured per-token at mint time (see PC_OtMint). */
-static int s_hiresNoInset = 0;
-void PC_SetHiresNoInset(int on) { s_hiresNoInset = on ? 1 : 0; }
-
-static void PC_OtResetTokens(void) { s_otTokens = 0; s_otOverflowed = 0; s_hiresNoInset = 0; }
+static void PC_OtResetTokens(void) { s_otTokens = 0; s_otOverflowed = 0; }
 
 /* Mint a token for `p`. Returns 0 (= end of chain) on overflow, which drops the
  * tail of that bucket rather than corrupting memory -- and says so loudly, since
@@ -867,7 +842,6 @@ static u32 PC_OtMint(void *p, int isBucket) {
     s_otTokens++;
     s_otPtr[s_otTokens] = p;
     s_otIsBucket[s_otTokens] = (unsigned char)isBucket;
-    s_otNoInset[s_otTokens] = (unsigned char)s_hiresNoInset;   /* capture the tag at mint time */
     return s_otTokens;
 }
 
@@ -1095,15 +1069,10 @@ static void HiresAppendRect(const RenderCtx *rch, int x, int y, int w, int h, in
  * disjoint rows. */
 static void HiresRasterizeBand(int clipY, int clipH) {
     int i;
-    /* DEBUG (VH_HIRES_DEBUG_OPAQUE=1): force every hi-res prim opaque. If the tile-seam dark lines vanish,
-     * they come from semi-transparent blending (double-blend at seams / blend against a dark under-layer),
-     * not coverage or texture. */
-    static int s_forceOpaque = -1;
-    if (s_forceOpaque < 0) s_forceOpaque = getenv("VH_HIRES_DEBUG_OPAQUE") ? 1 : 0;
     for (i = 0; i < s_hprimCount; i++) {
         HiresPrim *hp = &s_hprims[i];
         RenderCtx rc = hp->rc;
-        int semi = s_forceOpaque ? 0 : hp->semiTrans;
+        int semi = hp->semiTrans;
         rc.clipY = clipY; rc.clipH = clipH;
         if (hp->kind == 0)
             FillQuad(&rc, hp->v[0], hp->v[1], hp->v[2], hp->v[3], hp->r, hp->g, hp->b,
@@ -1235,7 +1204,6 @@ void DrawOTag(unsigned int *p) {
             rcn.dither = s_drawModeDither;
             rcn.twMaskX = s_twMaskX; rcn.twMaskY = s_twMaskY; rcn.twOffX = s_twOffX; rcn.twOffY = s_twOffY;
             rcn.target = 0; rcn.scale = 1;
-            rcn.noInset = s_otNoInset[nextTok];   /* per-prim inset tag (compass glyphs opt out) */
             rch = rcn; rch.target = 1; rch.scale = hiScale;
 
             switch (type) {
@@ -1300,20 +1268,6 @@ void DrawOTag(unsigned int *p) {
         nextTok = rawTagOfCur;
     }
 
-    /* DEBUG (VH_HIRES_DEBUG_GAPS=1): paint the hi-res draw region magenta before the tile pass, so any
-     * pixel no quad covers stays magenta -> reveals coverage gaps (the tile-seam black lines) directly. */
-    if (hiScale > 1 && s_hires && s_hprimCount) {
-        static int s_gapDbg = -1;
-        if (s_gapDbg < 0) s_gapDbg = getenv("VH_HIRES_DEBUG_GAPS") ? 1 : 0;
-        if (s_gapDbg) {
-            int S = hiScale, W = VRAM_W * S;
-            int gx0 = s_drawEnv.clip.x * S, gy0 = s_drawEnv.clip.y * S;
-            int gx1 = (s_drawEnv.clip.x + s_drawEnv.clip.w) * S, gy1 = (s_drawEnv.clip.y + s_drawEnv.clip.h) * S;
-            int gx, gy;
-            for (gy = gy0; gy < gy1 && gy < VRAM_H * S; gy++)
-                for (gx = gx0; gx < gx1 && gx < W; gx++) s_hires[(size_t)gy * W + gx] = 0x7C1F; /* magenta */
-        }
-    }
 
     /* P1: rasterize the deferred hi-res display list (the native pass drew inline above), fanned out
      * across per-band worker threads (step 2b). */

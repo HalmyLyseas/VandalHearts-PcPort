@@ -80,10 +80,11 @@ reinterpreting* the game. Two pieces:
   1× (native), 2×, 3×, or 4× the sample rate for crisper terrain and edges — an optional supersampling
   layer *on top of* the accurate DDA, which samples the same textures on a denser grid. **No assets are
   re-authored:** the game's own sprites, textures, videos and UI are untouched. Set live in the options
-  overlay ("INTERNAL RES") and persisted. Includes a **tile-edge inset** (`VH_HIRES_INSET`, on) that keeps
-  the finer sampling off each tile's dark texture-cell "crust," which would otherwise show as a faint dark
-  grid along terrain/lava/water seams — this also resolved the old compass "dotted lines" and the parked
-  water-shimmer note.
+  overlay ("INTERNAL RES") and persisted. **Crust-free tile sampling** is built in: on perspective world
+  polys the finer grid biases the sample onto the tile interior (like the reference renderer) instead of
+  each tile's dark texture-cell "crust," which would otherwise show as a faint dark grid along terrain/lava/
+  water seams — this also resolved the old compass "dotted lines" and the parked water-shimmer note. 2D
+  UI/text is auto-detected and kept pixel-aligned, so the bias never disturbs menus or glyphs.
 - **Multithreaded rasterizer — DONE (`VH_RASTER_THREADS`, auto).** The software renderer's hi-res pass is
   split across CPU cores (disjoint scanline bands, lock-free, bit-identical output), so 4× internal
   resolution holds the 30 fps cap and battle fast-forward stays effective on a multicore machine.
