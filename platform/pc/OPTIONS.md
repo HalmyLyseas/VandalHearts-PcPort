@@ -21,10 +21,15 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 | `VH_HIRES_INSET` | `1` | **Tile-edge inset** (1.5/G2), in texels. At internal res > 1, the finer sampling would otherwise land on the dark "crust" texel at each tile's texture-cell border — native samples the tile interiors, hi-res the borders — producing a faint dark grid along terrain/lava/water tile seams (and the compass "dotted lines"). The inset clamps the hi-res sample to the tile interior (`[uMin+n, uMax-n]`), matching native and removing the grid; interior stays sharp (unlike a blur filter). `0` disables (raw grid returns). Hi-res pass only (`rc->target`) so native is byte-exact; auto-tied to `VH_INTERNAL_SCALE>1`. Root-caused texel-exact (native bright-lava vs hi-res `CLUT[0]` gray at seams) and offline-validated on the real texture. **Minor cosmetic:** small high-contrast glyphs (compass E/W/S/N) fatten ~1px, since their edge texel is content rather than crust — no clean way to distinguish the two, so accepted as a documented trade for the whole-scene grid fix. |
 | `VH_CAM_INVERT_X` | `0` | Invert the right-stick camera *horizontal* axis (rotate direction). `1` = inverted. Also toggleable in the in-game options overlay (SELECT+START). |
 | `VH_CAM_INVERT_Y` | `1` | Invert the right-stick camera *vertical* axis (raise/lower angle). **Ships inverted** — the modern twin-stick convention (push up = tilt the view down); set `0` for a normal vertical axis. Also toggleable in the in-game options overlay. |
-| `VH_SPU_GAIN` | `1.012` | Software-SPU master output trim (float). Music/SFX loudness. Calibrated so the rendered mix RMS-matches the octoshock reference to within 0.01 dB (peak −5.6 dBFS vs the reference's −5.9, i.e. the same headroom hardware leaves for SFX). Falls back to `0.24` if `VH_SPU_SQUARE=0`. |
-| `VH_SPU_SQUARE` | on | PsyQ's **square volume law** — the final stage of the real key-on chain (`0x800d6d8c`): `VolL = L*L / 16383`, applied after panning, to music *and* SFX. Quadratic, so every dB of attenuation is doubled. Without it the mix renders at half the hardware's dynamic range in dB. `0` reverts to the old linear behaviour (and drops `VH_SPU_GAIN` to `0.24`) for A/B. See `exchange/57`. |
-| `VH_SPU_ANALOG` | **off** | Legacy EQ tilt (sub-bass lift + treble roll-off). **Was on by default until 2026-07-20**, when it turned out to be compensating for the missing square law — with that implemented it now *over*-corrects (mean error vs the reference: raw mix 2.20 dB, with this filter 4.27 dB). Kept as a tilt knob; `1` re-enables. Fine-tune with `VH_SPU_BASS`/`VH_SPU_TREB`/`VH_SPU_BASSFC`/`VH_SPU_TREBFC`. |
 | `VH_SEQ_MUTE` | off | `1` = mute only the SEQ **music**, keep VAG SFX + XA audible (useful for isolating sound effects). |
+
+> **Audio is calibration-fixed** — the software SPU matches real-hardware output at the authentic
+> values, so the tuning env vars are **not exposed** in `vandalhearts.ini` and are *not* user knobs.
+> They remain in code for developer A-B only: `VH_SPU_GAIN` (`1.012`, master trim RMS-matched to the
+> octoshock reference within 0.01 dB), `VH_SPU_SQUARE` (on = PsyQ's square volume law `VolL=L*L/16383`
+> at `0x800d6d8c` — the whole reason the mix has the right dynamic range; `0` is the old linear A-B and
+> drops gain to `0.24`), `VH_SPU_ANALOG` (off = legacy EQ tilt that over-corrects once the square law
+> is present: 2.20 dB → 4.27 dB mean error). See `exchange/57` for the derivation.
 
 ## Compatibility
 
