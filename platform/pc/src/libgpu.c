@@ -345,16 +345,16 @@ static unsigned short SampleTexture(const RenderCtx *rc, int tpage, int clut, in
  * native+hires pairs (exchange compass analysis). Fix: where the per-pixel UV footprint spans >1 texel,
  * average the texels the footprint covers ALONG THE DOMINANT (crushed) axis and coverage-blend over the
  * background -- proper anisotropic downsampling, so the thin feature becomes a continuous dim line as
- * native effectively shows, instead of aliased dashes. Magnified / ~1:1 footprints stay single-texel
- * point-sampled (crisp UI/text/rose). HI-RES PASS ONLY (rc->target) -- the native s_vram stays byte-exact.
- * Opaque textured only; semi-transparent falls back to point-sampling. Gated VH_HIRES_TEXAA (default off
- * for now, A/B). UV step fixed-point has DDA_ASHIFT+DDA_APOST = 24 fractional bits (1 texel = 1<<24). */
+ * native effectively shows, instead of aliased dashes. The UV step is per-HI-RES pixel, so magnified
+ * content (UI/text at Sx) has a sub-texel footprint: all 4 taps collapse to one texel -> the write is
+ * bit-identical to point-sampling and nothing crisp softens. HI-RES PASS ONLY (rc->target) -- the native
+ * s_vram stays byte-exact. Opaque textured only; semi-transparent falls back to point-sampling. Gated
+ * VH_HIRES_TEXAA (default off for now, A/B). UV fixed-point: DDA_ASHIFT+DDA_APOST = 24 frac bits. */
 static int HiresTexAaEnabled(void) {
     static int e = -1;
     if (e < 0) { const char *v = getenv("VH_HIRES_TEXAA"); e = (v && v[0] == '1') ? 1 : 0; }
     return e;
 }
-#define HIRES_AA_MAXTAPS 8
 
 /* ---- triangle rasterizer (flat or textured, affine UV, no perspective) -- */
 
@@ -401,27 +401,24 @@ static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
     s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
 }
 
-/* Anisotropic minification AA for one hi-res textured pixel (see the header above). uv is the pixel's
- * point-sample UV; cx->step holds the per-pixel UV gradients. Samples N taps across the footprint's
- * dominant axis, averages the non-transparent taps, and coverage-blends over the existing hi-res pixel.
- * Returns 1 if it handled the pixel (wrote or transparent-skipped), 0 to let the caller point-sample. */
+/* Footprint (2x2 rotated-grid) supersample for one hi-res textured pixel (see the header above). The UV
+ * step is per-HI-RES-pixel, so at internal scale S a thin (~1-texel) feature is sampled near 1:1 with a
+ * diagonal gradient -> point-sampling catches it only at some phases -> DASHES. Sample the 4 corners of
+ * the pixel's footprint (+-1/4 of each screen-axis UV gradient), average the non-transparent taps, and
+ * coverage-blend the feature over the background. KEY: for MAGNIFIED content (UI/text at Sx: footprint
+ * << 1 texel) all 4 taps fall in the SAME texel -> the average is that exact texel and coverage is 1 ->
+ * the write is bit-identical to point-sampling, so nothing crisp softens. Only genuine sub-pixel
+ * structure (thin features, edges) gets averaged. Returns 1 (always handles the pixel). */
 static int dda_texel_aa(const DdaCtx *cx, int x, int y, DdaUV uv) {
     const DdaUVStep *st = &cx->step;
     int dux = (int)st->dudx, dvx = (int)st->dvdx, duy = (int)st->dudy, dvy = (int)st->dvdy;
-    long lx = (long)(dux < 0 ? -dux : dux) + (dvx < 0 ? -dvx : dvx);   /* footprint texel-length, X axis */
-    long ly = (long)(duy < 0 ? -duy : duy) + (dvy < 0 ? -dvy : dvy);   /*                        Y axis */
-    int domU, domV; long dom;
-    int N, k, sr = 0, sg = 0, sb = 0, cnt = 0;
+    static const int sgn[2] = { -1, +1 };          /* +-1/4 footprint corner in each screen axis */
+    int i, j, sr = 0, sg = 0, sb = 0, cnt = 0;
     int W, H, ar, ag, ab, br, bg, bb, cr, cg, cb;
     unsigned short *px;
-    if (lx >= ly) { domU = dux; domV = dvx; dom = lx; } else { domU = duy; domV = dvy; dom = ly; }
-    N = (int)(dom >> 24);                          /* texels the footprint spans on the crushed axis */
-    if (N <= 1) return 0;                          /* magnified / ~1:1 -> caller point-samples (crisp) */
-    if (N > HIRES_AA_MAXTAPS) N = HIRES_AA_MAXTAPS;
-    for (k = 0; k < N; k++) {
-        int num = 2 * k + 1 - N;                   /* sub-position across (-0.5..+0.5)*dom, integer *2N */
-        int ou = (int)(((long long)domU * num) / (2 * N));
-        int ov = (int)(((long long)domV * num) / (2 * N));
+    for (i = 0; i < 2; i++) for (j = 0; j < 2; j++) {
+        int ou = (sgn[i] * dux + sgn[j] * duy) / 4;
+        int ov = (sgn[i] * dvx + sgn[j] * dvy) / 4;
         DdaUV s; unsigned short texel;
         s.u = uv.u + (unsigned)ou; s.v = uv.v + (unsigned)ov;
         texel = SampleTexture(cx->rc, cx->tpage, cx->clut, dda_getu(&s), dda_getv(&s));
@@ -432,10 +429,14 @@ static int dda_texel_aa(const DdaCtx *cx, int x, int y, DdaUV uv) {
     W = VRAM_W * cx->rc->scale; H = VRAM_H * cx->rc->scale;
     if (x < 0 || x >= W || y < 0 || y >= H) return 1;
     px = &s_hires[(size_t)y * W + x];
+    if (cnt == 4) {                                /* full coverage -> exact colour, no background read */
+        *px = (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(ar, ag, ab, x, y) : PackColor(ar, ag, ab);
+        return 1;
+    }
     UnpackColor(*px, &br, &bg, &bb);               /* background already drawn (compass is later in OT) */
-    cr = (ar * cnt + br * (N - cnt)) / N;           /* coverage-blend: feature avg over background */
-    cg = (ag * cnt + bg * (N - cnt)) / N;
-    cb = (ab * cnt + bb * (N - cnt)) / N;
+    cr = (ar * cnt + br * (4 - cnt)) / 4;           /* coverage-blend: feature avg over background */
+    cg = (ag * cnt + bg * (4 - cnt)) / 4;
+    cb = (ab * cnt + bb * (4 - cnt)) / 4;
     *px = (AccurateEnabled() && cx->rc->dither) ? PackColorG1Front(cr, cg, cb, x, y) : PackColor(cr, cg, cb);
     return 1;
 }
