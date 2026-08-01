@@ -193,8 +193,12 @@ static void ovlPanelBox(int w, int h, int px, int py, int panelW, int panelH) {
     ovlFillRect(w, h, px + panelW - 1, py, 1, panelH, 92, 108, 134, 235);
 }
 
-/* Pick scale 2 if a panel `base` px wide (scale-1) fits the native width with margins, else 1. */
-static int ovlPickScale(int w, int base) { return (2 * (base + 2 * OVL_PADX1) <= w - 8) ? 2 : 1; }
+/* Largest integer scale at which a `base`-px (scale-1) panel still fits width `w` with margins. */
+static int ovlFitScale(int w, int base) {
+    int s = 1;
+    while ((s + 1) * (base + 2 * OVL_PADX1) <= w - 8) s++;
+    return s;
+}
 
 /* 1.4 F2: overlay button-label style (1 == XBOX; see libetc.c PC_ButtonLabelStyle). Only the port
  * overlay's own footers swap PlayStation symbols for Xbox letters; the game's prompts are untouched. */
@@ -202,14 +206,14 @@ extern int PC_ButtonLabelStyle(void);
 extern const char *PC_OverlayItemWidestValue(int i);
 #define OVL_LABELS_XBOX (PC_ButtonLabelStyle() == 1)
 
-/* ALL overlay screens share ONE scale = the one the MAIN settings list needs. The main list is the
- * widest panel and the reference; without this a narrow panel (return-to-title confirm, save
- * management, detail) picks a LARGER scale than the main menu and renders bigger/blockier than it --
- * visible at internal res 1, where the wide main list is forced to scale 1 but the narrow panels fit
- * scale 2. The main list's items are readable on every screen (PC_OverlayItem is the settings list
- * regardless of the current sub-screen), so the reference width is always computable. */
+/* ALL overlay screens share ONE glyph scale so a sub-window (return-to-title confirm, save
+ * management, detail) never renders at a different size than the main settings list it opened from.
+ * The scale TRACKS the internal resolution: the presented buffer is 320 * VH_INTERNAL_SCALE wide, so
+ * scaling the overlay by that same factor keeps it the SAME relative size at every internal res
+ * (otherwise it stayed at scale 2 and shrank at x3/x4). The reference is the MAIN list (the widest
+ * panel, and computable on every sub-screen); we clamp DOWN only in the rare case it wouldn't fit. */
 static int ovlSharedScale(int w) {
-    int i, count = PC_OverlayCount(), base = 0;
+    int i, count = PC_OverlayCount(), base = 0, want, fit;
     for (i = 0; i < count; i++) {
         const char *label, *wv; int lw;
         PC_OverlayItem(i, &label, NULL);
@@ -217,7 +221,10 @@ static int ovlSharedScale(int w) {
         lw = ovlTextPx(label, 1) + (wv ? 12 + ovlTextPx(wv, 1) : 0);
         if (lw > base) base = lw;
     }
-    return ovlPickScale(w, base);
+    want = w / 320;                          /* 320 = native fb width; buffer is 320*scale wide => scale */
+    if (want < 1) want = 1;
+    fit = ovlFitScale(w, base);              /* cap so the main list still fits (defensive) */
+    return want < fit ? want : fit;
 }
 
 /* MAIN: the settings list. */
