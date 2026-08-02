@@ -383,11 +383,11 @@ static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
  *   VH_HD_DUMP=<dir>  -> write a grayscale .pgm of each unique upload (shape, to identify it)
  *   VH_HD_PACK=<dir>  -> load <dir>/<hash>.hdi (raw RGBA8 + header) and replace that region
  * HD assets (.hdi) are produced offline from PNG by workflow/vh_hdi_pack.py. */
+#include <sys/stat.h>    /* stat(): the async loader's existence probe (MinGW has it too) */
 #ifdef _WIN32
 #include <direct.h>
 #define HD_MKDIR(d) _mkdir(d)
 #else
-#include <sys/stat.h>
 #define HD_MKDIR(d) mkdir((d), 0777)
 #endif
 #define HD_MAX_REGIONS 512
@@ -558,6 +558,73 @@ static unsigned short *HdPack16(const unsigned int *rgba, int n) {
     }
     return px;
 }
+
+/* ---- async replacement loader (5a) -------------------------------------------------------------
+ * The webp decode + 16-bit pack of a full background (~1.2Mpx) costs enough to dip a scene-load
+ * frame from 60 to ~55 fps when run inline in LoadImage (the render thread). Instead: LoadImage
+ * does only a cheap EXISTENCE probe (stat) and queues the region; a single detached loader thread
+ * decodes and then PUBLISHES r->px with a release store. Until it lands, the draw path's acquire
+ * load sees NULL and samples the native texels -- scene loads sit behind fades, so the one-or-two-
+ * frame native window is invisible. LIFO queue: the most recent upload is the current scene.
+ * The region registry (s_hdReg/s_hdRegN/live) stays single-threaded (render thread only); the
+ * loader touches ONLY r->w/r->h/r->px of already-registered entries, exactly once each.
+ * VH_HD_SYNC=1 restores the old inline decode (A/B + debugging). */
+static int HdFileExists(const char *dir, unsigned long long h) {
+    char path[HD_PATH + 64]; struct stat st;
+    snprintf(path, sizeof(path), "%s/%016llx.webp", dir, h);
+    if (stat(path, &st) == 0) return 1;
+    snprintf(path, sizeof(path), "%s/%016llx.hdi", dir, h);
+    return stat(path, &st) == 0;
+}
+static pthread_mutex_t s_hdLoadMtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  s_hdLoadCv  = PTHREAD_COND_INITIALIZER;
+static HdRegion *s_hdLoadQ[HD_MAX_REGIONS];
+static int s_hdLoadQn, s_hdLoaderUp;
+static char s_hdLoaderDir[HD_PATH + 32];        /* pack dir snapshot; never changes mid-run */
+
+static void *HdLoaderMain(void *arg) {
+    (void)arg;
+    for (;;) {
+        HdRegion *r; int w = 0, hh = 0; unsigned int *rgba; unsigned short *px = NULL;
+        pthread_mutex_lock(&s_hdLoadMtx);
+        while (s_hdLoadQn == 0) pthread_cond_wait(&s_hdLoadCv, &s_hdLoadMtx);
+        r = s_hdLoadQ[--s_hdLoadQn];             /* LIFO: newest upload = current scene first */
+        pthread_mutex_unlock(&s_hdLoadMtx);
+        rgba = HdLoadImage(s_hdLoaderDir, r->hash, &w, &hh);
+        if (rgba) { px = HdPack16(rgba, (int)((size_t)w * hh)); free(rgba); }
+        if (px) {
+            r->w = w; r->h = hh;                 /* dims first, then the pointer gates visibility */
+            __atomic_store_n(&r->px, px, __ATOMIC_RELEASE);
+            fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d (async)\n",
+                    r->hash, r->rx, r->ry, r->rw, r->rh, w, hh);
+        } else {
+            fprintf(stderr, "[HD] async load FAILED %016llx (file vanished or bad?)\n", r->hash);
+        }
+    }
+    return NULL;
+}
+static void HdLoaderQueue(const char *dir, HdRegion *r) {
+    pthread_mutex_lock(&s_hdLoadMtx);
+    if (!s_hdLoaderUp) {
+        pthread_t th; pthread_attr_t at;
+        snprintf(s_hdLoaderDir, sizeof(s_hdLoaderDir), "%s", dir);
+        pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+        if (pthread_create(&th, &at, HdLoaderMain, NULL) == 0) s_hdLoaderUp = 1;
+        pthread_attr_destroy(&at);
+    }
+    if (s_hdLoaderUp && s_hdLoadQn < HD_MAX_REGIONS) {
+        s_hdLoadQ[s_hdLoadQn++] = r;
+        pthread_cond_signal(&s_hdLoadCv);
+        pthread_mutex_unlock(&s_hdLoadMtx);
+    } else {                                     /* thread refused to start: fall back to inline */
+        int w = 0, hh = 0; unsigned int *rgba;
+        pthread_mutex_unlock(&s_hdLoadMtx);
+        rgba = HdLoadImage(dir, r->hash, &w, &hh);
+        if (rgba) { r->px = HdPack16(rgba, (int)((size_t)w * hh)); free(rgba);
+                    if (r->px) { r->w = w; r->h = hh; } }
+    }
+}
+
 /* Called from LoadImage after the VRAM write. Many assets (e.g. every full-screen background) reuse the
  * SAME VRAM rect, so regions are found-by-hash but must be matched-by-rect at draw time -- we track which
  * region is LIVE (its content is what's in VRAM at that rect right now) and update it on every upload. */
@@ -583,11 +650,23 @@ static void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
                     char rp[600]; FILE *rf; snprintf(rp, sizeof(rp), "%s/%016llx_%dx%d.raw", dp, h, rect->w, rect->h);
                     rf = fopen(rp, "wb"); if (rf) { fwrite(src, 2, (size_t)rect->w * rect->h, rf); fclose(rf); }
                 }
-                if (pk) { unsigned int *rgba = HdLoadImage(pk, h, &r->w, &r->h);
-                          if (rgba) { r->px = HdPack16(rgba, r->w * r->h); free(rgba);
-                                      if (r->px) { s_hdReplaceN++; fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h); }
-                                      else { r->w = r->h = 0; } } }
-                if (r->px || dp) s_hdRegN++; else r = NULL;   /* nothing to track (no replacement, not dumping) */
+                {
+                    int hasRepl = pk && HdFileExists(pk, h);   /* cheap stat on the render thread */
+                    if (hasRepl) {
+                        static int syncMode = -1;
+                        if (syncMode < 0) { const char *e = getenv("VH_HD_SYNC"); syncMode = e && atoi(e) != 0; }
+                        s_hdReplaceN++;            /* counts as replaced; draw path skips while px==NULL */
+                        if (syncMode) {            /* old inline decode, for A/B + debugging */
+                            unsigned int *rgba = HdLoadImage(pk, h, &r->w, &r->h);
+                            if (rgba) { r->px = HdPack16(rgba, r->w * r->h); free(rgba); }
+                            if (r->px) fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d (sync)\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h);
+                            else { r->w = r->h = 0; hasRepl = 0; s_hdReplaceN--; }
+                        } else {
+                            HdLoaderQueue(pk, r);  /* decode + publish on the loader thread */
+                        }
+                    }
+                    if (hasRepl || dp) s_hdRegN++; else r = NULL;   /* track: has/awaits a replacement, or dumping */
+                }
             }
         }
     }
@@ -664,7 +743,9 @@ static HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vM
     wx0 = tpX + uMin / ppw; wx1 = tpX + uMax / ppw; wy0 = tpY + vMin; wy1 = tpY + vMax;
     for (i = 0; i < s_hdRegN; i++) {
         HdRegion *r = &s_hdReg[i];
-        if (!r->px || !r->live) continue;     /* live = its content is what's in VRAM at that rect now */
+        /* acquire pairs with the loader thread's release publish of px: once non-NULL, w/h and the
+         * pixel data are visible too. Until then the region is skipped -> native texels draw. */
+        if (!__atomic_load_n(&r->px, __ATOMIC_ACQUIRE) || !r->live) continue;
         if (wx1 < r->rx || wx0 >= r->rx + r->rw || wy1 < r->ry || wy0 >= r->ry + r->rh) continue;
         return r;
     }
