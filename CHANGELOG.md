@@ -38,9 +38,12 @@ mode is still byte-for-byte the retail game.
   background load; toggling off is immediate.
 
 ### Notes
-- The pack is data you build/provide; nothing copyrighted is committed or shipped. See
-  [docs/hd-pack.md](docs/hd-pack.md) for installing and building one, and
-  [docs/gameplay-additions.md](docs/gameplay-additions.md) for before/after shots.
+- The **source tree commits no copyrighted art**. The optional HD pack — upscaled derivative art — is
+  offered as a **separate release download** (`VandalHearts-<tag>-hdpack.zip`) that you can equally build
+  yourself from your own disc; no ownership is claimed and it will be withdrawn on request (see
+  [NOTICE](NOTICE) / [DISCLAIMER](DISCLAIMER)). Install/build instructions in
+  [docs/hd-pack.md](docs/hd-pack.md); before/after shots in
+  [docs/gameplay-additions.md](docs/gameplay-additions.md).
 
 ## [1.5.0] — Graphics fidelity: accurate rasterizer + internal-resolution supersampling
 
