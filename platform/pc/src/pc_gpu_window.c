@@ -22,6 +22,9 @@ static int s_winW, s_winH;               /* actual (scaled) window size */
  * for display; initialised from VH_SCALE / VH_FULLSCREEN in PC_GpuInit. */
 int g_vhScale = 2;
 int g_vhFullscreen = 0;
+/* 1.6 HD PACK toggle (VH_HDPACK). 0 until a valid pack is auto-detected; libgpu's HdDetect() then sets it
+ * (persisted VH_HDPACK, or auto-ON on first detect). The overlay binds it directly; libgpu reads it. */
+int g_vhHdPack = 0;
 static unsigned char *s_rgbaScratch;
 static int s_scratchCap;
 
@@ -526,9 +529,15 @@ void PC_GpuSetFullscreen(int on) {
  * to a 320x240 BGR555 buffer and registers it here; PC_GpuPresent then shows that instead of the
  * VRAM region, sidestepping the movie's 24bpp VRAM packing (the present path reads 16bpp only). */
 static const unsigned short *s_movieOverlay = NULL;
+static const unsigned char  *s_movieOverlayRGB = NULL;   /* 1.6 HD video: direct RGB24 (w*h*3, top-down) */
 static int s_movieOvW = 0, s_movieOvH = 0;
 void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h) {
-    s_movieOverlay = bgr555; s_movieOvW = w; s_movieOvH = h;
+    s_movieOverlay = bgr555; s_movieOverlayRGB = NULL; s_movieOvW = w; s_movieOvH = h;
+}
+/* 1.6 HD FMV: present a decoded HD frame directly at 24-bit (no 15-bit banding). Mutually exclusive with
+ * the native BGR555 overlay; the frame is scaled to the window aspect-preserved like the native one. */
+void PC_GpuSetMovieOverlayRGB(const unsigned char *rgb, int w, int h) {
+    s_movieOverlayRGB = rgb; s_movieOverlay = NULL; s_movieOvW = w; s_movieOvH = h;
 }
 
 void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
@@ -538,9 +547,9 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
 
     if (!s_window || !s_glCtx) return; /* headless: no-op */
 
-    /* A movie is playing -> present its decoded frame as a fullscreen overlay. */
-    if (s_movieOverlay && s_movieOvW > 0 && s_movieOvH > 0) {
-        vram = (unsigned short *)s_movieOverlay;
+    /* A movie is playing -> present its decoded frame as a fullscreen overlay (native BGR555, or HD RGB24). */
+    if ((s_movieOverlay || s_movieOverlayRGB) && s_movieOvW > 0 && s_movieOvH > 0) {
+        vram = (unsigned short *)s_movieOverlay;   /* NULL on the RGB path (used only by the BGR555 convert) */
         vramW = s_movieOvW; x = 0; y = 0; w = s_movieOvW; h = s_movieOvH;
     }
 
@@ -570,6 +579,12 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     }
     if (!s_rgbaScratch) return;
 
+    if (s_movieOverlayRGB) {
+        /* HD FMV: already RGB24 -- just flip rows to match the BGR555 path's vertical flip (glRasterPos
+         * draws bottom-up). One memcpy per row. */
+        for (py = 0; py < h; py++)
+            memcpy(&s_rgbaScratch[(h - 1 - py) * w * 3], &s_movieOverlayRGB[py * w * 3], (size_t)w * 3);
+    } else
     for (py = 0; py < h; py++) {
         for (px = 0; px < w; px++) {
             unsigned short c = vram[(y + py) * vramW + (x + px)];

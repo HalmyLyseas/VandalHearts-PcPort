@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# make-release.sh <version-tag> [--windows-only|--linux-only] [--no-publish]
+# make-release.sh <version-tag> [--windows-only|--linux-only] [--no-publish] [--hdpack=<dir>]
 #
 #   ./make-release.sh v1.0.0
+#   ./make-release.sh v1.6.0 --hdpack=/path/to/assembled/hdpacks   # + optional HD pack asset
 #
 # Builds the Windows + Linux release artifacts and publishes a GitHub release.
 #
@@ -23,14 +24,16 @@ set -euo pipefail
 
 # ---- args -------------------------------------------------------------------
 TAG="${1:-}"
-[ -n "$TAG" ] || { echo "usage: $0 <version-tag> [--windows-only|--linux-only] [--no-publish]" >&2; exit 2; }
+[ -n "$TAG" ] || { echo "usage: $0 <version-tag> [--windows-only|--linux-only] [--no-publish] [--hdpack=<dir>]" >&2; exit 2; }
 shift || true
 DO_WIN=1 DO_LINUX=1 PUBLISH=1 CONTAINER="vh-deb12"
+HDPACK_SRC="${VH_HDPACK_DIR:-}"      # optional assembled hdpacks/ folder -> extra release asset
 for a in "$@"; do case "$a" in
   --windows-only) DO_LINUX=0 ;;
   --linux-only)   DO_WIN=0 ;;
   --no-publish)   PUBLISH=0 ;;
   --container=*)  CONTAINER="${a#*=}" ;;
+  --hdpack=*)     HDPACK_SRC="${a#*=}" ;;
   *) echo "unknown flag: $a" >&2; exit 2 ;;
 esac; done
 
@@ -49,13 +52,25 @@ rm -rf "$STAGE"; mkdir -p "$STAGE"
 # ---- Windows: host MinGW-w64 cross-compile ----------------------------------
 if [ "$DO_WIN" = 1 ]; then
     command -v x86_64-w64-mingw32-gcc >/dev/null || die "MinGW-w64 toolchain not found (pacman -S mingw-w64-gcc)"
+    # 1.6: the HD-video decoder links a minimal STATIC libav so the Windows build ships NO ffmpeg DLLs
+    # (a shared distro/MSYS2 ffmpeg would drag 35+ codec DLLs). Build it once into a cached prefix and
+    # point CMake at it. Override the prefix with VH_MINGW_FFMPEG=<dir> to reuse a prebuilt one.
+    FFPREFIX="${VH_MINGW_FFMPEG:-$PC_DIR/ffmpeg-mingw-static}"
+    if [ ! -f "$FFPREFIX/lib/libavcodec.a" ]; then
+        log "Windows: building minimal static libav (one-time) -> $FFPREFIX"
+        PREFIX="$FFPREFIX" "$PC_DIR/tools/build-ffmpeg-mingw.sh" >/dev/null
+        [ -f "$FFPREFIX/lib/libavcodec.a" ] || die "static libav build failed (see tools/build-ffmpeg-mingw.sh)"
+    fi
     log "Windows: cross-compiling with MinGW-w64 (-O2)"
     # Release binaries are optimized (-O2, matching the validated `build_opt`). The default CMake/Make
     # build is -O0 -g for debugging; the internal-resolution rasterizer (1.5) needs -O2 to hold 30 fps,
     # so the release MUST override it. -DCMAKE_C_FLAGS=-O2 adds -O2 on top of the default -g.
+    # VH_MINGW_FFMPEG points the toolchain's CMAKE_FIND_ROOT_PATH at the static libav prefix (a host
+    # CMAKE_PREFIX_PATH is ignored under MinGW's find-root mode ONLY).
     ( cd "$PC_DIR"
-      cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
-            -DCMAKE_C_FLAGS=-O2 >/dev/null
+      VH_MINGW_FFMPEG="$FFPREFIX" cmake -S . -B build_win \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
+            -DCMAKE_C_FLAGS=-O2 -DVH_MINGW_FFMPEG="$FFPREFIX" >/dev/null
       cmake --build build_win >/dev/null )
     WIN_EXE="$PC_DIR/build_win/vandalhearts_pc.exe"
     [ -f "$WIN_EXE" ] || die "Windows build produced no .exe"
@@ -64,8 +79,10 @@ if [ "$DO_WIN" = 1 ]; then
     # the 6 runtime DLLs the CMake post-build step stages next to the .exe
     cp "$PC_DIR"/build_win/*.dll "$WZIP_DIR/" 2>/dev/null || die "expected runtime DLLs beside the .exe"
     cp "$INI" "$WZIP_DIR/"
+    # 6 base runtime DLLs (SDL2, OpenAL32, libwinpthread, libgcc_s_seh, libstdc++, libssp) + 2 for the
+    # 1.6 HD background codec (libwebp, libsharpyuv). libav is static, so it adds none. -> 8 expected.
     ndll=$(ls -1 "$WZIP_DIR"/*.dll | wc -l)
-    [ "$ndll" -eq 6 ] || echo "  WARNING: expected 6 DLLs, found $ndll"
+    [ "$ndll" -eq 8 ] || echo "  WARNING: expected 8 DLLs (6 base + libwebp/libsharpyuv), found $ndll: $(ls -1 "$WZIP_DIR"/*.dll | xargs -n1 basename | tr '\n' ' ')"
     ( cd "$WZIP_DIR" && zip -q -r "$STAGE/VandalHearts-$TAG-windows-x64.zip" . )
     rm -rf "$WZIP_DIR"
     log "  -> VandalHearts-$TAG-windows-x64.zip ($ndll DLLs + exe + ini)"
@@ -79,6 +96,12 @@ if [ "$DO_LINUX" = 1 ]; then
     distrobox enter "$CONTAINER" -- bash -lc "
         set -e; export PATH=\"\$HOME/bin:\$PATH\"
         cd '$PC_DIR'
+        # 1.6 HD deps: fail loudly with an install hint rather than silently building a no-HD AppImage
+        # (a missing lib would otherwise become a confusing link error, or drop VH_HD_* support).
+        for pc in libwebp libavformat libavcodec libavutil libswscale; do
+            pkg-config --exists \$pc || { echo \"ERROR: '\$pc' dev package missing in container '$CONTAINER'.\"; \
+              echo \"  fix: distrobox enter $CONTAINER -- sudo apt-get install -y libwebp-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev\"; exit 1; }
+        done
         make link BUILD_DIR=build_deb CC='cc -O2' >/dev/null
         packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc >/dev/null"
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"
@@ -86,6 +109,25 @@ if [ "$DO_LINUX" = 1 ]; then
     cp "$APP" "$STAGE/VandalHearts-$TAG-linux-x86_64.AppImage"
     cp "$INI" "$STAGE/vandalhearts.ini"
     log "  -> VandalHearts-$TAG-linux-x86_64.AppImage + vandalhearts.ini"
+fi
+
+# ---- optional HD pack (a SEPARATE release asset, not embedded in any binary) -------------------
+# --hdpack=<dir> (or VH_HDPACK_DIR) points at an assembled hdpacks/ folder: backgrounds/*.webp +
+# videos/<sector>.mp4 + manifest.json. The pack is upscaled DERIVATIVE art (see NOTICE); it is NOT
+# built here -- you supply the finished, metadata-stripped folder. Named VandalHearts-$TAG-hdpack.zip
+# so the checksum + upload globs below include it automatically.
+if [ -n "$HDPACK_SRC" ]; then
+    [ -d "$HDPACK_SRC" ]              || die "--hdpack: '$HDPACK_SRC' is not a directory"
+    [ -f "$HDPACK_SRC/manifest.json" ] || die "--hdpack: no manifest.json in '$HDPACK_SRC' (assemble the pack first)"
+    log "HD pack: packaging $HDPACK_SRC"
+    nbg=$(ls -1 "$HDPACK_SRC"/backgrounds/*.webp 2>/dev/null | wc -l)
+    nvid=$(ls -1 "$HDPACK_SRC"/videos/*.mp4 2>/dev/null | wc -l)
+    PKGTMP="$STAGE/_hdpack"; rm -rf "$PKGTMP"; mkdir -p "$PKGTMP/hdpacks"
+    cp -rL "$HDPACK_SRC"/. "$PKGTMP/hdpacks/"      # -L: dereference symlinks -> real bytes in the asset
+    ( cd "$PKGTMP" && zip -q -r "$STAGE/VandalHearts-$TAG-hdpack.zip" hdpacks )
+    rm -rf "$PKGTMP"
+    log "  -> VandalHearts-$TAG-hdpack.zip ($nbg backgrounds + $nvid movies)"
+    HDPACK_DONE=1
 fi
 
 # ---- checksums --------------------------------------------------------------
@@ -137,6 +179,17 @@ bulk loads from your own disc at runtime. See NOTICE/DISCLAIMER.
 
 Verify downloads against \`SHA256SUMS.txt\`.
 NOTE
+if [ "${HDPACK_DONE:-0}" = 1 ]; then
+cat >> "$NOTES" <<NOTE
+
+### Optional HD pack
+\`VandalHearts-$TAG-hdpack.zip\` — higher-resolution backgrounds + re-encoded FMV
+movies. **Optional**; the game runs identically without it. Unzip so \`hdpacks/\`
+sits next to the executable, then enable **HD PACK** in the Select+Start options
+(see docs/hd-pack.md). This is upscaled derivative art (© Konami), provided for
+convenience and also buildable from your own disc — see NOTICE / DISCLAIMER.
+NOTE
+fi
 log "Notes: $NOTES"
 
 # ---- publish ----------------------------------------------------------------

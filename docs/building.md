@@ -56,7 +56,10 @@ Everything below runs from `platform/pc/`.
 ### What you need
 
 - A host C compiler (GCC or Clang).
-- **SDL2**, **OpenAL** (e.g. OpenAL Soft), and **OpenGL** development libraries.
+- **SDL2**, **OpenAL** (e.g. OpenAL Soft), **OpenGL**, **libwebp**, and **libav / ffmpeg** (`libavformat`,
+  `libavcodec`, `libavutil`, `libswscale`) development libraries. libwebp + libav power the 1.6 HD pack
+  (`.webp` backgrounds, `.mp4` movies); build without them via `make link NO_WEBP=1 NO_HDVIDEO=1` /
+  `cmake -DVH_WEBP=OFF -DVH_HDVIDEO=OFF`, which drops HD-pack support (native `.hdi`/MDEC fallbacks).
 - **Python 3** (runs the data generators during the build).
 - Your own `SLUS_004.47` and the game disc `.bin` (the generators read the former; the game reads the
   latter at runtime — see [configuration.md](configuration.md)).

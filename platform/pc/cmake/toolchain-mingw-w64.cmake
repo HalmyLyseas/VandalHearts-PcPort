@@ -22,6 +22,16 @@ set(CMAKE_RC_COMPILER  ${MINGW_TARGET}-windres)
 # The toolchain's sysroot: where mingw headers/import-libs (and the AUR SDL2/OpenAL) live.
 set(CMAKE_FIND_ROOT_PATH /usr/${MINGW_TARGET})
 
+# 1.6: an extra prefix for a locally-built STATIC libav (the HD-video decoder) can be searched too.
+# With MODE ONLY below, find_library/find_path only look under CMAKE_FIND_ROOT_PATH, so a host
+# CMAKE_PREFIX_PATH is ignored -- the prefix must be appended here. Set it with -DVH_MINGW_FFMPEG=<prefix>
+# or the VH_MINGW_FFMPEG environment variable (make-release.sh does the latter).
+if(VH_MINGW_FFMPEG)
+    list(APPEND CMAKE_FIND_ROOT_PATH "${VH_MINGW_FFMPEG}")
+elseif(DEFINED ENV{VH_MINGW_FFMPEG})
+    list(APPEND CMAKE_FIND_ROOT_PATH "$ENV{VH_MINGW_FFMPEG}")
+endif()
+
 # Search host paths for programs (python3, etc.) but only the sysroot for headers/libs/packages,
 # so we never accidentally link a host .so or pick up a Linux SDL2Config.cmake.
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)

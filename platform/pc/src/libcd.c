@@ -109,6 +109,31 @@ static int  s_movieActive    = 0;
 static int s_movieBaseLBA   = 0;
 static int s_movieScanLBA   = 0;   /* forward demux cursor (frames are stored in order) */
 static int  s_movieScanFrame = 0;   /* highest frame the cursor has passed */
+
+/* 1.6 HD FMV: when a movie has an HD replacement (hdpacks/videos/<baseLBA>.mp4), decode THAT instead of
+ * the STR video. The game keeps reading the STR for its XA audio + frame timing, so we swap only the
+ * picture -- audio and sync are untouched. Keyed by the movie's base LBA (== its start sector). */
+extern int  PC_HdVideoOpen(const char *path);
+extern const unsigned char *PC_HdVideoFrame(int frameIdx, int *w, int *h);
+extern void PC_HdVideoClose(void);
+extern const char *PC_HdPackVideosDir(void);
+extern void PC_GpuSetMovieOverlayRGB(const unsigned char *rgb, int w, int h);
+static int s_movieHd = 0;
+static int s_movieHdLBA = -1;
+static void MovieHdClose(void) { if (s_movieHd) { PC_HdVideoClose(); s_movieHd = 0; } s_movieHdLBA = -1; }
+static void MovieHdTryOpen(int baseLBA) {
+    const char *dir;
+    char path[1100];
+    if (s_movieHd && s_movieHdLBA == baseLBA) return;   /* the stream-start block re-runs several times per
+                                                         * movie -> open the decoder ONCE, not each call */
+    MovieHdClose();
+    dir = PC_HdPackVideosDir();
+    if (!dir) return;
+    snprintf(path, sizeof(path), "%s/%x.mp4", dir, baseLBA);
+    s_movieHd = PC_HdVideoOpen(path);
+    s_movieHdLBA = s_movieHd ? baseLBA : -1;
+    fprintf(stderr, "[HDvideo] movie baseLBA=0x%x -> %s\n", baseLBA, s_movieHd ? "HD" : "native MDEC");
+}
 static unsigned short s_movieFb[320 * 240];
 static unsigned char  s_movieBs[32 * 1024];   /* one frame's BS (<= 9 sectors * 0x7E0 ~= 18KB) */
 
@@ -252,6 +277,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
                 PC_XaReset();
                 s_xaBaseLBA = -1;
                 s_movieActive = 0;
+                MovieHdClose();
             }
             return 1;
         case CdlReset:
@@ -261,7 +287,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             s_xaStreaming = 0;
             s_xaBaseLBA = -1;
             PC_XaReset();
-            if (s_movieActive) { s_movieActive = 0; PC_GpuSetMovieOverlay(NULL, 0, 0); }
+            if (s_movieActive) { s_movieActive = 0; PC_GpuSetMovieOverlay(NULL, 0, 0); MovieHdClose(); }
             return 1;
         case CdlSetfilter:
             /* Which interleaved XA file/channel to play (audio.c AudioJob_PrepareXa/PlayXa). */
@@ -527,6 +553,7 @@ int CdRead2(int mode) {
          * -1 at boot) had sound but post-gameplay story movies didn't. */
         s_xaFile = -1;
         s_xaChan = -1;
+        MovieHdTryOpen(s_movieBaseLBA);   /* 1.6: use an HD replacement for this movie if one is installed */
         MovieRenderFrame(1);
     }
     return 0;
@@ -651,6 +678,12 @@ static unsigned int s_fakeMovieSectorData[2];
  * with CdRead2). */
 static void MovieRenderFrame(int frameNo) {
     if (!s_disc || !s_movieActive || frameNo < 1) return;
+    if (s_movieHd) {                             /* 1.6 HD FMV: present the HD frame, skip MDEC */
+        int w = 0, h = 0;
+        const unsigned char *rgb = PC_HdVideoFrame(frameNo - 1, &w, &h);   /* game frame 1 -> mp4 frame 0 */
+        if (rgb) { PC_GpuSetMovieOverlayRGB(rgb, w, h); s_movieScanFrame = frameNo; return; }
+        MovieHdClose();                          /* decode ended/failed -> native MDEC for the rest */
+    }
     if (frameNo < s_movieScanFrame) {           /* looped/restarted -> rewind cursor */
         s_movieScanLBA = s_movieBaseLBA; s_movieScanFrame = 0;
     }

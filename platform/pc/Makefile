@@ -21,7 +21,7 @@ STAGE_DIR      := $(BUILD_DIR)/include_stage
 C_FILES        := $(wildcard $(SRC_DIR)/*.c)
 GAME_O_FILES   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/src/%.o,$(C_FILES))
 
-BACKEND_SRCS   := libetc.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c
+BACKEND_SRCS   := libetc.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c pc_hdvideo.c
 BACKEND_OBJS   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BACKEND_SRCS))
 
 # TARGET WIDTH. Default is now 64-bit (Stage 2.3 complete, 2026-07-21).
@@ -60,6 +60,18 @@ M32            ?= -m64
 # rest, so overruns *within* the parent object are invisible to ASAN. Struct-width diffing
 # (`gdb -ex "print sizeof(T)"` on build/ vs build32/) is the complementary check, not optional.
 SAN            ?=
+
+# OPTIMIZATION. Default is -O0 -g: fast compile + clean backtraces for gdb/ASan/UBSan. The SHIPPED
+# release is always -O2 (packaging/make-release.sh uses CC='cc -O2' / CMake -O2), and the 1.5+ hi-res
+# rasterizer + 1.6 HD sampler are far heavier at -O0 -- so PERF-TEST WITH `make link OPT=1`, never the
+# bare debug build (a bare -O0 build reads as ~3x the CPU / lower fps than what actually ships).
+#   make link OPT=1               -> optimized (-O2), representative of the release
+# Folded into CC so it reaches every compile AND the link in one place; a command-line CC=... (as the
+# release passes) overrides this and composes fine.
+ifdef OPT
+CC += -O2
+endif
+
 # Stage 2.3: the pkg-config search path has to follow the TARGET width, not be pinned to 32-bit.
 # Only -m32 needs the explicit lib32 pkgconfig dir; at any other width the system default is
 # already correct (and forcing lib32 there yields 32-bit .so paths that fail to link, which is
@@ -112,6 +124,24 @@ OPENAL_LIBS    := $(shell $(PKG_CONFIG_32) pkg-config --libs openal)
 GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PORT -DPC_FEAT -D'asm(x)=' \
                    -I$(STAGE_DIR) -Iinclude -I../.. \
                    -include pc_forward_decls.h -g
+
+# libwebp: STANDARD port dependency (1.6 HD pack). WebP-compressed replacements are ~7x smaller than raw
+# .hdi (a full background pack is ~20MB vs ~150MB), so it ships on by default. NO_WEBP=1 builds without it
+# (the engine's `#ifdef VH_HD_WEBP` then falls back to loading only raw .hdi packs) -- for a minimal-deps
+# build. The release + AppImage/Windows packaging bundle libwebp (build-appimage.sh / the MinGW DLL).
+ifndef NO_WEBP
+HD_WEBP_CFLAGS := -DVH_HD_WEBP $(shell pkg-config --cflags libwebp 2>/dev/null)
+HD_WEBP_LIBS   := $(shell pkg-config --libs libwebp 2>/dev/null || echo -lwebp)
+endif
+
+# libav (ffmpeg): STANDARD port dependency (1.6 HD pack, videos). Decodes the HD-upscaled FMVs (H.264
+# mp4) that replace the STR movies. On by default; NO_HDVIDEO=1 builds without it (the engine's
+# `#ifdef VH_HD_VIDEO` then keeps the native MDEC movie path). Packaging bundles the av DLLs (Windows).
+HD_VIDEO_PKGS  := libavformat libavcodec libswscale libavutil
+ifndef NO_HDVIDEO
+HD_VIDEO_CFLAGS := -DVH_HD_VIDEO $(shell pkg-config --cflags $(HD_VIDEO_PKGS) 2>/dev/null)
+HD_VIDEO_LIBS   := $(shell pkg-config --libs $(HD_VIDEO_PKGS) 2>/dev/null)
+endif
 
 .PHONY: default stage clean sweep gen-data link crash-trace asan asan32 ubsan
 default: $(GAME_O_FILES) $(BACKEND_OBJS)
@@ -192,7 +222,7 @@ link: $(BUILD_DIR)/generated_data.o $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/p
 	    $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o \
 	    $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o $(BUILD_DIR)/pc_spell_descriptions.o \
 	    $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o \
-	    $(SDL2_LIBS) $(OPENAL_LIBS) -lGL -lm -lpthread -rdynamic -o $(BUILD_DIR)/vandalhearts_pc
+	    $(SDL2_LIBS) $(OPENAL_LIBS) -lGL -lm -lpthread $(HD_WEBP_LIBS) $(HD_VIDEO_LIBS) -rdynamic -o $(BUILD_DIR)/vandalhearts_pc
 	@cp -n vandalhearts.ini $(BUILD_DIR)/ 2>/dev/null || true   # ship config template (don't clobber an edited copy)
 
 $(BUILD_DIR)/generated_data.o: $(BUILD_DIR)/generated_data.c
@@ -383,7 +413,7 @@ $(BUILD_DIR)/libgte.o: src/libgte.c
 	$(CC) $(M32) $(SAN) -Iinclude -fno-builtin -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libgpu.o: src/libgpu.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) -Iinclude $(HD_WEBP_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/pc_gpu_window.o: src/pc_gpu_window.c
 	$(CC) $(M32) $(SAN) -Iinclude $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
@@ -416,6 +446,10 @@ $(BUILD_DIR)/pc_spu.o: src/pc_spu.c
 
 $(BUILD_DIR)/pc_mdec.o: src/pc_mdec.c
 	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+
+# HD FMV decoder (1.6): libav H.264 -> RGB, replacing the STR movie picture. libav flags applied here.
+$(BUILD_DIR)/pc_hdvideo.o: src/pc_hdvideo.c
+	$(CC) $(M32) $(SAN) -Iinclude $(HD_VIDEO_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 # Generated PS1 BIOS kanji charset-2 glyphs (see tools/gen_kanji_font.py) used
 # by Krom2RawAdd in libkernel.c -- pure data, no game headers.

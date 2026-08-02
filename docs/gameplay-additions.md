@@ -246,6 +246,48 @@ so even 4× holds the 30 fps cap and battle fast-forward stays effective on a mu
 Cost scales with the square of the factor (2× is nearly free; 3×/4× are heavier). See
 [configuration.md](configuration.md) for `VH_INTERNAL_SCALE`, `VH_RASTER_THREADS` and `VH_ACCURATE`.
 
+## Shipped (1.6)
+
+An **optional HD pack** for the two pre-rendered layers — the 320×240 backgrounds and the FMV movies. The
+**source tree and base build contain no HD art** — you either build a pack from your own disc or download
+the prebuilt pack attached to the 1.6 release (upscaled derivative art, provided for convenience). A pack is
+auto-detected in `hdpacks/` beside the executable and enables the **HD PACK** options row, which also raises
+the internal resolution so the extra detail is visible:
+
+![The options overlay with HD PACK ON and INTERNAL RES set to X4](images/features-1.6-MenuHDPack.png)
+
+The whole feature is inert without a pack — the base build renders exactly as before. Building one offline
+from your own disc, and every option, is covered in [hd-pack.md](hd-pack.md).
+
+### HD backgrounds
+
+The pre-rendered, continuous-tone backgrounds are swapped for higher-resolution versions at render time —
+the game's own scenes, sharper, with no change to layout, palette or on-screen UI. Hand-drawn pixel art
+(portraits, sprites, fonts) stays native. The same weapon shop, native then HD:
+
+*Native:*
+
+![The weapon shop at native background resolution](images/features-1.6-BackgroundsInGame-01.png)
+
+*HD pack:*
+
+![The same weapon shop with the HD background](images/features-1.6-BackgroundsInGame-02.png)
+
+### HD movies
+
+The intro and ending FMVs can be replaced with HD re-encodes, presented in place of the native MDEC video
+while the game keeps its **original frame timing and XA audio** in sync — only the picture is swapped. The
+movie art is upscaled offline (a pack ships the finished files), so this layer is a genuine re-encode
+rather than a pure sharpen. The opening "Arris the Sage" scene, native MDEC then HD:
+
+*Native (MDEC):*
+
+![The intro FMV at native MDEC resolution](images/features-1.6-Videos-01.png)
+
+*HD pack:*
+
+![The same intro frame from the HD re-encode](images/features-1.6-Videos-02.png)
+
 ## Planned
 
 See the [roadmap](roadmap.md).

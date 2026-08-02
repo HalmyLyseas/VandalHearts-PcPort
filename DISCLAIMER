@@ -34,6 +34,14 @@ video are NOT included and load at runtime from the disc you supply, so a releas
 binary does nothing without your own legally-owned copy. See NOTICE for the full
 breakdown.
 
+The 1.6 release additionally offers an OPTIONAL, SEPARATE "HD PACK" download that
+is NOT part of the binary. It contains higher-resolution background images and
+re-encoded FMV movies produced by upscaling the game's original pre-rendered art.
+The port runs identically without it, and the same pack can be built locally from
+your own disc using the tools in platform/pc/tools/hdpack/. This is upscaled
+derivative work of © Konami material, provided for convenience/preservation, with
+no ownership claimed; it will be withdrawn on request. See NOTICE.
+
 What the repository DOES contain, beyond the original PC-port code (see NOTICE):
 a reverse-engineered decompilation of the game code (src/), and a small number of
 functional game-data tables (unit stats and animation/sprite pointer tables)

@@ -346,7 +346,13 @@ typedef struct {
     int clipL, clipR, clipT, clipB;   /* inclusive drawing area */
     DdaUVStep step;
     const RenderCtx *rc;              /* per-pass state: dither, texture window, target/scale (P1) */
+    /* HD-pack replace (1.6): resolved ONCE per triangle in FillTriangleDDA. hdPx==NULL -> no replacement,
+     * per-pixel path is unchanged. Scale is precomputed to a fixed-point multiply (no per-pixel divide). */
+    const unsigned short *hdPx; int hdW, hdH;       /* HD image, PRE-PACKED to 16-bit texels (0=transparent) + dims */
+    int hdTpX, hdTpY, hdPpw, hdRx, hdRy, hdRw, hdRh; /* hoisted VRAM-word mapping constants + region rect */
+    long long hdSx, hdSy;                            /* (hdW<<HD_SC)/nativeW , (hdH<<HD_SC)/nativeH */
 } DdaCtx;
+#define HD_SC 16
 
 static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
 static long long dda_makestep(int dx, int dy) {
@@ -367,6 +373,304 @@ static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
     s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
 }
 
+/* ================= HD asset-replacement (1.6 exploration; platform-only, env-gated) =================
+ * Replace a native texture region (e.g. a background) with a hi-res image, sampled at SUB-TEXEL
+ * precision during the hi-res pass -- so it shows real HD detail, not the native-texel NN block that
+ * VH_INTERNAL_SCALE already gives. Native pass + non-HD runs are byte-for-byte untouched.
+ *
+ * Identity = an FNV-1a hash of the raw uploaded VRAM block (in LoadImage). Regions are keyed by VRAM
+ * WORD coords, so multi-quad / multi-tpage drawing of one upload maps back to the right HD pixel.
+ *   VH_HD_DUMP=<dir>  -> write a grayscale .pgm of each unique upload (shape, to identify it)
+ *   VH_HD_PACK=<dir>  -> load <dir>/<hash>.hdi (raw RGBA8 + header) and replace that region
+ * HD assets (.hdi) are produced offline from PNG by workflow/vh_hdi_pack.py. */
+#ifdef _WIN32
+#include <direct.h>
+#define HD_MKDIR(d) _mkdir(d)
+#else
+#include <sys/stat.h>
+#define HD_MKDIR(d) mkdir((d), 0777)
+#endif
+#define HD_MAX_REGIONS 512
+typedef struct { unsigned long long hash; int rx, ry, rw, rh; unsigned short *px; int w, h; int dumped; int live; } HdRegion;
+static HdRegion s_hdReg[HD_MAX_REGIONS];
+static int s_hdRegN, s_hdReplaceN;
+
+/* GRAD 1 (1.6): auto-detect + validate an installed HD pack beside the exe/AppImage (disc-.bin pattern).
+ *   <deploy>/hdpacks/manifest.json               validated: its "game" id must match this build
+ *   <deploy>/hdpacks/backgrounds/<hash>.webp     the replacement images
+ * VH_HD_PACK=<dir> still overrides (points straight at a <hash>.webp folder, skipping detection). */
+#define HD_GAME_ID "SLUS-00447"
+#define HD_PATH    1024
+extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe dir, or AppImage dir) */
+extern int g_vhHdPack;         /* runtime on/off toggle, owned by pc_gpu_window.c; the overlay binds it.
+                                * 0 until a valid pack is detected (HdDetect sets it: persisted VH_HDPACK, or
+                                * auto-ON on first detect). The VH_HD_PACK=<dir> override ignores it (CI). */
+static struct { int checked, available, valid, count; char dir[HD_PATH]; char videosDir[HD_PATH]; char reason[80]; } s_hdPack;
+
+static const char *HdEnv(const char *name, int slot) {
+    static const char *v[2]; static int done[2];
+    if (!done[slot]) { v[slot] = getenv(name); done[slot] = 1; }
+    return v[slot];
+}
+#define HdDumpDir() HdEnv("VH_HD_DUMP", 1)
+
+/* Minimal read of the (controlled) manifest: "game" (string) + "count" (int). 1 if a game id was found.
+ * Not a general JSON parser -- just enough to validate + report, both fields near the top of the file. */
+static int HdManifestRead(const char *path, char *game, int gameSz, int *count) {
+    FILE *f = fopen(path, "rb"); char buf[8192], *p; size_t n;
+    game[0] = '\0'; *count = 0;
+    if (!f) return 0;
+    n = fread(buf, 1, sizeof(buf) - 1, f); fclose(f); buf[n] = '\0';
+    if ((p = strstr(buf, "\"game\"")) && (p = strchr(p, ':')) && (p = strchr(p, '"'))) {
+        int i = 0; p++;
+        while (*p && *p != '"' && i < gameSz - 1) game[i++] = *p++;
+        game[i] = '\0';
+    }
+    if ((p = strstr(buf, "\"count\"")) && (p = strchr(p, ':'))) *count = atoi(p + 1);
+    return game[0] != '\0';
+}
+
+/* Detect + validate <deploy>/hdpacks (runs once; caches in s_hdPack). reason[] drives the overlay label. */
+static void HdDetect(void) {
+    char deploy[HD_PATH], manifest[HD_PATH], game[80];
+    if (s_hdPack.checked) return;
+    s_hdPack.checked = 1;
+    snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "no HD pack");
+    if (!PC_GetDeployDir(deploy, sizeof(deploy))) return;
+    snprintf(manifest, sizeof(manifest), "%s/hdpacks/manifest.json", deploy);
+    if (!HdManifestRead(manifest, game, sizeof(game), &s_hdPack.count)) return;   /* no/blank manifest */
+    s_hdPack.available = 1;
+    if (strcmp(game, HD_GAME_ID) != 0) {                 /* pack for a different disc/region */
+        snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "HD pack is for %s", game);
+        fprintf(stderr, "[HD] pack present but for '%s' (this build is %s) -> HD PACK unavailable\n",
+                game, HD_GAME_ID);
+        return;
+    }
+    s_hdPack.valid = 1;
+    s_hdPack.reason[0] = '\0';
+    snprintf(s_hdPack.dir, sizeof(s_hdPack.dir), "%s/hdpacks/backgrounds", deploy);
+    snprintf(s_hdPack.videosDir, sizeof(s_hdPack.videosDir), "%s/hdpacks/videos", deploy);
+    { const char *e = getenv("VH_HDPACK");           /* persisted choice (ini->env) wins; else auto-ON */
+      g_vhHdPack = e ? (atoi(e) != 0) : 1; }
+    fprintf(stderr, "[HD] pack detected + valid: %s (%d backgrounds)%s\n",
+            s_hdPack.dir, s_hdPack.count, g_vhHdPack ? " -> ON" : " (off, persisted)");
+}
+
+/* Is HD replacement live right now? Explicit VH_HD_PACK override => always (CI/power-user); else the
+ * auto-detected valid pack gated by the g_vhHdPack toggle. Cheap enough for the per-triangle sample gate. */
+static int HdActive(void) {
+    const char *env = HdEnv("VH_HD_PACK", 0);
+    if (env && *env) return 1;
+    HdDetect();
+    return s_hdPack.valid && g_vhHdPack;
+}
+/* The active pack directory (or NULL). */
+static const char *HdPackDir(void) {
+    const char *env;
+    if (!HdActive()) return NULL;
+    env = HdEnv("VH_HD_PACK", 0);
+    return (env && *env) ? env : s_hdPack.dir;
+}
+
+/* Public API for the options overlay (GRAD 2/3). The toggle itself is g_vhHdPack (bound directly). */
+int PC_HdPackAvailable(void)      { HdDetect(); return s_hdPack.valid; }
+int PC_HdPackEnabled(void)        { HdDetect(); return s_hdPack.valid && g_vhHdPack; }
+int PC_HdPackCount(void)          { HdDetect(); return s_hdPack.count; }
+const char *PC_HdPackReason(void) { HdDetect(); return s_hdPack.reason; }
+/* HD FMV directory (<deploy>/hdpacks/videos), or NULL when HD is off / no valid pack. VH_HD_VIDEOS=<dir>
+ * overrides (CI). Gated by the same g_vhHdPack toggle as backgrounds -- videos ride the HD PACK option. */
+const char *PC_HdPackVideosDir(void) {
+    const char *env = getenv("VH_HD_VIDEOS");
+    if (env && *env) return env;
+    if (!g_vhHdPack) return NULL;
+    HdDetect();
+    return s_hdPack.valid ? s_hdPack.videosDir : NULL;
+}
+
+static unsigned long long HdHash(const unsigned short *s, int n) {
+    unsigned long long h = 1469598103934665603ULL; int i;
+    for (i = 0; i < n; i++) { h ^= s[i]; h *= 1099511628211ULL; }
+    return h;
+}
+static HdRegion *HdFind(unsigned long long h) {
+    int i; for (i = 0; i < s_hdRegN; i++) if (s_hdReg[i].hash == h) return &s_hdReg[i];
+    return NULL;
+}
+#ifdef VH_HD_WEBP
+#include <webp/decode.h>
+/* Decode <dir>/<hash>.webp to RGBA8 (WebPDecodeRGBA already emits R,G,B,A byte order = our px layout).
+ * WebP is ~7x smaller than PNG for these backgrounds; decode happens once at scene load, never per frame. */
+static unsigned int *HdLoadWebp(const char *dir, unsigned long long h, int *ow, int *oh) {
+    char path[600]; FILE *f; long sz; unsigned char *buf; unsigned int *px = NULL; int w, hh; uint8_t *rgba;
+    snprintf(path, sizeof(path), "%s/%016llx.webp", dir, h);
+    f = fopen(path, "rb"); if (!f) return NULL;
+    fseek(f, 0, SEEK_END); sz = ftell(f); fseek(f, 0, SEEK_SET);
+    if (sz <= 0) { fclose(f); return NULL; }
+    buf = (unsigned char *)malloc((size_t)sz);
+    if (buf && fread(buf, 1, (size_t)sz, f) == (size_t)sz) {
+        rgba = WebPDecodeRGBA(buf, (size_t)sz, &w, &hh);
+        if (rgba) {
+            if (w > 0 && hh > 0 && w <= 16384 && hh <= 16384) {
+                px = (unsigned int *)malloc((size_t)w * hh * 4);
+                if (px) { memcpy(px, rgba, (size_t)w * hh * 4); *ow = w; *oh = hh; }
+            }
+            WebPFree(rgba);
+        }
+    }
+    free(buf); fclose(f);
+    return px;
+}
+#endif
+static unsigned int *HdLoadHdi(const char *dir, unsigned long long h, int *ow, int *oh) {
+    char path[600]; unsigned char hd[12]; FILE *f; int w, hh; unsigned int *px; size_t n;
+    snprintf(path, sizeof(path), "%s/%016llx.hdi", dir, h);
+    f = fopen(path, "rb"); if (!f) return NULL;
+    if (fread(hd, 1, 12, f) != 12 || memcmp(hd, "HDI1", 4) != 0) { fclose(f); return NULL; }
+    w  = hd[4] | hd[5] << 8 | hd[6] << 16 | hd[7] << 24;
+    hh = hd[8] | hd[9] << 8 | hd[10] << 16 | hd[11] << 24;
+    if (w <= 0 || hh <= 0 || w > 16384 || hh > 16384) { fclose(f); return NULL; }
+    n = (size_t)w * hh; px = (unsigned int *)malloc(n * 4);
+    if (!px) { fclose(f); return NULL; }
+    if (fread(px, 4, n, f) != n) { free(px); fclose(f); return NULL; }
+    fclose(f); *ow = w; *oh = hh; return px;
+}
+/* Load a replacement: prefer <hash>.webp (compressed), else <hash>.hdi (raw). */
+static unsigned int *HdLoadImage(const char *dir, unsigned long long h, int *ow, int *oh) {
+#ifdef VH_HD_WEBP
+    unsigned int *px = HdLoadWebp(dir, h, ow, oh);
+    if (px) return px;
+#endif
+    return HdLoadHdi(dir, h, ow, oh);
+}
+/* PERF (1.6): pre-pack the loaded RGBA8 replacement to the 16-bit target texel format ONCE at load.
+ * Halves resident memory (2 vs 4 B/px -> much friendlier to the 1.2M-px/frame sample loop's cache) and
+ * removes the per-pixel RGBA->555 pack from the hot loop. 0x0000 = transparent (native texel!=0 rule);
+ * opaque black is nudged to 0x0421 (1,1,1) so it still draws instead of vanishing. */
+static unsigned short *HdPack16(const unsigned int *rgba, int n) {
+    unsigned short *px = (unsigned short *)malloc((size_t)n * 2); int i;
+    if (!px) return NULL;
+    for (i = 0; i < n; i++) {
+        unsigned int p = rgba[i];
+        if (((p >> 24) & 0xFF) < 128) { px[i] = 0; continue; }
+        { unsigned short t = (unsigned short)((((p >> 16) & 0xFF) >> 3) << 10 |
+                                              (((p >> 8) & 0xFF) >> 3) << 5 | ((p & 0xFF) >> 3));
+          px[i] = t ? t : 0x0421; }
+    }
+    return px;
+}
+/* Called from LoadImage after the VRAM write. Many assets (e.g. every full-screen background) reuse the
+ * SAME VRAM rect, so regions are found-by-hash but must be matched-by-rect at draw time -- we track which
+ * region is LIVE (its content is what's in VRAM at that rect right now) and update it on every upload. */
+static void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
+    const char *pk = HdPackDir(), *dp = HdDumpDir(); unsigned long long h; HdRegion *r = NULL; int i;
+    if (rect->w <= 0 || rect->h <= 0) return;
+    /* Hash + register/replace only when the pack (or dump) is active. But the LIVE-region invalidation at
+     * the end runs on EVERY upload regardless of the toggle -- so a background uploaded while HD PACK is
+     * OFF (pk==NULL) still evicts the stale live region it overwrites. Without this, toggling HD ON mid-
+     * scene resampled the PREVIOUS scene's HD image (its region stayed live because its VRAM eviction was
+     * skipped); now the current scene correctly shows native until its own background reloads. */
+    if (pk || dp) {
+        if (dp) { static int mk; if (!mk) { mk = 1; HD_MKDIR(dp); } }
+        h = HdHash(src, rect->w * rect->h);
+        r = HdFind(h);
+        if (!r) {                                 /* first time we see this content -> register it */
+            if (s_hdRegN >= HD_MAX_REGIONS) {
+                static int warned; if (!warned) { warned = 1; fprintf(stderr, "[HD] region cap %d hit -- raise HD_MAX_REGIONS\n", HD_MAX_REGIONS); }
+            } else {
+                r = &s_hdReg[s_hdRegN];
+                r->hash = h; r->rx = rect->x; r->ry = rect->y; r->rw = rect->w; r->rh = rect->h; r->px = NULL; r->w = r->h = 0; r->dumped = 0; r->live = 0;
+                if (dp && getenv("VH_HD_RAW")) {   /* diagnostic: exact hashed source bytes, to reverse the on-disc->VRAM layout offline */
+                    char rp[600]; FILE *rf; snprintf(rp, sizeof(rp), "%s/%016llx_%dx%d.raw", dp, h, rect->w, rect->h);
+                    rf = fopen(rp, "wb"); if (rf) { fwrite(src, 2, (size_t)rect->w * rect->h, rf); fclose(rf); }
+                }
+                if (pk) { unsigned int *rgba = HdLoadImage(pk, h, &r->w, &r->h);
+                          if (rgba) { r->px = HdPack16(rgba, r->w * r->h); free(rgba);
+                                      if (r->px) { s_hdReplaceN++; fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h); }
+                                      else { r->w = r->h = 0; } } }
+                if (r->px || dp) s_hdRegN++; else r = NULL;   /* nothing to track (no replacement, not dumping) */
+            }
+        }
+    }
+    /* This upload now occupies (part of) VRAM. Invalidate EVERY region whose rect it OVERLAPS -- their
+     * content is no longer intact, so they must not be sampled as a stale replacement. Exact-rect reuse
+     * (same backdrop reloaded across scenes) is the common case; the overlap test additionally closes the
+     * battle regression where dynamic textures uploaded to sub-rects of a backdrop's VRAM left the backdrop
+     * region stale-live -> overlays/effects/tiles sampling that VRAM were wrongly HD-replaced (opaque,
+     * wrong content). A partially-overwritten backdrop correctly reverts to native. Runs even with HD off
+     * (r==NULL) so a mid-scene toggle never sees a stale live region. */
+    for (i = 0; i < s_hdRegN; i++) {
+        HdRegion *o = &s_hdReg[i];
+        if (o == r) continue;
+        if (!(rect->x + rect->w <= o->rx || rect->x >= o->rx + o->rw ||
+              rect->y + rect->h <= o->ry || rect->y >= o->ry + o->rh))
+            o->live = 0;
+    }
+    if (r) r->live = 1;
+}
+/* Decode a dump-pending region to a .ppm, using the CLUT actually being used to sample it (VH_HD_DUMP).
+ * Called from the sample hook the first time a region's pixel is read -> guarantees the right palette
+ * (the upload-time palette is unknown) and the correct native pixel size, for matching to HD assets. */
+static void HdDecodeAndDump(HdRegion *r, int tp, int clut) {
+    const char *dp = HdDumpDir();
+    int clutX = (clut & 0x3F) * 16, clutY = (clut >> 6) & 0x1FF;
+    int ppw = (tp == 0) ? 4 : (tp == 1) ? 2 : 1, nW = r->rw * ppw, nH = r->rh, row, word, k;
+    char path[600]; FILE *f;
+    r->dumped = 1;
+    snprintf(path, sizeof(path), "%s/%016llx_%dx%d.ppm", dp, r->hash, nW, nH);
+    f = fopen(path, "wb");
+    if (!f) { fprintf(stderr, "[HD] dump OPEN-FAIL %s\n", path); return; }
+    fprintf(stderr, "[HD] DUMP %016llx %dx%d tp%d clut(%d,%d)\n", r->hash, nW, nH, tp, clutX, clutY);
+    fprintf(f, "P6\n%d %d\n255\n", nW, nH);
+    for (row = 0; row < nH; row++) for (word = 0; word < r->rw; word++) {
+        unsigned short hw = s_vram[r->ry + row][r->rx + word];
+        for (k = 0; k < ppw; k++) {
+            unsigned short raw; int R, G, B;
+            if (tp == 0)      raw = s_vram[clutY][clutX + ((hw >> (k * 4)) & 0xF)];
+            else if (tp == 1) raw = s_vram[clutY][clutX + (k ? ((hw >> 8) & 0xFF) : (hw & 0xFF))];
+            else              raw = hw;
+            UnpackColor(raw, &R, &G, &B); fputc(R, f); fputc(G, f); fputc(B, f);
+        }
+    }
+    fclose(f);
+}
+/* Per-TRIANGLE dump (VH_HD_DUMP): cheap. Given a textured triangle's tpage/clut and its texel-UV
+ * bounding box, dump any not-yet-dumped region whose VRAM footprint it samples, with the correct CLUT. */
+static void HdMaybeDump(int tpage, int clut, int uMin, int uMax, int vMin, int vMax) {
+    int tpX, tpY, tp, ppw, wx0, wx1, wy0, wy1, i;
+    if (!HdDumpDir() || !s_hdRegN) return;
+    TPageOrigin(tpage, &tpX, &tpY, &tp);
+    ppw = (tp == 0) ? 4 : (tp == 1) ? 2 : 1;
+    wx0 = tpX + uMin / ppw; wx1 = tpX + uMax / ppw; wy0 = tpY + vMin; wy1 = tpY + vMax;
+    for (i = 0; i < s_hdRegN; i++) {
+        HdRegion *r = &s_hdReg[i];
+        if (r->dumped) continue;
+        if (wx1 < r->rx || wx0 >= r->rx + r->rw || wy1 < r->ry || wy0 >= r->ry + r->rh) continue;  /* no overlap */
+        HdDecodeAndDump(r, tp, clut);
+    }
+}
+/* Per-TRIANGLE replace resolve (hi-res pass): return the replaced region this textured triangle samples
+ * (via its texel-UV bbox -> VRAM footprint), or NULL. The per-pixel HD sampling is then inlined in
+ * dda_span with precomputed constants -- no per-pixel scan/divide. Replace mode registers only regions
+ * that have a replacement, so this scan is short. */
+static HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax) {
+    int tpX, tpY, tp, ppw, wx0, wx1, wy0, wy1, i;
+    TPageOrigin(tpage, &tpX, &tpY, &tp);
+    /* Every HD-replaced asset is an 8bpp background (tp==1). Battle draws (unit sprites, effects, cursor
+     * tiles, HP bars) are 4bpp and merely share the same VRAM words as a still-live background region at a
+     * DIFFERENT bit depth -- reading them as the background is the regression. They never go through
+     * LoadImage (bulk VRAM DMA), so eviction can't catch them; the bit-depth guard does, cleanly. */
+    if (tp != 1) return NULL;
+    ppw = (tp == 0) ? 4 : (tp == 1) ? 2 : 1;
+    wx0 = tpX + uMin / ppw; wx1 = tpX + uMax / ppw; wy0 = tpY + vMin; wy1 = tpY + vMax;
+    for (i = 0; i < s_hdRegN; i++) {
+        HdRegion *r = &s_hdReg[i];
+        if (!r->px || !r->live) continue;     /* live = its content is what's in VRAM at that rect now */
+        if (wx1 < r->rx || wx0 >= r->rx + r->rw || wy1 < r->ry || wy0 >= r->ry + r->rh) continue;
+        return r;
+    }
+    return NULL;
+}
+
 static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv) {
     int width = x_bound - x_start;         /* fill [x_start, x_bound): left-inclusive, right-exclusive */
     int current_x = x_start;
@@ -377,10 +681,26 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
     {
     do {
         if (cx->textured) {
-            int tr, tg, tb, su = dda_getu(&uv), sv = dda_getv(&uv);
+            int tr, tg, tb, su = dda_getu(&uv), sv = dda_getv(&uv), draw = 1;
             unsigned short texel;
-            texel = SampleTexture(cx->rc, cx->tpage, cx->clut, su, sv);
-            if (texel != 0) {                                /* 0000h = transparent (skip, still step) */
+            int wx = cx->hdPx ? cx->hdTpX + su / cx->hdPpw : 0, wy = cx->hdPx ? cx->hdTpY + sv : 0;
+            if (cx->hdPx &&                                  /* HD replace, and this pixel is inside the region */
+                wx >= cx->hdRx && wx < cx->hdRx + cx->hdRw && wy >= cx->hdRy && wy < cx->hdRy + cx->hdRh) {
+                /* region resolved per-triangle; precomputed scale -> multiply, no per-pixel divide */
+                int shift = DDA_ASHIFT + DDA_APOST;
+                int px = (wx - cx->hdRx) * cx->hdPpw + (su % cx->hdPpw), py = wy - cx->hdRy;
+                long long nxf = ((long long)px << shift) + (uv.u & ((1u << shift) - 1));
+                long long nyf = ((long long)py << shift) + (uv.v & ((1u << shift) - 1));
+                long long hx = (nxf * cx->hdSx) >> (shift + HD_SC);
+                long long hy = (nyf * cx->hdSy) >> (shift + HD_SC);
+                unsigned short t;
+                if (hx < 0) hx = 0; if (hx >= cx->hdW) hx = cx->hdW - 1;
+                if (hy < 0) hy = 0; if (hy >= cx->hdH) hy = cx->hdH - 1;
+                t = cx->hdPx[hy * cx->hdW + hx];             /* pre-packed 16-bit texel; 0 = transparent */
+                if (t == 0) draw = 0;
+                else texel = t;
+            } else { texel = SampleTexture(cx->rc, cx->tpage, cx->clut, su, sv); draw = (texel != 0); }
+            if (draw) {                                      /* 0000h = transparent (skip, still step) */
                 UnpackColor(texel, &tr, &tg, &tb);
                 tr = (tr * cx->r) / 128; tg = (tg * cx->g) / 128; tb = (tb * cx->bcol) / 128;
                 PutPixel(cx->rc, current_x, y,
@@ -436,10 +756,33 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
     int S = rc->target ? rc->scale : 1;
     int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int vx[3], vy[3], vu[3], vv[3], i;
+    HdRegion *hdReg = NULL;   /* 1.6 HD pack: replaced region this triangle samples (resolved below) */
     RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rvc;
     for (i = 0; i < 3; i++) {
         vx[i] = (int)lround(rv[i].x) * S + ox; vy[i] = (int)lround(rv[i].y) * S + oy;
         vu[i] = (int)lround(rv[i].u);          vv[i] = (int)lround(rv[i].v);
+    }
+    if (textured && s_hdRegN) {   /* 1.6 HD pack: per-triangle UV bbox -> dump reference and/or resolve replaced region */
+        int uMn = vu[0], uMx = vu[0], vMn = vv[0], vMx = vv[0], k;
+        for (k = 1; k < 3; k++) { if (vu[k]<uMn)uMn=vu[k]; if (vu[k]>uMx)uMx=vu[k]; if (vv[k]<vMn)vMn=vv[k]; if (vv[k]>vMx)vMx=vv[k]; }
+        if (HdDumpDir())                    HdMaybeDump(tpage, clut, uMn, uMx, vMn, vMx);
+        if (rc->target && s_hdReplaceN && HdActive()) hdReg = HdFindTriRegion(tpage, uMn, uMx, vMn, vMx);
+        {   /* VH_HD_TRACE: log each UNIQUE (tpage,clut) that gets HD-replaced -> reveals which prims are
+             * wrongly matched (battle overlays/effects) vs the real background, to pick a discriminator. */
+            static int tr = -1; if (tr < 0) tr = getenv("VH_HD_TRACE") ? 1 : 0;
+            if (hdReg && tr) {
+                static unsigned seen[512]; static int nseen;
+                unsigned key = ((unsigned)tpage << 16) | (unsigned)(clut & 0xFFFF);
+                int j, dup = 0;
+                for (j = 0; j < nseen; j++) if (seen[j] == key) { dup = 1; break; }
+                if (!dup && nseen < 512) {
+                    seen[nseen++] = key;
+                    fprintf(stderr, "[HDtrace] tpage=%d clut=%d flat2d=%d semiTrans=%d abr=%d uv=[%d..%d,%d..%d] -> region(%d,%d,%d,%d) %016llx\n",
+                            tpage, clut, flat2d, semiTrans, abr, uMn, uMx, vMn, vMx,
+                            hdReg->rx, hdReg->ry, hdReg->rw, hdReg->rh, hdReg->hash);
+                }
+            }
+        }
     }
     /* `flat2d` (from the whole quad, via FillQuad): the prim projects to an axis-aligned screen
      * RECTANGLE (UI window / text glyph / billboard sprite). It scopes the "crust for free" +0.5-texel
@@ -502,6 +845,15 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
     cx.clipL = rc->clipX * S; cx.clipR = (rc->clipX + rc->clipW) * S - 1;
     cx.clipT = rc->clipY * S; cx.clipB = (rc->clipY + rc->clipH) * S - 1;
     cx.rc = rc;
+    cx.hdPx = NULL;
+    if (hdReg) {   /* hoist the HD mapping constants + precompute the scale as a fixed-point multiply */
+        int tpX, tpY, tp, ppw; TPageOrigin(tpage, &tpX, &tpY, &tp); ppw = (tp == 0) ? 4 : (tp == 1) ? 2 : 1;
+        cx.hdPx = hdReg->px; cx.hdW = hdReg->w; cx.hdH = hdReg->h;
+        cx.hdTpX = tpX; cx.hdTpY = tpY; cx.hdPpw = ppw;
+        cx.hdRx = hdReg->rx; cx.hdRy = hdReg->ry; cx.hdRw = hdReg->rw; cx.hdRh = hdReg->rh;
+        cx.hdSx = ((long long)hdReg->w << HD_SC) / (hdReg->rw * ppw);
+        cx.hdSy = ((long long)hdReg->h << HD_SC) / hdReg->rh;
+    }
     DdaUV origin; origin.u = origin.v = 0;
     if (textured) {
         /* ATTRIB_STEP(A,B) = (u32)(det(A,B)*(1<<12)/det) << 12, det(A,B)=(v1.A-v0.A)(v2.B-v1.B)-(v2.A-v1.A)(v1.B-v0.B) */
@@ -755,6 +1107,7 @@ int LoadImage(RECT *rect, unsigned int *p) {
             if (rect->y + y < VRAM_H && rect->x + x < VRAM_W)
                 s_vram[rect->y + y][rect->x + x] = src[y * rect->w + x];
     HiresMirrorRect(rect->x, rect->y, rect->w, rect->h);   /* G2: keep hires FB in sync (backgrounds) */
+    HdPack_OnLoad(rect, src);                              /* 1.6 HD pack: hash + replace/dump (env-gated) */
     return 0;
 }
 
@@ -1088,7 +1441,6 @@ static void HiresRasterizeBand(int clipY, int clipH) {
  * one thread. All lazy statics in the fill path are already warm here (the native pass ran first). */
 #define HIRES_MAX_THREADS 32
 typedef struct { int clipY, clipH; } HiresBand;
-static void *HiresBandWorker(void *arg) { HiresBand *b = (HiresBand *)arg; HiresRasterizeBand(b->clipY, b->clipH); return NULL; }
 
 static int HiresThreadCount(void) {
     static int n = -1;
@@ -1103,25 +1455,71 @@ static int HiresThreadCount(void) {
     return n;
 }
 
+/* PERF (1.6): PERSISTENT worker pool. Threads are created ONCE and reused every hi-res frame, driven by
+ * a generation counter -- no per-frame pthread_create/join (that overhead was a few % of a 60fps budget,
+ * paid on every HD frame). Bands write disjoint hi-res rows -> lock-free rasterization; the mutex/condvars
+ * only gate the start/finish handshake. Idle workers (band clipH==0) complete instantly. */
+static struct {
+    int inited, nworkers;
+    pthread_t th[HIRES_MAX_THREADS];
+    HiresBand band[HIRES_MAX_THREADS];
+    pthread_mutex_t mtx;
+    pthread_cond_t start_cv, done_cv;
+    unsigned gen;   /* bumped per dispatch */
+    int done;       /* workers finished this gen */
+} s_hpool;
+
+static void *HiresPoolWorker(void *arg) {
+    int id = (int)(long)arg; unsigned seen = 0;
+    for (;;) {
+        pthread_mutex_lock(&s_hpool.mtx);
+        while (s_hpool.gen == seen) pthread_cond_wait(&s_hpool.start_cv, &s_hpool.mtx);
+        seen = s_hpool.gen;
+        pthread_mutex_unlock(&s_hpool.mtx);
+        HiresRasterizeBand(s_hpool.band[id].clipY, s_hpool.band[id].clipH);
+        pthread_mutex_lock(&s_hpool.mtx);
+        if (++s_hpool.done == s_hpool.nworkers) pthread_cond_signal(&s_hpool.done_cv);
+        pthread_mutex_unlock(&s_hpool.mtx);
+    }
+    return NULL;
+}
+
+static void HiresPoolInit(int nworkers) {
+    int i;
+    pthread_mutex_init(&s_hpool.mtx, NULL);
+    pthread_cond_init(&s_hpool.start_cv, NULL);
+    pthread_cond_init(&s_hpool.done_cv, NULL);
+    s_hpool.nworkers = nworkers; s_hpool.gen = 0; s_hpool.done = 0;
+    for (i = 0; i < nworkers; i++)
+        if (pthread_create(&s_hpool.th[i], NULL, HiresPoolWorker, (void *)(long)i) != 0) { s_hpool.nworkers = i; break; }
+    s_hpool.inited = 1;
+}
+
 static void HiresRasterizeThreaded(int clipY, int clipH) {
     int nth = HiresThreadCount();
-    if (nth <= 1 || s_hprimCount < 64 || clipH < nth * 2) { HiresRasterizeBand(clipY, clipH); return; }
-    if (nth > clipH) nth = clipH;
+    /* Thread when the frame is heavy. Primitive COUNT is a poor proxy: a fullscreen HD-replaced
+     * background is one primitive but millions of expensive per-pixel samples, so the count guard
+     * (meant to skip trivial frames) would wrongly single-thread it -> also thread whenever an HD
+     * replacement is loaded (1.6 HD pack). Cheap non-HD frames keep the single-thread fast path. */
+    if (nth <= 1 || clipH < nth * 2 || (s_hprimCount < 64 && s_hdReplaceN == 0)) { HiresRasterizeBand(clipY, clipH); return; }
+    (void)AccurateEnabled();                          /* warm the lazy cache before the parallel section */
+    if (!s_hpool.inited) HiresPoolInit(nth - 1);      /* nth-1 workers; the main thread does one band too */
     {
-        pthread_t th[HIRES_MAX_THREADS];
-        HiresBand band[HIRES_MAX_THREADS];
-        int per = clipH / nth, rem = clipH % nth, y = clipY, i, spawned = 0;
-        (void)AccurateEnabled();                     /* warm the lazy cache before the parallel section */
-        for (i = 0; i < nth; i++) {                   /* contiguous bands tile [clipY, clipY+clipH) exactly */
+        int W = s_hpool.nworkers, total = W + 1;      /* W workers + this thread */
+        int per = clipH / total, rem = clipH % total, y = clipY, i, mainH;
+        pthread_mutex_lock(&s_hpool.mtx);
+        for (i = 0; i < W; i++) {                      /* contiguous bands; workers 0..W-1 then main = last */
             int h = per + (i < rem ? 1 : 0);
-            band[i].clipY = y; band[i].clipH = h; y += h;
+            s_hpool.band[i].clipY = y; s_hpool.band[i].clipH = h; y += h;
         }
-        for (i = 0; i < nth - 1; i++) {               /* spawn all but the last band... */
-            if (pthread_create(&th[spawned], NULL, HiresBandWorker, &band[i]) == 0) spawned++;
-            else HiresRasterizeBand(band[i].clipY, band[i].clipH);   /* spawn failed -> inline */
-        }
-        HiresRasterizeBand(band[nth - 1].clipY, band[nth - 1].clipH);   /* ...run the last on this thread */
-        for (i = 0; i < spawned; i++) pthread_join(th[i], NULL);
+        s_hpool.done = 0; s_hpool.gen++;              /* release workers */
+        pthread_cond_broadcast(&s_hpool.start_cv);
+        pthread_mutex_unlock(&s_hpool.mtx);
+        mainH = per + (W < rem ? 1 : 0);
+        HiresRasterizeBand(y, mainH);                 /* this thread's band, in parallel with the workers */
+        pthread_mutex_lock(&s_hpool.mtx);
+        while (s_hpool.done != W) pthread_cond_wait(&s_hpool.done_cv, &s_hpool.mtx);
+        pthread_mutex_unlock(&s_hpool.mtx);
     }
 }
 

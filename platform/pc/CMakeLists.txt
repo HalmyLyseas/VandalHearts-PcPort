@@ -70,11 +70,32 @@ find_package(Threads REQUIRED)
 find_library(OPENAL_LIB NAMES openal OpenAL32 REQUIRED)   # 'openal' on Linux, 'OpenAL32' on MinGW/Windows
 find_path(OPENAL_INCLUDE_DIR AL/al.h)
 
+# libwebp: STANDARD HD-pack dependency (1.6). .webp replacements are ~7x smaller than raw .hdi (a full
+# background pack is ~20MB vs ~150MB), so it ships on by default. -DVH_WEBP=OFF builds without it (the
+# engine's `#ifdef VH_HD_WEBP` falls back to loading only raw .hdi packs). Mirrors the Makefile's NO_WEBP.
+option(VH_WEBP "libwebp HD-pack support (.webp replacements)" ON)
+if(VH_WEBP)
+    find_library(WEBP_LIB NAMES webp REQUIRED)
+    find_path(WEBP_INCLUDE_DIR webp/decode.h)
+endif()
+
+# libav (ffmpeg): STANDARD HD-pack dependency (1.6 HD FMVs). Decodes the H.264 .mp4 movies that replace
+# the STR FMVs. On by default; -DVH_HDVIDEO=OFF keeps the native MDEC movie path (engine `#ifdef
+# VH_HD_VIDEO`). Mirrors the Makefile's NO_HDVIDEO.
+option(VH_HDVIDEO "libav HD FMV support (.mp4 replacements)" ON)
+if(VH_HDVIDEO)
+    find_library(AVFORMAT_LIB NAMES avformat REQUIRED)
+    find_library(AVCODEC_LIB  NAMES avcodec  REQUIRED)
+    find_library(AVUTIL_LIB   NAMES avutil   REQUIRED)
+    find_library(SWSCALE_LIB  NAMES swscale  REQUIRED)
+    find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
+endif()
+
 # ---- source lists -----------------------------------------------------------------------------
 file(GLOB GAME_SRCS ${SRC_DIR}/*.c)
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
-set(BACKEND_PLAIN   libcd libspu libkernel libgpu libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves)
+set(BACKEND_PLAIN   libcd libspu libkernel libgpu libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
 set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data pc_evt_entities)
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 
@@ -108,6 +129,14 @@ add_library(vh_objs OBJECT ${ALL_OBJ_SRCS})
 # Common include dirs for our own backend/data files.
 target_include_directories(vh_objs PRIVATE ${PC_DIR}/include ${STAGE_DIR}
                            ${SDL2_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIR})
+if(VH_WEBP)   # libgpu.c's HD-pack loader (#ifdef VH_HD_WEBP) uses <webp/decode.h>
+    target_compile_definitions(vh_objs PRIVATE VH_HD_WEBP)
+    target_include_directories(vh_objs PRIVATE ${WEBP_INCLUDE_DIR})
+endif()
+if(VH_HDVIDEO)   # pc_hdvideo.c's HD FMV decoder (#ifdef VH_HD_VIDEO) uses <libav*/…>
+    target_compile_definitions(vh_objs PRIVATE VH_HD_VIDEO)
+    target_include_directories(vh_objs PRIVATE ${AVCODEC_INCLUDE_DIR})
+endif()
 # Sanitizer flags apply to every object (additive with the per-source options below).
 if(VH_SAN_LIST)
     target_compile_options(vh_objs PRIVATE ${VH_SAN_LIST})
@@ -184,12 +213,36 @@ else()
     set(_GEN_GL_LIB "-lGL")
     set(_GEN_AL_LIB "-lopenal")
 endif()
+# libgpu.o references WebPDecodeRGBA/WebPFree (under VH_HD_WEBP); the probe link must resolve them so they
+# don't pollute the undefined-symbol list the generator harvests.
+set(_GEN_WEBP_LIB "")
+if(VH_WEBP)
+    set(_GEN_WEBP_LIB "-lwebp")
+endif()
+set(_GEN_AV_LIBS "")
+if(VH_HDVIDEO)
+    set(_GEN_AV_LIBS "-lavformat -lavcodec -lavutil -lswscale")
+    if(WIN32)
+        # The generator's undefined-symbol PROBE link (VH_LINK_LIBS) runs the cross linker directly. The
+        # STATIC libav lives outside the default MinGW lib path, so without -L<prefix>/lib the probe link
+        # HARD-fails on "cannot find -lavformat" -- it then prints no "undefined reference" lines, and the
+        # generator emits an EMPTY data segment (every game global then undefined at the real link). Add the
+        # search path (+ -lbcrypt for avutil's RNG); dependency order avformat->avcodec->swscale->avutil.
+        set(_ff "${VH_MINGW_FFMPEG}")
+        if(NOT _ff)
+            set(_ff "$ENV{VH_MINGW_FFMPEG}")
+        endif()
+        if(_ff)
+            set(_GEN_AV_LIBS "-L${_ff}/lib -lavformat -lavcodec -lswscale -lavutil -lbcrypt")
+        endif()
+    endif()
+endif()
 set(GENERATED_C ${GEN_DIR}/generated_data.c)
 set(GEN_ENV
     "VH_BUILD_DIR=${GEN_DIR}"
     "VH_CC=${CMAKE_C_COMPILER}"
     "VH_OBJ_FILES=$<JOIN:$<TARGET_OBJECTS:vh_objs>, >"
-    "VH_LINK_LIBS=-lSDL2 ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm")
+    "VH_LINK_LIBS=-lSDL2 ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
 if(VH_SANITIZE)
     list(APPEND GEN_ENV "VH_SAN=${VH_SANITIZE}")
 endif()
@@ -220,6 +273,22 @@ set_source_files_properties(${GENERATED_C} PROPERTIES GENERATED TRUE
 # ---- final executable -------------------------------------------------------------------------
 add_executable(vandalhearts_pc $<TARGET_OBJECTS:vh_objs> ${GENERATED_C})
 target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} OpenGL::GL m Threads::Threads)
+if(VH_WEBP)
+    target_link_libraries(vandalhearts_pc PRIVATE ${WEBP_LIB})
+endif()
+if(VH_HDVIDEO)
+    if(WIN32)
+        # The Windows build links a STATIC libav (the shippable form -- see tools/build-ffmpeg-mingw.sh;
+        # point CMake at it with -DCMAKE_PREFIX_PATH=<prefix>). Static archives resolve left-to-right, and
+        # the four libs cross-reference, so wrap them in a link group (order-independent). +bcrypt for
+        # avutil's BCryptGenRandom. On a shared libav these flags are harmless.
+        target_link_libraries(vandalhearts_pc PRIVATE
+            -Wl,--start-group ${AVFORMAT_LIB} ${AVCODEC_LIB} ${SWSCALE_LIB} ${AVUTIL_LIB} -Wl,--end-group
+            bcrypt)
+    else()
+        target_link_libraries(vandalhearts_pc PRIVATE ${AVFORMAT_LIB} ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB})
+    endif()
+endif()
 if(NOT WIN32)
     # -rdynamic: the crash-dump backtrace in pc_bootstrap.c needs dynamic symbols. Linux/POSIX only
     # -- the Windows build has no backtrace()/signal path, and MinGW ld does not take -rdynamic.
@@ -252,6 +321,34 @@ if(WIN32)
                 COMMENT "Bundling ${_dll} next to the .exe")
         endif()
     endforeach()
+    # libwebp (1.6 HD pack) + its sharpyuv split-out. Only the core decode lib is needed (NOT the
+    # webpdecoder/demux/mux siblings), and the SONAME digit varies by distro (Arch: libwebp.dll; Debian:
+    # libwebp-7.dll) -- so match "libwebp.dll" and "libwebp-<n>.dll" but not "libwebpdecoder.dll" etc.
+    if(VH_WEBP)
+        file(GLOB _WEBP_DLLS ${_MINGW_BIN}/libwebp.dll ${_MINGW_BIN}/libwebp-*.dll
+                             ${_MINGW_BIN}/libsharpyuv.dll ${_MINGW_BIN}/libsharpyuv-*.dll)
+        foreach(_wd ${_WEBP_DLLS})
+            add_custom_command(TARGET vandalhearts_pc POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_wd} $<TARGET_FILE_DIR:vandalhearts_pc>
+                COMMENT "Bundling ${_wd} next to the .exe")
+        endforeach()
+    endif()
+    # libav (ffmpeg) for HD FMV decode. The core decode DLLs are avformat/avcodec/avutil/swscale (+
+    # swresample). ffmpeg has many transitive codec deps, but H.264 decode + mp4 demux + yuv->rgb only
+    # pull a subset; the SONAME suffix varies (avcodec-62.dll / libavcodec.dll). GLOB the av*/sw* set and
+    # copy what the MinGW package ships. NOTE: verify the full runtime DLL set once mingw-w64-ffmpeg is
+    # installed and a Windows release is built (a missing transitive dep shows as a load error at launch).
+    if(VH_HDVIDEO)
+        file(GLOB _AV_DLLS ${_MINGW_BIN}/avformat*.dll ${_MINGW_BIN}/avcodec*.dll ${_MINGW_BIN}/avutil*.dll
+                           ${_MINGW_BIN}/swscale*.dll ${_MINGW_BIN}/swresample*.dll
+                           ${_MINGW_BIN}/libavformat*.dll ${_MINGW_BIN}/libavcodec*.dll
+                           ${_MINGW_BIN}/libavutil*.dll ${_MINGW_BIN}/libswscale*.dll)
+        foreach(_ad ${_AV_DLLS})
+            add_custom_command(TARGET vandalhearts_pc POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_ad} $<TARGET_FILE_DIR:vandalhearts_pc>
+                COMMENT "Bundling ${_ad} next to the .exe")
+        endforeach()
+    endif()
 endif()
 # generated_data.c is compiled into this target (not vh_objs), so sanitizer flags land here; the
 # sanitizer runtime must also be on the link line.

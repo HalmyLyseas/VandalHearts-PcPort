@@ -25,6 +25,8 @@
 extern int g_camInvertX;
 extern int g_camInvertY;
 extern int g_btnLabels;   /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 1=XBOX) */
+extern int g_vhHdPack;    /* 1.6 HD PACK toggle (pc_gpu_window.c); libgpu's HdDetect() auto-ONs it */
+extern int PC_HdPackAvailable(void);   /* 1.6 (libgpu.c): 1 if a valid HD pack is installed beside the exe */
 
 /* CHOICE value labels for BUTTON LABELS, indexed by g_btnLabels. */
 static const char *const s_btnLabelText[] = { "PLAYSTATION", "XBOX" };
@@ -34,6 +36,25 @@ static const char *const s_internalResText[] = { "", "OFF", "X2", "X3", "X4" };
 /* Stage-3 1.3: applying the Tactical Mode toggle -- set the mode and re-sync the balance patch
  * (idempotent). The save folder follows automatically (PC_SaveDir reads gTacticalMode). */
 static void apply_tactical(int nv) { gTacticalMode = nv; PC_SyncBalance(); }
+
+/* 1.6 HD PACK coupling. HD renders only at INTERNAL RES > 1 (the hi-res pass); windowed, it's only
+ * VISIBLE at WINDOW SCALE > 1 (else the hi-res buffer downsamples back to the 320 native window). So
+ * enabling HD bumps those to a minimum of 2 (leaving 3/4 as-is; fullscreen ignores window scale). The
+ * inverse -- dropping either back to 1 -- disables HD (reconcileHdPack, run from setValue). s_inHdApply
+ * suppresses that reconcile WHILE we bump, so a half-set intermediate state can't spuriously flip HD off.
+ * setItemByValue is defined below (needs the item table + setValue). */
+static int s_inHdApply = 0;
+static void setItemByValue(int *value, int nv);   /* fwd */
+extern int g_vhInternalScale;                      /* video (pc_gpu_window.c); also used in the item table */
+static void apply_hdpack(int nv) {
+    g_vhHdPack = nv;
+    if (nv) {
+        s_inHdApply = 1;
+        if (g_vhInternalScale < 2)            setItemByValue(&g_vhInternalScale, 2);
+        if (!g_vhFullscreen && g_vhScale < 2) setItemByValue(&g_vhScale, 2);
+        s_inHdApply = 0;
+    }
+}
 
 /* ---- MAIN screen: data-driven settings list ---------------------------------------------------- */
 
@@ -58,6 +79,9 @@ typedef struct {
 static int dis_whenFullscreen(void) { return g_vhFullscreen; }
 static int dis_whenWindowed(void)   { return !g_vhFullscreen; }
 
+/* 1.6: HD PACK is greyed AND locked (read-only) unless a valid pack is auto-detected beside the exe. */
+static int dis_noHdPack(void)       { return !PC_HdPackAvailable(); }
+
 /* Tactical Mode is editable ONLY at the main title menu (a run's mode is fixed -- GAP 4). Greyed
  * (read-only) during a run, where it just reflects the current run's mode. */
 static int dis_notAtTitle(void)     { return !PC_AtTitleMenu(); }
@@ -74,6 +98,10 @@ static const Item s_items[] = {
      * how you switch to it (locked = NULL). Return to Title is greyed AND locked at the title. */
     { "TACTICAL MODE",   OVL_TOGGLE, &gTacticalMode,  "tactical", "VH_TACTICAL",
       "OFF", "ON",            0, 0, 0, NULL, apply_tactical,      NULL,           dis_notAtTitle, dis_notAtTitle },
+    /* 1.6: greyed+locked with no valid pack; toggleable + auto-ON when one is installed. GRAD 3 adds an
+     * apply() for the internal-res/window coupling; for now setValue writes g_vhHdPack (libgpu reads it). */
+    { "HD PACK",         OVL_TOGGLE, &g_vhHdPack,     "video",  "VH_HDPACK",
+      "OFF", "ON",            0, 0, 0, NULL, apply_hdpack,        NULL,           dis_noHdPack, dis_noHdPack },
     { "INTERNAL RES",    OVL_CHOICE, &g_vhInternalScale, "video", "VH_INTERNAL_SCALE",
       NULL, NULL,             1, 4, 1, NULL, PC_GpuSetInternalScale, NULL,        NULL, NULL, s_internalResText },
     { "WINDOW SCALE",    OVL_CHOICE, &g_vhScale,      "video",  "VH_SCALE",
@@ -137,6 +165,8 @@ static void persist(const Item *it) {
     else if (it->kind == OVL_TOGGLE) PC_SaveIniConfig(it->iniSection, it->iniKey, *it->value ? "1" : "0");
 }
 
+static void reconcileHdPack(void);   /* fwd (defined below; keeps HD PACK consistent with its modes) */
+
 static void setValue(const Item *it, int nv) {
     if (it->apply) it->apply(nv); else *it->value = nv;
     persist(it);
@@ -146,6 +176,21 @@ static void setValue(const Item *it, int nv) {
         for (i = 0; i < N_ITEMS; i++)
             if (s_items[i].value == &g_vhFullscreen) { setValue(&s_items[i], 0); break; }
     }
+    reconcileHdPack();   /* 1.6: internal<=1, or (windowed) window<=1, turns HD PACK off */
+}
+
+/* Find the MAIN item bound to *value and set it (applies + persists + re-runs cross-item rules). */
+static void setItemByValue(int *value, int nv) {
+    int i;
+    for (i = 0; i < N_ITEMS; i++)
+        if (s_items[i].value == value) { setValue(&s_items[i], nv); return; }
+}
+/* 1.6: HD renders only at INTERNAL RES > 1, and windowed only shows at WINDOW SCALE > 1. If HD is on but
+ * a mode dropped below that, turn it off. No-op while apply_hdpack is mid-bump (s_inHdApply) or HD is off. */
+static void reconcileHdPack(void) {
+    if (s_inHdApply || !g_vhHdPack) return;
+    if (g_vhInternalScale <= 1 || (!g_vhFullscreen && g_vhScale <= 1))
+        setItemByValue(&g_vhHdPack, 0);
 }
 
 static void mainMove(int d)   { s_sel += d; if (s_sel < 0) s_sel = N_ITEMS - 1; if (s_sel >= N_ITEMS) s_sel = 0; }

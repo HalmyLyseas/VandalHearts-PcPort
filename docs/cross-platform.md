@@ -35,10 +35,16 @@ emulation DLL; its only real dependencies are our own (SDL2, OpenAL) plus the Mi
 ```sh
 # the cross GCC (pulls binutils, CRT, headers, winpthreads)
 #   Arch/CachyOS: pacman -S mingw-w64-gcc
-# SDL2 + OpenAL for the w64-mingw32 target (OpenGL's import lib ships with the toolchain)
-#   Arch/CachyOS: paru -S mingw-w64-sdl2 mingw-w64-openal   (install into /usr/x86_64-w64-mingw32/)
+# SDL2 + OpenAL + libwebp for the w64-mingw32 target (OpenGL's import lib ships with the toolchain)
+#   Arch/CachyOS: paru -S mingw-w64-sdl2 mingw-w64-openal mingw-w64-libwebp   (into /usr/x86_64-w64-mingw32/)
 cd platform/pc
-cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake
+# libav (HD FMV): the distro/AUR mingw ffmpeg is a SHARED "kitchen-sink" build whose avcodec DLL
+# hard-imports 35+ codec DLLs (x264/x265/aom/vpx/dav1d/...), 60-100 MB to bundle. Instead build a
+# minimal STATIC libav (H.264 decode + mov demux + swscale only) that links into the exe with NO
+# ffmpeg DLLs -- ~2.4 MB of exe growth:
+tools/build-ffmpeg-mingw.sh              # -> platform/pc/ffmpeg-mingw-static/
+cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
+      -DCMAKE_PREFIX_PATH="$PWD/ffmpeg-mingw-static"
 cmake --build build_win
 ```
 
@@ -76,13 +82,17 @@ Six things, all guarded so the Linux build is untouched:
 vandalhearts_pc.exe          vandalhearts.ini
 SDL2.dll  OpenAL32.dll        libwinpthread-1.dll
 libgcc_s_seh-1.dll  libstdc++-6.dll  libssp-0.dll
+libwebp-7.dll  libsharpyuv-0.dll
 ```
 
-Six DLLs ship. Two are our own dependencies (`SDL2.dll`, `OpenAL32.dll`); the four `lib*` DLLs are the
-MinGW runtime — `libwinpthread-1` (pthreads), `libgcc_s_seh-1` (GCC unwinder), `libstdc++-6` (C++
-runtime, pulled in by SDL2/OpenAL-soft), and `libssp-0` (stack-protector). None are Windows system
-DLLs, so all six must ship. Everything else the `.exe` imports — the UCRT `api-ms-win-crt-*`,
-`OPENGL32`, `KERNEL32`, `USER32` — is an OS component. A missing `lib*` DLL fails at load with a
+Eight DLLs ship. `SDL2.dll` + `OpenAL32.dll` are our own dependencies; the four `lib*` are the MinGW
+runtime — `libwinpthread-1` (pthreads), `libgcc_s_seh-1` (GCC unwinder), `libstdc++-6` (C++ runtime,
+pulled in by SDL2/OpenAL-soft), `libssp-0` (stack-protector); `libwebp-7` + `libsharpyuv-0` are the HD
+background codec. **libav ships as zero DLLs** — it is statically linked (see the deps block above), so
+the HD-video decoder is folded into the `.exe` (~2.4 MB) and the exe's only extra load-time import is
+`bcrypt.dll`, a Windows OS component (avutil's RNG). None of the eight are OS DLLs, so all eight must
+ship. Everything else the `.exe` imports — the UCRT `api-ms-win-crt-*`, `bcrypt`, `OPENGL32`,
+`KERNEL32`, `USER32` — is an OS component. A missing `lib*` DLL fails at load with a
 message box *before* any code runs and produces no log, which is the tell. The user drops their disc
 `.bin` in a `game\` folder next to the `.exe` and double-clicks (see
 [configuration.md](configuration.md)).
@@ -140,7 +150,8 @@ distrobox enter vh-deb12
 
 # --- inside the container, once ---
 sudo apt update && sudo apt install -y build-essential python3 patchelf file wget \
-     libsdl2-dev libopenal-dev libgl1-mesa-dev binutils-mipsel-linux-gnu
+     libsdl2-dev libopenal-dev libgl1-mesa-dev libwebp-dev binutils-mipsel-linux-gnu \
+     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
 mkdir -p ~/bin      # Debian 12 packages neither tool; use the upstream continuous builds
 wget -O ~/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
 wget -O ~/bin/linuxdeploy  https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage

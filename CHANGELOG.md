@@ -4,6 +4,44 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.0] — Optional HD pack: backgrounds + movies
+
+An **optional** HD layer for the two pre-rendered parts of the game — the 320×240 backgrounds and the FMV
+movies. Everything here is inert unless you install a pack: the **source tree and base build ship no HD
+art** — a pack is either built from your own disc or downloaded as the optional asset on this release — it
+is auto-detected in `hdpacks/` beside the executable, and without one the build renders exactly as before.
+Hand-drawn pixel art (portraits, sprites, UI, fonts) stays native by design. Applies to both modes; normal
+mode is still byte-for-byte the retail game.
+
+### Added (both modes)
+- **HD backgrounds** — the pre-rendered backgrounds are replaced with higher-resolution images at render
+  time (no change to layout, palette or UI). Each is keyed by a content hash of the VRAM upload, so a pack
+  maps 1:1 with no play-through. Enabled by the new **HD PACK** options row (auto-detected, defaults on,
+  persisted as `VH_HDPACK`); enabling it raises the internal resolution so the detail is visible.
+- **HD movies** — the intro/ending FMVs can be replaced with HD **H.264/HEVC** re-encodes, presented in
+  place of the native MDEC video while the game keeps its original frame timing and XA audio in sync (only
+  the picture is swapped).
+- **Pack tooling** (`platform/pc/tools/hdpack/`) — build a complete pack offline from your own disc:
+  background hashing + assembly, movie sector-mapping, a manifest generator, and an image finishing step.
+- **New dependencies, on by default** — **libwebp** (`.webp` backgrounds, ~20 MB vs ~150 MB) and **libav /
+  ffmpeg** (`.mp4` movies). Build without either via `NO_WEBP=1` / `NO_HDVIDEO=1` (Make) or `-DVH_WEBP=OFF`
+  / `-DVH_HDVIDEO=OFF` (CMake); the Windows build links a minimal **static** libav, so it ships **no extra
+  ffmpeg DLLs**.
+
+### Fixed
+- **Battle fast-forward** now works in every battle. It previously did nothing in a normal map-initiated
+  battle (the speed gate recognised only loaded-save and dojo/trial battles, not the story-battle state);
+  it is now tied to the game's own battle-tick dispatch, so R2 works everywhere a battle runs. *(This is a
+  fix to the 1.4 feature and applies with or without an HD pack.)*
+- **HD PACK toggle** — toggling HD on mid-scene no longer briefly shows the previous scene's HD background;
+  a background uploaded while HD was off now correctly evicts the stale image. HD takes effect on the next
+  background load; toggling off is immediate.
+
+### Notes
+- The pack is data you build/provide; nothing copyrighted is committed or shipped. See
+  [docs/hd-pack.md](docs/hd-pack.md) for installing and building one, and
+  [docs/gameplay-additions.md](docs/gameplay-additions.md) for before/after shots.
+
 ## [1.5.0] — Graphics fidelity: accurate rasterizer + internal-resolution supersampling
 
 A graphics-fidelity release, kept deliberately conservative — *sharpen without reinterpreting*. The art,

@@ -29,6 +29,11 @@ playthroughs on both Windows and Linux, including the endgame and credits.
   coverage + texture sampling, dithering, 5-bit blend; ~99.8–99.99% pixel-exact vs a reference-emulator
   capture), with optional **internal-resolution supersampling** (1–4×) on a multithreaded high-res pass
   for a sharper image with no re-authored art. The faithful look is the default.
+- **Optional HD pack (v1.6):** an opt-in layer that replaces the pre-rendered backgrounds and the FMV
+  movies with higher-resolution art (`.webp` + HEVC), auto-detected beside the executable and toggled by
+  the **HD PACK** option. The source tree and base build ship no art — a pack is either built offline from
+  your own disc or downloaded as an optional 1.6 release asset; the base build is unchanged without one.
+  See [docs/hd-pack.md](docs/hd-pack.md).
 - **64-bit** is the default build. The port is memory-safe — it runs unprivileged (no root, no
   `setcap`) and has passed both an AddressSanitizer out-of-bounds sweep and a UBSan pass across the
   game, which together fixed seven real out-of-bounds bugs latent in the retail game.

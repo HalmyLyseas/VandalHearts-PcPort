@@ -89,6 +89,28 @@ reinterpreting* the game. Three pieces:
   split across CPU cores (disjoint scanline bands, lock-free, bit-identical output), so 4× internal
   resolution holds the 30 fps cap and battle fast-forward stays effective on a multicore machine.
 
-Deliberately **out of scope:** upscaled/re-encoded videos, redrawn or AI-upscaled sprites, and camera
-changes like finer rotation — they'd re-author the art or alter the game's feel, which this project avoids.
-(Bundled "collector" extras such as artwork or manuals are also out — that material is copyrighted.)
+Kept for the **graphics-track renderer** itself, but deliberately **out of scope:** redrawn or AI-upscaled
+**sprites**, and camera changes like finer rotation — they'd re-author the hand-drawn pixel art or alter the
+game's feel, which this project avoids. (Bundled "collector" extras such as artwork or manuals are also out
+— that material is copyrighted.) The pre-rendered backgrounds and FMV movies are addressed separately by the
+**optional** 1.6 HD pack below, which is user-supplied data rather than a change to the base build.
+
+### 1.6 — HD pack: backgrounds + movies (complete, pending release)
+
+An **optional** engine layer that replaces the 320×240 pre-rendered backgrounds *and* the FMV movies with
+higher-resolution art, plus the tools to build a pack. Scoped to the pre-rendered layers only:
+
+- **Backgrounds.** Pre-rendered, continuous-tone art that upscales cleanly; replaced at render time with no
+  change to layout, palette or UI. Each is keyed by a content hash of its VRAM upload, so a pack maps 1:1
+  with no play-through. Portraits, sprites, UI and fonts are hand-drawn pixel art and stay native.
+- **Movies.** The intro/ending FMVs can be replaced with HD **H.264/HEVC** re-encodes, shown in place of the
+  native MDEC video while the game keeps its original frame timing and XA audio in sync.
+- **The source tree and base build ship no art.** A pack is either built from your own disc or downloaded
+  as an optional 1.6 release asset (upscaled derivative art); it is auto-detected in `hdpacks/` beside the
+  executable and toggled by the "HD PACK" options row. The base build is unchanged without one.
+- **Buildable offline from the disc** (no play-through): `platform/pc/tools/hdpack/` assembles a complete
+  pack — `.webp` backgrounds (~20 MB) + HEVC movies. New deps **libwebp** + **libav** are default-on and
+  optional (`NO_WEBP` / `NO_HDVIDEO`); the Windows build links a **static** libav, so it ships no extra
+  ffmpeg DLLs.
+
+See [hd-pack.md](hd-pack.md).

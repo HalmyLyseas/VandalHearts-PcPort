@@ -68,3 +68,19 @@ of the game — the bulk of the content (dialogue, maps, event scripts, audio, a
 video) is NOT included and is read at runtime from the disc image you supply. A
 release binary is non-functional without your own legally-owned copy of the game.
 If the copyright holder objects to this, binaries will be withdrawn on request.
+
+================================================================================
+Optional HD pack (a separate release download, not part of the binary)
+================================================================================
+
+The releases page may also offer an OPTIONAL "HD PACK" download, separate from the
+executable. It is NOT embedded in the binary and the port runs fully without it.
+It contains higher-resolution background images and re-encoded FMV movies produced
+by UPSCALING the game's original pre-rendered art (backgrounds and full-motion
+video). The pack's original audio is not included; movies use the game's own disc
+audio at runtime.
+
+This pack is UPSCALED DERIVATIVE WORK of © Konami material, provided only for
+convenience and preservation. It can also be built locally by any owner of the
+game from their own disc, using the tools in platform/pc/tools/hdpack/. No
+ownership is claimed over it, and it will be withdrawn on request.
