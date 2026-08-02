@@ -47,6 +47,7 @@ the old privileged low-page-mapping fallback (and its `setcap` targets) was reti
 | `VH_SEQ_LOG` | — | `vh_seq_log.txt` | SEQ music diagnostics. `=1` adds a ~6×/sec voice-census dump (active-voice count, note-on/off balance, master vol, timestamp). Low-volume lines — first-96 `[note]` events, stuck-note-reaper `[reaper]` events, `SsSeqStop` — are always logged (file auto-created), so a hung-note recurrence is captured without the flag. |
 | `VH_SPRITE_LOG` | `SPRITE_LOG=1` | `vh_sprite_fate.csv` | Per-unit-sprite cull/projection/GTE state. |
 | `VH_TERRAIN_LOG` | `TERRAIN_LOG=1` | `vh_terrain_otz_pc.csv` | Per-frame terrain `otz` stats + black-tile counts. |
+| `VH_FPS_LOG` | — | stderr | Per-second `[FPS]` meter (VSync calls/sec). Off by default — one line/sec is console noise in the logs bug reports paste. |
 | `VH_CAM_OSD` | — | on-screen | Camera-pose overlay (position/rotation/zoom) drawn in the window. |
 | NULL-read fixup handler | — | `vh_null_reads.log` | Auto: each NULL-region read / rodata-write the handler fixed up (see `make crash-trace`). |
 

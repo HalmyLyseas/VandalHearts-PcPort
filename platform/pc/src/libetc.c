@@ -968,20 +968,26 @@ int VSync(int mode) {
     { extern void PC_CdXaUpdate(void); PC_CdXaUpdate(); } /* XA music streaming pump */
     { extern void PC_SeqTick(void); PC_SeqTick(); }       /* SEQ (sequenced music) sequencer */
 
-    s_fpsLastMode = mode;
-    s_fpsWindowCalls++;
-    if (s_fpsWindowStart == 0) {
-        s_fpsWindowStart = SDL_GetTicks();
-    } else {
-        Uint32 windowElapsed = SDL_GetTicks() - s_fpsWindowStart;
-        if (windowElapsed >= 1000) {
-            double fps = s_fpsWindowCalls * 1000.0 / windowElapsed;
-            fprintf(stderr, "[FPS] VSync() calls/sec=%.2f (mode=%d) window_ms=%u\n",
-                    fps, s_fpsLastMode, windowElapsed);
+    /* Per-second FPS meter -- opt-in (VH_FPS_LOG=1): a line per second is pure console noise for
+     * players, and it drowns the actual signal in the logs bug reports paste. */
+    { static int fpsLog = -1;
+      if (fpsLog < 0) { const char *e = getenv("VH_FPS_LOG"); fpsLog = e && atoi(e) != 0; }
+      if (fpsLog) {
+        s_fpsLastMode = mode;
+        s_fpsWindowCalls++;
+        if (s_fpsWindowStart == 0) {
             s_fpsWindowStart = SDL_GetTicks();
-            s_fpsWindowCalls = 0;
+        } else {
+            Uint32 windowElapsed = SDL_GetTicks() - s_fpsWindowStart;
+            if (windowElapsed >= 1000) {
+                double fps = s_fpsWindowCalls * 1000.0 / windowElapsed;
+                fprintf(stderr, "[FPS] VSync() calls/sec=%.2f (mode=%d) window_ms=%u\n",
+                        fps, s_fpsLastMode, windowElapsed);
+                s_fpsWindowStart = SDL_GetTicks();
+                s_fpsWindowCalls = 0;
+            }
         }
-    }
+      } }
 
     return (int)s_vblankCount;
 }
