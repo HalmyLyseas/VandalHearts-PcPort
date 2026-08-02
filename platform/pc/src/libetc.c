@@ -99,7 +99,7 @@ void PC_DebugSpriteLog(int tileX, int tileZ, int winX, int winZ, int mapSX, int 
     /* GTE projection state used for THIS sprite (ofx/ofy are stored <<16; report >>16 too) */
     int ofx = 0, ofy = 0; int h = 0, rt00 = 0, rt02 = 0, rt22 = 0, trx = 0, trz = 0;
     PC_GteDebugState(&ofx, &ofy, &h, &rt00, &rt02, &rt22, &trx, &trz);
-    fprintf(s_spriteFateFile, "%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%ld,%d,%d,%d,%d,%d,%d,%d,%d\n",
+    fprintf(s_spriteFateFile, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, tileX, tileZ, winX, winZ, mapSX, mapSZ, inX, inZ,
             culled, gfxIdx, sx, sy, otz, otIdx,
             (int)(ofx >> 16), (int)(ofy >> 16), h, rt00, rt02, rt22, trx, trz,
@@ -133,7 +133,7 @@ void PC_DebugEvtEntityLog(int objIdx, int tileX, int tileZ, const void *base, co
         fprintf(s_evtEntFile,
                 "frame,objIdx,tileX,tileZ,baseAnimSet,altAnimSet,animSetUsed,animIdx,facing,animData,gfxIdx,usingAlt,runState,opcode,cmdState,cmdOff,cmdArg\n");
     }
-    fprintf(s_evtEntFile, "%ld,%d,%d,%d,%p,%p,%p,%d,%d,%p,%d,%d,%d,%d,%d,%d,%d\n",
+    fprintf(s_evtEntFile, "%d,%d,%d,%d,%p,%p,%p,%d,%d,%p,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, objIdx, tileX, tileZ, base, alt, cur, animIdx, facing, animData, gfxIdx, usingAlt,
             runState, opcode, cmdState, cmdOff, cmdArg);
     fflush(s_evtEntFile);
@@ -159,7 +159,7 @@ void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
     /* magSusc: 1=resistant .. 5=weak. magTerm = F3 (magSusc-3)*K applied to the score (0 if K unset /
      * Normal mode). SCORE already includes magTerm. */
     fprintf(s_aiLogFile,
-            "f=%ld caster[name=%d adv=%d lvl=%d] -> target[name=%d class=%d adv=%d lvl=%d hpFrac=%d]"
+            "f=%d caster[name=%d adv=%d lvl=%d] -> target[name=%d class=%d adv=%d lvl=%d hpFrac=%d]"
             "  terms: base=+280 lvl=%+d hp=%+d ADV=%+d(gAdv=%d) terr=%+d magSusc=%d magTerm=%+d  = SCORE %d\n",
             s_vblankCount, casterName, casterAdv, casterLvl,
             tgtName, tgtClass, tgtAdv, tgtLvl, tgtHpFrac,
@@ -300,7 +300,7 @@ static void LogCameraTraceRow(void) {
     s16 camDirQuad = (s16)((gCameraRotation.vy & 0xfff) >> 10);
     /* mapNum can be out of the 0..BATTLE_CT-1 range briefly outside a battle; clamp the read. */
     s16 startCurX = -1, startCurZ = -1, startCurY = -1;
-    if (gState.mapNum >= 0 && gState.mapNum < BATTLE_CT) {
+    if (gState.mapNum < BATTLE_CT) {   /* mapNum is u8: no negative range to clamp */
         startCurX = gMapCursorStartingPos[gState.mapNum].x;
         startCurZ = gMapCursorStartingPos[gState.mapNum].z;
         startCurY = gMapCursorStartingPos[gState.mapNum].y;
@@ -309,7 +309,7 @@ static void LogCameraTraceRow(void) {
     s16 fadeLevel = (gScreenFade != NULL) ? gScreenFade->d.objf795.fade : -1;
 
     fprintf(s_camTraceFile,
-            "%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+            "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, gState.primary, bmFuncIdx, bmState, bmState2,
             gCameraPos.vx, gCameraPos.vy, gCameraPos.vz,
             gCameraRotation.vx, gCameraRotation.vy, gCameraZoom.vz,
@@ -370,8 +370,8 @@ static void LogAiChainRow(void) {
     }
 
     fprintf(s_aiChainFile,
-            "%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-            "%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld\n",
+            "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+            "%d,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, gState.primary, bmState, bmState2, gShowBlueMovementGrid,
             D_80123468, D_80123480, ai570Idx, ai570State, ai570State2,
             subFuncIdx, subState, subState2,
@@ -401,7 +401,7 @@ static void LogRandSeedRow(void) {
         if (s_randTraceFile == NULL) return;
         fprintf(s_randTraceFile, "frame,primary,seed\n");
     }
-    fprintf(s_randTraceFile, "%ld,%d,0x%08x\n", s_vblankCount, gState.primary,
+    fprintf(s_randTraceFile, "%d,%d,0x%08x\n", s_vblankCount, gState.primary,
             GetRandSeedForDebug());
     fflush(s_randTraceFile);
 }
@@ -432,10 +432,10 @@ static void LogCameraMatrixRow(void) {
     }
 
     fprintf(s_mtxTraceFile,
-            "%ld,%d,%d,%d,%d,"
+            "%d,%d,%d,%d,%d,"
             "%d,%d,%d,%d,%d,%d,"
-            "%ld,%ld,%ld,%ld,%ld,%ld,"
-            "%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%ld,%ld\n",
+            "%d,%d,%d,%d,%d,%d,"
+            "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, gState.primary, gState.mapNum, gState.fieldRenderingDisabled,
             gState.enableMapScaling,
             gCameraRotation.vx, gCameraRotation.vy, gCameraRotation.vz,
@@ -494,7 +494,7 @@ static void LogTerrainRow(void) {
                             "otzMin,otzMax,otzMean,blackCount,trx,trz,h,rt22\n");
     }
     if (s_terrCount > 0) {
-        fprintf(s_terrFile, "%ld,%d,%d,%d,%d,%ld,%d,%d,%ld,%ld,%d,%d,%d,%d\n",
+        fprintf(s_terrFile, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                 s_vblankCount, gState.primary, gState.fieldRenderingDisabled,
                 gCameraRotation.vx, gCameraRotation.vy,
                 s_terrCount, s_terrOtzMin, s_terrOtzMax, s_terrOtzSum / s_terrCount, s_terrBlack,
@@ -522,7 +522,7 @@ void PC_DebugObjPrim4Log(int gfx, int otz, int otIdx, int sx, int sy, int otOfs)
         if (s_op4File == NULL) return;
         fprintf(s_op4File, "frame,primary,pitch,gfx,otz,otIdx,sx,sy,otOfs\n");
     }
-    fprintf(s_op4File, "%ld,%d,%d,%d,%d,%d,%d,%d,%d\n",
+    fprintf(s_op4File, "%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
             s_vblankCount, gState.primary, gCameraRotation.vx,
             gfx, otz, otIdx, sx, sy, otOfs);
     fflush(s_op4File);
@@ -544,7 +544,7 @@ void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy) {
         if (s_opgFile == NULL) return;
         fprintf(s_opgFile, "frame,gfx,tpage,fn,sx,sy\n");
     }
-    fprintf(s_opgFile, "%ld,%d,0x%04x,%d,%d,%d\n", s_vblankCount, gfx, tpage & 0xffff, fn, sx, sy);
+    fprintf(s_opgFile, "%d,%d,0x%04x,%d,%d,%d\n", s_vblankCount, gfx, tpage & 0xffff, fn, sx, sy);
     fflush(s_opgFile);
 }
 
@@ -584,13 +584,13 @@ void PC_DebugTerrainProjLog(int v0x, int v0y, int v0z, int v1x, int v1y, int v1z
     vin[2][0]=v2x; vin[2][1]=v2y; vin[2][2]=v2z;
     vin[3][0]=v3x; vin[3][1]=v3y; vin[3][2]=v3z;
 
-    fprintf(s_tprojFile, "%ld,%d,%d,%d,%ld,%ld", s_vblankCount,
+    fprintf(s_tprojFile, "%d,%d,%d,%d,%d,%d", s_vblankCount,
             gCameraRotation.vx, gCameraRotation.vy, h, ofx, ofy);
     for (c = 0; c < 4; c++) {
         int sx, sy, ir1, ir2, ir3, sz3, n;
         /* corners were pushed v0,v1,v2 (RTPT) then v3 (RTPS) => back = 3,2,1,0 */
         PC_GteProjEntry(3 - c, &sx, &sy, &ir1, &ir2, &ir3, &sz3, &n);
-        fprintf(s_tprojFile, ",%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld,%ld",
+        fprintf(s_tprojFile, ",%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
                 vin[c][0], vin[c][1], vin[c][2], sx, sy, ir1, ir2, ir3, sz3, n);
     }
     fprintf(s_tprojFile, "\n");
@@ -625,7 +625,7 @@ void PC_DebugSpriteQuadLog(int gfx, int otz, int otIdx, int facingLeft,
               fprintf(s_squadFile, ",ir2_%d,sz3_%d,n%d", c, c, c); }
         fprintf(s_squadFile, "\n");
     }
-    fprintf(s_squadFile, "%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+    fprintf(s_squadFile, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
             s_vblankCount, gCameraRotation.vx, gCameraRotation.vy, gfx, otz, otIdx, facingLeft,
             direction, coords0z, facingFront,
             tileX, tileZ, x0, y0, x1, y1, x2, y2, x3, y3);
@@ -635,7 +635,7 @@ void PC_DebugSpriteQuadLog(int gfx, int otz, int otIdx, int facingLeft,
     { int c; int sx, sy, ir1, ir2, ir3, sz3, n;
       for (c = 0; c < 4; c++) {
           PC_GteProjEntry(3 - c, &sx, &sy, &ir1, &ir2, &ir3, &sz3, &n);
-          fprintf(s_squadFile, ",%ld,%ld,%ld", ir2, sz3, n);
+          fprintf(s_squadFile, ",%d,%d,%d", ir2, sz3, n);
       } }
     fprintf(s_squadFile, "\n");
     fflush(s_squadFile);

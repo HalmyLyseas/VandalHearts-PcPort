@@ -121,7 +121,7 @@ extern void PC_SpuKeyOn(int voice, const short *pcm, int len, int loopS, int loo
  * and the boundary is `< 64` -- so pan 64 takes the second branch and yields 63/63 = unity on
  * both channels. Centre is unity/unity (constant-max law, no -3 dB centre dip). */
 static void PanFactors(int pan, float *l, float *r) {
-    if (pan < 0) pan = 0; if (pan > 127) pan = 127;
+    if (pan < 0) { pan = 0; } if (pan > 127) { pan = 127; }
     *l = (pan < 64) ? 1.0f : (float)(127 - pan) / 63.0f;
     *r = (pan < 64) ? (float)pan / 63.0f : 1.0f;
 }
@@ -225,7 +225,7 @@ static const int s_filterNeg[5] = {0, 0, -52, -55, -60};
  * frees). Also reports the SPU-ADPCM sustain loop, if any: block-header byte1 flags (per
  * octoshock spu.cpp) bit2 (0x04)=loop-start, bit0 (0x01)=block-end, bit1 (0x02)=repeat. A sample
  * loops from the loop-start block to the end block iff that end block has the repeat bit; else
- * it's one-shot. *outLoopStart/*outLoopEnd get sample indices, or -1 for a one-shot sample. */
+ * it's one-shot. *outLoopStart and *outLoopEnd get sample indices, or -1 for a one-shot sample. */
 static int DecodeVag(const unsigned char *data, int size, short **outPcm,
                      int *outLoopStart, int *outLoopEnd) {
     int numBlocks = size / 16;
@@ -432,7 +432,7 @@ short SsVabTransBodyPartly(unsigned char *vabBody, unsigned int size, short vabI
               if (dump < 0) { const char *e = getenv("VH_SPU_DUMPVAG"); dump = (e && e[0] == '1'); }
               if (dump && n > 0) {
                   char nm[64]; FILE *w;
-                  sprintf(nm, "vh_vag_%d_%d.wav", (int)vabId, v);
+                  snprintf(nm, sizeof(nm), "vh_vag_%d_%d.wav", (int)vabId, v);
                   if ((w = fopen(nm, "wb")) != NULL) {
                       unsigned int dl = (unsigned int)n * 2, rl = 36 + dl;
                       unsigned int sr = 44100, br = 44100 * 2; unsigned short one = 1, bs = 2, bits = 16;
@@ -1071,7 +1071,7 @@ static void SeqAdvanceByUsec(double dtUsec) {
         while (guard++ < 20000) {
             if (s->ticksToNext > maxDelta)      {
                 { FILE *lf = SeqLog(); if (lf) { fprintf(lf,
-                    "[watchdog] seq %d runaway delta=%ld (pos-base=%ld) -> end-of-track\n",
+                    "[watchdog] seq %d runaway delta=%d (pos-base=%d) -> end-of-track\n",
                     si, s->ticksToNext, (int)(s->pos - s->base)); fflush(lf); } }
                 if (SeqEndOfTrack(s, 1)) continue; else break; }
             if (s->tickBudget < (double)s->ticksToNext) {              /* wait for musical time */
@@ -1082,7 +1082,7 @@ static void SeqAdvanceByUsec(double dtUsec) {
                     static unsigned int lastLog[MAX_SEQ];
                     unsigned int now = SDL_GetTicks();
                     if (now - lastLog[si] > 1000) { lastLog[si] = now; FILE *lf = SeqLog();
-                        if (lf) { fprintf(lf, "[stall?] seq=%d tempo=%u ppqn=%d ticksToNext=%ld tickBudget=%.1f posBase=%ld\n",
+                        if (lf) { fprintf(lf, "[stall?] seq=%d tempo=%u ppqn=%d ticksToNext=%d tickBudget=%.1f posBase=%d\n",
                                   si, s->tempo, s->ppqn, s->ticksToNext, s->tickBudget, (int)(s->pos - s->base)); fflush(lf); } }
                 }
                 break;
@@ -1153,7 +1153,7 @@ void PC_SeqTick(void) {
           extern unsigned int SDL_GetTicks(void);
           extern short gSeqSetIdx; extern unsigned char gSeqCurrentID;
           int anyPlaying = 0, si; for (si = 0; si < MAX_SEQ; si++) if (s_seqs[si].inUse && s_seqs[si].playing) anyPlaying = 1;
-          fprintf(lg, "[voices] t=%ums activeSeq=%d seqPlaying=%d ons=%ld offs=%ld mvol=%d/%d "
+          fprintf(lg, "[voices] t=%ums activeSeq=%d seqPlaying=%d ons=%d offs=%d mvol=%d/%d "
                   "reverbOn=%d depth=%.2f | seqSetIdx=%d seqCurrentID=%u\n",
                   SDL_GetTicks(), activeSeq, anyPlaying, s_seqOns, s_seqOffs,
                   (int)s_masterVolL, (int)s_masterVolR, s_reverbOn, s_reverbDepth,

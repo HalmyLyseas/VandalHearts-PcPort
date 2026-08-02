@@ -84,7 +84,7 @@ static int ac_next(BitR *b) {
     int s, x, v;
     #define SIGNED10(n) ( ((n) & 0x200) ? ((n) | ~0x3ff) : (n) )
     #define EMIT(val) do{ int _v=(val); int run=(_v>>10)&0x3f; int lev=_v&0x3ff; \
-                          if(s) lev=-lev; return (run<<16)|(lev & 0xffff); }while(0)
+                          if(s) { lev=-lev; } return (run<<16)|(lev & 0xffff); }while(0)
     int b1 = br_bit(b); if (b1<0) return AC_ERR;
     if (b1==1) { int b2=br_bit(b); if(b2<0)return AC_ERR;
         if (b2==0) return AC_EOB;                       /* 10 */
@@ -272,8 +272,8 @@ int PC_MdecDecodeBS(const unsigned char *bs, int bsLen, int width, int height, u
                 float G = yv - 0.3437f*b - 0.7143f*r;
                 float B = yv + 1.772f*b;
                 int Ri = (int)lrintf(R)+128, Gi=(int)lrintf(G)+128, Bi=(int)lrintf(B)+128;
-                if(Ri<0)Ri=0; if(Ri>255)Ri=255; if(Gi<0)Gi=0; if(Gi>255)Gi=255;
-                if(Bi<0)Bi=0; if(Bi>255)Bi=255;
+                if(Ri<0){Ri=0;} if(Ri>255){Ri=255;} if(Gi<0){Gi=0;} if(Gi>255){Gi=255;}
+                if(Bi<0){Bi=0;} if(Bi>255){Bi=255;}
                 u16 bgr = ((Bi>>3)<<10) | ((Gi>>3)<<5) | (Ri>>3);
                 outBGR555[py*width + px] = bgr;
             }

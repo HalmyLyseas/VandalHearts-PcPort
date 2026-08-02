@@ -99,6 +99,12 @@ set(BACKEND_PLAIN   libcd libspu libkernel libgpu libsn pc_bootstrap pc_xa pc_sp
 set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data pc_evt_entities)
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 
+# Warning policy (mirrors the Makefile's GAME_WARN/PORT_WARN -- see the comment there): the decompiled
+# game source gets its known-benign 1996-C warning classes silenced; PORT code compiles -Wall -Wextra
+# and must stay warning-clean, so a new warning there is signal.
+set(GAME_WARN "-Wno-incompatible-pointer-types;-Wno-builtin-declaration-mismatch;-Wno-discarded-qualifiers;-Wno-pointer-to-int-cast;-Wno-int-to-pointer-cast;-Wno-int-conversion")
+set(PORT_WARN "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers")
+
 set(ALL_OBJ_SRCS ${GAME_SRCS})
 foreach(_b ${BACKEND_PLAIN} libetc libsnd libgte pc_gpu_window pc_balance ${DATA_PERM} ${DATA_PLAIN})
     list(APPEND ALL_OBJ_SRCS ${PC_DIR}/src/${_b}.c)
@@ -151,7 +157,7 @@ endif()
 foreach(_g ${GAME_SRCS})
     set_source_files_properties(${_g} PROPERTIES
         COMPILE_DEFINITIONS "PERMUTER;PC_PORT;PC_FEAT"
-        COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt;-include;${PC_DIR}/include/cmake_game_prelude.h"
+        COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt;-include;${PC_DIR}/include/cmake_game_prelude.h;${GAME_WARN}"
         INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
 endforeach()
 # Always-on runtime-gated probes (Makefile: UNCONDITIONAL, self-gating at runtime).
@@ -179,7 +185,7 @@ set_source_files_properties(${PC_DIR}/src/pc_gpu_window.c PROPERTIES
 foreach(_d ${DATA_PERM})
     set_source_files_properties(${PC_DIR}/src/${_d}.c PROPERTIES
         COMPILE_DEFINITIONS "PERMUTER"
-        COMPILE_OPTIONS "-std=gnu89"
+        COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt"
         INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 endforeach()
 
@@ -190,6 +196,16 @@ set_source_files_properties(${PC_DIR}/src/pc_balance.c PROPERTIES
     COMPILE_DEFINITIONS "PERMUTER"
     COMPILE_OPTIONS "-std=gnu89"
     INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
+
+# -- warning policy on PORT code (the same 18 stems the Makefile treats as backend) ---------------
+# MUST come after every set_source_files_properties above: that call OVERWRITES COMPILE_OPTIONS,
+# so these appends would otherwise be silently clobbered (bit pc_balance/libgte on first attempt).
+foreach(_b ${BACKEND_PLAIN} libetc libsnd libgte pc_gpu_window pc_balance)
+    set_property(SOURCE ${PC_DIR}/src/${_b}.c APPEND PROPERTY COMPILE_OPTIONS "${PORT_WARN}")
+endforeach()
+foreach(_b libetc libsnd pc_balance)   # compile through the staged game headers -> game csqrt(int) decl
+    set_property(SOURCE ${PC_DIR}/src/${_b}.c APPEND PROPERTY COMPILE_OPTIONS "-fno-builtin-csqrt")
+endforeach()
 
 # ---- data-segment generator (mid-build) -------------------------------------------------------
 # Runs after the objects compile; link-probes them for undefined symbols and emits generated_data.c.
@@ -267,7 +283,7 @@ add_custom_command(
     VERBATIM)
 set_source_files_properties(${GENERATED_C} PROPERTIES GENERATED TRUE
     COMPILE_DEFINITIONS "PERMUTER"
-    COMPILE_OPTIONS "-std=gnu89"
+    COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt"
     INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 
 # ---- final executable -------------------------------------------------------------------------

@@ -246,7 +246,7 @@ static struct timespec s_rcntStart[2];
  *    as Objf402/403's B.
  *
  * mapWidth/mapArea are read live from gMapMinX/gMapMaxX/gMapMinZ/gMapMaxZ
- * (include/field.h externs, no src/*.c changes needed, same category as
+ * (include/field.h externs, no src .c changes needed, same category as
  * reading gState/gObjectArray for earlier RAM-watch diagnostics) so the
  * cost genuinely scales with each battle's real map size instead of
  * assuming one.
@@ -316,7 +316,7 @@ int g_aiVisitCount[NUM_AI_THROTTLE_RANGES] = {0};
 static int AiThrottleRangeIndex(void *retAddr) {
     unsigned i;
     for (i = 0; i < NUM_AI_THROTTLE_RANGES; i++) {
-        unsigned int off = (unsigned int)retAddr - (unsigned int)s_aiThrottleRanges[i].start;
+        uintptr_t off = (uintptr_t)retAddr - (uintptr_t)s_aiThrottleRanges[i].start;
         if (off < s_aiThrottleRanges[i].size) {
             return (int)i;
         }
@@ -492,9 +492,9 @@ static int MakeDir(const char *p) {
  *   3. create <deploy>/saves                   -> use it (the new default)
  *   4. deploy dir unusable/read-only           -> fall back to cwd-relative "saves"           */
 static const char *SaveDir(void) {
-    static char cached[PATH_MAX];
+    static char cached[PATH_MAX + 32];
     static int cachedMode = -1;
-    char deploy[PATH_MAX];
+    char deploy[PATH_MAX];   /* cached[] below carries +32 headroom for the "/saves*" suffix */
     struct stat st;
     /* Mode isolation (GAP 4): Tactical saves live in "saves_tactical/", Normal in "saves/". Re-resolve
      * when the mode changes (it only changes at the title menu, so no save op is ever in flight). */
@@ -631,7 +631,7 @@ struct DIRENTRY *nextfile(struct DIRENTRY *entry) {
     while ((de = readdir(s_scanDir)) != NULL) {
         if (de->d_name[0] == '.') continue;
         char path[PATH_MAX];
-        snprintf(path, sizeof(path), "%s/%s", SaveDir(), de->d_name);
+        snprintf(path, sizeof(path), "%s/%.128s", SaveDir(), de->d_name);
         struct stat st;
         if (stat(path, &st) != 0) continue;
         strncpy(entry->name, de->d_name, sizeof(entry->name) - 1);

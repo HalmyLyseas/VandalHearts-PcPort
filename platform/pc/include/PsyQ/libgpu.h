@@ -219,7 +219,7 @@ typedef struct {
  * directly to the real hardware GP0 command byte instead:
  * `poly->code = GPU_CODE_POLY_FT4` (0x2c, optionally |GPU_CODE_SEMI_TRANS
  * =0x02) -- confirmed via grep to be the ONLY raw `.code =` assignment
- * anywhere in src/*.c, always for POLY_FT4. Primitives built this way
+ * anywhere in src (any .c), always for POLY_FT4. Primitives built this way
  * never carried our discriminator at all, so DrawOTag's dispatch silently
  * skipped them -- found from a real screenshot (a splash-screen sprite
  * never drew, leaving stale VRAM content visible instead), not a

@@ -306,7 +306,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             { static FILE *lg = NULL; static int tried = 0;   /* XA event log (set VH_XA_LOG=1) */
               extern unsigned int SDL_GetTicks(void);
               if (!tried) { tried = 1; if (getenv("VH_XA_LOG")) lg = fopen("vh_xa_log.txt", "w"); }
-              if (lg) { fprintf(lg, "t=%6u %s lba=%ld base=%ld file=%d chan=%d rt=%d %s\n",
+              if (lg) { fprintf(lg, "t=%6u %s lba=%d base=%d file=%d chan=%d rt=%d %s\n",
                         SDL_GetTicks(), com == CdlSeekL ? "SeekL" : "ReadN", s_targetLBA, s_xaBaseLBA,
                         s_xaFile, s_xaChan, (s_mode & CdlModeRT) ? 1 : 0,
                         (s_mode & CdlModeRT) && s_xaBaseLBA == s_targetLBA ? "(same-track replay)" : "(new/seek)");
@@ -428,7 +428,7 @@ void PC_CdXaUpdate(void) {
         frame++;
         int active = (gXaCurrentID != 0) || s_xaStreaming || (prevId != 0) || (prevStream == 1);
         if (lg && active) {
-            fprintf(lg, "%u,%u,%u,%d,%d,%d,%d,%d,%d,%d,%d,%ld\n",
+            fprintf(lg, "%u,%u,%u,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                     frame, SDL_GetTicks(), gXaCurrentID, gXaDuration, gXaStartTime, gXaCurrentVolume,
                     s_xaStreaming, PC_XaQueuedBuffers(), PC_XaSourceState(),
                     s_xaFile, s_xaChan, s_xaCursorLBA);

@@ -43,7 +43,7 @@ typedef struct {
 /* Not part of the confirmed-used function contract (no CVECTOR-typed GTE
  * function is actually called), but project headers (graphics.h/object.h)
  * reference the type directly for struct fields -- surfaced only once real
- * src/*.c compilation was attempted, not by the header-symbol contract scan. */
+ * src .c compilation was attempted, not by the header-symbol contract scan. */
 typedef struct {
     unsigned char r, g, b, cd;
 } CVECTOR;

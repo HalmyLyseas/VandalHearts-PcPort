@@ -201,7 +201,7 @@ static void mainAdjust(int d) {
     if (it->kind == OVL_TOGGLE) { int nv = (d < 0) ? 0 : 1; if (*it->value != nv) setValue(it, nv); }
     else if (it->kind == OVL_CHOICE) {
         int nv = *it->value + d * it->step;
-        if (nv < it->minv) nv = it->minv; if (nv > it->maxv) nv = it->maxv;
+        if (nv < it->minv) { nv = it->minv; } if (nv > it->maxv) { nv = it->maxv; }
         if (nv != *it->value) setValue(it, nv);
     }
 }

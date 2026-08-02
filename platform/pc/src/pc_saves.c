@@ -21,7 +21,7 @@
 static void activePath(char *out, size_t n)  { snprintf(out, n, "%s/%s", PC_SaveDir(), ACTIVE_CARD); }
 static void archiveDirPath(char *out, size_t n) { snprintf(out, n, "%s/%s", PC_SaveDir(), ARCHIVE_SUBDIR); }
 static void archivePath(char *out, size_t n, const char *file) {
-    snprintf(out, n, "%s/%s/%s", PC_SaveDir(), ARCHIVE_SUBDIR, file);
+    snprintf(out, n, "%s/%s/%.200s", PC_SaveDir(), ARCHIVE_SUBDIR, file);
 }
 
 static int makeDir(const char *p) {
@@ -62,7 +62,7 @@ static void formatLabel(const char *file, char *out, size_t cap) {
     if (dot && strlen(s) >= 13 && s[8] == '-')
         snprintf(out, cap, "%.4s-%.2s-%.2s %.2s:%.2s", s, s + 4, s + 6, s + 9, s + 11);
     else
-        snprintf(out, cap, "%s", s);
+        snprintf(out, cap, "%.*s", (int)cap - 1, s);   /* truncation of odd filenames is intended */
 }
 
 /* Bytes of CardFileData_Header (card.h) that precede the listing in every card file: magic[2] +

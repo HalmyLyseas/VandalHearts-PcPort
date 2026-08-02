@@ -405,7 +405,7 @@ extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe 
 extern int g_vhHdPack;         /* runtime on/off toggle, owned by pc_gpu_window.c; the overlay binds it.
                                 * 0 until a valid pack is detected (HdDetect sets it: persisted VH_HDPACK, or
                                 * auto-ON on first detect). The VH_HD_PACK=<dir> override ignores it (CI). */
-static struct { int checked, available, valid, count; char dir[HD_PATH]; char videosDir[HD_PATH]; char reason[80]; } s_hdPack;
+static struct { int checked, available, valid, count; char dir[HD_PATH + 32]; char videosDir[HD_PATH + 32]; char reason[80]; } s_hdPack;
 
 static const char *HdEnv(const char *name, int slot) {
     static const char *v[2]; static int done[2];
@@ -432,7 +432,7 @@ static int HdManifestRead(const char *path, char *game, int gameSz, int *count) 
 
 /* Detect + validate <deploy>/hdpacks (runs once; caches in s_hdPack). reason[] drives the overlay label. */
 static void HdDetect(void) {
-    char deploy[HD_PATH], manifest[HD_PATH], game[80];
+    char deploy[HD_PATH], manifest[HD_PATH + 32], game[80];
     if (s_hdPack.checked) return;
     s_hdPack.checked = 1;
     snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "no HD pack");
@@ -441,7 +441,7 @@ static void HdDetect(void) {
     if (!HdManifestRead(manifest, game, sizeof(game), &s_hdPack.count)) return;   /* no/blank manifest */
     s_hdPack.available = 1;
     if (strcmp(game, HD_GAME_ID) != 0) {                 /* pack for a different disc/region */
-        snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "HD pack is for %s", game);
+        snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "HD pack is for %.60s", game);
         fprintf(stderr, "[HD] pack present but for '%s' (this build is %s) -> HD PACK unavailable\n",
                 game, HD_GAME_ID);
         return;
@@ -501,7 +501,7 @@ static HdRegion *HdFind(unsigned long long h) {
 /* Decode <dir>/<hash>.webp to RGBA8 (WebPDecodeRGBA already emits R,G,B,A byte order = our px layout).
  * WebP is ~7x smaller than PNG for these backgrounds; decode happens once at scene load, never per frame. */
 static unsigned int *HdLoadWebp(const char *dir, unsigned long long h, int *ow, int *oh) {
-    char path[600]; FILE *f; long sz; unsigned char *buf; unsigned int *px = NULL; int w, hh; uint8_t *rgba;
+    char path[HD_PATH + 64]; FILE *f; long sz; unsigned char *buf; unsigned int *px = NULL; int w, hh; uint8_t *rgba;
     snprintf(path, sizeof(path), "%s/%016llx.webp", dir, h);
     f = fopen(path, "rb"); if (!f) return NULL;
     fseek(f, 0, SEEK_END); sz = ftell(f); fseek(f, 0, SEEK_SET);
@@ -522,7 +522,7 @@ static unsigned int *HdLoadWebp(const char *dir, unsigned long long h, int *ow, 
 }
 #endif
 static unsigned int *HdLoadHdi(const char *dir, unsigned long long h, int *ow, int *oh) {
-    char path[600]; unsigned char hd[12]; FILE *f; int w, hh; unsigned int *px; size_t n;
+    char path[HD_PATH + 64]; unsigned char hd[12]; FILE *f; int w, hh; unsigned int *px; size_t n;
     snprintf(path, sizeof(path), "%s/%016llx.hdi", dir, h);
     f = fopen(path, "rb"); if (!f) return NULL;
     if (fread(hd, 1, 12, f) != 12 || memcmp(hd, "HDI1", 4) != 0) { fclose(f); return NULL; }
@@ -694,8 +694,8 @@ static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv
                 long long hx = (nxf * cx->hdSx) >> (shift + HD_SC);
                 long long hy = (nyf * cx->hdSy) >> (shift + HD_SC);
                 unsigned short t;
-                if (hx < 0) hx = 0; if (hx >= cx->hdW) hx = cx->hdW - 1;
-                if (hy < 0) hy = 0; if (hy >= cx->hdH) hy = cx->hdH - 1;
+                if (hx < 0) { hx = 0; } if (hx >= cx->hdW) { hx = cx->hdW - 1; }
+                if (hy < 0) { hy = 0; } if (hy >= cx->hdH) { hy = cx->hdH - 1; }
                 t = cx->hdPx[hy * cx->hdW + hx];             /* pre-packed 16-bit texel; 0 = transparent */
                 if (t == 0) draw = 0;
                 else texel = t;
@@ -1294,9 +1294,9 @@ static void PC_WriteVramPpm(int idx) {
     FILE *f;
     int x, y;
     if (s_vramDumpDir && s_vramDumpDir[0])
-        sprintf(path, "%.480s/vh_vram_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
+        snprintf(path, sizeof(path), "%s/vh_vram_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
     else
-        sprintf(path, "vh_vram_%05d_f%06u.ppm", idx, s_drawFrame);
+        snprintf(path, sizeof(path), "vh_vram_%05d_f%06u.ppm", idx, s_drawFrame);
     f = fopen(path, "wb");
     if (!f) return;
     fprintf(f, "P6\n%d %d\n255\n", VRAM_W, VRAM_H);
@@ -1315,8 +1315,8 @@ static void PC_WriteHiresPpm(int idx, int x, int y, int w, int h) {
     char path[512]; FILE *f; int px, py, W = VRAM_W * g_vhInternalScale;
     if (!s_hires) return;
     if (s_vramDumpDir && s_vramDumpDir[0])
-        sprintf(path, "%.470s/vh_hires_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
-    else sprintf(path, "vh_hires_%05d_f%06u.ppm", idx, s_drawFrame);
+        snprintf(path, sizeof(path), "%s/vh_hires_%05d_f%06u.ppm", s_vramDumpDir, idx, s_drawFrame);
+    else snprintf(path, sizeof(path), "vh_hires_%05d_f%06u.ppm", idx, s_drawFrame);
     f = fopen(path, "wb"); if (!f) return;
     fprintf(f, "P6\n%d %d\n255\n", w, h);
     for (py = 0; py < h; py++)
@@ -1470,7 +1470,7 @@ static struct {
 } s_hpool;
 
 static void *HiresPoolWorker(void *arg) {
-    int id = (int)(long)arg; unsigned seen = 0;
+    int id = (int)(uintptr_t)arg; unsigned seen = 0;   /* LLP64-safe: Win64 long is 32-bit */
     for (;;) {
         pthread_mutex_lock(&s_hpool.mtx);
         while (s_hpool.gen == seen) pthread_cond_wait(&s_hpool.start_cv, &s_hpool.mtx);
@@ -1491,7 +1491,7 @@ static void HiresPoolInit(int nworkers) {
     pthread_cond_init(&s_hpool.done_cv, NULL);
     s_hpool.nworkers = nworkers; s_hpool.gen = 0; s_hpool.done = 0;
     for (i = 0; i < nworkers; i++)
-        if (pthread_create(&s_hpool.th[i], NULL, HiresPoolWorker, (void *)(long)i) != 0) { s_hpool.nworkers = i; break; }
+        if (pthread_create(&s_hpool.th[i], NULL, HiresPoolWorker, (void *)(uintptr_t)i) != 0) { s_hpool.nworkers = i; break; }
     s_hpool.inited = 1;
 }
 

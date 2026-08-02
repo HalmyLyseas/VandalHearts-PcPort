@@ -278,7 +278,7 @@ static void drawSaves(int w, int h) {
     int count = PC_OverlaySaveCount(), sel = PC_OverlaySaveSelected();
     int scale, i, base, visN, scrollOff = 0, showPos, bodyLines;
     int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
-    char posbuf[24];
+    char posbuf[32];
 
     base = ovlTextPx(title, 1);
     if (ovlTextPx(L1, 1) > base) base = ovlTextPx(L1, 1);
@@ -509,7 +509,7 @@ int PC_CpuCount(void) {
 /* Stage-3 (1.2a) options-overlay setters. The present path already re-letterboxes to any window size
  * each frame, so these just resize / toggle the window -- no render changes. */
 void PC_GpuSetScale(int scale) {
-    if (scale < 1) scale = 1; if (scale > 8) scale = 8;
+    if (scale < 1) { scale = 1; } if (scale > 8) { scale = 8; }
     g_vhScale = scale;
     s_winW = 320 * scale;   /* native 320x240 framebuffer * scale (see PC_GpuInit) */
     s_winH = 240 * scale;

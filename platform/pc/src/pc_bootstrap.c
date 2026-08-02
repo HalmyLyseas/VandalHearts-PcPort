@@ -53,7 +53,7 @@
  * literal a valid buffer again, exactly like on real hardware -- found via
  * a real crash (fread() into gSoundSets[0].bufferPtr, PID coredump
  * backtrace), not a hypothetical. Confirmed only 8 such literals exist
- * (grep across src/*.c), none aliasing a real named symbol -- they're
+ * (grep across all of src/), none aliasing a real named symbol -- they're
  * anonymous scratch space, so this doesn't need to coexist with our own
  * generated globals at matching offsets, just be valid memory. Uses
  * MAP_FIXED_NOREPLACE (fails loudly instead of silently clobbering an
@@ -233,7 +233,7 @@ int PC_GetDeployDir(char *out, size_t outSize) {
  * the window/audio init (VH_SCALE, ...) read anything. Absent file => silently all-defaults. */
 __attribute__((constructor(101)))
 static void PC_LoadIniConfig(void) {
-    char dir[PATH_MAX], iniPath[PATH_MAX], line[512];
+    char dir[PATH_MAX], iniPath[PATH_MAX + 32], line[512];
     FILE *f;
     if (!PC_GetDeployDir(dir, sizeof(dir))) return;   /* AppImage: next to the .AppImage, not the mount */
     snprintf(iniPath, sizeof(iniPath), "%s/vandalhearts.ini", dir);
@@ -337,7 +337,7 @@ static void PC_IniWriteKeyLine(FILE *out, const char *key, const char *value, co
  *      next header, or at EOF), so it joins the existing section rather than spawning a new one.
  *   3. neither -> append a fresh [section] header + the line (also the from-scratch/no-file case). */
 int PC_SaveIniConfig(const char *section, const char *key, const char *value) {
-    char dir[PATH_MAX], iniPath[PATH_MAX], tmpPath[PATH_MAX], line[512], hdr[128];
+    char dir[PATH_MAX], iniPath[PATH_MAX + 32], tmpPath[PATH_MAX + 40], line[512], hdr[128];
     FILE *in, *out;
     int keyExists = 0, sectionExists = 0, keyWritten = 0, inTarget = 0;
     if (!section) section = "";
@@ -430,8 +430,8 @@ static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
  * VH_DISC_IMAGE (checked by the caller) still overrides all of this. Whatever this returns, a failed
  * mount prints the path + a hint, so a wrong guess is self-explanatory rather than silent. */
 static const char *DefaultDiscPath(void) {
-    static char path[PATH_MAX];
-    char deployDir[PATH_MAX], exeDir[PATH_MAX], cand[PATH_MAX];
+    static char path[PATH_MAX + 64];
+    char deployDir[PATH_MAX], exeDir[PATH_MAX], cand[PATH_MAX + 16];
     /* Where the user keeps their disc: next to the .AppImage when packaged, else the exe dir. */
     if (PC_GetDeployDir(deployDir, sizeof(deployDir))) {
         /* 1. `game/` subfolder there */
@@ -542,6 +542,7 @@ static int VhDecodeMemAccess(const unsigned char *ip, int *outIsWrite, int *outG
 #endif /* __i386__ && !_WIN32 */
 
 #if !defined(_WIN32)
+#if defined(__i386__)   /* only the i386 NULL-decode fixup below calls this */
 /* Log a fixed-up NULL-region access once per unique instruction pointer (async-signal-safe-ish:
  * open/write/backtrace_symbols_fd, no malloc-heavy fprintf). */
 static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
@@ -565,6 +566,7 @@ static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
         backtrace_symbols_fd(frames, fn, 2);
     }
 }
+#endif /* __i386__ -- PC_LogNullRead */
 
 /* Stage 2.3: available on x86-64 as well as x86-32. `REG_ERR` and the page-fault error-code
  * layout are identical on both -- bit 1 set means the access was a write. This must NOT be

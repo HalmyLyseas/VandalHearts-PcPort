@@ -121,9 +121,20 @@ OPENAL_LIBS    := $(shell $(PKG_CONFIG_32) pkg-config --libs openal)
 # -DPC_FEAT: Stage-3 gameplay/QoL gate (bidirectional ally-cycle, threat overlay,
 # ...). New player-facing behaviour, distinct from PC_PORT (correctness) so it's
 # greppable on its own. Also PC-build-only; matching build never defines it.
+# Warning policy (post-1.6 maintenance): the decompiled game source is 1996 C compiled as-is -- its
+# recurring, known-benign warning classes (K&R declarations vs modern prototypes, PSX pointer-width
+# idioms) are silenced HERE so they stop drowning the build output. PORT code (the backend rules
+# below) instead compiles with $(PORT_WARN) and must stay warning-clean -- a new warning there is
+# signal, not noise. Do NOT add game-side suppressions to port code or vice versa.
+GAME_WARN      := -Wno-incompatible-pointer-types -Wno-builtin-declaration-mismatch \
+                  -Wno-discarded-qualifiers -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast \
+                  -Wno-int-conversion
+# -Wno-unused-parameter: the PsyQ-API shims keep Sony's exact signatures; unused args are inherent.
+PORT_WARN      := -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
+
 GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PORT -DPC_FEAT -D'asm(x)=' \
                    -I$(STAGE_DIR) -Iinclude -I../.. \
-                   -include pc_forward_decls.h -g
+                   -include pc_forward_decls.h -g $(GAME_WARN)
 
 # libwebp: STANDARD port dependency (1.6 HD pack). WebP-compressed replacements are ~7x smaller than raw
 # .hdi (a full background pack is ~20MB vs ~150MB), so it ships on by default. NO_WEBP=1 builds without it
@@ -226,29 +237,29 @@ link: $(BUILD_DIR)/generated_data.o $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/p
 	@cp -n vandalhearts.ini $(BUILD_DIR)/ 2>/dev/null || true   # ship config template (don't clobber an edited copy)
 
 $(BUILD_DIR)/generated_data.o: $(BUILD_DIR)/generated_data.c
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $(BUILD_DIR)/generated_data.c
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $(BUILD_DIR)/generated_data.c
 
 # Real, hand-extracted definitions for the flagged pointer globals fixed so far
 # (gBattleEnemyUnitInitialStates, gBattlePartyUnitInitialStates -- see the file's own header
 # comment and exchange/12-phase-c-bootstrap.md Bug 11). Needs the same staged-include flags as
 # generated_data.o since it #includes battle.h and needs the real struct layouts.
 $(BUILD_DIR)/pc_battle_data.o: src/pc_battle_data.c | stage
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 # Real, hand-extracted definition for gUnitAnimSets (3-level pointer structure -- see the
 # file's own header comment and exchange/12-phase-c-bootstrap.md Bug 12).
 $(BUILD_DIR)/pc_unit_anim_data.o: src/pc_unit_anim_data.c | stage
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 # Real, hand-extracted definition for gSpriteBoxQuads (single-level -- see the file's own
 # header comment and exchange/12-phase-c-bootstrap.md Bug 13).
 $(BUILD_DIR)/pc_sprite_box_quads.o: src/pc_sprite_box_quads.c | stage
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 # Reconstructed cutscene/event unit animation-set pointer tables (gAnimSet_* -- were NULL in the
 # data-gen, so cutscene units drew with gfxIdx=0 and were invisible; see the file's own header).
 $(BUILD_DIR)/pc_event_anim_data.o: src/pc_event_anim_data.c | stage
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 # ---- GENERATED game/BIOS-derived data files (gitignored; regenerated at build) ----------------
 # These reconstruct copyrighted content (Konami UI text, PS1 BIOS kanji glyphs) from the user's OWN
@@ -265,7 +276,7 @@ src/pc_string_table.c:       tools/gen_string_table.py       ; python3 $<
 # Reconstructed gEvtEntities[95] event-entity property tables (were NULL -> invisible cutscene
 # units; see the file's own header).
 $(BUILD_DIR)/pc_evt_entities.o: src/pc_evt_entities.c | stage
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 # Reconstructed gSpellDescriptions[72] battle spell/item info strings (were NULL -> blank
 # description window; see gen_spell_descriptions.py). Plain data, no game headers.
@@ -389,10 +400,10 @@ FORCE:
 # labels.inc __asm__ blocks are only skipped under PERMUTER (or M2CTX) -- same reason
 # pc_battle_data.c/pc_sprite_box_quads.c/libsnd.c already define it.
 $(BUILD_DIR)/libetc.o: src/libetc.c | stage
-	$(CC) $(M32) $(SAN) -DPERMUTER -Iinclude -I$(STAGE_DIR) $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -DPERMUTER -Iinclude -I$(STAGE_DIR) $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libcd.o: src/libcd.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # -Ibuild/include_stage + -DPERMUTER: libsnd.c reaches into cd.c's real
 # gCdFiles/gVabLoader globals (see the SsVabTransBodyPartly comment), which
@@ -401,60 +412,60 @@ $(BUILD_DIR)/libcd.o: src/libcd.c
 # GAME_C_FLAGS above), but NOT -std=gnu89 (this is our own file, written in
 # ordinary modern C, not K&R-compatible game source).
 $(BUILD_DIR)/libsnd.o: src/libsnd.c | stage
-	$(CC) $(M32) $(SAN) -DPERMUTER -Iinclude -I$(STAGE_DIR) $(OPENAL_CFLAGS) -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -DPERMUTER -Iinclude -I$(STAGE_DIR) $(OPENAL_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libspu.o: src/libspu.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libkernel.o: src/libkernel.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libgte.o: src/libgte.c
-	$(CC) $(M32) $(SAN) -Iinclude -fno-builtin -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -fno-builtin -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libgpu.o: src/libgpu.c
-	$(CC) $(M32) $(SAN) -Iinclude $(HD_WEBP_CFLAGS) -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude $(HD_WEBP_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/pc_gpu_window.o: src/pc_gpu_window.c
-	$(CC) $(M32) $(SAN) -Iinclude $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 # Stage-3 (1.1C) in-game options overlay model -- pure C, no SDL/game headers.
 $(BUILD_DIR)/pc_overlay.o: src/pc_overlay.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # Stage-3 (1.2b) save-management file ops -- pure C, no SDL/game headers.
 $(BUILD_DIR)/pc_saves.o: src/pc_saves.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # Stage-3 (1.3) Tactical-mode balance package -- patches mutable game tables (gUnitInfo, etc.), so it
 # needs the real struct layouts via the staged include chain, same flags as the pc data files above.
 $(BUILD_DIR)/pc_balance.o: src/pc_balance.c | stage
-	$(CC) $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libsn.o: src/libsn.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/pc_bootstrap.o: src/pc_bootstrap.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/pc_xa.o: src/pc_xa.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # Software SPU voice renderer (Phase 2.1) -- OpenAL streaming sink like pc_xa.o.
 $(BUILD_DIR)/pc_spu.o: src/pc_spu.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/pc_mdec.o: src/pc_mdec.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # HD FMV decoder (1.6): libav H.264 -> RGB, replacing the STR movie picture. libav flags applied here.
 $(BUILD_DIR)/pc_hdvideo.o: src/pc_hdvideo.c
-	$(CC) $(M32) $(SAN) -Iinclude $(HD_VIDEO_CFLAGS) -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude $(HD_VIDEO_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 # Generated PS1 BIOS kanji charset-2 glyphs (see tools/gen_kanji_font.py) used
 # by Krom2RawAdd in libkernel.c -- pure data, no game headers.
 $(BUILD_DIR)/pc_kanji_font.o: src/pc_kanji_font.c
-	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # Compiles every src/*.c independently and reports a pass/fail summary
 # without stopping at the first error -- the fast way to see the whole

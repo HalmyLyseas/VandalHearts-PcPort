@@ -50,7 +50,12 @@ void PC_ReturnToTitle(void) {
     /* GAP 8: jump straight to the title menu from anywhere, skipping the intro videos, by replicating
      * the game-over teardown (battle_eval.c). The title -> New/Load flow re-establishes run state, so
      * leftover party/chapter/objects don't need clearing. Mode stays as-is (toggle editable at title). */
-    PerformAudioCommand(AUDIO_CMD_STOP_ALL);
+    {
+        /* audio.h only carries a commented-out FIXME decl; declare the real signature
+         * (src/audio.c:1346) locally -- an implicit int declaration is UB at LP64. */
+        extern void PerformAudioCommand(s16 cmd);
+        PerformAudioCommand(AUDIO_CMD_STOP_ALL);
+    }
     gIsEnemyTurn = 0;
     gState.primary   = STATE_TITLE_SCREEN;
     gState.secondary = 0;

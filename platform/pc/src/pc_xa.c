@@ -172,7 +172,7 @@ void PC_XaReset(void) {
 void PC_XaSetVolume(int left, int right) {
     /* CD serial volume 0..127 per side -> average -> OpenAL gain 0..1. */
     int v = (left + right) / 2;
-    if (v < 0) v = 0; if (v > 127) v = 127;
+    if (v < 0) { v = 0; } if (v > 127) { v = 127; }
     s_gain = (float)v / 127.0f;
     if (s_alReady) alSourcef(s_source, AL_GAIN, s_gain);
 }
