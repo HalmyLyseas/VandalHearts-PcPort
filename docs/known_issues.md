@@ -23,15 +23,17 @@ unless noted otherwise.
 
 ## Data reconstruction (port layer)
 
-### Rare blank text or static minor effects are possible on untested paths
+### Rare blank text or static minor effects — class audited, believed closed
 
 - The port reconstructs the game's statically-initialized data tables from your own game copy at build
-  time. Pointer-typed tables need individual reconstruction, and while every instance found so far has
-  been fixed (blank spell/item descriptions, frozen arrows/effect shadows, invisible cutscene extras —
-  all resolved in past releases), a systematic audit of the remaining pointer-typed globals is planned.
-  If you ever see **blank description text, a missing minor visual, or a small effect that doesn't
-  animate**, please report it with the location — it is almost certainly this class, and fixes are
-  quick once located.
+  time. Pointer-typed tables need individual reconstruction; past instances (blank spell/item
+  descriptions, frozen arrows/effect shadows, invisible cutscene extras) were all fixed in earlier
+  releases. A **systematic audit of every remaining pointer-typed global (2026-08-03)** checked each
+  against its initializer in the original executable: all with real initializers are covered by
+  existing reconstructions, and the rest are zero on the PlayStation too (assigned at runtime). No
+  uncovered case remains. If you nonetheless see **blank description text, a missing minor visual, or
+  a small effect that doesn't animate**, please report it with the location — it would be this class,
+  and fixes are quick once located.
 
 ## Performance
 
