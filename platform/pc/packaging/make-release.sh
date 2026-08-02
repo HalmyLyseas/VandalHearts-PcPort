@@ -49,6 +49,10 @@ die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 rm -rf "$STAGE"; mkdir -p "$STAGE"
 [ -f "$INI" ] || die "missing $INI"
 
+# Guard: Makefile <-> CMakeLists source-list drift breaks exactly one platform's build (the 1.6
+# pc_hdvideo incident). Catch it before spending minutes on either build.
+"$PC_DIR/tools/check_build_parity.sh" || die "build-system parity check failed (see above)"
+
 # ---- Windows: host MinGW-w64 cross-compile ----------------------------------
 if [ "$DO_WIN" = 1 ]; then
     command -v x86_64-w64-mingw32-gcc >/dev/null || die "MinGW-w64 toolchain not found (pacman -S mingw-w64-gcc)"
