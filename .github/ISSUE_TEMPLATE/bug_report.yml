@@ -1,0 +1,78 @@
+name: Bug report
+description: Something in the PC port behaves wrongly (crash, rendering, audio, gameplay, saves…)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please check [known issues](../blob/master/docs/known_issues.md)
+        first. The original game's logic is reproduced byte-for-byte, so most real bugs live in
+        the port's backend layer — the details below are what make them findable.
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      description: Release tag (e.g. v1.6.0), or the commit hash for a self-built binary
+      placeholder: v1.6.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 10
+        - Windows 11
+        - Linux (AppImage)
+        - Linux (self-built)
+        - Other / self-built elsewhere
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Game mode
+      options:
+        - Normal
+        - Tactical
+        - Both / not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: hdpack
+    attributes:
+      label: HD pack
+      description: Is the optional HD pack installed, and does toggling HD PACK off change the bug?
+      options:
+        - Not installed
+        - Installed, bug happens with HD PACK ON
+        - Installed, bug happens with HD PACK OFF too
+        - Installed, not sure
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Where in the game
+      description: Chapter / battle / town / menu — precise enough to navigate there
+      placeholder: "Chapter 2, battle 6, after the cutscene"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: |
+        For rendering/audio issues, a comparison against original hardware or an accurate emulator
+        is especially helpful. Attach screenshots here if visual.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Console output / crash log
+      description: |
+        Run from a terminal (Windows: the console window) and paste anything the game printed —
+        especially the last lines before a crash. Attach your `vandalhearts.ini` if you changed it,
+        and a save file from `saves/` if the bug needs your progress to reproduce.
+      render: text

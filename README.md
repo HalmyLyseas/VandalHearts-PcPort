@@ -137,7 +137,9 @@ Byte-exact decomp check: `make check` rebuilds `SLUS_004.47` and md5-compares it
 
 ## Documentation
 
-Full developer and user documentation is in **[`docs/`](docs/)**:
+Full developer and user documentation is in **[`docs/`](docs/)**. Contributions and bug reports are
+welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for the ground rules (above all: the matching
+build must stay byte-exact).
 
 - [Known issues](docs/known_issues.md) — current defects and limitations we're already aware of
 - [Architecture](docs/architecture.md) — the two-layer design and how the port avoids breaking the match
