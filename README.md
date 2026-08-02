@@ -6,7 +6,7 @@ byte-exact matching decompilation of the game.
 > **Non-commercial fan preservation project. Not affiliated with Konami or Sony. You must supply
 > your own legally-owned copy of the game.** See [DISCLAIMER](DISCLAIMER) and *Legal* below.
 
-The project has two stages, **both complete**:
+The project has three stages, **all completed**:
 
 1. **Matching decompilation.** Every non-PsyQ function is decompiled to C that rebuilds the original
    `SLUS_004.47` byte-for-byte (`md5 596bb082a2de5f1fe977dd3d7e160b03`, verified by `make check`).
@@ -15,6 +15,13 @@ The project has two stages, **both complete**:
    submission, GTE matrix math, CD-ROM / XA audio, SPU, MDEC video, pad input — is replaced with a
    portable equivalent (SDL2 + OpenGL + OpenAL), so the game boots and runs on a modern desktop from
    its own data.
+3. **New features.** A PC-only layer of additions on top of the faithful port: reworked controls with
+   an at-a-glance enemy threat overlay, an in-game options and save-management overlay, an opt-in
+   **Tactical Mode** rebalance that offers a fresh way to play, a higher-fidelity graphics track (an
+   accurate software rasterizer with optional internal-resolution supersampling), and an optional
+   **HD pack** for backgrounds and movies. The faithful retail experience stays the default; anything
+   that changes gameplay is opt-in. See [docs/gameplay-additions.md](docs/gameplay-additions.md),
+   [docs/tactical-mode.md](docs/tactical-mode.md) and [docs/hd-pack.md](docs/hd-pack.md).
 
 ## Status
 
@@ -46,9 +53,10 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 The two foundational stages — the byte-exact decompilation and the faithful native port — are
 **complete** (see *Status* above). **Stage 3** adds an optional layer of gameplay and quality-of-life
 enhancements: better controls (including an at-a-glance enemy threat overlay), an in-game options and
-save-management overlay, an opt-in balance mode, and a higher-fidelity graphics layer (an accurate
-software rasterizer with optional internal-resolution supersampling). The faithful experience is always
-preserved; gameplay-changing additions are opt-in.
+save-management overlay, an opt-in balance mode, a higher-fidelity graphics layer (an accurate software
+rasterizer with optional internal-resolution supersampling), and an optional HD pack for the pre-rendered
+backgrounds and movies. The faithful experience is always preserved; gameplay-changing additions are
+opt-in.
 
 Full breakdown — what's shipped vs. planned — is in **[docs/roadmap.md](docs/roadmap.md)**. These are
 plans, not commitments: this is a non-commercial hobby preservation project.
@@ -62,7 +70,7 @@ A release is self-contained and needs no dependency hunting:
 
 | Platform | Package | Requirements |
 |---|---|---|
-| **Windows** | `.zip` — `vandalhearts_pc.exe`, 6 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
+| **Windows** | `.zip` — `vandalhearts_pc.exe`, 8 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
 | **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 to run the AppImage |
 
 **Setup is drop-in:** put your disc image in a `game/` folder next to the executable (or a bare
