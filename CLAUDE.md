@@ -26,8 +26,8 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    (SDL2 + OpenGL + OpenAL, chosen after evaluating Vulkan). The **full game runs end-to-end** from
    the real disc, validated by full playthroughs on **Windows and Linux** including the endgame and
    credits. Details below and in [`docs/`](docs/).
-3. **Stage 3 — gameplay/QoL (in progress).** PC-only quality-of-life and balance work, all
-   `platform/pc/` or `#ifdef PC_FEAT`-gated. **v1.1.0 released 2026-07-25** (bidirectional
+3. **Stage 3 — gameplay/QoL (v1.1–v1.6 shipped; main additions complete, now maintenance).** PC-only
+   quality-of-life, balance and graphics work, all `platform/pc/` or `#ifdef PC_FEAT`-gated. **v1.1.0 released 2026-07-25** (bidirectional
    shoulder-button ally-cycle; enemy threat overlay; a **SELECT+START** in-game options overlay,
    right-stick axis invert — Y inverted by default — plus deploy-relative saves). **v1.2.0 released
    2026-07-25** (video: window scale/fullscreen in the overlay; **save management** — unlimited
@@ -52,7 +52,17 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    pixel-aligned); (3) a **multithreaded rasterizer** (`VH_RASTER_THREADS`, auto) so 4× holds 30 fps and
    battle fast-forward stays effective. The tile-seam grid, compass "dotted lines" and parked water-shimmer
    were all resolved by crust-free sampling. Guiding principle: *sharpen without reinterpreting* (no
-   upscaled video, no redrawn sprites, no camera-feel changes).
+   upscaled video, no redrawn sprites, no camera-feel changes). **v1.6.0 released 2026-08-02** — an
+   **optional HD pack** (the base build ships no art and is unchanged without one). Upscaled `.webp`
+   backgrounds replace the 320×240 pre-rendered art via a content hash of each `LoadImage` VRAM upload
+   (sampled in the 1.5 hi-res pass); the intro/ending FMVs can be swapped for HD **H.264/HEVC** re-encodes
+   (a `libav` decoder in `platform/pc/src/pc_hdvideo.c`) while the game keeps its original XA audio + frame
+   timing. New deps **libwebp** + **libav** are default-on (`NO_WEBP`/`NO_HDVIDEO` opt-outs); the Windows
+   build links a **minimal static libav** so it ships no ffmpeg DLLs. Hand-drawn pixel art (portraits,
+   sprites, UI, fonts) deliberately stays native. **The pack is copyright-derived and is a RELEASE ASSET,
+   not committed** — an optional download or self-built from your own disc (disclosed in `NOTICE`/
+   `DISCLAIMER`). This marks the natural end of the main Stage-3 additions; further work is expected to be
+   maintenance — minor adjustments and reported bugs.
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates
@@ -120,10 +130,13 @@ job is byte-exact matching, not readability or portability; all port-side change
   `github.com/shao113/vh` (the original decomp, reference only). `upstream-master` is the pristine
   byte-exact base. Commit identity is the GitHub noreply address (no PII). Since it's public, keep
   committed files self-contained — reference only tracked paths, never `exchange/` or local notes.
-- **Releases:** **v1.0.0 published** (Windows zip + Linux AppImage). Built and published *locally* by
-  `platform/pc/packaging/make-release.sh <tag>` — never CI, because the data-segment generator needs
-  the byte-exact `SLUS_004.47` + `KROMDAT.BIN` at build time (copyrighted, can't live on runners).
-  Release binaries embed a portion of game-derived data; this is disclosed in `NOTICE`/`DISCLAIMER`.
+- **Releases:** **v1.0.0 through v1.6.0 published** (each: Windows zip + Linux AppImage; v1.6.0 adds an
+  optional `hdpack.zip` release asset). Built and published *locally* by
+  `platform/pc/packaging/make-release.sh <tag> [--hdpack=<dir>]` — never CI, because the data-segment
+  generator needs the byte-exact `SLUS_004.47` + `KROMDAT.BIN` at build time (copyrighted, can't live on
+  runners). Always stage-build BOTH platforms (`--no-publish`) before publishing — it has caught
+  Windows-only breaks every graphics release. Release binaries embed a portion of game-derived data; this
+  and the optional HD pack (upscaled derivative art) are disclosed in `NOTICE`/`DISCLAIMER`.
 
 ## Byte-exact discipline — the one rule that must not break
 

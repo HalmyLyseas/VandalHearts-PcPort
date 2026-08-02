@@ -95,7 +95,7 @@ game's feel, which this project avoids. (Bundled "collector" extras such as artw
 — that material is copyrighted.) The pre-rendered backgrounds and FMV movies are addressed separately by the
 **optional** 1.6 HD pack below, which is user-supplied data rather than a change to the base build.
 
-### 1.6 — HD pack: backgrounds + movies (complete, pending release)
+### 1.6 — HD pack: backgrounds + movies ✅ (released 2026-08-02)
 
 An **optional** engine layer that replaces the 320×240 pre-rendered backgrounds *and* the FMV movies with
 higher-resolution art, plus the tools to build a pack. Scoped to the pre-rendered layers only:
@@ -114,3 +114,11 @@ higher-resolution art, plus the tools to build a pack. Scoped to the pre-rendere
   ffmpeg DLLs.
 
 See [hd-pack.md](hd-pack.md).
+
+## Beyond 1.6 — maintenance
+
+The planned feature arc is complete. The game is a faithful, cross-platform native port (Stages 1–2, both
+byte-exact and playable end-to-end), and the Stage-3 releases — controls, save management, Tactical Mode,
+quality-of-life, graphics fidelity, and the optional HD pack — have shipped across **v1.1–v1.6**. From here
+the project is in **maintenance**: minor adjustments and fixes for reported issues rather than new feature
+tracks. Known problems and small follow-ups are tracked in [known_issues.md](known_issues.md).
