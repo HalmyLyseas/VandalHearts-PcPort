@@ -27,9 +27,7 @@ extern int g_camInvertY;
 extern int g_btnLabels;   /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 1=XBOX) */
 extern int g_vhHdPack;    /* 1.6 HD PACK toggle (pc_gpu_window.c); libgpu's HdDetect() auto-ONs it */
 extern int PC_HdPackAvailable(void);   /* 1.6 (libgpu.c): 1 if a valid HD pack is installed beside the exe */
-extern int PC_HdPackCount(void);        /* 1.6.1: pack content counts + short status for the value column */
-extern int PC_HdPackVideoCount(void);
-extern const char *PC_HdPackStatusShort(void);
+extern const char *PC_HdPackStatusShort(void);   /* 1.6.1: why the pack is unusable, for the value column */
 
 /* CHOICE value labels for BUTTON LABELS, indexed by g_btnLabels. */
 static const char *const s_btnLabelText[] = { "PLAYSTATION", "XBOX" };
@@ -333,15 +331,13 @@ int PC_OverlayItem(int i, const char **label, const char **valueText) {
     if (i < 0 || i >= N_ITEMS) { if (label) *label = ""; if (valueText) *valueText = NULL; return 0; }
     it = &s_items[i];
     if (label) *label = it->label;
-    /* 1.6.1: the HD PACK row's value shows WHAT the pack holds (or why it can't be used) instead of a
-     * bare ON/OFF -- "ON (75 BG+16 FMV)" / "NO PACK" / "OUTDATED PACK" / "WRONG GAME". */
+    /* 1.6.1: when the HD PACK row is unusable, its value says WHY ("NO PACK" / "OUTDATED PACK" /
+     * "WRONG GAME") instead of a meaningless OFF. With a valid pack it stays a plain ON/OFF -- the
+     * content counts (75 BG, 16 FMV) are console-only ([HD] detect log): in-menu they were clutter,
+     * and the OSD font has no '+' glyph anyway. */
     if (it->value == &g_vhHdPack && valueText) {
         const char *st = PC_HdPackStatusShort();
         if (st) { *valueText = st; return 1; }
-        if (*it->value) {
-            snprintf(vbuf, sizeof(vbuf), "ON (%d BG+%d FMV)", PC_HdPackCount(), PC_HdPackVideoCount());
-            *valueText = vbuf; return 1;
-        }
     }
     if (it->kind == OVL_TOGGLE) { if (valueText) *valueText = *it->value ? it->onText : it->offText; return 1; }
     if (it->kind == OVL_CHOICE) {

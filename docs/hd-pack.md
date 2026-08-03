@@ -30,9 +30,9 @@ in the SELECT+START options overlay. `VH_HD_PACK=<dir>` overrides the auto-detec
 `backgrounds/`-style folder.
 
 `manifest.json` records the disc/build id, pack version, and the pack's content (background hashes +
-FMV start sectors). The engine requires **packVersion 2**; the overlay's HD PACK row shows the pack's
-content when enabled (e.g. `ON (75 BG+16 FMV)`), or the reason it can't be used (`NO PACK` /
-`OUTDATED PACK` / `WRONG GAME`).
+FMV start sectors). The engine requires **packVersion 2**. The startup console log reports the pack's
+content (`75 backgrounds, 16 videos`); when the pack can't be used, the overlay's HD PACK row says why
+(`NO PACK` / `OUTDATED PACK` / `WRONG GAME`).
 
 ```json
 { "game": "SLUS-00447", "packVersion": 2, "count": 75, "hashes": ["0c5035b9b009cde7", ...],
