@@ -90,3 +90,4 @@ vh_vram_*.ppm
 
 # 1.6: locally-built static libav for the Windows HD-video build (make-release.sh)
 /platform/pc/ffmpeg-mingw-static/
+/platform/pc/ffmpeg-linux-static/

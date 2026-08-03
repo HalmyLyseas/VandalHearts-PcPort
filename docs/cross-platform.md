@@ -42,7 +42,7 @@ cd platform/pc
 # hard-imports 35+ codec DLLs (x264/x265/aom/vpx/dav1d/...), 60-100 MB to bundle. Instead build a
 # minimal STATIC libav (H.264 decode + mov demux + swscale only) that links into the exe with NO
 # ffmpeg DLLs -- ~2.4 MB of exe growth:
-tools/build-ffmpeg-mingw.sh              # -> platform/pc/ffmpeg-mingw-static/
+tools/build-ffmpeg-static.sh              # -> platform/pc/ffmpeg-mingw-static/
 cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
       -DCMAKE_PREFIX_PATH="$PWD/ffmpeg-mingw-static"
 cmake --build build_win
@@ -150,8 +150,11 @@ distrobox enter vh-deb12
 
 # --- inside the container, once ---
 sudo apt update && sudo apt install -y build-essential python3 patchelf file wget \
-     libsdl2-dev libopenal-dev libgl1-mesa-dev libwebp-dev binutils-mipsel-linux-gnu \
-     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+     libsdl2-dev libopenal-dev libgl1-mesa-dev libwebp-dev binutils-mipsel-linux-gnu
+# libav is NOT taken from apt: the release links a minimal STATIC libav (same as Windows) so the
+# AppImage doesn't bundle the distro ffmpeg's 100+-library codec closure (~65MB -> ~14MB).
+# make-release.sh clones + builds it automatically (cached at platform/pc/ffmpeg-linux-static/);
+# manual: TARGET=native platform/pc/tools/build-ffmpeg-static.sh inside the container.
 mkdir -p ~/bin      # Debian 12 packages neither tool; use the upstream continuous builds
 wget -O ~/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
 wget -O ~/bin/linuxdeploy  https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage

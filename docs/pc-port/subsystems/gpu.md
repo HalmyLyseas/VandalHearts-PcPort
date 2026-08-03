@@ -201,6 +201,34 @@ lead ("the game never calls `SetTexWindow`") was wrong: the window arrives via
   `Mask == 0` is a no-op (full page). The fix is general — any map effect using a
   texture window benefits.
 
+## The 1.5/1.6 rendering layers (accurate rasterizer, supersampling, HD sampling)
+
+Everything above describes the base pipeline; three later layers sit on top of it, all inside
+`libgpu.c`:
+
+- **PS1-accurate rasterization (`VH_ACCURATE`, the default).** The fills are a fixed-point integer
+  DDA that evaluates pixel coverage *and* texture UVs at the exact positions the PS1 GPU does, with
+  ordered dithering (gated on the GPU's dither-enable state, GP0 E1h.9), the 5-bit blend, and the
+  hardware's fill conventions — validated ~99.8–99.99 % pixel-exact against a reference-emulator
+  VRAM capture. The softer legacy fills remain behind `VH_ACCURATE=0`. The per-rule detail lives as
+  comments on the DDA code itself (`dda_span` and friends).
+- **Internal-resolution supersampling (`VH_INTERNAL_SCALE` 1–4×, "INTERNAL RES").** Each primitive
+  is rasterized twice: natively into `s_vram` (authoritative — uploads, `StoreImage`, and all
+  read-back see only this), and, when the scale is >1, into a separate `s_hires` buffer at scaled
+  geometry via a per-frame deferred display list. The hi-res pass is fanned out across worker
+  threads (`VH_RASTER_THREADS`, disjoint scanline bands, bit-identical output) and is what gets
+  presented. *Crust-free* sampling biases hi-res texel sampling onto tile interiors on perspective
+  quads (2D UI is auto-detected and stays pixel-aligned), which is what removed the tile-seam grid.
+- **HD background sampling (1.6, `HD PACK`).** `LoadImage` content-hashes each upload; a matching
+  pack image is decoded on a background thread and, once published, the hi-res pass samples it at
+  sub-texel precision instead of the native texels (8bpp draws only — battle 4bpp sprites sharing
+  the same VRAM are never replaced). See [hd-pack.md](../../hd-pack.md).
+
+**Regression harness:** `VH_GPU_RECORD` / `VH_GPU_REPLAY` serialize and deterministically replay
+everything this file consumes (VRAM ops + walker-dispatched primitives) — see
+[`platform/pc/tools/regress/`](../../../platform/pc/tools/regress/README.md). Run `raster_check.sh`
+after any change here.
+
 ## Gotchas / notes
 
 - **Never write a raw pointer into an OT tag.** Only `AddPrim`/`ClearOTag`/

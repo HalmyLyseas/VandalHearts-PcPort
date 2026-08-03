@@ -294,7 +294,7 @@ if(VH_WEBP)
 endif()
 if(VH_HDVIDEO)
     if(WIN32)
-        # The Windows build links a STATIC libav (the shippable form -- see tools/build-ffmpeg-mingw.sh;
+        # The Windows build links a STATIC libav (the shippable form -- see tools/build-ffmpeg-static.sh;
         # point CMake at it with -DCMAKE_PREFIX_PATH=<prefix>). Static archives resolve left-to-right, and
         # the four libs cross-reference, so wrap them in a link group (order-independent). +bcrypt for
         # avutil's BCryptGenRandom. On a shared libav these flags are harmless.

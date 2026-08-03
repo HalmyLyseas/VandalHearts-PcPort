@@ -62,8 +62,8 @@ if [ "$DO_WIN" = 1 ]; then
     FFPREFIX="${VH_MINGW_FFMPEG:-$PC_DIR/ffmpeg-mingw-static}"
     if [ ! -f "$FFPREFIX/lib/libavcodec.a" ]; then
         log "Windows: building minimal static libav (one-time) -> $FFPREFIX"
-        PREFIX="$FFPREFIX" "$PC_DIR/tools/build-ffmpeg-mingw.sh" >/dev/null
-        [ -f "$FFPREFIX/lib/libavcodec.a" ] || die "static libav build failed (see tools/build-ffmpeg-mingw.sh)"
+        PREFIX="$FFPREFIX" "$PC_DIR/tools/build-ffmpeg-static.sh" >/dev/null
+        [ -f "$FFPREFIX/lib/libavcodec.a" ] || die "static libav build failed (see tools/build-ffmpeg-static.sh)"
     fi
     log "Windows: cross-compiling with MinGW-w64 (-O2)"
     # Release binaries are optimized (-O2, matching the validated `build_opt`). The default CMake/Make
@@ -96,16 +96,33 @@ fi
 if [ "$DO_LINUX" = 1 ]; then
     command -v distrobox >/dev/null || die "distrobox not found"
     distrobox list 2>/dev/null | grep -q "$CONTAINER" || die "container '$CONTAINER' not found (see docs/cross-platform.md)"
+    # 1.6 libav: link a minimal STATIC libav (same as Windows) instead of the distro's shared ffmpeg.
+    # A shared libav drags its full codec closure into the AppImage (100+ .so, ~65MB vs ~20MB) for a
+    # 15fps movie decode. Built once inside the container (its gcc sets the ABI floor) from a source
+    # tree cloned on the HOST (the container has no git); cached at ffmpeg-linux-static/.
+    FF_LINUX="$PC_DIR/ffmpeg-linux-static"
+    FF_SRC="$PC_DIR/build/ffmpeg-src"
+    if [ ! -f "$FF_LINUX/lib/libavcodec.a" ]; then
+        if [ ! -f "$FF_SRC/configure" ]; then
+            log "Linux: cloning FFmpeg source (host) -> $FF_SRC"
+            git clone --depth 1 --branch n7.1 https://github.com/FFmpeg/FFmpeg.git "$FF_SRC" >/dev/null 2>&1 \
+                || die "FFmpeg clone failed"
+        fi
+        log "Linux: building minimal static libav in the container (one-time) -> $FF_LINUX"
+        distrobox enter "$CONTAINER" -- bash -lc \
+            "TARGET=native PREFIX='$FF_LINUX' SRC='$FF_SRC' '$PC_DIR/tools/build-ffmpeg-static.sh'" >/dev/null 2>&1
+        [ -f "$FF_LINUX/lib/libavcodec.a" ] || die "container static-libav build failed (rerun tools/build-ffmpeg-static.sh TARGET=native inside $CONTAINER)"
+    fi
     log "Linux: building the AppImage in container '$CONTAINER' (glibc floor)"
     distrobox enter "$CONTAINER" -- bash -lc "
         set -e; export PATH=\"\$HOME/bin:\$PATH\"
         cd '$PC_DIR'
-        # 1.6 HD deps: fail loudly with an install hint rather than silently building a no-HD AppImage
-        # (a missing lib would otherwise become a confusing link error, or drop VH_HD_* support).
-        for pc in libwebp libavformat libavcodec libavutil libswscale; do
-            pkg-config --exists \$pc || { echo \"ERROR: '\$pc' dev package missing in container '$CONTAINER'.\"; \
-              echo \"  fix: distrobox enter $CONTAINER -- sudo apt-get install -y libwebp-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev\"; exit 1; }
-        done
+        # 1.6 HD deps: fail loudly with an install hint rather than silently building a no-HD AppImage.
+        # libwebp comes from the distro (small, clean dep); libav comes from the static prefix above
+        # (its pkg-config dir is prepended so the port's Makefile resolves the .a's, no ffmpeg .so).
+        pkg-config --exists libwebp || { echo \"ERROR: libwebp-dev missing in container '$CONTAINER'.\"; \
+              echo \"  fix: distrobox enter $CONTAINER -- sudo apt-get install -y libwebp-dev\"; exit 1; }
+        export PKG_CONFIG_PATH='$FF_LINUX/lib/pkgconfig'\${PKG_CONFIG_PATH:+:\$PKG_CONFIG_PATH}
         make link BUILD_DIR=build_deb CC='cc -O2' >/dev/null
         packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc >/dev/null"
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Build a MINIMAL, STATIC libav for the Windows (x86_64-w64-mingw32) target — just what the
-# port's HD-FMV decoder (pc_hdvideo.c) needs: H.264 decode + mov/mp4 demux + swscale rescale.
+# Build a MINIMAL, STATIC libav — just what the port's HD-FMV decoder (pc_hdvideo.c) needs:
+# H.264/HEVC decode + mov/mp4 demux + swscale rescale. Two targets:
+#   TARGET=mingw  (default) -> cross-compiled for Windows (x86_64-w64-mingw32)
+#   TARGET=native           -> the build host (used inside the vh-deb12 container so the Linux
+#                              AppImage links libav statically instead of bundling the distro's
+#                              shared ffmpeg + its 100+-library codec closure)
 #
 # Why: distro/MSYS2 ffmpeg is a SHARED "kitchen-sink" build — its avcodec DLL alone imports 35+
 # external codec DLLs (x264/x265/aom/vpx/dav1d/jxl/cairo/glib/gnutls/...), 60-100 MB to bundle.
@@ -13,14 +17,23 @@
 # CMakeLists adds it under VH_HDVIDEO when cross-compiling.
 set -euo pipefail
 
-CROSS=${CROSS:-x86_64-w64-mingw32-}
+TARGET=${TARGET:-mingw}
 FFVER=${FFVER:-n7.1}                       # any recent release tag; matches the 8.x soname era
-PREFIX=${PREFIX:-$PWD/ffmpeg-mingw-static}
 SRC=${SRC:-/tmp/ffmpeg-src}
+if [ "$TARGET" = native ]; then
+  CROSS=${CROSS:-}
+  PREFIX=${PREFIX:-$PWD/ffmpeg-linux-static}
+  TARGET_FLAGS=""
+else
+  CROSS=${CROSS:-x86_64-w64-mingw32-}
+  PREFIX=${PREFIX:-$PWD/ffmpeg-mingw-static}
+  TARGET_FLAGS="--arch=x86_64 --target-os=mingw32 --cross-prefix=$CROSS --enable-cross-compile"
+fi
 
 command -v "${CROSS}gcc" >/dev/null || { echo "need ${CROSS}gcc on PATH"; exit 1; }
 
-if [ ! -d "$SRC/.git" ]; then
+if [ ! -d "$SRC" ] || [ ! -f "$SRC/configure" ]; then
+  command -v git >/dev/null || { echo "no ffmpeg source at $SRC and no git to fetch it -- clone on the host first:";                                  echo "  git clone --depth 1 --branch $FFVER https://github.com/FFmpeg/FFmpeg.git $SRC"; exit 1; }
   git clone --depth 1 --branch "$FFVER" https://github.com/FFmpeg/FFmpeg.git "$SRC"
 fi
 cd "$SRC"
@@ -35,7 +48,7 @@ fi
 
 ./configure ${ASM_FLAG:+$ASM_FLAG} \
   --prefix="$PREFIX" \
-  --arch=x86_64 --target-os=mingw32 --cross-prefix="$CROSS" --enable-cross-compile \
+  $TARGET_FLAGS \
   --enable-static --disable-shared --enable-pic \
   --disable-programs --disable-doc --disable-network --disable-autodetect \
   --disable-avdevice --disable-avfilter --disable-postproc --disable-swresample \
