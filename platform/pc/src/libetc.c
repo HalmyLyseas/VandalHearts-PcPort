@@ -916,6 +916,15 @@ unsigned int PadRead(int id) {
     /* OR in any connected gamepad. */
     p1 |= pc_pad_read();
 
+    /* Smoke mode (VH_SMOKE=1): hold START through the intro movies so the port's START-skip cuts
+     * them short -- the boot smoke reaches the title in ~15s instead of sitting through the FMVs.
+     * Alternating press/release gives the skip logic its rising edge. */
+    { static int smoke = -1;
+      if (smoke < 0) { const char *e = getenv("VH_SMOKE"); smoke = e && atoi(e) != 0; }
+      if (smoke && gState.primary == STATE_MOVIE) {
+          static unsigned t; if ((++t / 8) & 1) p1 |= PADstart;
+      } }
+
     /* PadRead(0) packs both controller ports into one 32-bit value (port 0
      * in the low 16 bits, port 1 in the high 16); the original code reads
      * player 2 via `PadRead(0/1) >> 0x10`. No second controller mapped
@@ -967,6 +976,32 @@ int VSync(int mode) {
 
     { extern void PC_CdXaUpdate(void); PC_CdXaUpdate(); } /* XA music streaming pump */
     { extern void PC_SeqTick(void); PC_SeqTick(); }       /* SEQ (sequenced music) sequencer */
+
+    /* Boot smoke test (VH_SMOKE=1, tools/regress/smoke_boot.sh): exit 0 the moment the title screen
+     * is reached -- proving the whole boot chain (data-segment constructors, disc mount, MDEC logo
+     * movie, SPU/XA init, font, rasterizer) ran; exit 1 on timeout with the stuck state. Runs
+     * headless under SDL_VIDEODRIVER=dummy (window-less present is already a no-op). */
+    { static int smoke = -1; static unsigned smokeFrames;
+      if (smoke < 0) { const char *e = getenv("VH_SMOKE"); smoke = e && atoi(e) != 0; }
+      if (smoke) {
+        smokeFrames++;
+        if (gState.primary == STATE_TITLE_SCREEN) {
+            /* VH_SMOKE_LINGER=N: keep running N more frames once the title is up, so a recording
+             * run (raster_check.sh) captures the title screen actually rendering. Default 0. */
+            static int linger = -1; static unsigned atTitle;
+            if (linger < 0) { const char *e = getenv("VH_SMOKE_LINGER"); linger = e ? atoi(e) : 0; }
+            if (atTitle == 0) atTitle = smokeFrames;
+            if (smokeFrames - atTitle >= (unsigned)linger) {
+                fprintf(stderr, "SMOKE: reached the title screen after %u frames -- boot chain OK\n", atTitle);
+                exit(0);
+            }
+        }
+        if (smokeFrames > 60u * 120u) {
+            fprintf(stderr, "SMOKE: TIMEOUT after %u frames (primary=%d) -- boot never reached the title\n",
+                    smokeFrames, (int)gState.primary);
+            exit(1);
+        }
+      } }
 
     /* Per-second FPS meter -- opt-in (VH_FPS_LOG=1): a line per second is pure console noise for
      * players, and it drowns the actual signal in the logs bug reports paste. */

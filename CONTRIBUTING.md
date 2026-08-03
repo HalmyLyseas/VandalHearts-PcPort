@@ -53,8 +53,11 @@ make link OPT=1        # optimized build -> build/vandalhearts_pc (needs SDL2/Op
 ```
 
 You need your own legally-owned game dump (see [README](README.md#playing-the-game)); nothing
-copyrighted is in the repo. There is no automated game-test suite — changes are validated by
-building both platforms and playing the affected area, so say in your PR what you tested.
+copyrighted is in the repo. Two fast headless checks live in `platform/pc/tools/regress/`
+(see its README): `smoke_boot.sh` (~7s, boots the real game to the title) and `raster_check.sh`
+(golden-image regression for the rasterizer — record once from your disc, byte-exact verify after).
+Run both before a PR; beyond that, changes are validated by building both platforms and playing
+the affected area, so say in your PR what you tested.
 
 ## Housekeeping
 

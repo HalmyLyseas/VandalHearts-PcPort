@@ -1145,7 +1145,11 @@ DISPENV *PutDispEnv(DISPENV *env) {
     return env;
 }
 
+static void TrcInit(void);
+static void TrcWrite(char op, const void *a, u32 na, const void *b, u32 nb);
+
 DRAWENV *PutDrawEnv(DRAWENV *env) {
+    TrcWrite('E', NULL, 0, env, (u32)sizeof(*env));
     s_drawEnv = *env;
     s_drawModeDither = env->dtd ? 1 : 0;   /* GP0(E1h).9 -- persistent dither-enable state */
     return env;
@@ -1180,15 +1184,147 @@ void SetDrawMode(DR_MODE *p, int dfe, int dtd, int tpage, RECT *tw) {
 
 /* ---- VRAM transfers ------------------------------------------------------ */
 
+/* ---- GPU trace record / replay (regression harness, post-1.6 "3a") ----------------------------
+ * Record (VH_GPU_RECORD=<file> [VH_GPU_RECORD_FRAMES=N, default 400]): serialize, in call order,
+ * everything that mutates the rasterizer's state -- VRAM uploads/blits/clears, PutDrawEnv, and
+ * every primitive the DrawOTag walker dispatches (raw struct bytes; state prims like DR_MODE are
+ * primitives too, so mode/texture-window changes replay in order). 'Z' marks each DrawOTag end.
+ *
+ * Replay (VH_GPU_REPLAY=<file>, handled in pc_bootstrap before the game starts): feed the ops back
+ * through the very same entry points -- recorded prims are copied to an arena, chained with real
+ * OT tokens, and handed to DrawOTag itself -- so the full production raster pipeline runs with no
+ * game, no disc, no window, fully deterministically. After every frame the 1MB VRAM is FNV-hashed;
+ * the combined hash is the regression signature (tools/regress/raster_check.sh records a boot
+ * trace once, stores the signature, and re-verifies it on demand). Traces contain game-derived
+ * texture data -> they live under build/ (gitignored), never in the repo. */
+static u32 PC_OtMint(void *p, int isBucket);
+static void PC_OtResetTokens(void);
+
+static FILE *s_trcF; static int s_trcState = -1;   /* -1 unchecked, 0 off, 1 recording, 2 done */
+static unsigned s_trcFrames, s_trcMaxFrames;
+static int s_trcReplaying;
+
+static u32 TrcPrimSize(int type) {
+    switch (type) {
+    case PC_GPU_PRIM_POLY_F4:  return (u32)sizeof(POLY_F4);
+    case PC_GPU_PRIM_POLY_FT4: return (u32)sizeof(POLY_FT4);
+    case PC_GPU_PRIM_SPRT:     return (u32)sizeof(SPRT);
+    case PC_GPU_PRIM_TILE:     return (u32)sizeof(TILE);
+    case PC_GPU_PRIM_DR_MODE:  return (u32)sizeof(DR_MODE);
+    default: return 0;                     /* unknown = the walker skips it too */
+    }
+}
+static void TrcWrite(char op, const void *a, u32 na, const void *b, u32 nb) {
+    if (s_trcState != 1) return;
+    fputc(op, s_trcF);
+    fwrite(&na, 4, 1, s_trcF); if (na) fwrite(a, 1, na, s_trcF);
+    fwrite(&nb, 4, 1, s_trcF); if (nb) fwrite(b, 1, nb, s_trcF);
+}
+static void TrcInit(void) {
+    const char *p, *n;
+    if (s_trcState >= 0) return;
+    s_trcState = 0;
+    if (s_trcReplaying) return;
+    p = getenv("VH_GPU_RECORD"); if (!p || !*p) return;
+    s_trcF = fopen(p, "wb");
+    if (!s_trcF) { fprintf(stderr, "[trace] cannot open '%s' for recording\n", p); return; }
+    fwrite("VHT1", 1, 4, s_trcF);
+    n = getenv("VH_GPU_RECORD_FRAMES");
+    s_trcMaxFrames = (n && atoi(n) > 0) ? (unsigned)atoi(n) : 400;
+    s_trcState = 1;
+    fprintf(stderr, "[trace] recording GPU trace -> %s (%u DrawOTag frames)\n", p, s_trcMaxFrames);
+}
+static void TrcFrameEnd(void) {
+    if (s_trcState != 1) return;
+    TrcWrite('Z', NULL, 0, NULL, 0);
+    if (++s_trcFrames >= s_trcMaxFrames) {
+        fclose(s_trcF); s_trcF = NULL; s_trcState = 2;
+        fprintf(stderr, "[trace] recording complete (%u frames)\n", s_trcFrames);
+    }
+}
+static unsigned long long TrcVramHash(void) {
+    const unsigned char *b = (const unsigned char *)s_vram;
+    size_t n = sizeof(s_vram), i; unsigned long long h = 1469598103934665603ull;
+    for (i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ull; }
+    return h;
+}
+
+int PC_GpuReplayTrace(const char *path) {
+    FILE *f = fopen(path, "rb");
+    char magic[4]; unsigned frame = 0; unsigned long long combined = 1469598103934665603ull;
+    unsigned char *arena = NULL; size_t arenaCap = 0, arenaUsed = 0;
+    size_t *poff = NULL; u32 *psz = NULL; size_t pcap = 0, pcount = 0;
+    unsigned char *payload = NULL; size_t payloadCap = 0;
+    if (!f) { fprintf(stderr, "[replay] cannot open '%s'\n", path); return 2; }
+    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "VHT1", 4) != 0) {
+        fprintf(stderr, "[replay] '%s' is not a VHT1 GPU trace\n", path); fclose(f); return 2;
+    }
+    s_trcReplaying = 1; s_trcState = 0;
+    for (;;) {
+        int op = fgetc(f); u32 na, nb;
+        unsigned char hdrA[64];
+        if (op == EOF) break;
+        if (fread(&na, 4, 1, f) != 1) break;
+        if (na > sizeof(hdrA)) { fprintf(stderr, "[replay] corrupt header size %u\n", na); break; }
+        if (na && fread(hdrA, 1, na, f) != na) break;
+        if (fread(&nb, 4, 1, f) != 1) break;
+        if (nb) {
+            if (nb > payloadCap) { payloadCap = nb * 2 + 4096; payload = (unsigned char *)realloc(payload, payloadCap); }
+            if (!payload || fread(payload, 1, nb, f) != nb) break;
+        }
+        switch (op) {
+        case 'L': LoadImage((RECT *)hdrA, (unsigned int *)payload); break;
+        case 'M': { int *xy = (int *)payload; MoveImage((RECT *)hdrA, xy[0], xy[1]); } break;
+        case 'C': ClearImage((RECT *)hdrA, payload[0], payload[1], payload[2]); break;
+        case 'E': { DRAWENV env; if (nb == sizeof(env)) { memcpy(&env, payload, sizeof(env)); PutDrawEnv(&env); } } break;
+        case 'P': {
+            if (arenaUsed + nb > arenaCap) { arenaCap = (arenaUsed + nb) * 2 + 65536; arena = (unsigned char *)realloc(arena, arenaCap); }
+            if (pcount == pcap) { pcap = pcap * 2 + 256; poff = (size_t *)realloc(poff, pcap * sizeof(*poff)); psz = (u32 *)realloc(psz, pcap * sizeof(*psz)); }
+            if (!arena || !poff || !psz) { fprintf(stderr, "[replay] out of memory\n"); fclose(f); return 2; }
+            memcpy(arena + arenaUsed, payload, nb);
+            poff[pcount] = arenaUsed; psz[pcount] = nb; pcount++;
+            arenaUsed += (nb + 7u) & ~7u;                  /* keep prims 8-aligned */
+            break;
+        }
+        case 'Z': {
+            u32 tok = 0, headSlot; size_t i; unsigned long long fh;
+            PC_OtResetTokens();
+            for (i = pcount; i-- > 0; ) {                  /* chain in record order: i -> i+1 */
+                P_TAG *pr = (P_TAG *)(arena + poff[i]);
+                pr->tag = tok;
+                tok = PC_OtMint(pr, 0);
+            }
+            headSlot = tok;
+            DrawOTag(&headSlot);
+            fh = TrcVramHash();
+            combined ^= fh; combined *= 1099511628211ull;
+            frame++;
+            if (getenv("VH_GPU_REPLAY_VERBOSE"))
+                fprintf(stderr, "[replay] frame %u prims=%u vram=%016llx\n", frame, (unsigned)pcount, fh);
+            pcount = 0; arenaUsed = 0;
+            break;
+        }
+        default:
+            fprintf(stderr, "[replay] unknown op 0x%02x at frame %u -- trace corrupt?\n", op, frame);
+            fclose(f); return 2;
+        }
+    }
+    fclose(f); free(arena); free(poff); free(psz); free(payload);
+    printf("REPLAY frames=%u combined=%016llx\n", frame, combined);
+    return frame ? 0 : 2;
+}
+
 int LoadImage(RECT *rect, unsigned int *p) {
     unsigned short *src = (unsigned short *)p;
     int x, y;
+    TrcInit();
+    if (rect->w > 0 && rect->h > 0) TrcWrite('L', rect, 8, src, (u32)(rect->w * rect->h * 2));
     for (y = 0; y < rect->h; y++)
         for (x = 0; x < rect->w; x++)
             if (rect->y + y < VRAM_H && rect->x + x < VRAM_W)
                 s_vram[rect->y + y][rect->x + x] = src[y * rect->w + x];
     HiresMirrorRect(rect->x, rect->y, rect->w, rect->h);   /* G2: keep hires FB in sync (backgrounds) */
-    HdPack_OnLoad(rect, src);                              /* 1.6 HD pack: hash + replace/dump (env-gated) */
+    if (!s_trcReplaying) HdPack_OnLoad(rect, src);         /* 1.6 HD pack: hash + replace/dump (env-gated) */
     return 0;
 }
 
@@ -1204,6 +1340,7 @@ int StoreImage(RECT *rect, unsigned int *p) {
 
 int MoveImage(RECT *rect, int x, int y) {
     int i, j;
+    { int xy[2]; xy[0] = x; xy[1] = y; TrcWrite('M', rect, 8, xy, 8); }
     for (j = 0; j < rect->h; j++)
         for (i = 0; i < rect->w; i++) {
             int sx = rect->x + i, sy = rect->y + j, dx = x + i, dy = y + j;
@@ -1219,6 +1356,7 @@ int MoveImage(RECT *rect, int x, int y) {
 }
 
 int ClearImage(RECT *rect, u_char r, u_char g, u_char b) {
+    { unsigned char rgb[3]; rgb[0] = r; rgb[1] = g; rgb[2] = b; TrcWrite('C', rect, 8, rgb, 3); }
     FillRectRaw(rect->x, rect->y, rect->w, rect->h, r, g, b);
     return 0;
 }
@@ -1612,6 +1750,7 @@ void DrawOTag(unsigned int *p) {
     u32 nextTok = ((P_TAG *)p)->tag;
     int hiScale = InternalScale();          /* G2: >1 => also rasterize each prim into s_hires at Sx */
     static int s_rtTime = -1; static clock_t s_rtAccum = 0; static unsigned s_rtFrames = 0; clock_t s_rtStart = 0;
+    TrcInit();
     s_drawFrame++;
     if (s_tileLogReq) { s_tileLogFrame = s_drawFrame; s_tileLogReq = 0; }
     if (hiScale > 1) HiresEnsure();
@@ -1643,6 +1782,11 @@ void DrawOTag(unsigned int *p) {
         if (!isBucket) {
             int type = PC_GPU_PRIM_TYPE((P_TAG *)cur);
             int semi = PC_GPU_IS_SEMI((P_TAG *)cur) ? 1 : 0;
+
+            if (s_trcState == 1) {                 /* trace record: raw struct bytes, walk order */
+                u32 psz = TrcPrimSize(type);
+                if (psz) { u32 t32 = (u32)type; TrcWrite('P', &t32, 4, cur, psz); }
+            }
 
             if (s_primLog) {
                 /* Log every semi-transparent prim + any unrecognized type, with blend mode (abr) and
@@ -1747,6 +1891,7 @@ void DrawOTag(unsigned int *p) {
         nextTok = rawTagOfCur;
     }
 
+    TrcFrameEnd();   /* trace record: 'Z' frame delimiter (+ closes the file at the frame cap) */
 
     /* P1: rasterize the deferred hi-res display list (the native pass drew inline above), fanned out
      * across per-band worker threads (step 2b). */

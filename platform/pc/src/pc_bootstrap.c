@@ -750,6 +750,12 @@ static void PC_FatalDiscError(const char *title, const char *body, const char *p
 
 __attribute__((constructor))
 static void PC_Bootstrap(void) {
+    /* GPU-trace replay mode (regression harness): feed a recorded trace straight through the
+     * rasterizer and print the deterministic VRAM signature -- no game, no disc, no window.
+     * See tools/regress/raster_check.sh. Must run before any other bootstrap work. */
+    { const char *rp = getenv("VH_GPU_REPLAY");
+      if (rp && *rp) { extern int PC_GpuReplayTrace(const char *path); exit(PC_GpuReplayTrace(rp)); } }
+
     PC_MakeRodataWritable();            /* make string-literal writes work without faulting (portable) */
 #if !defined(_WIN32)
     signal(SIGUSR1, PC_SigUsr1);        /* kill -USR1 <pid> -> stack dump (freeze diagnosis) */
