@@ -132,6 +132,11 @@ if [ "$DO_LINUX" = 1 ]; then
     log "  -> VandalHearts-$TAG-linux-x86_64.AppImage + vandalhearts.ini"
 fi
 
+# ---- Player Manual PDF (release asset; source = docs/manual/, built via pandoc + chromium) ------
+log "Manual: building the Player Manual PDF"
+"$PC_DIR/tools/build-manual.sh" "$TAG" "$STAGE/VandalHearts-$TAG-Manual.pdf" \
+    || die "manual build failed (pandoc + chromium needed -- see tools/build-manual.sh)"
+
 # ---- optional HD pack (a SEPARATE release asset, not embedded in any binary) -------------------
 # --hdpack=<dir> (or VH_HDPACK_DIR) points at an assembled hdpacks/ folder: backgrounds/*.webp +
 # videos/<sector>.mp4 + manifest.json. The pack is upscaled DERIVATIVE art (see NOTICE); it is NOT
@@ -189,6 +194,7 @@ cat >> "$NOTES" <<NOTE
 |---|---|---|
 | Windows 10/11 | \`VandalHearts-$TAG-windows-x64.zip\` | Unzip; put your disc in a \`game\\\` folder next to \`vandalhearts_pc.exe\`; run it. |
 | Linux (glibc ≥ 2.34) | \`VandalHearts-$TAG-linux-x86_64.AppImage\` + \`vandalhearts.ini\` | Put both together; put your disc in a \`game/\` folder beside the \`.AppImage\`; \`chmod +x\` and run. Needs FUSE2. |
+| Any | \`VandalHearts-$TAG-Manual.pdf\` | The Player Manual: setup, controls, features, troubleshooting. |
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).
 

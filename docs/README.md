@@ -27,6 +27,8 @@ commitments.
   HD pack, saves, and how to report a bug usefully.
 - **[performance.md](performance.md)** — what the display settings cost, reference numbers, and the
   built-in diagnostics for performance reports.
+- **[manual/](manual/)** — source of the Player Manual PDF attached to each release (setup,
+  controls, features, troubleshooting in one printable document).
 - **[hd-pack.md](hd-pack.md)** — the optional 1.6 HD background pack: installing one, the HD PACK option,
   and building a pack with the tools in `platform/pc/tools/hdpack/`.
 - **[gameplay-additions.md](gameplay-additions.md)** — the optional Stage-3 QoL features (twin-stick

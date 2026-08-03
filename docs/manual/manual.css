@@ -1,0 +1,22 @@
+/* Print stylesheet for the Player Manual (rendered by headless Chromium -> PDF). */
+@page { size: A4; margin: 18mm 16mm; }
+html { font-size: 11pt; }
+body {
+    font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+    line-height: 1.45; color: #1a1a1a; max-width: none; margin: 0; padding: 0;
+}
+header#title-block-header { text-align: center; margin: 40mm 0 8mm; page-break-after: always; }
+header#title-block-header h1.title { font-size: 26pt; margin-bottom: 4mm; }
+header#title-block-header p.subtitle { font-size: 15pt; color: #444; }
+header#title-block-header p.date { color: #888; margin-top: 18mm; }
+h1 { font-size: 17pt; border-bottom: 2px solid #333; padding-bottom: 2mm; margin-top: 0;
+     page-break-before: always; }
+h2 { font-size: 13pt; margin-top: 7mm; }
+img { max-width: 78%; display: block; margin: 4mm auto; border: 1px solid #ccc; }
+table { border-collapse: collapse; margin: 4mm 0; width: 100%; font-size: 9.5pt;
+        page-break-inside: avoid; }
+th, td { border: 1px solid #bbb; padding: 1.6mm 2.4mm; text-align: left; vertical-align: top; }
+th { background: #eee; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 0.92em; background: #f2f2f2;
+       padding: 0 2px; border-radius: 2px; }
+p, li { page-break-inside: avoid; }
