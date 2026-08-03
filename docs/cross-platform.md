@@ -229,6 +229,9 @@ for f in squashfs-root/usr/bin/vandalhearts_pc squashfs-root/usr/lib/*.so*; do
 
 ## Publishing a release
 
+> Pre-flight first: the step-by-step checks live in **[releasing.md](releasing.md)** — this section
+> is the mechanics.
+
 `platform/pc/packaging/make-release.sh <tag>` builds both artifacts, checksums them, and publishes a
 GitHub release via the `gh` CLI:
 

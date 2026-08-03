@@ -17,6 +17,8 @@ commitments.
 
 - **[building.md](building.md)** — building the matching decompilation (`make check`) and the native PC
   port (Makefile / CMake), plus the Windows cross-compile and sanitizer builds.
+- **[releasing.md](releasing.md)** — the release checklist: correctness gates (smoke + raster
+  regression, `make check`), both-platform stage builds, hygiene, publish.
 - **[configuration.md](configuration.md)** — supplying the disc image, the `vandalhearts.ini` config
   file, runtime options, and diagnostics. (Full option reference:
   [`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md).)
