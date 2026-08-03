@@ -1,4 +1,4 @@
-# Tactical Mode (1.4)
+# Tactical Mode
 
 **Tactical Mode is an optional, opt-in rebalance of Vandal Hearts** — a second way to play for people
 who want a tighter, more deliberate tactical experience than the retail game offers. It is **off by
@@ -33,7 +33,7 @@ retail values.
 
 Open the in-game options overlay (**Select + Start**) and set **Tactical Mode** to **ON**.
 
-![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/OverlayMenu-Main.png)
+![The options overlay with the Tactical Mode toggle](images/OverlayMenu-Main.png)
 
 - The toggle is editable **only at the main title screen** — everywhere else it is shown but greyed, so
   a run can never switch modes underneath itself.
@@ -174,6 +174,10 @@ poking magic-weak enemies.
   is no longer negligible — they can now finish enemies with their own kit, at the cost of being in
   melee range.
 
+The reworked list in game:
+
+![The Ninja's reworked spell list in battle](images/TacticalOnly-Spellist-MonkNinja.png)
+
 **Origin spells are kept.** Both promotions retain their three origin spells — Huxley/Sara their first
 three Priest spells, Eleni/Zohar their first three Mage spells. (An earlier revision dropped them at the
 Ninja tier for a cleaner list; playtesting showed that was a needless nerf to a path that doesn't need
@@ -206,6 +210,8 @@ rework:
 | Avalanche        | single  | enemy         |     6 |     0 |        18 |      9 | DAMAGE     | 23     |
 | Salamander       | AOE     | enemy-grp     |     0 |    10 |        13 |     14 | DAMAGE     | 25     |
 
+![The Sorcerer's spell list in battle with Thunder Ball](images/TacticalOnly-Spellist-EnchanterSorcerer.png)
+
 ### Avalanche — an ice re-skin
 
 **A cosmetic touch.** Avalanche is thematically a wall of snow and ice, yet its retail effect is a
@@ -237,6 +243,8 @@ members back into the final chapter.
 - **Kept Plasma Wave** on its spell list — the signature power-fantasy cast survives, but it's now
   MP-limited like any spell, with the infinite-MP item loop gone.
 
+![The Vandalier's spell list: Plasma Wave present, paid for from a finite MP pool](images/TacticalOnly-Spellist-Vandalier.png)
+
 ### Clarified item descriptions
 
 The mystery `?????` items found on hidden tiles now describe what they do, and the generic "attack
@@ -258,7 +266,7 @@ magic item" blurbs are rewritten to name their actual effect.
 | Shiv Book | `??????????` | Casts Dagger Storm |
 | Necklace | `??????????` | Casts Dark Hurricane |
 
-### Magic-aware enemy casters *(added in 1.4)*
+### Magic-aware enemy casters
 
 Everything above makes magic resistance *matter* — the `magicSusceptibility` rebalance, and the resistance
 that **Perfect Guard** and **Mystic Energy** now grant. But retail's enemy AI is **blind** to it: it scores
