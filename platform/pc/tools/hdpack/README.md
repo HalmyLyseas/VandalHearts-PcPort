@@ -7,7 +7,7 @@ image at render time (see `docs/`). The pack is data the user supplies — the p
 ## Layout the engine expects
 ```
 hdpacks/
-  manifest.json          # {"game":"SLUS-00447","packVersion":N,"count":C,"hashes":[...]}
+  manifest.json          # {"game":"SLUS-00447","packVersion":2,"count":C,"hashes":[...],"videos":V,"sectors":[...]}
   backgrounds/
     <hash>.webp          # one per background, keyed by the engine's upload hash
 ```
@@ -23,7 +23,7 @@ your HD images into place under the right hash name — no play-through needed.
 ./vh_tim_hashpack.py --tim <DISC_TIMs> --hd <HD_WEBP_DIR> --out hdpacks/backgrounds
 
 # 2. manifest        (validated by the engine against the build's game id, SLUS-00447)
-./vh_hdpack_manifest.py --pack hdpacks --game SLUS-00447 --version 1
+./vh_hdpack_manifest.py --pack hdpacks --game SLUS-00447        # run AFTER the videos step below
 ```
 
 Drop the resulting `hdpacks/` next to the executable; the `HD PACK` toggle then enables in the options

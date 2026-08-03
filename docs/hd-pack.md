@@ -29,10 +29,14 @@ On launch the port auto-detects `hdpacks/`, validates `manifest.json`, and enabl
 in the SELECT+START options overlay. `VH_HD_PACK=<dir>` overrides the auto-detect with an explicit
 `backgrounds/`-style folder.
 
-`manifest.json` records the disc/build id, pack version, and the background hashes:
+`manifest.json` records the disc/build id, pack version, and the pack's content (background hashes +
+FMV start sectors). The engine requires **packVersion 2**; the overlay's HD PACK row shows the pack's
+content when enabled (e.g. `ON (75 BG+16 FMV)`), or the reason it can't be used (`NO PACK` /
+`OUTDATED PACK` / `WRONG GAME`).
 
 ```json
-{ "game": "SLUS-00447", "packVersion": 1, "count": 75, "hashes": ["0c5035b9b009cde7", ...] }
+{ "game": "SLUS-00447", "packVersion": 2, "count": 75, "hashes": ["0c5035b9b009cde7", ...],
+  "videos": 16, "sectors": ["1fded", ...] }
 ```
 
 The `game` id must match the build (`SLUS-00447`, Vandal Hearts USA). A pack for a different version is

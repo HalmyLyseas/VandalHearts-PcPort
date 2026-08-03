@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <dirent.h>      /* HdDetect: sanity-count the pack videos dir */
 #include <pthread.h>     /* P1 step 2b: band-parallel hi-res rasterization (winpthreads on MinGW) */
 
 #include "PsyQ/libgpu.h"
@@ -405,7 +406,7 @@ extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe 
 extern int g_vhHdPack;         /* runtime on/off toggle, owned by pc_gpu_window.c; the overlay binds it.
                                 * 0 until a valid pack is detected (HdDetect sets it: persisted VH_HDPACK, or
                                 * auto-ON on first detect). The VH_HD_PACK=<dir> override ignores it (CI). */
-static struct { int checked, available, valid, count; char dir[HD_PATH + 32]; char videosDir[HD_PATH + 32]; char reason[80]; } s_hdPack;
+static struct { int checked, available, valid, count, videoCount, packVersion; char dir[HD_PATH + 32]; char videosDir[HD_PATH + 32]; char reason[80]; } s_hdPack;
 
 static const char *HdEnv(const char *name, int slot) {
     static const char *v[2]; static int done[2];
@@ -427,6 +428,8 @@ static int HdManifestRead(const char *path, char *game, int gameSz, int *count) 
         game[i] = '\0';
     }
     if ((p = strstr(buf, "\"count\"")) && (p = strchr(p, ':'))) *count = atoi(p + 1);
+    if ((p = strstr(buf, "\"packVersion\"")) && (p = strchr(p, ':'))) s_hdPack.packVersion = atoi(p + 1);
+    if ((p = strstr(buf, "\"videos\"")) && (p = strchr(p, ':'))) s_hdPack.videoCount = atoi(p + 1);
     return game[0] != '\0';
 }
 
@@ -446,14 +449,30 @@ static void HdDetect(void) {
                 game, HD_GAME_ID);
         return;
     }
+    if (s_hdPack.packVersion < 2) {                      /* 1.6.0-era pack: no videos manifest */
+        snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "OUTDATED PACK");
+        fprintf(stderr, "[HD] pack manifest is v%d; this build needs v2 -- regenerate it with "
+                        "tools/hdpack/vh_hdpack_manifest.py (or download the current pack)\n",
+                s_hdPack.packVersion);
+        return;
+    }
     s_hdPack.valid = 1;
     s_hdPack.reason[0] = '\0';
     snprintf(s_hdPack.dir, sizeof(s_hdPack.dir), "%s/hdpacks/backgrounds", deploy);
     snprintf(s_hdPack.videosDir, sizeof(s_hdPack.videosDir), "%s/hdpacks/videos", deploy);
+    {   /* best-practice sanity: the videos/ dir should hold what the manifest declares */
+        DIR *d = opendir(s_hdPack.videosDir); int found = 0;
+        if (d) { struct dirent *de;
+                 while ((de = readdir(d)) != NULL) if (strstr(de->d_name, ".mp4")) found++;
+                 closedir(d); }
+        if (found != s_hdPack.videoCount)
+            fprintf(stderr, "[HD] videos/: %d file(s) but the manifest declares %d -- FMVs missing "
+                            "from the pack?\n", found, s_hdPack.videoCount);
+    }
     { const char *e = getenv("VH_HDPACK");           /* persisted choice (ini->env) wins; else auto-ON */
       g_vhHdPack = e ? (atoi(e) != 0) : 1; }
-    fprintf(stderr, "[HD] pack detected + valid: %s (%d backgrounds)%s\n",
-            s_hdPack.dir, s_hdPack.count, g_vhHdPack ? " -> ON" : " (off, persisted)");
+    fprintf(stderr, "[HD] pack detected + valid: %s (%d backgrounds, %d videos)%s\n",
+            s_hdPack.dir, s_hdPack.count, s_hdPack.videoCount, g_vhHdPack ? " -> ON" : " (off, persisted)");
 }
 
 /* Is HD replacement live right now? Explicit VH_HD_PACK override => always (CI/power-user); else the
@@ -476,6 +495,16 @@ static const char *HdPackDir(void) {
 int PC_HdPackAvailable(void)      { HdDetect(); return s_hdPack.valid; }
 int PC_HdPackEnabled(void)        { HdDetect(); return s_hdPack.valid && g_vhHdPack; }
 int PC_HdPackCount(void)          { HdDetect(); return s_hdPack.count; }
+int PC_HdPackVideoCount(void)     { HdDetect(); return s_hdPack.videoCount; }
+/* Short UPPERCASE status for the overlay's value column when the pack can't be used (the OSD font is
+ * caps-only); NULL when a valid pack is installed (normal ON/OFF handling applies). */
+const char *PC_HdPackStatusShort(void) {
+    HdDetect();
+    if (s_hdPack.valid) return NULL;
+    if (!s_hdPack.available) return "NO PACK";
+    if (s_hdPack.packVersion && s_hdPack.packVersion < 2) return "OUTDATED PACK";
+    return "WRONG GAME";
+}
 const char *PC_HdPackReason(void) { HdDetect(); return s_hdPack.reason; }
 /* HD FMV directory (<deploy>/hdpacks/videos), or NULL when HD is off / no valid pack. VH_HD_VIDEOS=<dir>
  * overrides (CI). Gated by the same g_vhHdPack toggle as backgrounds -- videos ride the HD PACK option. */

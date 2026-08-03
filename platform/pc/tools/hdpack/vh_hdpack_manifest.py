@@ -16,16 +16,20 @@ def main():
     ap = argparse.ArgumentParser(description="Generate hdpacks/manifest.json")
     ap.add_argument("--pack", required=True, help="the hdpacks/ folder (contains backgrounds/)")
     ap.add_argument("--game", default="SLUS-00447", help="disc/build id the engine validates against")
-    ap.add_argument("--version", type=int, default=1, help="pack version")
+    ap.add_argument("--version", type=int, default=2, help="pack version (2 = current: backgrounds + videos)")
     a = ap.parse_args()
     bgdir = os.path.join(a.pack, "backgrounds")
+    viddir = os.path.join(a.pack, "videos")
     hashes = sorted(os.path.splitext(os.path.basename(f))[0]
                     for f in glob.glob(os.path.join(bgdir, "*.webp")) + glob.glob(os.path.join(bgdir, "*.hdi")))
-    manifest = {"game": a.game, "packVersion": a.version, "count": len(hashes), "hashes": hashes}
+    sectors = sorted(os.path.splitext(os.path.basename(f))[0]
+                     for f in glob.glob(os.path.join(viddir, "*.mp4")))
+    manifest = {"game": a.game, "packVersion": a.version, "count": len(hashes), "hashes": hashes,
+                "videos": len(sectors), "sectors": sectors}
     out = os.path.join(a.pack, "manifest.json")
     with open(out, "w") as f:
         json.dump(manifest, f, indent=1)
-    print(f"{out}: game={a.game} v{a.version} count={len(hashes)}")
+    print(f"{out}: game={a.game} v{a.version} count={len(hashes)} videos={len(sectors)}")
 
 
 if __name__ == "__main__":
