@@ -1,8 +1,13 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Known issues
-    url: https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/known_issues.md
-    about: Check here first — the defects and by-design limitations we already know about.
-  - name: Documentation
-    url: https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/README.md
-    about: Setup, configuration, gameplay additions, the HD pack, and troubleshooting pointers.
+- name: Troubleshooting
+  url: https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/troubleshooting.md
+  about: Common problems and fixes — startup, display, HD pack, saves.
+- name: Known issues
+  url: https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/known_issues.md
+  about: Check here first — the defects and by-design limitations we already know
+    about.
+- name: Documentation
+  url: https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/README.md
+  about: Setup, configuration, gameplay additions, the HD pack, and troubleshooting
+    pointers.

@@ -1,7 +1,7 @@
 # Known Issues
 
 A short, honest list of the defects and limitations we're already aware of — so you can check here
-before filing a report. If you hit something that **isn't** listed, please do report it.
+(and [troubleshooting.md](troubleshooting.md)) before filing a report. If you hit something that **isn't** listed, please do report it.
 
 Some background on scope: the game's original logic is reproduced byte-for-byte, and the normal
 (non-Tactical) mode is unaffected by the gameplay work. The items below are almost entirely in the

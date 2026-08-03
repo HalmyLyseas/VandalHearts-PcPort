@@ -23,6 +23,10 @@ commitments.
   file, runtime options, and diagnostics. (Full option reference:
   [`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md).)
 - **[controls.md](controls.md)** — the full gamepad + keyboard control scheme in battle.
+- **[troubleshooting.md](troubleshooting.md)** — common problems and their fixes: startup, display,
+  HD pack, saves, and how to report a bug usefully.
+- **[performance.md](performance.md)** — what the display settings cost, reference numbers, and the
+  built-in diagnostics for performance reports.
 - **[hd-pack.md](hd-pack.md)** — the optional 1.6 HD background pack: installing one, the HD PACK option,
   and building a pack with the tools in `platform/pc/tools/hdpack/`.
 - **[gameplay-additions.md](gameplay-additions.md)** — the optional Stage-3 QoL features (twin-stick

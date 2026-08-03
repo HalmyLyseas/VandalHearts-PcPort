@@ -89,7 +89,7 @@ Changes apply immediately and are saved to `vandalhearts.ini` right away, so the
 | **Fullscreen** | `OFF` | Fullscreen-desktop vs windowed (aspect-preserved, letterboxed). Scale and fullscreen are mutually exclusive — the inactive one greys out, and changing the scale turns fullscreen off. |
 | **Camera X-axis** | `NORMAL` | Flips the horizontal (rotate) direction. |
 | **Camera Y-axis** | `INVERTED` | Flips the vertical (raise/lower) direction. Ships **inverted** (modern twin-stick: push up = tilt the view down). |
-| **Button labels** *(1.4)* | `XBOX` | Which face-button labels the port's **own overlay** footers use — **`XBOX`** (A/B/X/Y) or **`PLAYSTATION`** (□ ○ △ ✕). Only affects the overlay's own prompts, not the game's. Defaults to Xbox (the common PC pad). |
+| **Button labels** | `XBOX` | Which face-button labels the port's **own overlay** footers use — **`XBOX`** (A/B/X/Y) or **`PLAYSTATION`** (□ ○ △ ✕). Only affects the overlay's own prompts, not the game's. Defaults to Xbox (the common PC pad). |
 
 These persist in `vandalhearts.ini`'s `[video]` / `[camera]` / `[controls]` sections and can be preset
 there too — see [configuration.md](configuration.md).
