@@ -19,7 +19,7 @@ Nintendo-style pads.
 | West (X) | Square | **(PC)** Toggle the enemy threat overlay |
 | **L1 / R1** (shoulders) | — | **(PC)** Cycle through your units — **L1** previous, **R1** next |
 | **Right stick** | — | **(PC)** Camera — horizontal = rotate, vertical = raise/lower the angle |
-| **L2 / R2** (triggers) | — | **(PC)** *(1.4)* Battle fast-forward — **R2** speed up to 2×, **L2** back to normal |
+| **L2 / R2** (triggers) | — | **(PC)** Battle fast-forward — **R2** speed up to 2×, **L2** back to normal |
 | Start | Start | Battle menu / options; skips an intro movie |
 | **Select + Start** (chord) | — | **(PC)** Open / close the in-game options overlay |
 
@@ -38,7 +38,7 @@ Options, Save, Load).
 | **`[` / `]`** | — | **(PC)** Cycle through your units — `[` previous, `]` next |
 | **Q / E** | L1 / R1 | Camera rotate (left / right) |
 | **R / F** | L2 / R2 | **(PC)** Camera elevation — **R** raise the view angle, **F** lower it |
-| **`,` / `.`** | — | **(PC)** *(1.4)* Battle fast-forward — `.` speed up to 2×, `,` back to normal |
+| **`,` / `.`** | — | **(PC)** Battle fast-forward — `.` speed up to 2×, `,` back to normal |
 | Enter | Start | Battle menu / options; skips an intro movie |
 | Space | Select | Select — used only for the overlay chord below |
 | **Space + Enter** (chord) | — | **(PC)** Open / close the in-game options overlay |
@@ -51,12 +51,12 @@ which frees the physical shoulders for the unit-cycle and the triggers for battl
 keyboard, **Q / E** rotate the camera and **R / F** raise / lower the viewing angle — so keyboard-only
 players have full camera control too, including the finer elevation below.
 
-*(1.4)* The up/down **elevation** gains an extra, evenly-spread stop — **5 viewing angles** (11.25° to
+The up/down **elevation** gains an extra, evenly-spread stop — **5 viewing angles** (11.25° to
 78.75°, 16.875° apart, now including a level **45°**) instead of the original 4 — so you can find a
 readable angle on stepped terrain. Rotation stays at 90° quadrants (finer rotation needs new artwork — a
 later release).
 
-## Battle fast-forward (PC addition, 1.4)
+## Battle fast-forward (PC addition)
 
 During a battle, tap **R2** (or the `.` key) to run at **2× speed**; **L2** (or `,`) drops back to
 normal. A small **`BATTLE SPEED X2`** indicator shows top-right while it's active. It only works inside a battle — menus, the world map, cutscenes and movies always play at normal

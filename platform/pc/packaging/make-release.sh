@@ -80,7 +80,7 @@ if [ "$DO_WIN" = 1 ]; then
     [ -f "$WIN_EXE" ] || die "Windows build produced no .exe"
     WZIP_DIR="$STAGE/win"; mkdir -p "$WZIP_DIR"
     cp "$WIN_EXE" "$WZIP_DIR/"
-    # the 6 runtime DLLs the CMake post-build step stages next to the .exe
+    # the 8 runtime DLLs the CMake post-build step stages next to the .exe (6 base + libwebp/libsharpyuv)
     cp "$PC_DIR"/build_win/*.dll "$WZIP_DIR/" 2>/dev/null || die "expected runtime DLLs beside the .exe"
     cp "$INI" "$WZIP_DIR/"
     # 6 base runtime DLLs (SDL2, OpenAL32, libwinpthread, libgcc_s_seh, libstdc++, libssp) + 2 for the

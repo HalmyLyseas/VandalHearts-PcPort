@@ -83,7 +83,8 @@ The build tools live in [`platform/pc/tools/hdpack/`](../platform/pc/tools/hdpac
 2. `vh_tim_hashpack.py` — hash the disc TIMs and assemble `backgrounds/<hash>.webp` from your HD images.
 3. `vh_hdpack_manifest.py` — write `manifest.json`.
 
-`.webp` keeps a full pack around 20 MB (roughly 7× smaller than uncompressed). A raw `.hdi` format is also
+`.webp` keeps the backgrounds around 20 MB (roughly 7× smaller than uncompressed); the HEVC movies add
+about 310 MB, so a complete pack is ~330 MB. A raw `.hdi` format is also
 accepted as a fallback for builds made without libwebp.
 
 ## Building the movies

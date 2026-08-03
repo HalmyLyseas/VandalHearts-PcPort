@@ -251,7 +251,7 @@ the user's own disc/BIOS. CI can't produce a runnable artifact; automation there
 and upload only. (And a release binary embeds a portion of game-derived data — see `NOTICE`.)
 
 The script builds each artifact in the environment that gives the correct result:
-- **Windows** — host MinGW-w64 cross-compile (`build_win`), zipped with its 6 runtime DLLs +
+- **Windows** — host MinGW-w64 cross-compile (`build_win`), zipped with its 8 runtime DLLs +
   `vandalhearts.ini` → `VandalHearts-<tag>-windows-x64.zip`.
 - **Linux** — the AppImage from the pinned Debian 12 `vh-deb12` container (the glibc floor; a
   host-built AppImage would only run on distros as new as the host) → `VandalHearts-<tag>-linux-x86_64.AppImage`.
