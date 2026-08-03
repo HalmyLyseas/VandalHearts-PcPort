@@ -5,10 +5,11 @@ body {
     font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
     line-height: 1.45; color: #1a1a1a; max-width: none; margin: 0; padding: 0;
 }
-header#title-block-header { text-align: center; margin: 40mm 0 8mm; page-break-after: always; }
+header#title-block-header { text-align: center; margin: 34mm 0 0; }
 header#title-block-header h1.title { font-size: 26pt; margin-bottom: 4mm; }
 header#title-block-header p.subtitle { font-size: 15pt; color: #444; }
-header#title-block-header p.date { color: #888; margin-top: 18mm; }
+img.cover-logo { width: 42mm; border: none; margin: 14mm auto 0; }
+p.version { text-align: center; color: #888; margin-top: 10mm; }
 h1 { font-size: 17pt; border-bottom: 2px solid #333; padding-bottom: 2mm; margin-top: 0;
      page-break-before: always; }
 h2 { font-size: 13pt; margin-top: 7mm; }

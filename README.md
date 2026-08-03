@@ -48,44 +48,29 @@ playthroughs on both Windows and Linux, including the endgame and credits.
   from Linux with MinGW-w64; Linux ships as an AppImage. A CMake build sits alongside the Makefile.
   macOS is scaffolded but not pursued — see [docs/cross-platform.md](docs/cross-platform.md).
 
-## Roadmap
+## Where to start
 
-The two foundational stages — the byte-exact decompilation and the faithful native port — are
-**complete** (see *Status* above). **Stage 3** adds an optional layer of gameplay and quality-of-life
-enhancements: better controls (including an at-a-glance enemy threat overlay), an in-game options and
-save-management overlay, an opt-in balance mode, a higher-fidelity graphics layer (an accurate software
-rasterizer with optional internal-resolution supersampling), and an optional HD pack for the pre-rendered
-backgrounds and movies. The faithful experience is always preserved; gameplay-changing additions are
-opt-in.
+| You want to… | Go to |
+|---|---|
+| **Play the game** | Grab the [latest release](https://github.com/HalmyLyseas/VandalHearts-PcPort/releases/latest) — the **Player Manual** (PDF) ships with it and covers setup, controls, and every feature ([source](docs/manual/manual.md)). Quick start below. |
+| **Something's wrong** | [Troubleshooting](docs/troubleshooting.md) · [Known issues](docs/known_issues.md) · then open an issue. |
+| **Contribute / fix a bug** | [Architecture](docs/architecture.md) first — the two-layer design and the one unbreakable rule — then [CONTRIBUTING.md](CONTRIBUTING.md). |
+| **Understand how it works** | The [documentation index](docs/README.md): internals, subsystem deep-dives, decoded game mechanics. |
 
-Full breakdown — what's shipped vs. planned — is in **[docs/roadmap.md](docs/roadmap.md)**. These are
-plans, not commitments: this is a non-commercial hobby preservation project.
-
-## Playing the game
+## Quick start
 
 You supply the game; the port supplies everything else. **You need your own legally-owned copy of
 Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derived is distributed here.
 
-A release is self-contained and needs no dependency hunting:
-
 | Platform | Package | Requirements |
 |---|---|---|
 | **Windows** | `.zip` — `vandalhearts_pc.exe`, 8 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
-| **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 to run the AppImage |
+| **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 |
 
-**Setup is drop-in:** put your disc image in a `game/` folder next to the executable (or a bare
-`*.bin` beside it) and launch. No configuration, no environment variables — the disc is
-auto-detected, and its boot signature is verified, so mounting the wrong disc fails with a clear
-message instead of booting into a blank window.
-
-**To configure**, edit `vandalhearts.ini` next to the executable (on Linux, next to the
-`.AppImage`): window scale, audio, and compatibility options, all commented out at their defaults.
-The same file and keys work on every platform; environment variables still override it. Full option
-reference in [`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md) and
-[docs/configuration.md](docs/configuration.md).
-
-Saves are ordinary files in a `saves/` folder next to the executable. They use a fixed on-disk
-layout, so they are architecture-agnostic and cross-loadable between the 32- and 64-bit builds.
+Put your disc image in a `game/` folder next to the executable and launch — the disc is
+auto-detected and verified, settings live in the in-game overlay (**SELECT + START**) and
+`vandalhearts.ini`, and saves are plain files in `saves/`. Details: the Player Manual,
+[configuration.md](docs/configuration.md), and [`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md).
 
 ## Building from source
 
@@ -94,46 +79,15 @@ layout, so they are architecture-agnostic and cross-loadable between the 32- and
 > needs locally. (The repo does contain the decompiled game code and a few functional game-data
 > tables — see *Legal* and [NOTICE](NOTICE).)
 
-Requirements: a Linux host with SDL2, OpenAL, and OpenGL development libraries; Python 3; and, for
-the matching-decomp verification, the PSY-Q toolchain. A 32-bit toolchain is optional (only for the
-`-m32` reference build). The full environment recipe lives in `.claude/skills/decomp-build/`.
-
-Two interchangeable build systems for the native port (both produce the same binary):
-
 ```sh
-cd platform/pc
-
-# Makefile
-make link                       # -> platform/pc/build/vandalhearts_pc  (64-bit)
-make link M32=-m32 BUILD_DIR=build32   # 32-bit reference build
-
-# CMake
-cmake -S . -B build_cmake && cmake --build build_cmake   # -> build_cmake/vandalhearts_pc
+cd platform/pc && make link       # the native port  -> build/vandalhearts_pc   (needs SDL2/OpenAL/GL/libwebp/libav, Python 3)
+make check                        # (repo root) byte-exact decomp verification -> MD5 must match
 ```
 
-Windows is **cross-compiled from Linux** (no Windows machine needed) via a CMake toolchain file:
-
-```sh
-cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake
-cmake --build build_win         # -> build_win/vandalhearts_pc.exe + bundled DLLs
-```
-
-Linux releases are packaged as an AppImage, built inside a pinned Debian 12 container so the
-artifact's glibc floor stays low — see [docs/cross-platform.md](docs/cross-platform.md) for the
-full recipe:
-
-```sh
-packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc   # -> dist/VandalHearts-x86_64.AppImage
-```
-
-The built binary finds your disc and `vandalhearts.ini` the same way a release does (see *Playing
-the game*); `VH_DISC_IMAGE` still overrides. Runtime options and build flags are in
-[`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md).
-
-Byte-exact decomp check: `make check` rebuilds `SLUS_004.47` and md5-compares it to the original.
-**Any change under `src/` or `include/` must keep this passing** — see
-[docs/architecture.md](docs/architecture.md) for the gating conventions (`PERMUTER`, `PC_PORT`,
-`PC_DEBUG_*`) that keep port work out of the matching build.
+The full picture — CMake, the Windows cross-compile, the AppImage container, sanitizers, and the
+matching-decomp toolchain — is in [building.md](docs/building.md) and
+[cross-platform.md](docs/cross-platform.md). **Any change under `src/` or `include/` must keep
+`make check` passing** ([architecture.md](docs/architecture.md) has the gating rules).
 
 ## Documentation
 

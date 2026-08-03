@@ -19,11 +19,10 @@ command -v pandoc >/dev/null || { echo "manual: pandoc not found" >&2; exit 2; }
 CHROME="$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)"
 [ -n "$CHROME" ] || { echo "manual: no chromium/chrome for PDF rendering" >&2; exit 2; }
 
-pandoc "$SRC" --standalone --embed-resources \
+sed "s/@VERSION@/$VER/" "$SRC" | pandoc --standalone --embed-resources \
     --css "$CSS" \
-    --metadata date="$VER" \
-    --resource-path "$REPO/docs/manual:$REPO/docs" \
-    -o "$TMPHTML"
+    --resource-path "$REPO/docs/manual:$REPO/docs:$REPO" \
+    --from markdown -o "$TMPHTML"
 
 mkdir -p "$(dirname "$OUT")"
 "$CHROME" --headless --disable-gpu --no-sandbox --no-pdf-header-footer \

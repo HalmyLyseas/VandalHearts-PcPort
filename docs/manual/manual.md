@@ -3,6 +3,10 @@ title: "Vandal Hearts — PC Port"
 subtitle: "Player Manual"
 ---
 
+![](platform/pc/packaging/appimage/vandalhearts.svg){.cover-logo}
+
+<p class="version">@VERSION@</p>
+
 # About this port
 
 This is a native PC version of *Vandal Hearts* (PlayStation, 1997), rebuilt from the original
