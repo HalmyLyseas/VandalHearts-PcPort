@@ -33,7 +33,7 @@ retail values.
 
 Open the in-game options overlay (**Select + Start**) and set **Tactical Mode** to **ON**.
 
-![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/features-1.3-OverlayNewEntries.png)
+![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/OverlayMenu-Main.png)
 
 - The toggle is editable **only at the main title screen** — everywhere else it is shown but greyed, so
   a run can never switch modes underneath itself.
