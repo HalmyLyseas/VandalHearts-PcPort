@@ -48,7 +48,7 @@ The overlay row (between `TACTICAL MODE` and `INTERNAL RES`) is greyed and read-
 installed. With a pack present it is toggleable and defaults to on; the choice persists in `vandalhearts.ini`
 as `VH_HDPACK`.
 
-![The options overlay with HD PACK ON and INTERNAL RES set to X4](images/features-1.6-MenuHDPack.png)
+![The options overlay with HD PACK ON and INTERNAL RES set to X4](images/OverlayMenu-Main.png)
 
 HD detail is only visible when the game renders above the native 320×240:
 

@@ -1,284 +1,178 @@
 # Gameplay additions (PC port)
 
-Stage 3 adds optional features on top of the faithful port. The quality-of-life additions never change
-the underlying game — the vanilla experience is preserved — they just make it nicer to play with a
-modern controller. The one feature that *does* change gameplay, **Tactical Mode** (1.3), is strictly
-opt-in and isolated, so the faithful mode stays byte-for-byte the original. Everything here is guarded
-by the `PC_FEAT` build gate, so the matching decompilation is unaffected. See the [roadmap](roadmap.md)
-for what's planned next, and [controls.md](controls.md) for the full button layout.
+The port adds an optional layer of features on top of the faithful game. This page describes each
+feature as it works **today**; per-release history lives in the [CHANGELOG](../CHANGELOG.md).
 
-## Shipped (1.1)
+Two rules hold everywhere:
 
-### Twin-stick camera + shoulder unit-cycle
+- **The faithful experience is the default.** Nothing here changes how the original game plays
+  unless you turn it on.
+- **Anything that changes gameplay is opt-in** (Tactical Mode). Everything else is presentation,
+  controls, or convenience.
 
-The battlefield camera moves to the **right analog stick** (rotate + raise/lower the angle), freeing
-the **shoulder buttons** to cycle through your own units — **L1 = previous, R1 = next** — jumping the
-cursor straight to each unit instead of scrolling the map. Cycling skips units that have already acted,
-and it's bidirectional, so you can step back and forth naturally. (Vanilla only cycled forward, on
-Square.) The shoulder *buttons* and triggers still drive the camera as well, so keyboard players and
-pads without a right stick keep the original controls.
+---
 
-### Enemy threat overlay
+## Controls & camera
 
-Press **Square** to toggle a **purple overlay** showing the combined danger zone of **every enemy on
-the map at once** — every tile any enemy could move to *and* attack from this turn. It's the fastest
-way to plan positioning: you see all the threatened squares in one glance, instead of inspecting each
-enemy's range one at a time. (The overlay gently pulses between purple and magenta so it reads clearly
-over any terrain.)
+**Intent: modern controller comfort without changing how the game feels.**
 
-Before — a normal battle view:
-
-![A normal battle view before toggling the overlay](images/features-1.3.1-EnemyOverlay-01.png)
-
-After pressing **Square** — every enemy's combined move-and-attack danger zone appears at once:
-
-![The threat overlay showing the enemies' combined danger zone](images/features-1.3.1-EnemyOverlay-02.png)
-
-- **Layering & colors:** the overlay sits *below* your own previews, so it never hides what you're
-  doing. When you select a unit to move, its **blue** movement range stays visible, and any of its
-  reachable tiles that are *also* under threat turn **orange** (reachable **and** dangerous), with pure
-  enemy threat beyond in **purple**.
-
-  ![With a unit selected: blue movement range, orange where it overlaps the threat, purple enemy threat beyond](images/features-1.3.1-EnemyOverlay-03.png)
-- **Distinct from spell targeting:** when you aim a spell or attack, its **yellow** AoE preview draws on
-  top — and because reachable-and-threatened is now orange (previously it shared yellow), you can read a
-  spell's target area cleanly even inside a danger zone.
-
-  ![A spell's yellow AoE preview clearly distinct from the orange reachable-threat tiles](images/features-1.3.1-EnemyOverlay-04.png)
-- **Stays current:** the overlay refreshes automatically when the board changes — a unit moves, a
-  crate is pushed, an enemy dies — so it always reflects the real danger. (It updates while you're
-  planning at the cursor; during an action animation it hides and reappears, correct, when the action
-  completes.)
-- **Scope:** it only appears on your turn, and clears at end of turn. Maps with special win conditions
-  work the same — it simply shows whatever enemies are present.
-
-Movies (intros/cutscenes) can be skipped at any time with **Start**.
-
-### In-game options overlay
-
-Press **Select + Start** to open a small options overlay anywhere in the game (the same chord closes
-it). It doesn't pause — the field idles behind it — and settings apply immediately and save to
-`vandalhearts.ini` on the spot.
-
-![The in-game options overlay](images/features-1.3-CameraControls.png)
-
-1.1 ships two settings: independent **invert** for each right-stick camera axis (X = rotate, Y =
-raise/lower). The full navigation and the rationale for the Select + Start chord are in
-[controls.md](controls.md#options-overlay-pc-addition).
-
-## Shipped (1.2)
-
-The options overlay grew from two toggles into a small menu system — still opened with **Select +
-Start**, still no pause.
-
-![The full options overlay: video, camera, and save management](images/features-1.3-OverlayNewEntries.png)
-
-### Video options
-
-**Window scale** (X1–X8) and **Fullscreen**, applied live and saved to `vandalhearts.ini`'s `[video]`
-section. Scale and fullscreen are mutually-exclusive display modes: the inactive one is greyed, and
-changing the scale drops fullscreen so your new size is actually shown.
-
-### Save management
-
-Vandal Hearts saves to a single memory card with three slots. Save management lets you keep **unlimited
-whole-card backups** and swap them in — each backup stays a byte-identical, real-hardware-valid card, so
-nothing here diverges the save format or makes a save unloadable on real hardware.
-
-![The save browser: timestamped backups, the active-card marker, and the control legend](images/features-1.3-SaveManagement-01.png)
-
-- **Square: back up** — copy the current card to a new timestamped snapshot.
-- **Circle: restore** — replace the current card with a backup. Because this overwrites all three
-  slots, it asks first, with **"back up then restore"** as the safe default so you can't lose your
-  current save by surprise.
-- **Triangle: delete** a backup · **Cross: back**.
-- A green **(\*)** marks the backup identical to your current card — a glance tells you where you are,
-  and it doubles as a duplicate-spotter (two identical backups both show it).
-
-The one-way actions (**restore** and **delete**) confirm first, with the prompt shown in **red** so an
-irreversible operation is unmistakable:
-
-![A destructive save-management confirmation, its prompt shown in red](images/features-1.3-DestructiveOperationsRed.png)
-
-Press **Start** on a backup to inspect it without restoring — the three save slots, each with chapter,
-section, Ash's level and playtime (the game's own save caption):
-
-![The save-detail view: each slot's chapter, section, level and playtime](images/features-1.3-SaveManagement-02.png)
-
-Backups live in a hidden `saves/.archive/` folder next to the game, invisible to the game's own
-load/save screens.
-
-## Shipped (1.3)
-
-1.3 adds **Tactical Mode** — a large, opt-in gameplay rebalance — plus two general overlay conveniences.
-The rebalance is its own topic; this section covers the overlay-facing additions. The full player guide
-to what Tactical Mode changes (level cap, class rebalancing, clarified item content, save isolation) is
-in **[tactical-mode.md](tactical-mode.md)**.
-
-![The options overlay with the new Tactical Mode toggle and Return to Title entry](images/features-1.3-OverlayNewEntries.png)
-
-### Tactical Mode toggle
-
-A **Tactical Mode** on/off toggle sits at the top of the overlay. It is editable only at the main title
-screen (greyed during a run, so a run can't switch modes mid-flight), and its state is remembered in
-`vandalhearts.ini`. Turning it on and starting a New Game begins a Tactical run, with its own separate
-save folder. Everything it changes is described in [tactical-mode.md](tactical-mode.md) — and none of
-it touches the normal mode.
-
-### Return to Title
-
-A **Return to Title** entry lets you jump straight back to the title screen from anywhere — no need to
-reset the application or sit through the intro again. Because it abandons unsaved progress, it asks for
-confirmation first, with the warning shown in red and **Cancel** a button away:
-
-![The Return to Title confirmation, warning that unsaved progress will be lost](images/features-1.3-ReturnToTitle.png)
-
-This one is available in **both** modes (it's a plain convenience, not a Tactical change). It's greyed
-out while you're already at the title screen.
-
-## Shipped (1.4)
-
-1.4 is a quality-of-life release: a battle fast-forward, controller-aware overlay prompts, a magic-aware
-Tactical AI, and a finer battle-camera elevation. All four apply in both modes except the AI change, which
-is Tactical-only.
-
-### Battle fast-forward
-
-A battle-only **2× speed** for quicker play. During a battle, tap **R2** (or the `.` key) to run at
-double speed; **L2** (or `,`) returns to normal. A small **`BATTLE SPEED X2`** readout shows top-right
-while it's active. It works **only inside a battle** — menus, the world map, cutscenes and movies always
-play at normal speed — and it **resets to 1× automatically** when the battle ends, so it never carries
-into the next battle or the overworld.
-
-![A battle with the BATTLE SPEED X2 readout shown top-right](images/features-1.4-BattleSpeed.png)
-
-The speed-up is *whole-tick*: the game runs its complete update steps closer together in time, never
-skipping or splitting one, so **the AI, RNG and every outcome are identical to normal speed** — only the
-idle wait between frames is compressed. Because it changes nothing about what the game computes, it
-applies in **both** normal and Tactical mode (it isn't a balance change).
-
-On a gamepad this reuses the physical **L2 / R2 triggers**. Vanilla used those for camera elevation; the
-port had already moved the camera to the right stick, so the triggers were free — nothing is lost, and
-the right stick still raises/lowers the view. See [controls.md](controls.md#battle-fast-forward-pc-addition-14).
-
-### Controller-aware overlay labels
-
-The port overlay's own button hints now match your controller. A **Button labels** setting (in the
-Select + Start overlay) switches the footers between **Xbox** letters (A / B / X / Y) and **PlayStation**
-symbols (□ ○ △ ✕). It defaults to Xbox — the common PC controller — and a PlayStation player flips it
-once; the choice is saved to `vandalhearts.ini`. This is deliberately limited to the port's **own**
-overlay (save management, options) — the game's in-battle prompts are left exactly as the original.
+- **Twin-stick camera** — the right stick rotates the battle camera and raises/lowers the view
+  angle, with finer elevation steps than the original's fixed positions. The vertical axis ships
+  inverted (push up = tilt down, the modern convention); both axes can be flipped in the options
+  overlay. Keyboard: `Q`/`E` rotate, `R`/`F` elevate.
+- **Shoulder unit-cycle** — `L1`/`R1` jump the cursor to the previous/next ally, in both
+  directions (the original only cycled forward). Keyboard: `[` / `]`.
+- **Controller-aware button labels** — in-game button prompts can follow your pad: Xbox letters or
+  PlayStation symbols. Set it in the options overlay (`BUTTON LABELS`).
 
 | Xbox labels | PlayStation labels |
 |---|---|
-| ![Save-management footer with Xbox A/B/X/Y letters](images/features-1.4-Layout-XBOX-02.png) | ![Save-management footer with PlayStation square/circle/triangle/cross symbols](images/features-1.4-Layout-PSX-02.png) |
+| ![Save-management footer showing Xbox A/B/X/Y letters](images/ButtonsLabels-XBOX.png) | ![The same footer showing PlayStation symbols](images/ButtonsLabels-Playstation.png) |
 
-### Finer camera elevation
+The full scheme — every binding, pad and keyboard — is in [controls.md](controls.md).
 
-The battle camera's up/down viewing angle (right stick) now has **5 evenly-spaced stops** (11.25° to
-78.75°, including a clean **45°**) instead of the original 4 — an extra angle and a better mid-tilt for
-reading maps with tall or stepped terrain, without adding a lot of near-identical steps to click through.
-Purely a camera convenience: it changes nothing about the game, and 90° rotation is unchanged (finer
-rotation would need new eight-direction sprite art, a later release).
+## The options overlay
 
-| Low (~11°) | The new 45° | High (~79°) |
-|---|---|---|
-| ![Battle camera at a low, near-horizontal elevation](images/features-1.4-Elevation-Step-01.png) | ![Battle camera at the new 45-degree elevation](images/features-1.4-Elevation-Step-03.png) | ![Battle camera at a high, near-overhead elevation](images/features-1.4-Elevation-Step-05.png) |
+**Intent: change settings in-game, without config files or restarts.**
 
-### Magic-aware enemy AI *(Tactical Mode only)*
+Press **SELECT + START** during play to open the overlay. Every setting applies live and persists
+to `vandalhearts.ini`:
 
-In Tactical Mode, enemy spellcasters now **weigh magic resistance** when choosing a target — preferring
-magic-weak units and shying away from resistant or magically-buffed ones. Retail's AI is blind to this
-(it will happily fire a spell at your most magic-resistant unit), which undercut the magic-matters rebalance
-1.3 built; this closes that gap so the resistances and defensive buffs actually influence enemy decisions.
-It's a bias layered on top of the original targeting logic, not a rewrite. Normal mode is unaffected. The
-underlying targeting model is documented in
-[game-mechanics/ai-decision-making.md](game-mechanics/ai-decision-making.md).
+![The options overlay: Tactical Mode, HD pack, resolution, camera, labels, saves](images/OverlayMenu-Main.png)
 
-## Shipped (1.5)
+- **TACTICAL MODE** — the opt-in rebalance (see below). Changeable only at the title screen: a
+  run's mode is fixed.
+- **HD PACK** — the optional HD backgrounds/movies layer (see below). When a pack can't be used,
+  this row says why (`NO PACK` / `OUTDATED PACK` / `WRONG GAME`).
+- **INTERNAL RES / WINDOW SCALE / FULLSCREEN** — display settings (see *Graphics*).
+- **CAMERA X/Y-AXIS, BUTTON LABELS** — controls settings (above).
+- **SAVE MANAGEMENT / RETURN TO TITLE** — below.
 
-1.5 is a **graphics-fidelity** release, kept deliberately conservative — the aim is to *sharpen without
-reinterpreting* the game. Nothing about the art, sprites, videos, camera feel or gameplay changes; the
-same frames are simply rendered more precisely, and optionally at a higher internal resolution. All of it
-applies in both modes.
+### Save management
 
-### A more hardware-accurate renderer
+**Intent: never lose progress to the original's single save card.**
 
-The port's software renderer is now a fixed-point integer rasterizer that evaluates pixel coverage **and**
-texture sampling at the exact positions the PlayStation's GPU does, with the same ordered dithering (gated
-on the GPU's dither-enable bit) and 5-bit transparency blend. It measures **~99.8–99.99% pixel-exact**
-against a reference emulator's video memory across battle and effect scenes, and it resolves the denser-
-than-hardware Chapter 2 casting-ray effect noted in 1.4. It's the default; a softer legacy renderer stays
-available via `VH_ACCURATE=0` in `vandalhearts.ini` for anyone who prefers it.
+Saves are ordinary files in a `saves/` folder next to the game — no memory-card images to manage.
+`SAVE MANAGEMENT` in the overlay adds unlimited whole-card backups:
 
-### Internal-resolution supersampling
+![The save browser: timestamped backups and the active-card marker](images/SaveManagement-Browse.png)
 
-The 3D can be rendered at **1× (native), 2×, 3× or 4×** the internal resolution for crisper terrain and
-edges — the same textures sampled on a denser grid, with **no re-authored art**. Set it live in the
-options overlay (**Select + Start → INTERNAL RES**, also saved to `vandalhearts.ini`):
+Press Start on a backup to inspect its three slots — chapter, section, level, playtime — before
+touching anything:
 
-![The options overlay with INTERNAL RES set to X4](images/features-1.5-MenuInternalResolution.png)
+![The save-detail view showing each slot's progress](images/SaveManagement-Inspect.png)
 
-The difference is clearest on stepped terrain and tile edges. Each pair below is native (1×) then the
-same view at 4×, shown full-width so the detail isn't downscaled:
+Restoring defaults to the safe path: **back up the current card first**, then restore. Destructive
+prompts are shown in red:
 
-*Battle field — native (1×):*
+![The restore confirmation: back up then restore is the default](images/SaveManagement-Restore.png)
 
-![Battle field rendered at native internal resolution](images/features-1.5-Scene1-x1.png)
+### Return to title
 
-*Battle field — supersampled (4×):*
+**Intent: leave a run without quitting the program.**
 
-![The same battle field rendered at 4× internal resolution](images/features-1.5-Scene1-x4.png)
+`RETURN TO TITLE` jumps back to the title menu from anywhere, with a red confirmation first —
+unsaved progress is lost, and the prompt says so:
 
-*Battle field overhead — native (1×):*
+![The return-to-title confirmation](images/ReturnToTitle.png)
 
-![Battle field from an overhead angle at native internal resolution](images/features-1.5-Scene2-x1.png)
+## Battle quality of life
 
-*Battle field overhead — supersampled (4×):*
+### Enemy threat overlay
 
-![The same overhead battle field at 4× internal resolution](images/features-1.5-Scene2-x4.png)
+**Intent: see at a glance what the enemy can reach, so turns need less counting.**
 
-Tile seams are handled by built-in *crust-free* sampling: the denser grid samples each tile's bright
-interior the way the reference renderer does, so no dark grid appears along terrain/lava/water seams,
-while 2D UI and text stay pixel-aligned. The higher-resolution pass is **multithreaded** across CPU cores,
-so even 4× holds the 30 fps cap and battle fast-forward stays effective on a multicore machine.
+Toggle the overlay in battle to paint the enemies' combined danger zone:
 
-Cost scales with the square of the factor (2× is nearly free; 3×/4× are heavier). See
-[configuration.md](configuration.md) for `VH_INTERNAL_SCALE`, `VH_RASTER_THREADS` and `VH_ACCURATE`.
+![The threat overlay painting the enemies' combined attack reach in red](images/ThreatOverlay-EnemyPhysicalAttackReach.png)
 
-## Shipped (1.6)
+With one of your units selected, its movement range overlays the threat: blue = safe movement,
+orange = reachable but threatened, purple = enemy threat beyond your reach:
 
-An **optional HD pack** for the two pre-rendered layers — the 320×240 backgrounds and the FMV movies. The
-**source tree and base build contain no HD art** — you either build a pack from your own disc or download
-the prebuilt pack attached to the 1.6 release (upscaled derivative art, provided for convenience). A pack is
-auto-detected in `hdpacks/` beside the executable and enables the **HD PACK** options row, which also raises
-the internal resolution so the extra detail is visible:
+![A selected unit's movement range over the threat: blue safe, orange contested](images/ThreatOverlay-PlayerMovement.png)
 
-![The options overlay with HD PACK ON and INTERNAL RES set to X4](images/features-1.6-MenuHDPack.png)
+Targeting keeps the distinction visible while you pick a destination or victim:
 
-The whole feature is inert without a pack — the base build renders exactly as before. Building one offline
-from your own disc, and every option, is covered in [hd-pack.md](hd-pack.md).
+![Targeting with the threat overlay active](images/ThreatOverlay-Targeting.png)
 
-### HD backgrounds
+Spell AoE previews stay visually distinct from the threat colors, so area placement and danger
+never blur together:
 
-The pre-rendered, continuous-tone backgrounds are swapped for higher-resolution versions at render time —
-the game's own scenes, sharper, with no change to layout, palette or on-screen UI. Hand-drawn pixel art
-(portraits, sprites, fonts) stays native. The same weapon shop, native then HD:
+![A spell's area preview clearly distinct from the threat overlay](images/ThreatOverlay-AOEvisibility.png)
 
-*Native:*
+### Battle fast-forward
 
-![The weapon shop at native background resolution](images/features-1.6-BackgroundsInGame-01.png)
+**Intent: keep tactical battles, skip the waiting.**
 
-*HD pack:*
+Hold nothing, tap once: **R2** doubles the battle speed; **L2** returns to normal (keyboard `.`
+and `,`). A `BATTLE SPEED X2` readout shows while it's active:
 
-![The same weapon shop with the HD background](images/features-1.6-BackgroundsInGame-02.png)
+![A battle running at double speed with the BATTLE SPEED X2 readout](images/BattleSpeed-x2.png)
 
-### HD movies
+Only the pacing changes — AI decisions and outcomes are identical, so fast-forward is never a
+gameplay change. It applies in every battle type, and holds the full 2× even at the maximum
+internal resolution.
 
-The intro and ending FMVs can be replaced with HD re-encodes, presented in place of the native MDEC video
-while the game keeps its **original frame timing and XA audio** in sync — only the picture is swapped. The
-movie art is upscaled offline (a pack ships the finished files), so this layer is a genuine re-encode
-rather than a pure sharpen. The opening "Arris the Sage" scene, native MDEC then HD:
+## Tactical Mode *(opt-in rebalance)*
+
+**Intent: a fresh challenge for players who know the game — without touching the original.**
+
+Tactical Mode is a separate, opt-in way to play: a per-chapter level cap, Trials that reward gold
+and XP, reworked classes, a reined-in Vandalier, and restored/clarified content. Normal mode stays
+byte-for-byte the retail game, and each mode keeps its own save folder.
+
+Two examples of its smaller fixes — items that never explained themselves now do (and `≠` marks
+gear the unit can't equip):
+
+![The shop showing an item's restored effect description](images/TacticalOnly-ItemDescriptions.png)
+
+…and the Avalanche map's re-skin turns its boulder to ice, matching the scene:
+
+![The Avalanche battle with the Tactical ice re-skin](images/TacticalOnly-AvalancheReskin.png)
+
+The full design — every class change, spell list, and the reasoning — is in
+[tactical-mode.md](tactical-mode.md).
+
+## Graphics
+
+**Intent: sharpen the original image without reinterpreting the art.**
+
+The renderer is a PSX-accurate software rasterizer by default: pixel coverage, texture sampling,
+dithering and blending match the console's GPU to measured ~99.8–99.99 % pixel-exactness. On top
+of it, `INTERNAL RES` renders the 3D at **1× to 4×** the native resolution — the same art, sampled
+more finely, with no re-authored assets. Set it live in the overlay.
+
+*Native (×1):*
+
+![A battle at native internal resolution](images/InternalResolution-x1.png)
+
+*Supersampled (×4):*
+
+![The same view at 4x internal resolution](images/InternalResolution-x4.png)
+
+The high-resolution pass is multithreaded, so ×4 holds the frame cap — including during battle
+fast-forward. Configuration detail: [configuration.md](configuration.md).
+
+## HD pack
+
+**Intent: real HD for the pre-rendered art — backgrounds and movies — while hand-drawn pixel art
+stays untouched.**
+
+An optional pack replaces the 320×240 pre-rendered backgrounds and the FMV movies with
+high-resolution versions. The source tree and base build ship no HD art: install the pack from the
+release page, or build one from your own disc. Portraits, sprites, UI and fonts are deliberately
+kept native — smoothing pixel art would clash with the crisp UI.
+
+*Without the pack:*
+
+![A pre-rendered background at native resolution](images/HDPack-Off.png)
+
+*With the pack:*
+
+![The same background from the HD pack](images/HDPack-On.png)
+
+Movies get the same treatment — the game keeps its original timing and audio; only the picture is
+swapped:
 
 *Native (MDEC):*
 
@@ -287,6 +181,10 @@ rather than a pure sharpen. The opening "Arris the Sage" scene, native MDEC then
 *HD pack:*
 
 ![The same intro frame from the HD re-encode](images/features-1.6-Videos-02.png)
+
+Installing, building, and every option: [hd-pack.md](hd-pack.md).
+
+---
 
 ## Planned
 

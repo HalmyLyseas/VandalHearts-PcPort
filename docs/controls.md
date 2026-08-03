@@ -75,7 +75,7 @@ Press **Select + Start** together to open a small in-game options overlay; the s
 It works everywhere — battle, world map, even over a movie — and it doesn't pause the game (Vandal
 Hearts is turn-based, so the field simply idles behind it while it's open).
 
-![The in-game options overlay: video, camera, and save management](images/features-1.3-OverlayNewEntries.png)
+![The in-game options overlay: video, camera, and save management](images/OverlayMenu-Main.png)
 
 Navigate with **Up / Down**; change the highlighted setting with **Left / Right** or **Circle**.
 Changes apply immediately and are saved to `vandalhearts.ini` right away, so they persist across runs.
