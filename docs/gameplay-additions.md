@@ -121,8 +121,7 @@ Tactical Mode is a separate, opt-in way to play: a per-chapter level cap, Trials
 and XP, reworked classes, a reined-in Vandalier, and restored/clarified content. Normal mode stays
 byte-for-byte the retail game, and each mode keeps its own save folder.
 
-Two examples of its smaller fixes — items that never explained themselves now do (and `≠` marks
-gear the unit can't equip):
+One example of its smaller fixes — items that never explained themselves now do:
 
 ![The shop showing an item's restored effect description](images/TacticalOnly-ItemDescriptions.png)
 
