@@ -540,12 +540,22 @@ void PC_GpuSetMovieOverlayRGB(const unsigned char *rgb, int w, int h) {
     s_movieOverlayRGB = rgb; s_movieOverlay = NULL; s_movieOvW = w; s_movieOvH = h;
 }
 
+/* VH_PRESENT_TIME=1: phase timing for the present path (convert / OSD / GL submit+swap), mean over
+ * 120-frame windows -- the raster has VH_RASTER_TIME, this is its display-side counterpart. */
+static double presentNowMs(void) {
+    return (double)SDL_GetPerformanceCounter() * 1000.0 / (double)SDL_GetPerformanceFrequency();
+}
+
 void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
                     int x, int y, int w, int h) {
     int px, py;
+    static int s_ptTime = -1; static double s_ptConv, s_ptOsd, s_ptGl; static unsigned s_ptN;
+    double pt0 = 0, pt1 = 0, pt2 = 0, pt3 = 0;
     (void)vramH;
 
     if (!s_window || !s_glCtx) return; /* headless: no-op */
+    if (s_ptTime < 0) s_ptTime = getenv("VH_PRESENT_TIME") ? 1 : 0;
+    if (s_ptTime) pt0 = presentNowMs();
 
     /* A movie is playing -> present its decoded frame as a fullscreen overlay (native BGR555, or HD RGB24). */
     if ((s_movieOverlay || s_movieOverlayRGB) && s_movieOvW > 0 && s_movieOvH > 0) {
@@ -600,6 +610,8 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         }
     }
 
+    if (s_ptTime) pt1 = presentNowMs();
+
     {
         static int s_osdEnabled = -1;
         if (s_osdEnabled < 0) s_osdEnabled = (getenv("VH_CAM_OSD") != NULL) ? 1 : 0;
@@ -647,5 +659,16 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         glRasterPos2f(-1.0f, -1.0f);           /* bottom-left of the viewport */
         glDrawPixels(w, h, GL_RGB, GL_UNSIGNED_BYTE, s_rgbaScratch);
     }
+    if (s_ptTime) pt2 = presentNowMs();
     SDL_GL_SwapWindow(s_window);
+    if (s_ptTime) {
+        pt3 = presentNowMs();
+        s_ptConv += pt1 - pt0; s_ptOsd += pt2 - pt1; s_ptGl += pt3 - pt2;
+        if (++s_ptN >= 120) {
+            fprintf(stderr, "[present] convert=%.2f osd+ovl=%.2f gl+swap=%.2f total=%.2f ms/frame (%u frames)\n",
+                    s_ptConv / s_ptN, s_ptOsd / s_ptN, s_ptGl / s_ptN,
+                    (s_ptConv + s_ptOsd + s_ptGl) / s_ptN, s_ptN);
+            s_ptConv = s_ptOsd = s_ptGl = 0; s_ptN = 0;
+        }
+    }
 }

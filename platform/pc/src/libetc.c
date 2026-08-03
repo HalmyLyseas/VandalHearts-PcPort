@@ -844,6 +844,15 @@ static unsigned int PC_OverlayFilterPad(unsigned int raw) {
 #define VH_BATTLE_SPEED_MAX 2
 static int s_battleSpeed = 1;   /* 1..MAX; reset to 1x on leaving battle (see VSync) */
 
+/* VH_FRAME_TIME=1: split each VSync-to-VSync interval into WORK (logic + GTE + raster + present =
+ * time from the previous VSync's return to this call) vs IDLE (this call's pacing delay). Mean
+ * over 120 frames, tagged with the VSync mode + current battle speed. Complement of
+ * VH_RASTER_TIME / VH_PRESENT_TIME: work - raster - present = game-side cost. */
+static int s_ftOn = -1; static double s_ftWork, s_ftIdle; static unsigned s_ftN;
+static double FtNowMs(void) {
+    return (double)SDL_GetPerformanceCounter() * 1000.0 / (double)SDL_GetPerformanceFrequency();
+}
+
 static int PC_InActiveBattle(void) {
     /* Match main.c's State_Battle() dispatch set exactly -- every primary state that runs a real-time
      * battle tick, so fast-forward covers all battle entry paths. STATE_30 = normal story battle
@@ -948,6 +957,24 @@ int VSync(int mode) {
         return (int)s_vblankCount;
     }
 
+    if (s_ftOn < 0) s_ftOn = getenv("VH_FRAME_TIME") ? 1 : 0;
+    if (s_ftOn) {                       /* entry: close the previous frame's interval */
+        static double lastEntry, idleSum; static int lastMode;
+        double now = FtNowMs();
+        if (lastEntry > 0) {
+            s_ftWork += (now - lastEntry) - s_ftIdle;  /* everything that wasn't the pacing delay */
+            idleSum  += s_ftIdle;
+            if (++s_ftN >= 120) {
+                double w = s_ftWork / s_ftN;
+                fprintf(stderr, "[frame] mode=%d speed=%d work=%.2f idle=%.2f ms/frame "
+                                "(work-only ceiling %.1f fps)\n",
+                        lastMode, s_battleSpeed, w, idleSum / s_ftN, w > 0 ? 1000.0 / w : 0.0);
+                s_ftWork = idleSum = 0; s_ftN = 0;
+            }
+        }
+        lastEntry = now; lastMode = mode; s_ftIdle = 0;
+    }
+
     int waits = (mode == 0) ? 1 : mode;
     /* Stage-3 (1.4 F1): fast-forward resets to 1x on leaving battle, so it never carries into the next
      * battle or an overworld save -- each battle starts at normal speed. */
@@ -955,17 +982,27 @@ int VSync(int mode) {
     /* Divide the per-tick idle wait by the speed factor so N whole ticks fit the wall-clock of one --
      * outside battle PC_BattleSpeedGet() returns 1 (no-op). */
     double frameMs = FRAME_MS_F / (double)PC_BattleSpeedGet();
-    for (int i = 0; i < waits; i++) {
+    /* ONE consolidated deadline per call (1.6.1 pacing fix). The old per-vblank loop resynced the
+     * deadline on each missed sub-wait and then slept the NEXT sub-wait in full -- so a battle at
+     * fast-forward (VSync(2), speed 2 => two 8.3ms sub-waits) whose work exceeded one sub-wait paid
+     * `work + 8.3ms` per frame instead of max(work, 16.7ms): a constant ~8ms of idle burned every
+     * frame, capping ~53fps with a measured 90+fps work ceiling. One deadline over the whole call
+     * absorbs sub-frame overshoot in the remaining budget; a miss keeps the deadline (the next
+     * frame's budget bounds the catch-up to one frame -- no racing), and only a FULL frame of
+     * lateness resyncs (a real hitch/stall, the case the old resync existed for). */
+    {
+        double totalMs = frameMs * waits;
         Uint32 now = SDL_GetTicks();
-        s_nextVBlankMs += frameMs;            /* fractional deadline: accumulates the sub-ms remainder */
+        s_nextVBlankMs += totalMs;
         if ((double)now < s_nextVBlankMs) {
-            SDL_Delay((Uint32)(s_nextVBlankMs - now));
-        } else {
-            /* fell behind (slow frame / stall) -- resync rather than racing to catch up, so a hitch
-             * doesn't make the game briefly run fast to "make up" lost time. */
-            s_nextVBlankMs = (double)now;
+            if (s_ftOn == 1) { double d0 = FtNowMs();
+                               SDL_Delay((Uint32)(s_nextVBlankMs - now));
+                               s_ftIdle += FtNowMs() - d0; }
+            else SDL_Delay((Uint32)(s_nextVBlankMs - now));
+        } else if ((double)now - s_nextVBlankMs > totalMs) {
+            s_nextVBlankMs = (double)now;     /* > one frame behind: genuine stall, resync */
         }
-        s_vblankCount++;
+        s_vblankCount += waits;
     }
 
     LogCameraTraceRow();
@@ -976,6 +1013,10 @@ int VSync(int mode) {
 
     { extern void PC_CdXaUpdate(void); PC_CdXaUpdate(); } /* XA music streaming pump */
     { extern void PC_SeqTick(void); PC_SeqTick(); }       /* SEQ (sequenced music) sequencer */
+
+    /* GPU-trace recording, battle-gated (VH_GPU_RECORD_BATTLE=1): arm the recorder from the same
+     * battle-state set the fast-forward gate uses, so a trace captures pure battle content. */
+    { extern void PC_GpuTraceArmBattle(int on); PC_GpuTraceArmBattle(PC_InActiveBattle()); }
 
     /* Boot smoke test (VH_SMOKE=1, tools/regress/smoke_boot.sh): exit 0 the moment the title screen
      * is reached -- proving the whole boot chain (data-segment constructors, disc mount, MDEC logo

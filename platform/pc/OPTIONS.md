@@ -48,8 +48,10 @@ the old privileged low-page-mapping fallback (and its `setcap` targets) was reti
 | `VH_SPRITE_LOG` | `SPRITE_LOG=1` | `vh_sprite_fate.csv` | Per-unit-sprite cull/projection/GTE state. |
 | `VH_TERRAIN_LOG` | `TERRAIN_LOG=1` | `vh_terrain_otz_pc.csv` | Per-frame terrain `otz` stats + black-tile counts. |
 | `VH_FPS_LOG` | — | stderr | Per-second `[FPS]` meter (VSync calls/sec). Off by default — one line/sec is console noise in the logs bug reports paste. |
+| `VH_FRAME_TIME` | — | stderr | Per-frame budget split, mean over 120 frames: `work` (logic + GTE + raster + present) vs `idle` (pacing sleep), tagged with VSync mode + battle speed, plus the work-only fps ceiling. First stop for any "can't hold N fps" report. |
+| `VH_PRESENT_TIME` | — | stderr | Present-path phase timing (555→888 convert / UI+GL submit / swap), mean over 120 frames. |
 | `VH_SMOKE` | — | stderr + exit code | Boot smoke mode (`tools/regress/smoke_boot.sh`): exit 0 the moment the title screen is reached, exit 1 on timeout. Auto-holds START through the intro movies. `VH_SMOKE_LINGER=N` keeps running N frames after the title (for trace recording). |
-| `VH_GPU_RECORD` | — | `<file>` | Record a GPU trace (every VRAM upload + every primitive drawn) for the raster regression harness; `VH_GPU_RECORD_FRAMES=N` frames (default 400). Replay with `VH_GPU_REPLAY=<file>` (deterministic, prints a VRAM signature; `VH_GPU_REPLAY_VERBOSE=1` per-frame). See `tools/regress/raster_check.sh`. |
+| `VH_GPU_RECORD` | — | `<file>` | Record a GPU trace (every VRAM upload + every primitive drawn) for the raster regression harness; `VH_GPU_RECORD_FRAMES=N` frames (default 400); `VH_GPU_RECORD_BATTLE=1` holds recording until an active battle (a frame budget captures pure battle, not the boot lead-in). Replay with `VH_GPU_REPLAY=<file>` (deterministic, prints a VRAM signature; `VH_GPU_REPLAY_VERBOSE=1` per-frame). See `tools/regress/raster_check.sh`. |
 | `VH_CAM_OSD` | — | on-screen | Camera-pose overlay (position/rotation/zoom) drawn in the window. |
 | NULL-read fixup handler | — | `vh_null_reads.log` | Auto: each NULL-region read / rodata-write the handler fixed up (see `make crash-trace`). |
 

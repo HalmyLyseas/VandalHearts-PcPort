@@ -21,7 +21,10 @@ TRACE="$RD/boot.vht"; REF="$RD/boot.vht.ref"
 mkdir -p "$RD"
 
 replay_hash() {
-    env VH_GPU_REPLAY="$TRACE" SDL_VIDEODRIVER=dummy ALSOFT_DRIVERS=null "$EXE" 2>/dev/null \
+    # Pin the raster environment: the ini->env loader runs before replay, so a user's
+    # VH_INTERNAL_SCALE/VH_RASTER_THREADS in vandalhearts.ini would otherwise leak in.
+    env VH_GPU_REPLAY="$TRACE" VH_INTERNAL_SCALE=1 VH_RASTER_THREADS=1 \
+        SDL_VIDEODRIVER=dummy ALSOFT_DRIVERS=null "$EXE" 2>/dev/null \
         | grep -E "^REPLAY " || { echo "raster: replay produced no signature" >&2; exit 2; }
 }
 

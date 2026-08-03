@@ -1249,12 +1249,18 @@ static void TrcWrite(char op, const void *a, u32 na, const void *b, u32 nb) {
     fwrite(&na, 4, 1, s_trcF); if (na) fwrite(a, 1, na, s_trcF);
     fwrite(&nb, 4, 1, s_trcF); if (nb) fwrite(b, 1, nb, s_trcF);
 }
+/* VH_GPU_RECORD_BATTLE=1: hold recording until the game is in an active battle (libetc's VSync arms
+ * this from the battle-state dispatch each tick), so a 600-frame budget is pure battle content
+ * instead of being eaten by the boot/menu lead-in. */
+static int s_trcArmed;
+void PC_GpuTraceArmBattle(int on) { s_trcArmed = on; }
+
 static void TrcInit(void) {
     const char *p, *n;
     if (s_trcState >= 0) return;
-    s_trcState = 0;
-    if (s_trcReplaying) return;
-    p = getenv("VH_GPU_RECORD"); if (!p || !*p) return;
+    if (s_trcReplaying) { s_trcState = 0; return; }
+    p = getenv("VH_GPU_RECORD"); if (!p || !*p) { s_trcState = 0; return; }
+    if (getenv("VH_GPU_RECORD_BATTLE") && !s_trcArmed) return;   /* stay unchecked; retry next frame */
     s_trcF = fopen(p, "wb");
     if (!s_trcF) { fprintf(stderr, "[trace] cannot open '%s' for recording\n", p); return; }
     fwrite("VHT1", 1, 4, s_trcF);
@@ -1278,9 +1284,20 @@ static unsigned long long TrcVramHash(void) {
     return h;
 }
 
+static unsigned long long TrcHiresHash(void) {   /* verification only: 16x the data at scale 4 */
+    int S = InternalScale();
+    const unsigned char *b = (const unsigned char *)s_hires;
+    size_t n = (size_t)VRAM_W * S * VRAM_H * S * 2, i;
+    unsigned long long h = 1469598103934665603ull;
+    if (!s_hires || S <= 1) return 0;
+    for (i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ull; }
+    return h;
+}
+
 int PC_GpuReplayTrace(const char *path) {
     FILE *f = fopen(path, "rb");
     char magic[4]; unsigned frame = 0; unsigned long long combined = 1469598103934665603ull;
+    double drawMs = 0.0; int hashHires;
     unsigned char *arena = NULL; size_t arenaCap = 0, arenaUsed = 0;
     size_t *poff = NULL; u32 *psz = NULL; size_t pcap = 0, pcount = 0;
     unsigned char *payload = NULL; size_t payloadCap = 0;
@@ -1289,6 +1306,13 @@ int PC_GpuReplayTrace(const char *path) {
         fprintf(stderr, "[replay] '%s' is not a VHT1 GPU trace\n", path); fclose(f); return 2;
     }
     s_trcReplaying = 1; s_trcState = 0;
+    /* Bench knobs: VH_INTERNAL_SCALE engages the hi-res pass (the game normally sets it in GpuInit,
+     * which replay mode skips); VH_RASTER_THREADS is read by the pool as usual. Timing accumulates
+     * DrawOTag wall time ONLY -- hashing (which can dwarf rasterization at scale 4) stays outside.
+     * VH_GPU_REPLAY_HASH_HIRES=1 folds the hi-res buffer into the signature (slow; for verifying an
+     * optimization bit-identical, not for timing). */
+    { const char *e = getenv("VH_INTERNAL_SCALE"); if (e && atoi(e) > 1) PC_GpuSetInternalScale(atoi(e)); }
+    hashHires = getenv("VH_GPU_REPLAY_HASH_HIRES") != NULL;
     for (;;) {
         int op = fgetc(f); u32 na, nb;
         unsigned char hdrA[64];
@@ -1324,8 +1348,17 @@ int PC_GpuReplayTrace(const char *path) {
                 tok = PC_OtMint(pr, 0);
             }
             headSlot = tok;
+#ifndef _WIN32
+            { struct timespec t0, t1;
+              clock_gettime(CLOCK_MONOTONIC, &t0);
+              DrawOTag(&headSlot);
+              clock_gettime(CLOCK_MONOTONIC, &t1);
+              drawMs += (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6; }
+#else
             DrawOTag(&headSlot);
+#endif
             fh = TrcVramHash();
+            if (hashHires) { unsigned long long hh = TrcHiresHash(); combined ^= hh; combined *= 1099511628211ull; }
             combined ^= fh; combined *= 1099511628211ull;
             frame++;
             if (getenv("VH_GPU_REPLAY_VERBOSE"))
@@ -1340,6 +1373,9 @@ int PC_GpuReplayTrace(const char *path) {
     }
     fclose(f); free(arena); free(poff); free(psz); free(payload);
     printf("REPLAY frames=%u combined=%016llx\n", frame, combined);
+    if (drawMs > 0.0 && frame)
+        fprintf(stderr, "[replay] scale=%d DrawOTag total=%.0fms  mean=%.2fms/frame  (%.1f fps-equivalent)\n",
+                InternalScale(), drawMs, drawMs / frame, 1000.0 * frame / drawMs);
     return frame ? 0 : 2;
 }
 
