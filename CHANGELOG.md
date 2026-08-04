@@ -4,6 +4,42 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.1] — Point release: full-speed fast-forward, smoother HD, and a Player Manual
+
+A maintenance and polish release. No gameplay changes; normal mode remains byte-for-byte the retail
+game.
+
+### Fixed (both modes)
+- **Battle fast-forward now holds the full 2× at every graphics setting.** A frame-pacing flaw made
+  battles at high `INTERNAL RES` sleep away part of each fast-forwarded frame (about 53 of the
+  targeted 60 ticks/sec at ×4). The pacing now spends the whole frame budget; measured 60/60 with
+  headroom on a worst-case battle scene.
+- **HD pack scene loads no longer dip the frame rate.** HD backgrounds decode on a background
+  thread; the brief 60→55 fps dip on entering a scene is gone (worst case validated at fullscreen
+  ×4).
+
+### Changed
+- **The HD pack format is now v2 — re-download the pack.** The pack manifest now declares the FMVs
+  too; the game verifies the pack's contents at startup (a missing movie is reported instead of
+  silently playing the original), and the HD PACK option explains itself when a pack can't be used
+  (`NO PACK` / `OUTDATED PACK` / `WRONG GAME`). The 1.6.0 pack download is withdrawn; this
+  release's pack (same art, current manifest) is the supported one.
+- **The Linux AppImage shrank from 65 MB to 14 MB** (the movie decoder is now built into the
+  executable instead of bundling a system multimedia stack — same approach as Windows).
+
+### Added
+- **A Player Manual (PDF)** ships with each release: setup on Windows and Linux, controls, every
+  feature illustrated, and a quick problem table.
+- **Reorganized documentation**: the feature guide is now organized by feature with current
+  screenshots, plus new [troubleshooting](docs/troubleshooting.md) and
+  [performance](docs/performance.md) pages.
+- Quality-of-life for diagnostics: the per-second FPS meter is now opt-in (`VH_FPS_LOG`, settable
+  in the ini), joined by frame-budget and display-path meters (`VH_FRAME_TIME`,
+  `VH_PRESENT_TIME`) — the first stops for any performance report.
+- Developer-facing: an in-repo regression harness (a 7-second headless boot test and a byte-exact
+  rasterizer golden-image check), a build-system parity guard, warning-clean builds on all
+  targets, a release checklist, and contributor/issue templates.
+
 ## [1.6.0] — Optional HD pack: backgrounds + movies
 
 An **optional** HD layer for the two pre-rendered parts of the game — the 320×240 backgrounds and the FMV
