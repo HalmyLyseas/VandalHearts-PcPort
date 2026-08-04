@@ -53,12 +53,12 @@ The six subsystem backends each replace one PSX hardware unit:
 
 | PSX unit | PsyQ module | PC backend | Deep-dive |
 |---|---|---|---|
-| GPU (rasteriser) | `libgpu` | `libgpu.c` + `pc_gpu_window.c` | [subsystems/gpu.md](pc-port/subsystems/gpu.md) |
+| GPU (rasteriser) | `libgpu` | `libgpu.c` + `pc_raster.c` + `pc_hdpack.c` + `pc_gpu_trace.c` + `pc_gpu_window.c` | [subsystems/gpu.md](pc-port/subsystems/gpu.md) |
 | GTE (geometry coprocessor) | `libgte` | `libgte.c` | [subsystems/gte.md](pc-port/subsystems/gte.md) |
 | SPU (sound) | `libspu` / `libsnd` | `libspu.c` / `libsnd.c` + `pc_spu.c` | [subsystems/spu.md](pc-port/subsystems/spu.md) |
 | CD-ROM / XA audio | `libcd` | `libcd.c` + `pc_xa.c` | [subsystems/cd-xa.md](pc-port/subsystems/cd-xa.md) |
 | MDEC (video decode) | `libpress` | `pc_mdec.c` | [subsystems/mdec.md](pc-port/subsystems/mdec.md) |
-| Kernel / events / timing | `libapi` / `libetc` | `libkernel.c` / `libetc.c` | [subsystems/kernel.md](pc-port/subsystems/kernel.md) |
+| Kernel / events / timing | `libapi` / `libetc` | `libkernel.c` / `libetc.c` (+ `pc_diag.c`, `pc_battle_speed.c`) | [subsystems/kernel.md](pc-port/subsystems/kernel.md) |
 
 The backends are *behavioural* reimplementations, not hardware emulators: where the original relied on
 a documented PsyQ behaviour, the PC side reproduces that behaviour — and where a constant or algorithm

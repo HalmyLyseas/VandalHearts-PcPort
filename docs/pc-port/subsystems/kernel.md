@@ -9,7 +9,10 @@ so on PC those names resolve to two portable C files instead of Sony's asm:
 - [`platform/pc/src/libkernel.c`](../../../platform/pc/src/libkernel.c) — events, root counters, the
   memory-card/save file layer, `Krom2RawAdd` (BIOS kanji glyph lookup) and the BIOS `rand()`.
 - [`platform/pc/src/libetc.c`](../../../platform/pc/src/libetc.c) — `VSync()` frame pacing and
-  `PadRead()` input, both backed by SDL2.
+  `PadRead()` input, both backed by SDL2. Two companions extracted from it:
+  [`pc_battle_speed.c`](../../../platform/pc/src/pc_battle_speed.c) (the 1.4 battle fast-forward
+  state + gate) and [`pc_diag.c`](../../../platform/pc/src/pc_diag.c) (every `VH_*`-gated
+  diagnostic logger/meter plus the `VH_SMOKE` boot harness, driven from `VSync()` via small hooks).
 
 Two clean-room headers define the interface with the exact signatures and constants the byte-exact
 decompile recovered: [`PsyQ/kernel.h`](../../../platform/pc/include/PsyQ/kernel.h) (`OpenEvent`,

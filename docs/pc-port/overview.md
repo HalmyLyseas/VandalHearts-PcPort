@@ -43,12 +43,12 @@ disassemble the real routine rather than theorise.
 
 | Subsystem | Replaces | Backend files | Deep-dive |
 |---|---|---|---|
-| **GPU** | `libgpu` (rasteriser, OT, primitives) | `libgpu.c`, `pc_gpu_window.c` | [subsystems/gpu.md](subsystems/gpu.md) |
+| **GPU** | `libgpu` (rasteriser, OT, primitives) | `libgpu.c`, `pc_raster.c`, `pc_hdpack.c`, `pc_gpu_trace.c`, `pc_gpu_window.c` | [subsystems/gpu.md](subsystems/gpu.md) |
 | **GTE** | `libgte` (fixed-point 3D math) | `libgte.c` | [subsystems/gte.md](subsystems/gte.md) |
 | **SPU / sound** | `libspu` + `libsnd` (voices, SEQ music) | `libspu.c`, `libsnd.c`, `pc_spu.c` | [subsystems/spu.md](subsystems/spu.md) |
 | **CD / XA** | `libcd` (disc reads, XA audio) | `libcd.c`, `pc_xa.c` | [subsystems/cd-xa.md](subsystems/cd-xa.md) |
 | **MDEC / video** | `libpress` (STR FMV decode) | `pc_mdec.c` | [subsystems/mdec.md](subsystems/mdec.md) |
-| **Kernel / timing** | `libapi` + `libetc` (events, VSync, saves) | `libkernel.c`, `libetc.c` | [subsystems/kernel.md](subsystems/kernel.md) |
+| **Kernel / timing** | `libapi` + `libetc` (events, VSync, saves) | `libkernel.c`, `libetc.c` (+ `pc_diag.c`, `pc_battle_speed.c`) | [subsystems/kernel.md](subsystems/kernel.md) |
 
 All six are complete and validated on Linux and Windows via a full demo playthrough; A/V fidelity was
 checked against real hardware (BizHawk) — GTE/perspective, terrain and sprite rendering, the software

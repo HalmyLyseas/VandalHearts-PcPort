@@ -4,12 +4,15 @@ The PlayStation's GPU is a fixed-function 2D rasteriser fed by GP0/GP1 command
 packets over DMA, backed by 1&nbsp;MB of 16-bit VRAM. The game never touches it
 directly — it builds an **ordering table** of primitives with PsyQ's `libgpu`
 and hands it to `DrawOTag`, which DMAs the packets to the GPU. The PC backend
-replaces that unit wholesale. `platform/pc/src/libgpu.c` keeps a real
-1024&nbsp;×&nbsp;512 BGR555 VRAM buffer, walks a real ordering table, and
-**software-rasterises** the four primitive types the game actually uses into
-that VRAM. SDL2 + OpenGL are used *only* for the last step: blitting the
-finished framebuffer to a resizable window each frame
-(`platform/pc/src/pc_gpu_window.c`). This is the "OT → per-frame primitive list
+replaces that unit wholesale, split across five files in `platform/pc/src/`:
+`libgpu.c` (the PsyQ API surface, VRAM transfers, the ordering-table token
+bridge and the `DrawOTag` walker), `pc_raster.c` (the framebuffers — a real
+1024&nbsp;×&nbsp;512 BGR555 VRAM plus the hi-res buffer — and the
+**software rasteriser** for the four primitive types the game actually uses),
+`pc_hdpack.c` (the optional HD background replacement), `pc_gpu_trace.c` (the
+record/replay regression harness), and `pc_gpu_window.c` (SDL2 + OpenGL, used
+*only* for the last step: blitting the finished framebuffer to a resizable
+window each frame). This is the "OT → per-frame primitive list
 → rasterise" translation the interface contract calls for, not a 1:1 re-submission
 of GPU command words.
 
@@ -203,8 +206,8 @@ lead ("the game never calls `SetTexWindow`") was wrong: the window arrives via
 
 ## The 1.5/1.6 rendering layers (accurate rasterizer, supersampling, HD sampling)
 
-Everything above describes the base pipeline; three later layers sit on top of it, all inside
-`libgpu.c`:
+Everything above describes the base pipeline; three later layers sit on top of it — the fills and
+supersampling in `pc_raster.c`, the HD sampling in `pc_hdpack.c`:
 
 - **PS1-accurate rasterization (`VH_ACCURATE`, the default).** The fills are a fixed-point integer
   DDA that evaluates pixel coverage *and* texture UVs at the exact positions the PS1 GPU does, with

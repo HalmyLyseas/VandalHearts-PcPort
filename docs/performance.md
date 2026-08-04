@@ -39,6 +39,18 @@ or as environment variables):
 A performance report with a few `[frame]`/`[FPS]` lines from a slow scene is immediately
 actionable — include them, plus your `INTERNAL RES` setting and CPU model.
 
+### Supported settings vs developer diagnostics
+
+The `VH_*` variables fall into two classes, and the boundary is simple: **anything documented in
+[`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md) / [configuration.md](configuration.md) (or
+the three meters above) is a supported setting; everything else is a developer diagnostic** —
+one-off investigation loggers (`VH_*_LOG` CSV writers in `platform/pc/src/pc_diag.c`), the
+GPU-trace regression harness (`VH_GPU_RECORD`/`VH_GPU_REPLAY`,
+[`tools/regress/`](../platform/pc/tools/regress/README.md)), HD-pack authoring probes
+(`VH_HD_DUMP`/`VH_HD_TRACE`/`VH_HD_SYNC`), frame-buffer dumps (`VH_VRAM_DUMP`, `VH_HIRES_DUMP`),
+and the `VH_SMOKE` boot harness. Diagnostics are documented next to their code, may change or
+disappear in any release, and are never needed to play the game.
+
 ## Reference numbers
 
 Measured on a 16-thread desktop CPU, in-battle worst case (large spell effect), `INTERNAL RES` ×4,
