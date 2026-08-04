@@ -21,7 +21,7 @@ STAGE_DIR      := $(BUILD_DIR)/include_stage
 C_FILES        := $(wildcard $(SRC_DIR)/*.c)
 GAME_O_FILES   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/src/%.o,$(C_FILES))
 
-BACKEND_SRCS   := libetc.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c pc_hdvideo.c
+BACKEND_SRCS   := libetc.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c pc_hdvideo.c
 BACKEND_OBJS   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BACKEND_SRCS))
 
 # TARGET WIDTH. Default is now 64-bit (Stage 2.3 complete, 2026-07-21).
@@ -400,6 +400,13 @@ FORCE:
 # labels.inc __asm__ blocks are only skipped under PERMUTER (or M2CTX) -- same reason
 # pc_battle_data.c/pc_sprite_box_quads.c/libsnd.c already define it.
 $(BUILD_DIR)/libetc.o: src/libetc.c | stage
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -DPERMUTER -Iinclude -I$(STAGE_DIR) $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
+
+# Extracted from libetc.c -- same staged-include profile (they read the game's state/object headers).
+$(BUILD_DIR)/pc_diag.o: src/pc_diag.c | stage
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -DPERMUTER -Iinclude -I$(STAGE_DIR) $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
+
+$(BUILD_DIR)/pc_battle_speed.o: src/pc_battle_speed.c | stage
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -DPERMUTER -Iinclude -I$(STAGE_DIR) $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/libcd.o: src/libcd.c

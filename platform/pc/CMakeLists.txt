@@ -106,7 +106,7 @@ set(GAME_WARN "-Wno-incompatible-pointer-types;-Wno-builtin-declaration-mismatch
 set(PORT_WARN "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers")
 
 set(ALL_OBJ_SRCS ${GAME_SRCS})
-foreach(_b ${BACKEND_PLAIN} libetc libsnd libgte pc_gpu_window pc_balance ${DATA_PERM} ${DATA_PLAIN})
+foreach(_b ${BACKEND_PLAIN} libetc pc_diag pc_battle_speed libsnd libgte pc_gpu_window pc_balance ${DATA_PERM} ${DATA_PLAIN})
     list(APPEND ALL_OBJ_SRCS ${PC_DIR}/src/${_b}.c)
 endforeach()
 
@@ -171,9 +171,11 @@ set_property(SOURCE ${SRC_DIR}/window.c ${SRC_DIR}/object.c ${SRC_DIR}/main_menu
 # set_property(SOURCE ${SRC_DIR}/path_grids.c APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_PATH_STEP)
 
 # -- backend files with special profiles --------------------------------------------------------
-set_source_files_properties(${PC_DIR}/src/libetc.c PROPERTIES
-    COMPILE_DEFINITIONS "PERMUTER"
-    INCLUDE_DIRECTORIES "${PC_DIR}/include;${STAGE_DIR};${SDL2_INCLUDE_DIRS}")
+foreach(_e libetc pc_diag pc_battle_speed)   # pc_diag/pc_battle_speed: extracted from libetc.c, same profile
+    set_source_files_properties(${PC_DIR}/src/${_e}.c PROPERTIES
+        COMPILE_DEFINITIONS "PERMUTER"
+        INCLUDE_DIRECTORIES "${PC_DIR}/include;${STAGE_DIR};${SDL2_INCLUDE_DIRS}")
+endforeach()
 set_source_files_properties(${PC_DIR}/src/libsnd.c PROPERTIES
     COMPILE_DEFINITIONS "PERMUTER"
     INCLUDE_DIRECTORIES "${PC_DIR}/include;${STAGE_DIR};${OPENAL_INCLUDE_DIR}")
