@@ -19,6 +19,26 @@ const void *PC_GpuVramBytes(size_t *n);
 const void *PC_GpuHiresBytes(size_t *n);
 /* The resolved internal scale (reads VH_INTERNAL_SCALE on first use, like the rasterizer). */
 int PC_GpuGetInternalScale(void);
+/* The live VRAM as its natural 2D shape (rows of 1024 halfwords) -- the HD dump path decodes
+ * texels + CLUTs straight out of it. */
+#define PC_GPU_VRAM_W 1024
+#define PC_GPU_VRAM_H 512
+unsigned short (*PC_GpuVram(void))[PC_GPU_VRAM_W];
+/* Texpage/pixel helpers shared across the split TUs (were file-static in libgpu.c). */
+void TPageOrigin(int tpage, int *x, int *y, int *tp);
+void UnpackColor(unsigned short c, int *r, int *g, int *b);
+
+/* ---- provided by pc_hdpack.c (1.6 HD pack: background replacement) ---- */
+/* One replaced/dumped VRAM region. px is published by the async loader with a release store;
+ * readers acquire-load it (NULL until the decode lands -> native texels draw). */
+typedef struct { unsigned long long hash; int rx, ry, rw, rh; unsigned short *px; int w, h; int dumped; int live; } HdRegion;
+void HdPack_OnLoad(const RECT *rect, const unsigned short *src);  /* LoadImage hook: hash/register/evict */
+void HdMaybeDump(int tpage, int clut, int uMin, int uMax, int vMin, int vMax);   /* VH_HD_DUMP */
+HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax);    /* per-triangle resolve */
+int  HdActive(void);           /* pack (or VH_HD_PACK override) live right now? */
+const char *HdDumpDir(void);   /* VH_HD_DUMP dir, or NULL */
+int  HdRegionCount(void);      /* registered regions (gates the per-triangle work) */
+int  HdReplaceCount(void);     /* regions with a replacement (gates threading + resolve) */
 
 /* ---- provided by pc_gpu_trace.c (record/replay regression harness) ---- */
 void TrcInit(void);                /* arm recording if VH_GPU_RECORD asks for it (no-op otherwise) */

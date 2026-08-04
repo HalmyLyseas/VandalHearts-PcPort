@@ -95,7 +95,7 @@ endif()
 file(GLOB GAME_SRCS ${SRC_DIR}/*.c)
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
-set(BACKEND_PLAIN   libcd libspu libkernel libgpu pc_gpu_trace libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
+set(BACKEND_PLAIN   libcd libspu libkernel libgpu pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
 set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data pc_evt_entities)
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 
@@ -135,7 +135,7 @@ add_library(vh_objs OBJECT ${ALL_OBJ_SRCS})
 # Common include dirs for our own backend/data files.
 target_include_directories(vh_objs PRIVATE ${PC_DIR}/include ${STAGE_DIR}
                            ${SDL2_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIR})
-if(VH_WEBP)   # libgpu.c's HD-pack loader (#ifdef VH_HD_WEBP) uses <webp/decode.h>
+if(VH_WEBP)   # pc_hdpack.c's HD-pack loader (#ifdef VH_HD_WEBP) uses <webp/decode.h>
     target_compile_definitions(vh_objs PRIVATE VH_HD_WEBP)
     target_include_directories(vh_objs PRIVATE ${WEBP_INCLUDE_DIR})
 endif()
