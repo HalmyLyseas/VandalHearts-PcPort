@@ -71,6 +71,12 @@ if [ "$DO_WIN" = 1 ]; then
     # so the release MUST override it. -DCMAKE_C_FLAGS=-O2 adds -O2 on top of the default -g.
     # VH_MINGW_FFMPEG points the toolchain's CMAKE_FIND_ROOT_PATH at the static libav prefix (a host
     # CMAKE_PREFIX_PATH is ignored under MinGW's find-root mode ONLY).
+    # Release builds are CLEAN builds. Plain Make does not track compiler-flag/include-path changes,
+    # so an incremental build can silently link objects compiled against one library era with
+    # archives from another -- exactly the 1.6.1 AppImage crash: a build_deb pc_hdvideo.o compiled
+    # against the container's shared libav-59 headers got linked into the static libav-61 binary
+    # (mismatched struct offsets -> SEGV in avcodec_parameters_to_context). Never ship incremental.
+    rm -rf "$PC_DIR/build_win"
     ( cd "$PC_DIR"
       VH_MINGW_FFMPEG="$FFPREFIX" cmake -S . -B build_win \
             -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
@@ -123,6 +129,7 @@ if [ "$DO_LINUX" = 1 ]; then
         pkg-config --exists libwebp || { echo \"ERROR: libwebp-dev missing in container '$CONTAINER'.\"; \
               echo \"  fix: distrobox enter $CONTAINER -- sudo apt-get install -y libwebp-dev\"; exit 1; }
         export PKG_CONFIG_PATH='$FF_LINUX/lib/pkgconfig'\${PKG_CONFIG_PATH:+:\$PKG_CONFIG_PATH}
+        rm -rf build_deb                      # clean build: see the comment at the Windows step
         make link BUILD_DIR=build_deb CC='cc -O2' >/dev/null
         packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc >/dev/null"
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"

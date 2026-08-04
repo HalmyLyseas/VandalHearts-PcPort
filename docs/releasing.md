@@ -38,7 +38,9 @@ Releases are built locally, never CI (the data-segment generator needs the byte-
 platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled hdpacks dir>]
 ```
 
-- The script front-loads the **build-parity check** (Makefile ↔ CMake source lists) and builds
+- The script builds **from clean** (it wipes `build_win`/`build_deb` first — incremental objects
+  compiled against a different library era have shipped a crash before), front-loads the
+  **build-parity check** (Makefile ↔ CMake source lists), and builds
   Windows (MinGW cross, **static libav** — cached at `platform/pc/ffmpeg-mingw-static/`, rebuilt
   by the script if missing) and the Linux AppImage (the `vh-deb12` container; the script verifies
   its HD dev packages).
