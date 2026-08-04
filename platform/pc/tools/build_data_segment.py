@@ -532,8 +532,21 @@ def generate(results, sizes, unresolved_by_probe):
     out += ctor_lines
     out.append('')
 
-    with open(OUT_C, 'w') as f:
-        f.write('\n'.join(out) + '\n')
+    # Write-if-changed: this runs on every `make link` (the rule hangs off the phony `default`
+    # so the sizeof-probe always re-checks the current tree), but when the emitted text is
+    # identical, rewriting would only bump the timestamp -- forcing a pointless recompile of
+    # this multi-MB translation unit plus a relink on every no-op build. Content equality is a
+    # complete staleness check: every input that matters (ELF bytes, target width, sanitizer
+    # env, this script's own logic) changes the generated text.
+    new_text = '\n'.join(out) + '\n'
+    try:
+        with open(OUT_C) as f:
+            stats['unchanged'] = (f.read() == new_text)
+    except OSError:
+        stats['unchanged'] = False
+    if not stats['unchanged']:
+        with open(OUT_C, 'w') as f:
+            f.write(new_text)
     return stats
 
 
@@ -563,6 +576,8 @@ def main():
     print(f"5. Extracting real bytes and generating {OUT_C}...")
     stats = generate(results, sizes, unresolved)
     print(f"   {stats}")
+    if stats.get('unchanged'):
+        print("   output identical to existing file -- timestamp preserved (no recompile)")
 
     with open(f'{WORK_DIR}/classified.json', 'w') as f:
         json.dump(results, f, indent=1)

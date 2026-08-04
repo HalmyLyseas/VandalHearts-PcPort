@@ -89,6 +89,10 @@ as an A/B reference. Both build systems run the mid-build data-segment generator
 resolution rasterizer (1.5) needs optimization to hold the frame cap, so build with `-O2` for anything
 perf-sensitive: `make link CC="cc -O2"` or `cmake … -DCMAKE_C_FLAGS=-O2`. The **release packaging
 (`make-release.sh`) always builds `-O2`** on both platforms, so shipped binaries are optimized.
+This split is deliberate policy, not drift: dev builds stay `-O0` for exact breakpoints and readable
+crash backtraces (most maintenance work starts from a bug report), while every shipped artifact is
+`-O2` from a clean tree — so use an explicit `-O2` build for any performance measurement, never the
+dev default.
 
 Run it, and point it at your disc:
 
