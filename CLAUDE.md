@@ -69,6 +69,12 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    withdrawn — the v2 pack is the only supported one), a **Player Manual (PDF)** built per release
    (`platform/pc/tools/build-manual.sh`), reorganized player docs, and a developer regression harness
    (`platform/pc/tools/regress/`) + release checklist ([`docs/releasing.md`](docs/releasing.md)).
+   Post-1.6.1 the two largest backend files were split into single-purpose units for maintainability
+   (pure code motion, output verified bit-identical against the shipped release binary): `libgpu.c` →
+   + `pc_raster.c`/`pc_hdpack.c`/`pc_gpu_trace.c`, `libetc.c` → + `pc_diag.c`/`pc_battle_speed.c`
+   (file maps in [`docs/pc-port/subsystems/gpu.md`](docs/pc-port/subsystems/gpu.md) and
+   [`kernel.md`](docs/pc-port/subsystems/kernel.md)). **Active development concluded 2026-08-04**:
+   the project is in maintenance — fixes for reported issues, no new feature tracks planned.
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates

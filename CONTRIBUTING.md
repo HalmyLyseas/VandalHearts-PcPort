@@ -36,8 +36,10 @@ not readability (see [docs/architecture.md](docs/architecture.md#how-the-port-av
   (the decompiled game source has its own silenced profile — don't move suppressions across the
   boundary).
 - **Both build systems:** a new source file must be added to **both** the Makefile
-  (`BACKEND_SRCS`) and `CMakeLists.txt` (`BACKEND_PLAIN`/`DATA_*`) —
-  `platform/pc/tools/check_build_parity.sh` enforces this and runs before every release build.
+  (`BACKEND_SRCS` **plus its own explicit `$(BUILD_DIR)/<name>.o:` rule — there is no generic
+  `%.o` pattern rule, and a missing rule fails the build**) and `CMakeLists.txt`
+  (`BACKEND_PLAIN`/`DATA_*`) — `platform/pc/tools/check_build_parity.sh` enforces the lists and
+  runs before every release build.
 - **Both platforms:** anything touching the build or release should compile for Linux **and**
   Windows (MinGW cross-compile, see [docs/cross-platform.md](docs/cross-platform.md)) — every
   release cycle so far has caught a Windows-only break this way.
