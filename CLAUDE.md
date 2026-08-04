@@ -62,7 +62,13 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    sprites, UI, fonts) deliberately stays native. **The pack is copyright-derived and is a RELEASE ASSET,
    not committed** — an optional download or self-built from your own disc (disclosed in `NOTICE`/
    `DISCLAIMER`). This marks the natural end of the main Stage-3 additions; further work is expected to be
-   maintenance — minor adjustments and reported bugs.
+   maintenance — minor adjustments and reported bugs. **v1.6.1 released 2026-08-04** — the first
+   maintenance release: a frame-pacing fix so battle fast-forward holds the full 2× at every graphics
+   setting, HD backgrounds decoded on a background thread (no scene-load dips), HD-pack **manifest v2**
+   (FMVs declared, verified at startup, self-explaining HD PACK row; the v1.6.0 pack download is
+   withdrawn — the v2 pack is the only supported one), a **Player Manual (PDF)** built per release
+   (`platform/pc/tools/build-manual.sh`), reorganized player docs, and a developer regression harness
+   (`platform/pc/tools/regress/`) + release checklist ([`docs/releasing.md`](docs/releasing.md)).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates
@@ -130,8 +136,8 @@ job is byte-exact matching, not readability or portability; all port-side change
   `github.com/shao113/vh` (the original decomp, reference only). `upstream-master` is the pristine
   byte-exact base. Commit identity is the GitHub noreply address (no PII). Since it's public, keep
   committed files self-contained — reference only tracked paths, never `exchange/` or local notes.
-- **Releases:** **v1.0.0 through v1.6.0 published** (each: Windows zip + Linux AppImage; v1.6.0 adds an
-  optional `hdpack.zip` release asset). Built and published *locally* by
+- **Releases:** **v1.0.0 through v1.6.1 published** (each: Windows zip + Linux AppImage; since v1.6 also
+  an optional `hdpack.zip` and a Player Manual PDF as release assets). Built and published *locally* by
   `platform/pc/packaging/make-release.sh <tag> [--hdpack=<dir>]` — never CI, because the data-segment
   generator needs the byte-exact `SLUS_004.47` + `KROMDAT.BIN` at build time (copyrighted, can't live on
   runners). Always stage-build BOTH platforms (`--no-publish`) before publishing — it has caught

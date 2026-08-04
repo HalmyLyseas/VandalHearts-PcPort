@@ -122,3 +122,9 @@ byte-exact and playable end-to-end), and the Stage-3 releases — controls, save
 quality-of-life, graphics fidelity, and the optional HD pack — have shipped across **v1.1–v1.6**. From here
 the project is in **maintenance**: minor adjustments and fixes for reported issues rather than new feature
 tracks. Known problems and small follow-ups are tracked in [known_issues.md](known_issues.md).
+
+**v1.6.1** (released 2026-08-04) was the first maintenance release: a frame-pacing fix so battle
+fast-forward holds the full 2× at every graphics setting, background-threaded HD scene loads, an HD-pack
+**manifest v2** that verifies the pack and explains itself when one can't be used, a **Player Manual
+(PDF)** shipped with each release, and reorganized player documentation (per-feature guide,
+[troubleshooting](troubleshooting.md), [performance](performance.md)).
