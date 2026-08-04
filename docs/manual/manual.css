@@ -13,7 +13,10 @@ p.version { text-align: center; color: #888; margin-top: 10mm; }
 h1 { font-size: 17pt; border-bottom: 2px solid #333; padding-bottom: 2mm; margin-top: 0;
      page-break-before: always; }
 h2 { font-size: 13pt; margin-top: 7mm; }
-img { max-width: 78%; display: block; margin: 4mm auto; border: 1px solid #ccc; }
+img { max-width: 72%; max-height: 68mm; display: block; margin: 4mm auto; border: 1px solid #ccc;
+      page-break-inside: avoid; page-break-before: avoid; }
+.page-break { page-break-before: always; }
+h1.no-break { page-break-before: auto; margin-top: 9mm; }
 table { border-collapse: collapse; margin: 4mm 0; width: 100%; font-size: 9.5pt;
         page-break-inside: avoid; }
 th, td { border: 1px solid #bbb; padding: 1.6mm 2.4mm; text-align: left; vertical-align: top; }

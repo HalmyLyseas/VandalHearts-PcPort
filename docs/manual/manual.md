@@ -78,7 +78,7 @@ Press **SELECT + START** during play. Every setting applies immediately and is r
 
 ![](../images/OverlayMenu-Main.png)
 
-## Battle helpers
+## Battle helpers {.page-break}
 
 **Enemy threat overlay** — toggle an overlay that paints the enemies' combined reach; with a unit
 selected, blue is safe movement and orange is reachable-but-threatened. Plan turns at a glance
@@ -89,7 +89,7 @@ instead of counting tiles.
 **Battle fast-forward** — tap **R2** in battle for 2× speed, **L2** for normal. Only the pacing
 changes; outcomes are identical. Works in every battle, at every graphics setting.
 
-## Save management
+## Save management {.page-break}
 
 The overlay's **SAVE MANAGEMENT** keeps unlimited timestamped backups of your save card. Inspect
 any backup's three slots before restoring; restoring backs up the current card first by default.
@@ -97,7 +97,7 @@ Destructive choices are shown in red.
 
 ![](../images/SaveManagement-Browse.png)
 
-## Graphics
+## Graphics {.page-break}
 
 **INTERNAL RES** renders the 3D at up to 4× the original resolution — the same art, sampled more
 finely. The renderer itself reproduces the PlayStation GPU's output pixel-for-pixel; supersampling
@@ -113,13 +113,13 @@ smoothed.
 
 ![](../images/HDPack-On.png)
 
-## Tactical Mode *(opt-in, changes gameplay)*
+## Tactical Mode *(opt-in, changes gameplay)* {.page-break}
 
 A second way to play for veterans: a per-chapter level cap, rewarding Trials, reworked classes,
 and a reined-in ultimate class. Turn it on at the title screen; it keeps its own saves, and the
 normal mode remains exactly the game as shipped. Full design: `docs/tactical-mode.md`.
 
-# If something goes wrong
+# If something goes wrong {.no-break}
 
 | Symptom | Fix |
 |---|---|
