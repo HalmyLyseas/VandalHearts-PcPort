@@ -110,12 +110,20 @@ build must stay byte-exact).
 
 ## Repository layout
 
+**The repository root *is* the matching-decompilation layer**, kept in the standard
+[splat](https://github.com/ethteck/splat)-decomp shape — `Makefile` (`make check`),
+`SLUS_004.47.yaml`, and the symbol map at top level, exactly where anyone from the decomp scene
+expects them (and where the upstream decompilation keeps them). The port lives entirely under
+`platform/pc/`.
+
 - `src/`, `include/` — the matching decompilation (C source and project headers).
+- `SLUS_004.47.yaml`, `undefined_additional.txt` — splat configuration and linker symbol input.
+- `symbol_addrs.txt` — the address → symbol map. **Shared ground truth, not decomp-only**: the
+  port's data-segment generator reads it on every port build.
 - `platform/pc/` — the native PC port: PSX subsystem backends (`src/lib*.c`, `pc_*.c`), the build
   system (Makefile, CMake, `cmake/` toolchain files), data-generation and sanitizer tooling
   (`tools/`, `run_*san.sh`), release packaging (`packaging/`), and clean-room PsyQ headers.
 - `docs/` — developer & user documentation.
-- `SLUS_004.47.yaml`, `symbol_addrs.txt` — the splat configuration and the address → symbol map.
 
 Some data files are **generated at build time** from your own copy and are not committed (e.g. the
 PS1 kanji font from `KROMDAT.BIN`, and the in-game description strings) — the same model as the

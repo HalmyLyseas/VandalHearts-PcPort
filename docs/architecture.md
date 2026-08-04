@@ -85,11 +85,19 @@ surfaced bugs that were invisible to static review).
 
 ## Repository layout
 
+The **repository root is Layer 1's home**, deliberately kept in the standard splat-decomp shape
+(build + config + symbol map at top level, `asm/`/`assets/`/`build/` generated beside them) — the
+layout every splat-based decompilation uses, and the one the upstream decomp used. One root file
+crosses the layers: `symbol_addrs.txt` is the address ground-truth **both** sides consume — splat
+extraction on the decomp side, and the port's data-segment generator
+(`platform/pc/tools/build_data_segment.py`) on every port build.
+
 ```
 src/                 matching-decomp C source (Layer 1) — byte-exact, do not de-consolize here
 include/             matching-decomp project headers
 SLUS_004.47.yaml     splat configuration (segment/section layout, symbols)
-symbol_addrs.txt     authoritative address → symbol map
+symbol_addrs.txt     authoritative address → symbol map (shared: decomp extraction + port data-gen)
+undefined_additional.txt   extra linker-symbol input for the matching link
 Makefile             matching-decomp build orchestration (make extract / check)
 
 platform/pc/         the native PC port (Layer 2)
