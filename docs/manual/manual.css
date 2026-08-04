@@ -13,7 +13,7 @@ p.version { text-align: center; color: #888; margin-top: 10mm; }
 h1 { font-size: 17pt; border-bottom: 2px solid #333; padding-bottom: 2mm; margin-top: 0;
      page-break-before: always; }
 h2 { font-size: 13pt; margin-top: 7mm; }
-img { max-width: 72%; max-height: 68mm; display: block; margin: 4mm auto; border: 1px solid #ccc;
+img { max-width: 82%; display: block; margin: 5mm auto; border: 1px solid #ccc;
       page-break-inside: avoid; page-break-before: avoid; }
 .page-break { page-break-before: always; }
 h1.no-break { page-break-before: auto; margin-top: 9mm; }

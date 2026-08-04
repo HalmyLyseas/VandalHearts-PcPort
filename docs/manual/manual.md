@@ -105,7 +105,7 @@ sharpens it without changing its character.
 
 ![](../images/InternalResolution-x4.png)
 
-## HD pack
+## HD pack {.page-break}
 
 With the optional pack installed, the pre-rendered backgrounds and the movies play in true HD.
 Hand-drawn pixel art — portraits, sprites, menus — deliberately stays original: crisp, not
