@@ -6,6 +6,7 @@
 #define PC_GPU_INTERNAL_H
 
 #include <stddef.h>
+#include <signal.h>        /* sig_atomic_t (the SIGUSR2 hires-dump latch) */
 #include "PsyQ/libgpu.h"   /* u32, P_TAG, PC_GPU_PRIM_* */
 
 /* ---- provided by libgpu.c ---- */
@@ -19,14 +20,46 @@ const void *PC_GpuVramBytes(size_t *n);
 const void *PC_GpuHiresBytes(size_t *n);
 /* The resolved internal scale (reads VH_INTERNAL_SCALE on first use, like the rasterizer). */
 int PC_GpuGetInternalScale(void);
-/* The live VRAM as its natural 2D shape (rows of 1024 halfwords) -- the HD dump path decodes
- * texels + CLUTs straight out of it. */
+/* The per-DrawOTag frame counter (libgpu.c) -- diagnostics stamp filenames/logs with it. */
+extern unsigned s_drawFrame;
+
+/* ---- provided by pc_raster.c (framebuffers + software rasterizer) ---- */
+/* The live VRAM as its natural 2D shape (rows of 1024 halfwords) -- libgpu.c's bulk transfers
+ * write through this; the HD dump path decodes texels + CLUTs straight out of it. */
 #define PC_GPU_VRAM_W 1024
 #define PC_GPU_VRAM_H 512
 unsigned short (*PC_GpuVram(void))[PC_GPU_VRAM_W];
 /* Texpage/pixel helpers shared across the split TUs (were file-static in libgpu.c). */
 void TPageOrigin(int tpage, int *x, int *y, int *tp);
 void UnpackColor(unsigned short c, int *r, int *g, int *b);
+/* Per-pass render context (Stage-3 1.5/P1 re-entrancy). The mutable rasterizer state the pixel/texture
+ * path reads: clip band, draw offset, dither-enable, texture window, and the target (native VRAM vs the
+ * Sx hi-res buffer). The OT walk (DrawOTag, in libgpu.c) tracks DR_MODE state in its own globals and
+ * snapshots it into a ctx per draw; the hi-res pass hands per-band copies to worker threads. */
+typedef struct {
+    int clipX, clipY, clipW, clipH;   /* drawing area, native units (y/h become the band under threading) */
+    int ofsX, ofsY;                   /* draw offset, native units */
+    int dither;                       /* dither-enable (GP0 E1h.9) */
+    int twMaskX, twMaskY, twOffX, twOffY;  /* texture window (GP0 E2h) */
+    int target;                       /* 0 = native VRAM, 1 = hi-res */
+    int scale;                        /* geometry x scale when target==1 (else effectively 1) */
+} RenderCtx;
+typedef struct { double x, y, u, v; } RVert;
+void FillQuad(const RenderCtx *rc, RVert v0, RVert v1, RVert v2, RVert v3, int r, int g, int b,
+              int textured, int tpage, int clut, int semiTrans, int abr);
+void FillRect(const RenderCtx *rc, int x0, int y0, int w, int h, int r, int g, int b);
+void FillRectRaw(int x0, int y0, int w, int h, int r, int g, int b);   /* ClearImage: no offset/clip */
+/* G2 hi-res pass (VH_INTERNAL_SCALE): buffer lifecycle, per-frame display list, banded thread pool. */
+void HiresEnsure(void);
+void HiresMirrorRect(int x0, int y0, int w, int h);   /* keep hi-res in sync with bulk VRAM writes */
+void HiresFrameReset(void);
+void HiresAppendQuad(const RenderCtx *rch, RVert a, RVert b, RVert c, RVert d,
+                     int r, int g, int bcol, int textured, int tpage, int clut, int semi, int abr);
+void HiresAppendRect(const RenderCtx *rch, int x, int y, int w, int h, int r, int g, int b);
+void HiresRasterizeThreaded(int clipY, int clipH);
+int  HiresActive(void);                                        /* scale > 1 and the buffer exists */
+void HiresPresent(int dispX, int dispY, int dispW, int dispH); /* edge-clamp + dump hook + present */
+extern volatile sig_atomic_t g_vhHiresDumpReq;   /* SIGUSR2 latch: dump the hires pair this frame */
 
 /* ---- provided by pc_hdpack.c (1.6 HD pack: background replacement) ---- */
 /* One replaced/dumped VRAM region. px is published by the async loader with a release store;
