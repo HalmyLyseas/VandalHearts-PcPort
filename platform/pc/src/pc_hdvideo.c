@@ -52,6 +52,10 @@ static void hdv_free_all(void) { hdv_free_decoder(); free(V.rgb); V.rgb = NULL; 
 
 int PC_HdVideoOpen(const char *path) {
     const AVCodec *codec;
+    /* Errors only: our minimal static libav has no nasm-built SIMD, so libswscale otherwise prints
+     * a harmless "No accelerated colorspace conversion" info line on every first open -- console
+     * noise in the logs players paste. Real decode errors still come through. */
+    { static int once; if (!once) { once = 1; av_log_set_level(AV_LOG_ERROR); } }
     hdv_free_all();    /* release the PREVIOUS movie's decoder + kept frame (overlay has moved on) */
     if (avformat_open_input(&V.fmt, path, NULL, NULL) != 0) return 0;
     if (avformat_find_stream_info(V.fmt, NULL) < 0)         { hdv_free_all(); return 0; }
