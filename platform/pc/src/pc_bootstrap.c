@@ -744,6 +744,15 @@ void PC_FatalDiscError(const char *title, const char *body, const char *path) { 
         snprintf(full, sizeof(full), "%s\n\nDisc path tried:\n%s", body, path);
         MessageBoxA(NULL, full, title, MB_OK | MB_ICONERROR);
     }
+#else
+    {   /* Linux: a desktop (double-click) AppImage launch has no terminal, so without a dialog the
+         * app just opens and closes -- the user never sees why (caught in the 1.6.2 validation).
+         * SDL's message box works before SDL_Init and no-ops harmlessly under the headless dummy
+         * driver (the regress harness), where stderr above is the channel anyway. */
+        char full[4096];
+        snprintf(full, sizeof(full), "%s\n\nDisc path tried:\n%s", body, path);
+        PC_ShowErrorBox(title, full);
+    }
 #endif
     exit(1);
 }

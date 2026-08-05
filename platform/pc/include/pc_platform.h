@@ -36,6 +36,7 @@ void PC_FatalDiscError(const char *title, const char *body, const char *path);
  * Returns nonzero on success. */
 int PC_GpuInit(int width, int height, const char *title);
 void PC_GpuGetWindowSize(int *w, int *h, int *scale);   /* actual scaled window size + VH_SCALE factor */
+void PC_ShowErrorBox(const char *title, const char *body);   /* modal SDL error dialog; safe pre-SDL_Init, no-op headless */
 
 /* Stage-3 (1.2a) video settings, driven by the in-game options overlay. The window is resizable and
  * the present path re-letterboxes each frame, so these just resize / toggle it. g_vhScale (1..8) and

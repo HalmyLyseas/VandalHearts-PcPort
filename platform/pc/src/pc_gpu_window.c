@@ -498,6 +498,15 @@ void PC_GpuGetWindowSize(int *w, int *h, int *scale) {
     if (scale) *scale = g_vhScale;
 }
 
+/* Modal error dialog for fatal, user-actionable failures (PC_FatalDiscError). SDL documents this as
+ * callable at ANY time, even before SDL_Init -- which matters, because disc validation fails before
+ * the window exists. On Linux this is what a double-click AppImage launch shows instead of dying
+ * silently with the message only on a terminal nobody opened; headless runs (SDL_VIDEODRIVER=dummy,
+ * regress harness) just get SDL's error return, which we ignore -- stderr already has the text. */
+void PC_ShowErrorBox(const char *title, const char *body) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, body, NULL);
+}
+
 /* OS-agnostic online CPU count for the threaded rasterizer -- see pc_platform.h. SDL abstracts the
  * per-platform query (sysconf on POSIX, GetSystemInfo on Windows), so libgpu.c stays SDL-free and
  * needs no #ifdef. Never returns < 1. */
