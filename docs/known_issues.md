@@ -37,12 +37,13 @@ unless noted otherwise.
 
 ## Performance
 
-### Brief frame dips when a scene loads with the HD pack (v1.6)
+### ~~Brief frame dips when a scene loads with the HD pack~~ — RESOLVED in v1.6.1
 
-- With an HD pack installed, entering a new screen decodes that scene's HD background (and opens the HD
-  movie, for FMVs) on the render thread, which can dip the frame rate from 60 to ~55 for a moment on
-  scene entry. Gameplay is unaffected. Moving the decode to a background thread is planned. Without an
-  HD pack there is no dip.
+- **Fixed by moving the HD background decode to a background thread (v1.6.1).** Entering a new screen
+  no longer dips the frame rate; the scene shows native texels for the one or two frames (behind the
+  scene fade) it takes the decode to land, then switches to the HD image. Validated at the worst case
+  (fullscreen, internal resolution ×4): no dip. If you still see scene-entry dips on v1.6.1 or later,
+  please report it with your CPU model and settings.
 
 ## Not bugs — by design
 

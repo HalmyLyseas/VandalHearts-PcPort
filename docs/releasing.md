@@ -28,6 +28,8 @@ Releases are built locally, never CI (the data-segment generator needs the byte-
 - [ ] [roadmap.md](roadmap.md), [known_issues.md](known_issues.md), the READMEs and `CLAUDE.md`
       say what is now true (shipped vs planned; new options documented in
       [`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md) / [configuration.md](configuration.md)).
+      Mark known-issues entries this release fixes as RESOLVED, and bump the version example in
+      `.github/ISSUE_TEMPLATE/bug_report.yml` — both went stale at 1.6.1 and were caught by users.
 - [ ] New screenshots: **strip PNG metadata** before committing (text/time chunks leak tool names
       and locale timestamps), reference them from the docs, and keep raw-URL links in release
       notes pinned to a pushed commit.
