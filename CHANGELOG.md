@@ -18,7 +18,7 @@ changes; normal mode remains byte-for-byte the retail game.
   number of raw CD sectors at startup, and every sector read during play is checked for the CD
   sync pattern and its own embedded sector address. A damaged image now stops with a clear message
   naming the exact broken sector (see
-  [troubleshooting.md](docs/troubleshooting.md#the-game-wont-start)) instead of hanging. Intact
+  [troubleshooting.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/troubleshooting.md#the-game-wont-start)) instead of hanging. Intact
   images are unaffected — the checks are structural, so any valid dump still works, and their cost
   is unmeasurable (a 15-byte compare on data already being read).
 
