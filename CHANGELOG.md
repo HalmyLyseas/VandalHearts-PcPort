@@ -4,6 +4,24 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.2] — Corrupted disc images are detected instead of hanging
+
+A small maintenance release, prompted by the first user bug report after release. No gameplay
+changes; normal mode remains byte-for-byte the retail game.
+
+### Fixed
+
+- **A damaged disc image no longer hangs the game silently.** A `.bin` that was truncated
+  (interrupted copy/download) or carried garbage sectors (bad rip) used to pass the quick boot
+  check and then freeze the game — typically right after the `[HD] pack detected` console line,
+  with no error at all. The port now validates the image three ways: the file size must be a whole
+  number of raw CD sectors at startup, and every sector read during play is checked for the CD
+  sync pattern and its own embedded sector address. A damaged image now stops with a clear message
+  naming the exact broken sector (see
+  [troubleshooting.md](docs/troubleshooting.md#the-game-wont-start)) instead of hanging. Intact
+  images are unaffected — the checks are structural, so any valid dump still works, and their cost
+  is unmeasurable (a 15-byte compare on data already being read).
+
 ## [1.6.1] — Point release: full-speed fast-forward, smoother HD, and a Player Manual
 
 A maintenance and polish release. No gameplay changes; normal mode remains byte-for-byte the retail

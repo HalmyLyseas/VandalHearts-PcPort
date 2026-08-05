@@ -15,11 +15,13 @@ tried.
 your image, the image is not the USA release (`SLUS-00447`), or the dump is not a raw 2352-byte
 `.bin`. Re-dump the disc as `.bin`/`.cue` and use the `.bin`.
 
-**The game starts but hangs (window "not responding") right after the `[HD] pack detected`
-console line.** This is the signature of a **damaged disc image**: usually an interrupted
-copy/download (truncated file) or a bad rip (garbage sectors). The hang is in the disc reads that
-follow — the HD banner is just the last thing printed before them, which is why toggling the HD
-pack changes nothing. Two quick self-checks on your `.bin`:
+**"Disc image is incomplete / corrupted" error — or, on v1.6.1 and older, the game starts but
+hangs (window "not responding") right after the `[HD] pack detected` console line.** This is the
+signature of a **damaged disc image**: usually an interrupted copy/download (truncated file) or a
+bad rip (garbage sectors). Since **v1.6.2** the game detects this at startup or on first touching
+the damaged data, and the error names the exact broken sector; older versions hung silently in the
+disc reads — the HD banner was just the last thing printed before them, which is why toggling the
+HD pack changed nothing. Two quick self-checks on your `.bin`:
 
 - its **size must be an exact multiple of 2352 bytes** (a partial copy almost never is);
 - one known-good dump of *Vandal Hearts (USA)* is **664,849,248 bytes** with SHA-256

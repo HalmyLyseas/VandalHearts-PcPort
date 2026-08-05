@@ -24,6 +24,11 @@ const char *PC_SaveDir(void);
  * success. Must be called before CdInit(). */
 int PC_CdMount(const char *discImagePath);
 int PC_CdDiscSignatureOk(void);   /* 1 if the mounted image has Vandal Hearts (USA)'s boot signature */
+long long PC_CdImageBytes(void);  /* mounted image size (-1 if none) -- the truncation gate (% 2352) */
+/* Fatal, user-actionable disc error: stderr + a Windows message box, then exit (pc_bootstrap.c).
+ * Used at mount validation and by libcd.c's per-read corruption guards (a damaged image used to
+ * hang the game silently instead). */
+void PC_FatalDiscError(const char *title, const char *body, const char *path);
 
 /* Opens an SDL2+OpenGL window for the GPU backend to present into. Optional:
  * if never called, PC_GpuPresent() below just no-ops the windowing part,

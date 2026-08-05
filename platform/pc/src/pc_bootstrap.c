@@ -736,7 +736,7 @@ static void PC_MakeRodataWritable(void) {
  * in a console launch) AND, on Windows, pops a message box so double-click users -- who have no
  * console -- still see it. `path` is the disc path we tried, appended so it's clear what was wrong.
  * Then exits: booting on into a blank window / garbage would only confuse. */
-static void PC_FatalDiscError(const char *title, const char *body, const char *path) {
+void PC_FatalDiscError(const char *title, const char *body, const char *path) {   /* non-static: libcd.c's corruption guards use it (pc_platform.h) */
     fprintf(stderr, "\n*** %s ***\n%s\nDisc path tried: %s\n", title, body, path);
 #if defined(_WIN32)
     {
@@ -781,6 +781,19 @@ static void PC_Bootstrap(void) {
             "Put your Vandal Hearts (USA) .bin file in a \"game\" folder next to the "
             "executable (or right beside it), or set the disc path via VH_DISC_IMAGE in "
             "vandalhearts.ini (or the environment).", discPath);
+    }
+    /* Corruption guard 1/3 (post-1.6.1, from a real user report): a raw .bin is a whole number of
+     * 2352-byte sectors, and an interrupted copy/download almost never is. Catching it here turns a
+     * silent boot hang (the loader retrying garbage forever) into an error the user can act on. */
+    {
+        long long sz = PC_CdImageBytes();
+        if (sz > 0 && (sz % 2352) != 0) {
+            PC_FatalDiscError("Vandal Hearts - disc image is incomplete",
+                "This disc image looks TRUNCATED: its size is not a whole number of raw CD "
+                "sectors (2352 bytes), which usually means the file was only partially "
+                "copied or downloaded.\n\n"
+                "Re-copy or re-dump your Vandal Hearts (USA) disc and try again.", discPath);
+        }
     }
     if (!PC_CdDiscSignatureOk()) {
         PC_FatalDiscError("Vandal Hearts - wrong disc image",

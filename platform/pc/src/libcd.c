@@ -207,16 +207,68 @@ int PC_CdDiscSignatureOk(void) {
     return memcmp(sec + SECTOR_DATA_OFFSET, "PS-X EXE", 8) == 0;   /* same data offset as CdRead */
 }
 
+static char s_discPath[1024];   /* kept for the corruption guards' error messages */
+
 int PC_CdMount(const char *discImagePath) {
     if (s_disc) {
         fclose(s_disc);
     }
     s_disc = fopen(discImagePath, "rb");
+    snprintf(s_discPath, sizeof(s_discPath), "%s", discImagePath);
     s_headLBA = 0;
     s_targetLBA = 0;
     s_motorStarted = 0;
     s_pendingReadUntilMs = 0;
     return s_disc != NULL;   /* whether the file opened; content is validated via PC_CdDiscSignatureOk */
+}
+
+/* The mounted image's size in bytes (-1 if none/unknown) -- the bootstrap's truncation gate
+ * (a raw .bin must be a whole number of 2352-byte sectors). */
+long long PC_CdImageBytes(void) {
+    long long sz;
+    if (!s_disc) return -1;
+    if (fseek(s_disc, 0, SEEK_END) != 0) return -1;
+    sz = (long long)ftell(s_disc);
+    fseek(s_disc, 0, SEEK_SET);
+    return sz;
+}
+
+/* ---- corruption guards 2/3 + 3/3 (post-1.6.1, from a real user report) -------------------------
+ * A corrupted .bin used to pass the one-sector LBA-23 signature check and then HANG the game with
+ * no output at all: garbage sectors load as garbage (loader state machines spin forever), and reads
+ * past a truncated image's end just reported failure the retry loops never escape. Both reproduced
+ * with deliberately-corrupted images (zeroed 8-40MB span => hang right after the HD-pack banner;
+ * truncation => hang when the intro movie's XA audio never arrives).
+ *
+ * Every raw 2352-byte sector starts with a fixed 12-byte sync pattern (00 FF x10 00) followed by
+ * its own BCD minute/second/frame address -- so each read can prove the sector is intact and IS the
+ * sector we asked for, for the price of a 15-byte compare. On mismatch (or a read past EOF on the
+ * game-file/movie paths, which a complete dump never does) we stop with a message naming the sector
+ * instead of hanging: the image is damaged and only a re-copy/re-dump fixes it. */
+static void CdFatalCorrupt(int lba, const char *why) {
+    char body[512];
+    snprintf(body, sizeof(body),
+             "The disc image is DAMAGED: sector %d %s.\n\n"
+             "This usually means a bad or incomplete copy (the game would otherwise hang here).\n"
+             "Re-copy or re-dump your Vandal Hearts (USA) disc, then verify the file: its size\n"
+             "must be an exact multiple of 2352 bytes.", lba, why);
+    PC_FatalDiscError("Vandal Hearts - disc image is corrupted", body, s_discPath);
+}
+
+static const unsigned char CD_SYNC[12] = { 0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00 };
+
+static void CdCheckRawSector(const unsigned char *raw, int lba) {
+    if (memcmp(raw, CD_SYNC, sizeof(CD_SYNC)) != 0) {
+        CdFatalCorrupt(lba, "has no CD sync pattern (zeroed or garbage data)");
+    }
+    {   /* the sector's own BCD MSF address must be the one we sought to (catches shifted/spliced images) */
+        int frames = lba + MSF_PREGAP_SECTORS;
+        if (raw[12] != toBCD(frames / (60 * 75)) ||
+            raw[13] != toBCD((frames / 75) % 60) ||
+            raw[14] != toBCD(frames % 75)) {
+            CdFatalCorrupt(lba, "carries the wrong sector address (image shifted or spliced)");
+        }
+    }
 }
 
 int CdInit(void) {
@@ -386,10 +438,21 @@ void PC_CdXaUpdate(void) {
             int off = s_xaCursorLBA * (int)SECTOR_RAW_SIZE;
             if (fseek(s_disc, off, SEEK_SET) != 0 ||
                 fread(raw, 1, SECTOR_RAW_SIZE, s_disc) != (size_t)SECTOR_RAW_SIZE) {
-                s_xaStreaming = 0; s_xaBaseLBA = -1;   /* end of disc */
+                if (s_movieActive && !s_xaMatchedYet) {
+                    /* An active movie's XA is its frame clock: if the stream lies entirely past the
+                     * image's end (not one sector ever matched), Movie_SyncFrame would busy-wait on
+                     * an audio position that can never advance -- the exact silent hang a truncated
+                     * image used to produce. A valid dump always contains its movies, so this only
+                     * fires on damage. (Mid-stream EOF stays graceful: legitimate end-of-track.) */
+                    CdFatalCorrupt(s_xaCursorLBA, "is missing (a movie's audio stream lies past the "
+                                                  "image's end -- truncated)");
+                }
+                s_xaStreaming = 0; s_xaBaseLBA = -1;   /* end of disc -- graceful by design: the XA
+                                                        * pump legitimately scans toward track ends */
                 PC_XaEndStream();
                 break;
             }
+            CdCheckRawSector(raw, s_xaCursorLBA);   /* successfully-read sectors must still be intact */
             int queued = PC_XaSubmitSector(raw, s_xaFile, s_xaChan);
             if (queued) s_xaMatchedYet = 1;
             s_miss = queued ? 0 : (s_miss + 1);
@@ -474,13 +537,17 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
      * match real hardware's pacing. */
     unsigned char *out = (unsigned char *)buf;
     for (int i = 0; i < sectors; i++) {
-        int offset = (s_targetLBA + i) * (int)SECTOR_RAW_SIZE + SECTOR_DATA_OFFSET;
-        if (fseek(s_disc, offset, SEEK_SET) != 0 ||
-            fread(out + (size_t)i * SECTOR_DATA_SIZE, 1, SECTOR_DATA_SIZE, s_disc) != SECTOR_DATA_SIZE) {
-            s_lastReadResult = -1;
-            s_pendingReadUntilMs = 0;
-            return 0;
+        /* Read the WHOLE raw sector (not just its 2048 data bytes) so the sync/address guard can
+         * prove it intact -- a game-file read past EOF or into garbage means a damaged image, and
+         * proceeding used to mean an unexplained hang (the loader retries forever). */
+        unsigned char raw[SECTOR_RAW_SIZE];
+        int lba = s_targetLBA + i;
+        if (fseek(s_disc, (long)lba * SECTOR_RAW_SIZE, SEEK_SET) != 0 ||
+            fread(raw, 1, SECTOR_RAW_SIZE, s_disc) != (size_t)SECTOR_RAW_SIZE) {
+            CdFatalCorrupt(lba, "is missing (the image ends before data the game needs -- truncated)");
         }
+        CdCheckRawSector(raw, lba);
+        memcpy(out + (size_t)i * SECTOR_DATA_SIZE, raw + SECTOR_DATA_OFFSET, SECTOR_DATA_SIZE);
     }
 
     double seekMs = CalcSeekTimeMs(s_headLBA, s_targetLBA);
@@ -691,8 +758,14 @@ static void MovieRenderFrame(int frameNo) {
     int bsLen = 0, w = 320, h = 240, got = 0, ssize = 9, guard = 0;
     unsigned char sec[SECTOR_RAW_SIZE];
     while (guard++ < 6000) {
-        if (fseek(s_disc, lba * (int)SECTOR_RAW_SIZE, SEEK_SET) != 0) break;
-        if (fread(sec, 1, SECTOR_RAW_SIZE, s_disc) != SECTOR_RAW_SIZE) break;
+        if (fseek(s_disc, lba * (int)SECTOR_RAW_SIZE, SEEK_SET) != 0 ||
+            fread(sec, 1, SECTOR_RAW_SIZE, s_disc) != SECTOR_RAW_SIZE) {
+            /* A complete dump contains every sector its movies reference; running off the end mid-
+             * movie means a truncated image -- fail loudly instead of the frame-sync hanging forever
+             * waiting for a frame that can never arrive. */
+            CdFatalCorrupt(lba, "is missing mid-movie (the image ends early -- truncated)");
+        }
+        CdCheckRawSector(sec, lba);
         lba++;
         if (sec[16 + 2] & 0x04) continue;                       /* audio sector -> skip */
         unsigned char *d = sec + SECTOR_DATA_OFFSET;
