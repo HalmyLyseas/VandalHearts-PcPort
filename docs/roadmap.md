@@ -123,6 +123,10 @@ quality-of-life, graphics fidelity, and the optional HD pack — have shipped ac
 the project is in **maintenance**: minor adjustments and fixes for reported issues rather than new feature
 tracks. Known problems and small follow-ups are tracked in [known_issues.md](known_issues.md).
 
+**v1.6.2** (released 2026-08-05) came from the first user bug report: a damaged disc image used to
+hang the game silently and now stops with a clear error naming the broken sector (see
+[troubleshooting.md](troubleshooting.md#the-game-wont-start)).
+
 **v1.6.1** (released 2026-08-04) was the first maintenance release: a frame-pacing fix so battle
 fast-forward holds the full 2× at every graphics setting, background-threaded HD scene loads, an HD-pack
 **manifest v2** that verifies the pack and explains itself when one can't be used, a **Player Manual

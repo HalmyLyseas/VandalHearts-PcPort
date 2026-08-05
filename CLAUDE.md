@@ -142,7 +142,7 @@ job is byte-exact matching, not readability or portability; all port-side change
   `github.com/shao113/vh` (the original decomp, reference only). `upstream-master` is the pristine
   byte-exact base. Commit identity is the GitHub noreply address (no PII). Since it's public, keep
   committed files self-contained — reference only tracked paths, never `exchange/` or local notes.
-- **Releases:** **v1.0.0 through v1.6.1 published** (each: Windows zip + Linux AppImage; since v1.6 also
+- **Releases:** **v1.0.0 through v1.6.2 published** (each: Windows zip + Linux AppImage; since v1.6 also
   an optional `hdpack.zip` and a Player Manual PDF as release assets). Built and published *locally* by
   `platform/pc/packaging/make-release.sh <tag> [--hdpack=<dir>]` — never CI, because the data-segment
   generator needs the byte-exact `SLUS_004.47` + `KROMDAT.BIN` at build time (copyrighted, can't live on
