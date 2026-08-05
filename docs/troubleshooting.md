@@ -15,6 +15,20 @@ tried.
 your image, the image is not the USA release (`SLUS-00447`), or the dump is not a raw 2352-byte
 `.bin`. Re-dump the disc as `.bin`/`.cue` and use the `.bin`.
 
+**The game starts but hangs (window "not responding") right after the `[HD] pack detected`
+console line.** This is the signature of a **damaged disc image**: usually an interrupted
+copy/download (truncated file) or a bad rip (garbage sectors). The hang is in the disc reads that
+follow — the HD banner is just the last thing printed before them, which is why toggling the HD
+pack changes nothing. Two quick self-checks on your `.bin`:
+
+- its **size must be an exact multiple of 2352 bytes** (a partial copy almost never is);
+- one known-good dump of *Vandal Hearts (USA)* is **664,849,248 bytes** with SHA-256
+  `4A8F984975775588B9ACE6B117895E4091A0F645B9678BD95FDA0EFFF3EBA561`. A different hash does **not**
+  by itself mean your dump is bad — valid dumps vary by ripping tool — but combined with this
+  symptom it is strong confirmation.
+
+The only fix is a fresh copy: re-copy the file, or re-dump your disc.
+
 **Windows: an error box appears before anything else, then nothing.** A runtime DLL is missing —
 this failure happens before the game can log anything, which is how you recognize it. Re-extract
 the **entire** release zip into one folder; the `.exe` needs all 8 DLLs next to it.
