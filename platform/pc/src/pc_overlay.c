@@ -83,6 +83,83 @@ static int dis_whenWindowed(void)   { return !g_vhFullscreen; }
 /* 1.6: HD PACK is greyed AND locked (read-only) unless a valid pack is auto-detected beside the exe. */
 static int dis_noHdPack(void)       { return !PC_HdPackAvailable(); }
 
+/* ---- LANGUAGE picklist (v1.7 language packs) ---------------------------------------------------
+ * Lists every valid pack under <deploy>/langpacks/ by its MANIFEST display name; OFF = retail text.
+ * NO auto-select by design (a picklist is not a binary state -- user decision, exchange/80): nothing
+ * loads until chosen here (or via VH_LANG in the ini, which this row persists to). A pack applies at
+ * BOOT, so a pending change shows a '*' and takes effect on the next launch -- never a live swap. */
+#include "pc_lang.h"
+#define LANG_MAX 12
+static int  g_langSel;                          /* 0 = OFF, 1..N = s_langFolders[sel-1] */
+static int  s_langCount;
+static char s_langFolders[LANG_MAX][64];
+static char s_langNames[LANG_MAX][64];
+static char s_langLabelBuf[LANG_MAX + 1][32];   /* uppercased, ascii-folded, '*' when pending */
+static const char *s_langChoice[LANG_MAX + 1 + 1];
+
+/* OSD-safe fold: the 5x7 font is caps-only ASCII, but manifest names may carry accents -- fold
+ * Latin-1-range codepoints to their base letter instead of dropping them ("Francais", not "Franais"). */
+static void langFoldName(const char *in, char *out, int cap) {
+    static const char *fold = "AAAAAAACEEEEIIIIDNOOOOO*OUUUUY__aaaaaaaceeeeiiiidnooooo/ouuuuy_y";
+    int o = 0;
+    while (*in && o < cap - 2) {
+        unsigned char c = (unsigned char)*in++;
+        if (c < 0x80) { out[o++] = (char)((c >= 'a' && c <= 'z') ? c - 32 : c); continue; }
+        if ((c == 0xC3 || c == 0xC2) && *in) {              /* 2-byte UTF-8, Latin-1 range */
+            unsigned cp = ((c & 0x1F) << 6) | ((unsigned char)*in & 0x3F);
+            in++;
+            if (cp >= 0xC0 && cp <= 0xFF) {
+                char f = fold[cp - 0xC0];
+                out[o++] = (char)((f >= 'a' && f <= 'z') ? f - 32 : f);
+            }
+            continue;
+        }
+        /* anything else (3/4-byte, stray) is skipped */
+    }
+    out[o] = '\0';
+}
+
+static void langRefreshLabels(void) {
+    int i, bootSel = 0;
+    for (i = 0; i < s_langCount; i++)
+        if (strcmp(s_langFolders[i], PC_LangBootFolder()) == 0) bootSel = i + 1;
+    snprintf(s_langLabelBuf[0], sizeof s_langLabelBuf[0], "OFF%s",
+             (g_langSel != bootSel && g_langSel == 0) ? " *" : "");
+    s_langChoice[0] = s_langLabelBuf[0];
+    for (i = 0; i < s_langCount; i++) {
+        char folded[28];
+        langFoldName(s_langNames[i], folded, sizeof folded);
+        snprintf(s_langLabelBuf[i + 1], sizeof s_langLabelBuf[i + 1], "%s%s", folded,
+                 (g_langSel == i + 1 && g_langSel != bootSel) ? " *" : "");
+        s_langChoice[i + 1] = s_langLabelBuf[i + 1];
+    }
+    for (i = s_langCount + 1; i <= LANG_MAX; i++) s_langChoice[i] = "";
+}
+
+static void langScan(void) {
+    char pending[64];
+    int i;
+    /* keep the user's pending choice across rescans BY FOLDER (indices may shift) */
+    snprintf(pending, sizeof pending, "%s",
+             (g_langSel > 0 && g_langSel <= s_langCount) ? s_langFolders[g_langSel - 1]
+                                                         : (s_langCount ? "" : PC_LangBootFolder()));
+    s_langCount = PC_LangListPacks(s_langFolders, s_langNames, LANG_MAX);
+    g_langSel = 0;
+    for (i = 0; i < s_langCount; i++)
+        if (pending[0] && strcmp(s_langFolders[i], pending) == 0) g_langSel = i + 1;
+    langRefreshLabels();
+}
+
+static void apply_language(int v) {
+    if (v < 0) v = 0;                            /* safety only; the generic clamp already bounds v */
+    if (v > s_langCount) v = s_langCount;
+    g_langSel = v;
+    PC_SaveIniConfig("language", "VH_LANG", v ? s_langFolders[v - 1] : "");
+    langRefreshLabels();
+}
+
+static int dis_noLangPack(void)     { return s_langCount == 0; }
+
 /* Tactical Mode is editable ONLY at the main title menu (a run's mode is fixed -- GAP 4). Greyed
  * (read-only) during a run, where it just reflects the current run's mode. */
 static int dis_notAtTitle(void)     { return !PC_AtTitleMenu(); }
@@ -92,8 +169,10 @@ static int dis_atTitle(void)        { return PC_AtTitleMenu(); }
 static void act_enterSaves(void);           /* SAVE MANAGEMENT -> the saves screen */
 static void act_returnToTitle(void);        /* RETURN TO TITLE -> confirm -> PC_ReturnToTitle */
 
-/* A global's address is a compile-time constant, so this const table with &g_* is valid. */
-static const Item s_items[] = {
+/* A global's address is a compile-time constant, so this static table with &g_* is valid. (Not
+ * const: the LANGUAGE row's maxv is set at scan time to the number of installed packs, so the
+ * generic clamp/cycle logic treats the picklist exactly like every other CHOICE row.) */
+static Item s_items[] = {
     /* Tactical Mode is greyed AND locked off-title (a run's mode is fixed). Window Scale / Fullscreen
      * are greyed to show the inactive display mode, but stay INTERACTIVE -- toggling the greyed one is
      * how you switch to it (locked = NULL). Return to Title is greyed AND locked at the title. */
@@ -115,6 +194,11 @@ static const Item s_items[] = {
       "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
     { "BUTTON LABELS",   OVL_CHOICE, &g_btnLabels,    "controls", "VH_BUTTON_LABELS",
       NULL, NULL,             0, 1, 1, NULL, NULL,                NULL,           NULL, NULL, s_btnLabelText },
+    /* v1.7 language packs: picklist of installed packs by manifest name; persists VH_LANG (its own
+     * apply -- iniKey NULL skips the numeric persist); '*' = applies on next launch. Greyed+locked
+     * with no valid pack, like HD PACK. */
+    { "LANGUAGE",        OVL_CHOICE, &g_langSel,      NULL, NULL,
+      NULL, NULL,             0, LANG_MAX, 1, NULL, apply_language, NULL,         dis_noLangPack, dis_noLangPack, s_langChoice },
     { "SAVE MANAGEMENT", OVL_ACTION, NULL, NULL, NULL,
       NULL, NULL,             0, 0, 0, NULL, NULL,                act_enterSaves, NULL, NULL },
     { "RETURN TO TITLE", OVL_ACTION, NULL, NULL, NULL,
@@ -153,7 +237,17 @@ int  PC_OverlayScreen(void) { return s_screen; }
 
 void PC_OverlayToggle(void) {
     s_open = !s_open;
-    if (s_open) { s_screen = OVL_SCREEN_MAIN; s_sel = 0; }   /* always reopen at the top */
+    if (s_open) {
+        s_screen = OVL_SCREEN_MAIN;
+        s_sel = 0;                               /* always reopen at the top */
+        langScan();                              /* refresh the LANGUAGE picklist (cheap dir scan) */
+        {   /* dynamic ceiling: arrows clamp at the real last pack, confirm cycles OFF..last -- the
+             * same behaviour as every other CHOICE row, no special wrap on one arrow only */
+            int i;
+            for (i = 0; i < N_ITEMS; i++)
+                if (s_items[i].value == &g_langSel) { s_items[i].maxv = s_langCount; break; }
+        }
+    }
 }
 
 /* ---- MAIN screen logic ------------------------------------------------------------------------- */

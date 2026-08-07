@@ -96,4 +96,10 @@ const unsigned char *PC_LangCharmapBlob(unsigned *len);
  * pack's string or the input literal untouched. */
 unsigned char *PC_LangStr(const char *lit);
 
+/* Overlay picklist support: enumerate installed packs (same game/format gate as loading, applied
+ * quietly) and report the folder selected at boot ("" = none) so a pending change can show its
+ * restart marker. A pack applies at BOOT; the overlay persists the choice, it never live-swaps. */
+int PC_LangListPacks(char folders[][64], char names[][64], int max);
+const char *PC_LangBootFolder(void);
+
 #endif /* PC_LANG_H */

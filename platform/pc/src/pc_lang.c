@@ -21,6 +21,7 @@
  * NOT COVERED YET: the 8x9 glyph bitmaps and the ASCII->glyph map are private to src/text.c and need
  * gated hooks. Until then a pack is limited to the glyphs the US font already has.
  */
+#include <dirent.h>          /* pack enumeration for the overlay picklist (portable; MinGW has it) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,6 +96,7 @@ static struct {
 } s_lang;
 
 static void LitLoad(const unsigned char *p, unsigned len);   /* defined below LangLoad */
+static void LangLoad(void);
 
 static unsigned RdU32(const unsigned char *p) {
     return (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
@@ -250,6 +252,51 @@ static int LangManifestCheck(const char *dir) {
     return 1;
 }
 
+/* The folder name selected at boot ("" when no pack loaded) -- the overlay's picklist compares its
+ * pending selection against this to show the restart marker. */
+static char s_bootFolder[64];
+
+const char *PC_LangBootFolder(void) {
+    if (!s_lang.loaded) LangLoad();
+    return s_bootFolder;
+}
+
+/* Enumerate installed packs for the overlay picklist: every <deploy>/langpacks/<folder> whose
+ * manifest passes the same game/format gate the loader applies (quietly -- listing is not loading).
+ * Returns the count; folders and display names are parallel arrays. */
+int PC_LangListPacks(char folders[][64], char names[][64], int max) {
+    char deploy[512], root[560], mpath[700], buf[2048], game[64];
+    DIR *d;
+    struct dirent *e;
+    int n = 0;
+    if (!PC_GetDeployDir(deploy, sizeof deploy)) return 0;
+    snprintf(root, sizeof root, "%s/langpacks", deploy);
+    d = opendir(root);
+    if (!d) return 0;
+    while ((e = readdir(d)) != NULL && n < max) {
+        FILE *f;
+        size_t r;
+        int format = 0;
+        if (e->d_name[0] == '.') continue;
+        snprintf(mpath, sizeof mpath, "%s/%s/manifest.json", root, e->d_name);
+        f = fopen(mpath, "r");
+        if (!f) continue;
+        r = fread(buf, 1, sizeof buf - 1, f);
+        buf[r] = '\0';
+        fclose(f);
+        if (!MiniJsonStr(buf, "game", game, sizeof game) || strcmp(game, LANG_GAME_ID) != 0)
+            continue;
+        if (!MiniJsonInt(buf, "format", &format) || format > LANG_FORMAT)
+            continue;
+        snprintf(folders[n], 64, "%s", e->d_name);
+        if (!MiniJsonStr(buf, "name", names[n], 64))
+            snprintf(names[n], 64, "%s", e->d_name);
+        n++;
+    }
+    closedir(d);
+    return n;
+}
+
 /* Load + apply once. Safe to call from anywhere after the data-segment constructors (i.e. after
  * main() starts), and idempotent -- both entry points below call it. */
 static void LangLoad(void) {
@@ -263,6 +310,12 @@ static void LangLoad(void) {
     s_lang.loaded = 1;
     if (!LangPackDir(dir, sizeof dir)) return;
     if (!LangManifestCheck(dir)) return;
+    {   /* remember the boot selection BY FOLDER NAME (the overlay's restart marker compares to it);
+         * a VH_LANGPACK dev override deliberately stays "" -- it is not a langpacks/ selection */
+        const char *lang = getenv("VH_LANG");
+        if (lang && *lang && !getenv("VH_LANGPACK"))
+            snprintf(s_bootFolder, sizeof s_bootFolder, "%s", lang);
+    }
     snprintf(path, sizeof path, "%s/strings.bin", dir);
     f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "[lang] no pack at %s\n", path); return; }
