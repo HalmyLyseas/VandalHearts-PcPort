@@ -680,7 +680,14 @@ static s32 sjis_to_krom_glyph(u32 sjis) {
  * the cast in text.c and the implicit assign in window.c both still work, as does their
  * `== -1` sentinel test. */
 void *Krom2RawAdd(s32 sjisCode) {
-    s32 idx = sjis_to_krom_glyph((u32)sjisCode & 0xffff);
+    s32 idx;
+    /* Language pack (pc_lang_font.c): pack-assigned 2-byte codes (0x8440+, a range the retail map
+     * never answers) resolve to pack-supplied 16x15 glyphs -- accented item names ride the existing
+     * DrawSjisGlyph path, anti-aliasing included. NULL without a pack; retail lookup unchanged. */
+    { extern const void *PC_LangKromGlyph(unsigned sjis);
+      const void *g = PC_LangKromGlyph((unsigned)sjisCode & 0xffff);
+      if (g) return (void *)g; }
+    idx = sjis_to_krom_glyph((u32)sjisCode & 0xffff);
     if (idx < 0) {
         return (void *)(intptr_t)-1;
     }

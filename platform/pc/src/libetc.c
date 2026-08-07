@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "PsyQ/libetc.h"
+#include "pc_lang.h"
 #include "pc_platform.h"
 #include "pc_etc_internal.h"
 #include "pc_balance.h"
@@ -269,6 +270,7 @@ int VSync(int mode) {
          * post-constructor point, so pc_balance.c snapshots retail-pristine tables. (The title-menu
          * toggle + new-game/load hooks will become the interactive triggers in later increments.) */
         PC_BalanceBoot();
+        PC_LangBoot();   /* language pack: load + apply once (inert without a pack) */
     }
 
     if (mode < 0) {

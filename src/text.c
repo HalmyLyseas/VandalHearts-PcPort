@@ -377,6 +377,35 @@ s32 MsgBox_DrawFontGlyph(Object *msg, s16 idx) {
    }
 }
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang_font.c): UTF-8 sibling of MsgBox_DrawFontGlyph, with
+ * IDENTICAL position math -- the glyph just comes from the pack's codepoint table instead of
+ * sFontGlyphBitmaps. Consumes the WHOLE multi-byte sequence and returns its byte length, or 0 when
+ * *p is not a pack-drawable sequence start (plain ASCII / no pack -- the retail path then runs
+ * untouched). Past maxCharsPerLine it clips exactly like the retail path (nothing drawn) but still
+ * consumes, so continuation bytes can never leak into the parser. */
+static s32 MsgBox_DrawLangUtf8(Object *msg, u8 *p) {
+   extern s32 PC_LangUtf8Glyph(u8 **pp, s32 px, s32 py, s32 color);
+   extern s32 PC_LangUtf8SeqLen(u8 *pB);
+   u8 *q = p;
+
+   if (msg->x3.n < msg->d.objf351.pregapChars) {
+      PC_LangUtf8Glyph(&q, 512 + msg->x3.n * (8 >> 2) + msg->x1.n,
+                       msg->y3.n * (msg->d.objf351.lineSpacing + 15) + msg->y1.n +
+                           sMsgBoxVramOffsets[msg->d.objf351.type * 2][1],
+                       0);
+   } else if (msg->x3.n < msg->d.objf351.maxCharsPerLine) {
+      PC_LangUtf8Glyph(&q, 576 + (msg->x3.n - msg->d.objf351.pregapChars) * (8 >> 2),
+                       msg->y3.n * (msg->d.objf351.lineSpacing + 15) + msg->y1.n +
+                           sMsgBoxVramOffsets[msg->d.objf351.type * 2 + 1][1],
+                       0);
+   } else {
+      return PC_LangUtf8SeqLen(p);
+   }
+   return (s32)(q - p);
+}
+#endif
+
 s32 ParseDigits(u8 *str, s32 *output) {
    s32 value;
    s32 n;
@@ -708,6 +737,27 @@ void Objf351_MsgBoxText(Object *obj) {
 
             // fallthrough
             default:
+#ifdef PC_FEAT
+               /* Language packs: pack dialogue is UTF-8. Offer the byte to the pack engine first --
+                * a consumed sequence is ONE character for every purpose below (column, pacing,
+                * letter wait-timer); on 0 the retail path runs verbatim. */
+               {
+                  s32 uLen = MsgBox_DrawLangUtf8(obj, p);
+                  if (uLen != 0) {
+                     if (gState.vsyncMode != 2) {
+                        n = 6;
+                     } else {
+                        n = 3;
+                     }
+                     gState.msgTextWaitTimer[OBJ.type] = n;
+                     p += uLen;
+                     OBJ.textPtr += uLen;
+                     obj->x3.n++;
+                     OBJ.textSpeedAccum -= 0x100;
+                     break;
+                  }
+               }
+#endif
                MsgBox_DrawFontGlyph(obj, GetGlyphIdxForAsciiChar(*p));
                if (*p >= 'A' && *p <= 'z') {
                   if (gState.vsyncMode != 2) {
@@ -766,6 +816,16 @@ void Objf351_MsgBoxText(Object *obj) {
    }
 }
 
+#ifdef PC_FEAT
+/* Forward declaration for the hand-off below: the initialized definition sits after this function
+ * (same TU, same PERMUTER-conditional size). */
+#ifdef PERMUTER
+static u8 sFontGlyphBitmaps[129][9];
+#else
+static u8 sFontGlyphBitmaps[128][9];
+#endif
+#endif
+
 u8 GetGlyphIdxForAsciiChar(u8 asc) {
    static u8 mappings[128] = {
        128, 0,  0,  0,   0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,
@@ -774,6 +834,23 @@ u8 GetGlyphIdxForAsciiChar(u8 asc) {
        69,  70, 71, 72,  73, 74, 75, 76, 77, 78, 79,  80, 81, 82, 83, 84, 85, 86,  87, 88, 89, 90,
        91,  92, 93, 0,   0,  0,  0,  0,  0,  68, 69,  70, 71, 72, 73, 74, 75, 76,  77, 78, 79, 80,
        81,  82, 83, 84,  85, 86, 87, 88, 89, 90, 91,  92, 93, 0,  0,  0,  0,  0};
+
+#ifdef PC_FEAT
+   /* Language packs (platform/pc/src/pc_lang.c): both the code->glyph map above and the glyph
+    * bitmaps are function/file-STATIC, so -- like battle_0201b8.c's terrainText -- they are handed
+    * to the language layer once, on first use. A pack's charmap section can then assign free byte
+    * codes to free glyph slots (writing pack bitmaps into them) and remap existing codes (the
+    * mixed-case option reuses the lowercase art already present at indices 13-38). Every consumer
+    * of this map -- DrawText, the message box, StringToGlyphs -- picks the changes up for free. */
+   {
+      static s32 langApplied = 0;
+      if (!langApplied) {
+         extern void PC_LangApplyCharmap(u8 *map128, u8 (*glyphs)[9], s32 glyphCount);
+         langApplied = 1;
+         PC_LangApplyCharmap(mappings, sFontGlyphBitmaps, sizeof(sFontGlyphBitmaps) / 9);
+      }
+   }
+#endif
 
    return mappings[asc & 0x7f];
 }
@@ -921,7 +998,22 @@ void DrawText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 c
                pad = 5;
             }
          }
+#ifdef PC_FEAT
+         /* Language packs (platform/pc/src/pc_lang_font.c): pointer strings from a pack are UTF-8.
+          * Offer the byte to the pack's font engine first -- if it starts a valid multi-byte
+          * sequence, the WHOLE sequence is consumed and drawn as ONE glyph, and the shared
+          * column/wrap arithmetic below runs exactly as for one retail character. Returns 0
+          * untouched for plain ASCII or when no pack font is loaded, so retail text is unaffected. */
+         {
+            extern s32 PC_LangUtf8Glyph(u8 **pp, s32 px, s32 py, s32 color);
+            if (PC_LangUtf8Glyph(&p, column * (8 >> 2) + x + pad, rowY + y, color) == 0) {
+               DrawFontGlyph(GetGlyphIdxForAsciiChar(*p++), column * (8 >> 2) + x + pad, rowY + y,
+                             color);
+            }
+         }
+#else
          DrawFontGlyph(GetGlyphIdxForAsciiChar(*p++), column * (8 >> 2) + x + pad, rowY + y, color);
+#endif
          column++;
          if (column >= maxCharsPerLine) {
             column = 0;

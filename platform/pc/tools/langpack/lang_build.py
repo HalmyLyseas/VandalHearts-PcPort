@@ -1,0 +1,650 @@
+#!/usr/bin/env python3
+"""lang_build.py -- compile an edited working set into a language pack the port can load.
+
+MVP scope (exchange/80, F1): prove the PLUMBING end to end with English as the baseline. Encoding is
+ASCII/Shift-JIS passthrough; the font + charmap work (the 128-slot code space) comes later and does
+not change any interface here.
+
+DESIGN: the pack is a DIFF, not a rebuild.
+Every section starts from the ORIGINAL bytes on the disc and applies only the entries whose `text`
+field is non-empty. Consequences that matter:
+  * an unedited working set produces an EMPTY pack -- so "no edits" is provably a no-op, and the
+    identity case needs no argument;
+  * a changed entry is the only thing that can differ, so a regression is attributable;
+  * dialogue keeps its file framing (header lines, blank-line entry toggles, END, trailing bytes)
+    byte-for-byte, because we never re-synthesise the file -- we substitute lines inside it.
+
+Fixed-width tables are shipped as the whole rebuilt blob (the game indexes them directly, so the
+runtime just memcpy's). Pointer tables ship only the edited entries: the runtime allocates the new
+strings and repoints those slots, so a translation is not bounded by the original string's length.
+Dialogue ships the whole patched file, keyed by its ISO LBA -- which is what the game's own
+gCdFiles[] holds, so the runtime can match a read without knowing any filenames.
+
+Self-check: every UNEDITED entry is re-encoded and compared against the disc bytes. If the encoder
+cannot reproduce what the game shipped, the build fails rather than emitting a subtly wrong pack.
+
+Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en]
+       -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
+"""
+import json, os, struct, sys, unicodedata
+
+from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR
+
+MAGIC = b"VHLANG\x01\x00"
+K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM = 1, 2, 3, 4, 5, 6
+GTEXT_BYTES = 10928   # symbol_addrs.txt: gText size 0x2ab0 -- LoadText unpacks a whole file here
+FONT_VRAM = 0x801012e4   # sFontGlyphBitmaps[128][9] -- base letterforms for glyph synthesis
+
+# id, name, kind, count, record width (fixed only), pad byte(s)
+# Padding is per table and was READ OFF THE DISC, not assumed: character and spell names are plain
+# ASCII padded with NUL; only item names are full-width Shift-JIS, padded with 0x8140. (Each table's
+# slot 0 is an all-filler "empty" record -- 0x8140s in the SJIS-adjacent tables, NUL in names -- which
+# is why unedited records are always kept verbatim rather than re-synthesised.)
+TABLES = [
+    (0, "gCharacterNames",    0x800eaf58, "fixed",  35,  7, b"\x00"),
+    (1, "gItemNamesSjis",     0x800eed20, "fixed", 101, 17, b"\x81\x40"),
+    (2, "gSpellNames",        0x800ee410, "fixed",  72, 21, b"\x00"),
+    (3, "gStringTable",       0x8010102c, "ptr",   100, None, None),
+    (4, "gSpellDescriptions", 0x800ee9f8, "ptr",    72, None, None),
+    (5, "gItemDescriptions",  0x800ef3d8, "ptr",   101, None, None),
+    (6, "gItemDescriptions2", 0x800ef56c, "ptr",   101, None, None),
+    # Appended (ids never renumbered -- the runtime's table matches by id): the three StringToGlyphs
+    # tables the step-1 probe run uncovered. See lang_export.py's note.
+    (7, "gUnitTypeNames",         0x800eb050, "fixed",  86, 11, b"\x00"),
+    (8, "gItemNames",             0x800eb404, "fixed", 139, 13, b"\x00"),
+    (9, "gClassAdvancementNames", 0x801f6a34, "fixed",  18, 17, b"\x00"),
+    # Function-static in battle_0201b8.c: the runtime applies it through a PC_FEAT hook rather than
+    # by symbol, but the pack format treats it like any other fixed table.
+    (10, "terrainText",           0x800f29f4, "fixed",  10, 12, b"\x00"),
+]
+LOAD = 0x80010000
+
+
+def enc_sjis(s):
+    """Reverse of the exporter's cp932+NFKC decode: ASCII -> full-width -> cp932 bytes."""
+    wide = "".join("　" if c == " " else
+                   chr(ord(c) + 0xFEE0) if 0x21 <= ord(c) <= 0x7E else c
+                   for c in s)
+    return wide.encode("cp932")
+
+
+def enc_plain(s):
+    return s.encode("latin1")
+
+
+# --- UTF-8 + glyph synthesis (decision D1/D2, exchange/80) ------------------------------------
+# Pointer strings carry REAL UTF-8; the engine (pc_lang_font.c) draws any codepoint the pack ships
+# a glyph for. Glyphs for accented Latin are SYNTHESISED from the disc's own letterforms: the US
+# font already contains lowercase a-z at indices 13-38 (uppercase at 68-93), and an accent is a few
+# pixels OR'd into the rows the base letter leaves blank.
+#
+# Marks are drawn in rows 0-1, which lowercase letterforms leave empty -- UPPERCASE occupies row 1,
+# so uppercase accents are NOT synthesisable and error out ("needs pack art") rather than merging
+# into the letter. Cedilla uses row 8, blank in every US letterform.
+MARKS = {
+    0x301: [(0, 0x08), (1, 0x10)],   # acute        ´
+    0x300: [(0, 0x10), (1, 0x08)],   # grave        `
+    0x302: [(0, 0x10), (1, 0x28)],   # circumflex   ^
+    0x308: [(0, 0x28)],              # diaeresis    ¨
+    0x303: [(0, 0x14), (1, 0x28)],   # tilde        ~
+    0x327: [(8, 0x10)],              # cedilla      ¸  (below)
+}
+
+
+ABOVE_MARKS = {0x300, 0x301, 0x302, 0x308, 0x303}   # everything but the cedilla sits ON TOP
+
+
+def synth_one(exe, cp):
+    """One codepoint -> 9-byte bitmap, or None if not synthesisable from the US font."""
+    o = foff(FONT_VRAM)
+    d = unicodedata.normalize("NFD", chr(cp))
+    if not d or not ("a" <= d[0] <= "z") or len(d) < 2:
+        return None                                   # uppercase: row-1 collision; see MARKS note
+    rows = list(exe[o + (13 + ord(d[0]) - 97) * 9:][:9])
+    shift = 0
+    if d[0] in "ij" and any(ord(m) in ABOVE_MARKS for m in d[1:]):
+        # Typography, caught in-game (L12 read as "i with a cross on top"): an above-mark REPLACES
+        # the dot of i/j -- î is dotless-i + circumflex, never dot + circumflex. Clear everything
+        # above the letter body (the dot sits isolated at row 2, body starts row 4), then seat the
+        # mark one row lower so it does not float over the empty dot row.
+        rows[0] = rows[1] = rows[2] = rows[3] = 0
+        shift = 1
+    for m in d[1:]:
+        if ord(m) not in MARKS:
+            return None
+        for r, bits in MARKS[ord(m)]:
+            rows[r + shift] |= bits
+    return bytes(rows)
+
+
+def synth_glyphs(exe, cps, errors):
+    """codepoints -> sorted [(cp, 9-byte bitmap)]; unsynthesisable ones become build errors."""
+    out = []
+    for cp in sorted(cps):
+        rows = synth_one(exe, cp)
+        if rows is None:
+            errors.append(f"U+{cp:04X} {chr(cp)!r}: not synthesisable from the US font "
+                          f"(lowercase+mark only for now) -- needs pack-supplied art")
+            continue
+        out.append((cp, rows))
+    return out
+
+
+# --- 1-byte pack codes for fixed-width tables (decision D2, exchange/80) -----------------------
+# Fixed records keep byte = char = column: a non-ASCII character there gets a FREE 1-BYTE CODE
+# assigned by the builder, the retail map is rewritten so that code names a FREE GLYPH SLOT, and
+# the synthesised bitmap is written into that slot (all via the K_CHARMAP section + text.c's
+# hand-off hook). Provenance of the pools:
+#   codes: printable ASCII whose retail map entry is 0 (renders blank), minus '#'/'$' (parser
+#          markup) and minus any character that actually appears in retail text -- a code that
+#          retail uses would suddenly render as the pack glyph wherever retail draws it;
+#   slots: 111-127 ONLY (17 cells). ⚠ NOT slot 1: it is blank in sFontGlyphBitmaps but in the
+#          SHEET it is GLYPH_BG -- the window background tile. Assigning it stamped an accent over
+#          every window fill in the game (increment-4 captures, "huge bleeding in other menus").
+#          The free set is the INTERSECTION of blank-in-bitmaps and unnamed-in-sheet, and 1 is
+#          named. With D3 (widen sFontGlyphBitmaps to [156]) the shared range becomes 111-155 = 45.
+RETAIL_MAP = [
+    128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 97, 40, 42, 0, 99, 0, 39, 0, 0, 0, 102,
+    95, 12, 94, 101, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 96, 0, 41, 100, 0, 98, 0, 68,
+    69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90,
+    91, 92, 93, 0, 0, 0, 0, 0, 0, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+    81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 0, 0, 0, 0, 0]
+
+# Fixed tables that carry 1-byte pack codes. Since the F_WD sheet patch (Path 1b), this includes
+# the strip-path names: the same K_CHARMAP records feed BOTH stores (bitmaps via the text.c
+# hand-off, sheet cells via the LoadImage-side stamp).
+CHARMAP_TABLES = {"gSpellNames", "gClassAdvancementNames", "terrainText",
+                  "gCharacterNames", "gUnitTypeNames", "gItemNames"}
+
+
+# --- 16x15 wide glyphs for the SJIS path (Path 2: the krom extension) --------------------------
+# gItemNamesSjis draws through DrawSjisGlyph -> Krom2RawAdd, which on PC is OUR map + OUR table
+# (libkernel.c / pc_kanji_font.c). A pack assigns accented characters 2-byte codes at 0x8440+ (a
+# range the retail map never answers) and ships 16x15 bitmaps; the runtime consults the pack first.
+# Base letterforms come from the BIOS charset itself (parsed out of pc_kanji_font.c), composed with
+# the marks below. At 15 rows there is room to SHIFT: uppercase (ink from row 1) moves down one row
+# to free the top for the mark -- so this path supports TRUE UPPERCASE ACCENTS, unlike 8x9.
+KROM_MARKS = {                       # two 16-bit rows per mark, MSB = leftmost pixel
+    0x301: [0x00C0, 0x0300],         # acute
+    0x300: [0x0600, 0x00C0],         # grave
+    0x302: [0x0180, 0x0660],         # circumflex
+    0x308: [0x0660, 0x0660],         # diaeresis
+    0x303: [0x0320, 0x04C0],         # tilde
+    0x327: [0x0080, 0x0180],         # cedilla (below)
+}
+KROM_A, KROM_LOWER_A = 157, 183      # libkernel.c sjis_to_krom_glyph: A-Z at 157+, a-z at 183+
+
+
+def load_krom_base():
+    import re as _re2
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "..", "src", "pc_kanji_font.c")).read()
+    body = _re2.search(r"pc_kanji_charset2\[\d+\]\s*=\s*\{(.*?)\};", src, _re2.S).group(1)
+    return bytes(int(x, 16) for x in _re2.findall(r"0x([0-9a-fA-F]{2})", body))
+
+
+def krom_synth(krom_data, cp):
+    """One codepoint -> 30-byte 16x15 bitmap, or None. Dynamic mark placement: shift the letter
+    down (or up, for a below-mark) inside the 15 rows to make room, instead of refusing."""
+    d = unicodedata.normalize("NFD", chr(cp))
+    if len(d) < 2:
+        return None
+    base = d[0]
+    if "A" <= base <= "Z":
+        idx = KROM_A + ord(base) - 65
+    elif "a" <= base <= "z":
+        idx = KROM_LOWER_A + ord(base) - 97
+    else:
+        return None
+    g = krom_data[idx * 30:(idx + 1) * 30]
+    rows = [(g[r * 2] << 8) | g[r * 2 + 1] for r in range(15)]
+    marks = [ord(m) for m in d[1:]]
+    if any(m not in KROM_MARKS for m in marks):
+        return None
+    above = [m for m in marks if m != 0x327]
+    below = [m for m in marks if m == 0x327]
+
+    if base in "ij" and above:                       # accent replaces the dot (typography rule)
+        inked = [r for r, v in enumerate(rows) if v]
+        gaps = [r for r in range(inked[0], inked[-1]) if not rows[r]]
+        if gaps:                                     # clear the dot: everything above the first gap
+            for r in range(0, gaps[0] + 1):
+                rows[r] = 0
+
+    def top():  return next((r for r, v in enumerate(rows) if v), 15)
+    def bot():  return max((r for r, v in enumerate(rows) if v), default=0)
+
+    if above:
+        shift = max(0, 3 - top())                    # want mark(2) + gap(1) above the letter
+        if bot() + shift > 14:
+            shift = max(0, 2 - top())                # no gap, mark touches
+        if bot() + shift > 14 or len(above) > 1:
+            return None
+        rows = [0] * shift + rows[:15 - shift]
+        m0 = top() - (3 if top() >= 3 else 2)
+        for i2, bits in enumerate(KROM_MARKS[above[0]]):
+            rows[m0 + i2] |= bits
+    if below:
+        up = max(0, bot() + 2 - 14)
+        if top() - up < 0:
+            return None
+        rows = rows[up:] + [0] * up
+        b = bot()
+        for i2, bits in enumerate(KROM_MARKS[below[0]]):
+            rows[b + 1 + i2] |= bits
+    out = bytearray()
+    for v in rows:
+        out += bytes([(v >> 8) & 0xFF, v & 0xFF])
+    return bytes(out)
+
+
+class KromAssign:
+    def __init__(self):
+        self.krom_data = None
+        self.assigned = {}   # cp -> (code, rows30)
+        self.next = 0x8440   # DrawSjisGlyph's own guard ends at 0x843f; retail map never answers here
+
+    def code_for(self, ch, errors, ctx):
+        cp = ord(ch)
+        if cp in self.assigned:
+            return self.assigned[cp][0]
+        if self.krom_data is None:
+            self.krom_data = load_krom_base()
+        rows = krom_synth(self.krom_data, cp)
+        if rows is None:
+            errors.append(f"{ctx}: {ch!r} not synthesisable at 16x15 -- needs pack-supplied art")
+            return None
+        code = self.next
+        self.next += 1
+        if (self.next & 0xFF) == 0x7F:               # skip the invalid SJIS second byte
+            self.next += 1
+        self.assigned[cp] = (code, rows)
+        return code
+
+    def section(self):
+        recs = sorted((code, rows) for code, rows in self.assigned.values())
+        if not recs:
+            return None
+        blob = struct.pack("<I", len(recs))
+        for code, rows in recs:
+            blob += struct.pack("<H", code) + rows
+        return blob
+
+
+class CharmapAssign:
+    def __init__(self, exe, retail_chars):
+        self.exe = exe
+        self.assigned = {}   # cp -> (code, slot, rows)
+        self.codes = [b for b in range(0x21, 0x7F)
+                      if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
+                      and chr(b) not in retail_chars]
+        self.slots = list(range(111, 128))   # NEVER slot 1 = GLYPH_BG, the window background
+
+    def reserve_literal(self, ch):
+        """The translator used this ASCII char literally: it must never become a pack code."""
+        b = ord(ch)
+        if b in self.codes:
+            self.codes.remove(b)
+        return any(cp for cp, (code, _, _) in self.assigned.items() if code == b)
+
+    def code_for(self, ch, errors, ctx):
+        cp = ord(ch)
+        if cp in self.assigned:
+            return self.assigned[cp][0]
+        rows = synth_one(self.exe, cp)
+        if rows is None:
+            errors.append(f"{ctx}: {ch!r} not synthesisable from the US font "
+                          f"(lowercase+mark only for now) -- needs pack-supplied art")
+            return None
+        if not self.codes or not self.slots:
+            errors.append(f"{ctx}: out of free codes/slots for {ch!r} "
+                          f"(18 shared slots; widening sFontGlyphBitmaps to [156] is decision D3)")
+            return None
+        code, slot = self.codes.pop(0), self.slots.pop(0)
+        self.assigned[cp] = (code, slot, rows)
+        return code
+
+    def section(self):
+        recs = sorted((code, slot, rows) for code, slot, rows in self.assigned.values())
+        if not recs:
+            return None
+        blob = struct.pack("<I", len(recs))
+        for code, slot, rows in recs:
+            blob += bytes([code, slot]) + rows
+        return blob
+
+
+def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=None, krom=None):
+    """Whole-table blob: original record bytes, with edited records re-encoded."""
+    base = foff(vram)
+    blob = bytearray(exe[base:base + count * width])
+    edited = 0
+    sjis = (name == "gItemNamesSjis")
+    for i in range(count):
+        e = entries[i]
+        orig = bytes(blob[i * width:(i + 1) * width])
+        want = e.get("text") or ""
+        en = e.get("en") or ""
+        src = want if want else en
+        if want and sjis and not want.isascii():
+            # Path 2 (krom): accented chars become 2-byte pack codes at 0x8440+, big-endian on the
+            # wire (DrawSjisGlyph reads (p[0]<<8)|p[1]). 2 bytes per glyph, budgets unchanged.
+            out, ok = bytearray(), True
+            for c in want:
+                if c.isascii():
+                    out += enc_sjis(c)
+                else:
+                    code = krom.code_for(c, errors, f"{name}[{i}]")
+                    if code is None:
+                        ok = False; break
+                    out += bytes([(code >> 8) & 0xFF, code & 0xFF])
+            if not ok:
+                continue
+            raw = bytes(out)
+        elif want and not sjis and not want.isascii():
+            if charmap is None:
+                errors.append(f"{name}[{i}]: non-ASCII in a fixed-width table without a charmap")
+                continue
+            # D2: encode with 1-byte pack codes -- byte = char = column, budgets unchanged.
+            out, ok = bytearray(), True
+            for c in want:
+                if c.isascii():
+                    if charmap.reserve_literal(c):
+                        errors.append(f"{name}[{i}]: literal {c!r} collides with an assigned pack "
+                                      f"code -- reorder edits or avoid that character")
+                        ok = False; break
+                    out.append(ord(c))
+                else:
+                    code = charmap.code_for(c, errors, f"{name}[{i}]")
+                    if code is None:
+                        ok = False; break
+                    out.append(code)
+            if not ok:
+                continue
+            raw = bytes(out)
+        else:
+            try:
+                raw = enc_sjis(src) if sjis else enc_plain(src)
+            except Exception as ex:
+                errors.append(f"{name}[{i}]: cannot encode ({ex})"); continue
+        if len(raw) > width - 1:
+            errors.append(f"{name}[{i}]: {len(raw)} bytes, record holds {width - 1}")
+            continue
+        rec = bytearray(pad * width)[:width]         # re-pad in full: a SHORTER replacement must not
+        rec[:len(raw)] = raw                         # leave the old text's tail behind
+        rec[width - 1] = 0
+        if not want:
+            # Self-check on REAL content only: re-encoding what the game shipped must reproduce it.
+            # Empty slots are all-filler records (see the table note) and are exempt.
+            if en and bytes(rec) != orig:
+                errors.append(f"{name}[{i}]: round-trip mismatch -- encoder disagrees with the disc "
+                              f"(disc {orig.hex()} != rebuilt {bytes(rec).hex()})")
+            continue                                 # unedited: keep the disc's bytes verbatim
+        blob[i * width:(i + 1) * width] = rec
+        edited += 1
+    return bytes(blob), edited
+
+
+def build_ptr(exe, vram, count, entries, name, errors, used_cps):
+    """Only edited slots travel: (index, bytes). Length is unconstrained -- the runtime allocates.
+    Encoding is UTF-8 (D1): the engine hook in DrawText_Internal consumes multi-byte sequences as
+    one column each. Non-ASCII codepoints are collected so the font section can cover them."""
+    out, n = bytearray(), 0
+    for i in range(count):
+        e = entries[i]
+        want = e.get("text") or ""
+        if not want:
+            continue
+        raw = want.encode("utf-8")
+        used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
+        if len(raw) > 511:
+            errors.append(f"{name}[{i}]: {len(raw)} bytes, cap is 511"); continue
+        out += struct.pack("<HH", i, len(raw)) + raw
+        n += 1
+    return struct.pack("<I", n) + bytes(out), n
+
+
+def dialogue_bytes_safe(raw):
+    """Dialogue lines travel through TWO byte-pairing consumers before our engine ever sees them:
+    CopySjisString (LoadText's unpacker) and the message-box parser's SJIS branch, both of which
+    treat 0x81-0x9F / 0xE0-0xFC as a 2-byte lead and consume the NEXT byte with it. A UTF-8 byte in
+    those ranges can therefore swallow a line's NUL terminator (buffer overrun) or bypass our hook.
+    RULE: every byte of an encoded dialogue line must avoid both ranges. In practice: all lowercase
+    accented Latin (U+00E0-00FF) and A-grave pass; other UPPERCASE accents and every 3-/4-byte
+    codepoint fail -- which matches the glyph-synthesis constraint anyway."""
+    return not any(0x81 <= b <= 0x9F or 0xE0 <= b <= 0xFC for b in raw)
+
+
+def build_text(raw_file, doc, stem, budget, errors, used_cps):
+    """Substitute edited LINES inside the decoded file, keeping every other byte untouched."""
+    edits = {}
+    for ent in doc["entries"]:
+        edits[ent["key"]] = ent
+    plain = bytearray(~b & 0xFF for b in raw_file)
+    lines = plain.split(b"\r\n")
+    # Re-walk exactly as LoadText does, so line indices line up with the exporter's entries.
+    inside, n, li = False, 0, 0
+    changed = 0
+    for idx, ln in enumerate(lines):
+        if ln.startswith(b"END"):
+            break
+        if ln == b"":
+            if not inside:
+                inside, n, li = True, n + 1, 0
+            else:
+                inside = False
+            continue
+        if not inside:
+            continue
+        ent = edits.get(f"{stem}[{n}]")
+        if ent and li < len(ent.get("text", [])):
+            want = ent["text"][li]
+            if want:
+                raw = want.encode("utf-8")
+                if not dialogue_bytes_safe(raw):
+                    bad = ", ".join(f"{c!r}" for c in want if not dialogue_bytes_safe(c.encode("utf-8")))
+                    errors.append(f"{stem}[{n}] line {li}: {bad} unsafe in dialogue (byte collides "
+                                  f"with the engine's SJIS lead ranges) -- lowercase accents are "
+                                  f"safe, most uppercase accents are not")
+                else:
+                    lines[idx] = raw
+                    used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
+                    changed += 1
+        li += 1
+    if not changed:
+        return None, 0
+    new = b"\r\n".join(lines)
+    if len(new) < len(plain):                       # keep the original tail; only length may shrink
+        new = new + plain[len(new):]
+    if len(new) > budget:
+        errors.append(f"{stem}: patched file is {len(new)} B, the game reads only {budget} B")
+        return None, 0
+    # SECOND budget, and it is a different one: LoadText UNPACKS the whole file into gText[10928],
+    # one shared buffer, so a file's entries must also fit there once the framing is stripped.
+    # CopySjisString copies each line verbatim and LoadText writes one NUL per entry.
+    unpacked = sum(len(l) for e in doc["entries"] for l in e["en"]) + len(doc["entries"])
+    for e in doc["entries"]:
+        for i, t in enumerate(e.get("text", [])):
+            if t:
+                unpacked += len(t.encode("utf-8")) - len(e["en"][i])
+    if unpacked > GTEXT_BYTES:
+        errors.append(f"{stem}: unpacks to {unpacked} B, gText holds {GTEXT_BYTES} B")
+        return None, 0
+    return bytes(~b & 0xFF for b in new), changed
+
+
+PACK_NAME_RX = None   # compiled below; module-level so the CLI and build() share one rule
+
+
+def check_pack_name(lang):
+    """Packaging convention (exchange/80): <languageTag>-<freeDescription>, lowercase [a-z0-9._-]
+    only -- URL-safe (packs travel as zip links; '#' truncates in browsers), shell-safe, and immune
+    to the Windows/Linux case-sensitivity mismatch (two packs on Linux, a collision on Windows)."""
+    import re as _re3
+    global PACK_NAME_RX
+    if PACK_NAME_RX is None:
+        PACK_NAME_RX = _re3.compile(r"^[a-z]{2}(-[a-z]{2})?-[a-z0-9._-]+$|^[a-z]{2}(-[a-z]{2})?$")
+    if not PACK_NAME_RX.match(lang):
+        raise SystemExit(f"pack name {lang!r} breaks the convention: <languageTag>-<description>, "
+                         f"lowercase [a-z0-9._-] only (e.g. en-fix, fr-fantrad, pt-br-fantrad)")
+
+
+def build(disc, work, outdir, lang, meta=None):
+    meta = meta or {}
+    check_pack_name(lang)
+    exe = read_exe(disc)
+    tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    errors, sections, stats = [], [], []
+    used_cps = set()
+
+    # Every character retail text actually draws, from every source -- a pack code must never be a
+    # character retail uses, or retail text would sprout pack glyphs. Literals included: menus like
+    # "Skill\nSpell\nItems" go through the same map.
+    retail_chars = set()
+    for t in tables.values():
+        for e in t["entries"]:
+            retail_chars.update(e.get("en") or "")
+    dlg_dir_scan = os.path.join(work, "strings", "dialogue")
+    if os.path.isdir(dlg_dir_scan):
+        for fn in os.listdir(dlg_dir_scan):
+            for e in json.load(open(os.path.join(dlg_dir_scan, fn)))["entries"]:
+                for l in e["en"]:
+                    retail_chars.update(l)
+    lit_path = os.path.join(work, "strings", "literals.json")
+    if os.path.exists(lit_path):
+        for e in json.load(open(lit_path))["entries"]:
+            retail_chars.update(e.get("en") or "")
+    charmap = CharmapAssign(exe, retail_chars)
+    krom = KromAssign()
+
+    for tid, name, vram, kind, count, width, pad in TABLES:
+        entries = tables[name]["entries"]
+        if kind == "fixed":
+            blob, n = build_fixed(exe, vram, count, width, pad, entries, name, errors,
+                                  charmap if name in CHARMAP_TABLES else None,
+                                  krom if name == "gItemNamesSjis" else None)
+            if n:
+                sections.append((K_FIXED, tid, blob))
+        else:
+            blob, n = build_ptr(exe, vram, count, entries, name, errors, used_cps)
+            if n:
+                sections.append((K_PTR, tid, blob))
+        if n:
+            stats.append((name, n))
+
+
+    f, files, sec = _iso(disc)
+    dlg_dir = os.path.join(work, "strings", "dialogue")
+    nfiles = nlines = 0
+    for nm in sorted(files):
+        m = TEXT_RX.fullmatch(nm)
+        if not m:
+            continue
+        stem = m.group(1)
+        jp = os.path.join(dlg_dir, f"{stem}.json")
+        if not os.path.exists(jp):
+            continue
+        lba, size = files[nm]
+        nsec = (size + 2047) // 2048
+        raw = sec(lba, nsec)[:size]
+        patched, n = build_text(raw, json.load(open(jp)), stem, nsec * 2048, errors, used_cps)
+        if patched:
+            sections.append((K_TEXT, lba, struct.pack("<I", len(patched)) + patched))
+            nfiles += 1; nlines += n
+    f.close()
+
+    # The font section is built LAST so it covers codepoints from every source (ptr tables AND
+    # dialogue). Sorted by codepoint: the runtime binary-searches.
+    nglyphs = 0
+    if used_cps:
+        glyphs = synth_glyphs(exe, used_cps, errors)
+        if glyphs:
+            blob = struct.pack("<I", len(glyphs))
+            for cp, rows in glyphs:
+                blob += struct.pack("<I", cp) + rows
+            sections.append((K_FONT, 0, blob))
+            nglyphs = len(glyphs)
+
+    cm = charmap.section()
+    if cm:
+        sections.append((K_CHARMAP, 0, cm))
+    km = krom.section()
+    if km:
+        sections.append((K_KROM, 0, km))
+
+    if errors:
+        print("BUILD FAILED:\n  " + "\n  ".join(errors[:20]), file=sys.stderr)
+        if len(errors) > 20:
+            print(f"  ... and {len(errors) - 20} more", file=sys.stderr)
+        raise SystemExit(1)
+
+    d = os.path.join(outdir, "langpacks", lang)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "strings.bin"), "wb") as fo:
+        fo.write(MAGIC + struct.pack("<I", len(sections)))
+        for kind, sid, payload in sections:
+            fo.write(struct.pack("<III", kind, sid, len(payload)) + payload)
+    # Manifest = the MACHINE TRUTH about the pack (the folder name is only a human convention).
+    # The runtime refuses to load without a matching "game" and a readable "format".
+    lang_tag = lang.split("-")[0]
+    json.dump({"game": "vandal-hearts-usa",
+               "format": 1,
+               "language": lang_tag,
+               "name": meta.get("name") or lang,
+               "author": meta.get("author") or "",
+               "version": meta.get("version") or "",
+               "notes": meta.get("notes") or "",
+               "contains": ["strings"],
+               "tables_edited": dict(stats), "dialogue_files": nfiles, "dialogue_lines": nlines,
+               "font_glyphs": nglyphs},
+              open(os.path.join(d, "manifest.json"), "w"), indent=1, ensure_ascii=False)
+    return d, stats, nfiles, nlines, len(sections), nglyphs
+
+
+def print_repertoire():
+    """The renderable repertoire, GENERATED from the mark set the synthesisers actually use -- run
+    `lang_build.py --repertoire` after any MARKS change and paste into the tooling README, so the
+    documentation can never drift from what the builder enforces."""
+    assert set(MARKS) == set(KROM_MARKS), "8x9 and 16x15 mark sets diverged -- repertoire is ambiguous"
+    lower, upper = [], []
+    for cp in range(0x80, 0x2000):
+        d = unicodedata.normalize("NFD", chr(cp))
+        if len(d) == 2 and ord(d[1]) in MARKS:
+            if "a" <= d[0] <= "z":
+                lower.append(chr(cp))
+            elif "A" <= d[0] <= "Z":
+                upper.append(chr(cp))
+    print("Marks:", " ".join(unicodedata.name(chr(m)).replace("COMBINING ", "").lower()
+                             for m in sorted(MARKS)))
+    print(f"\nLowercase -- renders EVERYWHERE ({len(lower)}):")
+    print("  " + " ".join(lower))
+    print(f"\nUppercase -- item-name path only ({len(upper)}):")
+    print("  " + " ".join(upper))
+    print("\nNot composable (needs pack-supplied art, pipeline not built):")
+    print("  å ø æ ß ð þ œ ¡ ¿ · -- and every non-Latin script")
+
+
+if __name__ == "__main__":
+    if "--repertoire" in sys.argv:
+        print_repertoire()
+        sys.exit(0)
+    if len(sys.argv) < 4:
+        raise SystemExit(__doc__)
+    lang = "en"
+    meta = {}
+    if "--lang" in sys.argv:
+        lang = sys.argv[sys.argv.index("--lang") + 1]
+    for k in ("name", "author", "version", "notes"):
+        flag = f"--{k}"
+        if flag in sys.argv:
+            meta[k] = sys.argv[sys.argv.index(flag) + 1]
+    d, stats, nf, nl, ns, ng = build(sys.argv[1], sys.argv[2], sys.argv[3], lang, meta)
+    print(f"wrote {d}/strings.bin  ({ns} sections)")
+    for n, c in stats:
+        print(f"  {n:22}{c:>5} entries")
+    print(f"  dialogue{'':14}{nf:>5} files, {nl} lines")
+    if ng:
+        print(f"  font{'':18}{ng:>5} synthesised glyph(s)")
+    if not ns:
+        print("  (nothing edited -- an empty pack, which the runtime treats as absent)")

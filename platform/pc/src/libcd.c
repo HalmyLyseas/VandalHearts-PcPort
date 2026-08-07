@@ -61,6 +61,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "PsyQ/libcd.h"
+#include "pc_lang.h"
 #include "pc_platform.h"
 #include "pc_xa.h"
 
@@ -549,6 +550,12 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
         CdCheckRawSector(raw, lba);
         memcpy(out + (size_t)i * SECTOR_DATA_SIZE, raw + SECTOR_DATA_OFFSET, SECTOR_DATA_SIZE);
     }
+
+    /* Language pack (pc_lang.c): a translated on-disc text file is substituted here, keyed by the
+     * read's LBA. cd.c reads a text file whole in one CdRead from gCdFiles[cdf].startingSector --
+     * the plain ISO9660 LBA -- so this is indistinguishable from the disc having held those bytes,
+     * and the game parses them with its own unmodified LoadText. No-op without a pack. */
+    PC_LangPatchRead(s_targetLBA, sectors, out);
 
     double seekMs = CalcSeekTimeMs(s_headLBA, s_targetLBA);
     if (!s_motorStarted) {

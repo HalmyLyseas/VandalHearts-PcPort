@@ -21,7 +21,7 @@ STAGE_DIR      := $(BUILD_DIR)/include_stage
 C_FILES        := $(wildcard $(SRC_DIR)/*.c)
 GAME_O_FILES   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/src/%.o,$(C_FILES))
 
-BACKEND_SRCS   := libetc.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c pc_hdvideo.c
+BACKEND_SRCS   := libetc.c pc_lang.c pc_lang_font.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c pc_hdvideo.c
 BACKEND_OBJS   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BACKEND_SRCS))
 
 # TARGET WIDTH. Default is now 64-bit (Stage 2.3 complete, 2026-07-21).
@@ -434,6 +434,13 @@ $(BUILD_DIR)/libgpu.o: src/libgpu.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 $(BUILD_DIR)/pc_gpu_trace.o: src/pc_gpu_trace.c
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+
+# Optional language-pack loader + its UTF-8 font engine (inert without a pack).
+$(BUILD_DIR)/pc_lang.o: src/pc_lang.c
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+
+$(BUILD_DIR)/pc_lang_font.o: src/pc_lang_font.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # The hot per-pixel path (DDA spans, texture sampling, blending) -- same flags as libgpu.o had.

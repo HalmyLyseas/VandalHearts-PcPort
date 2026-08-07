@@ -95,7 +95,7 @@ endif()
 file(GLOB GAME_SRCS ${SRC_DIR}/*.c)
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
-set(BACKEND_PLAIN   libcd libspu libkernel libgpu pc_raster pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
+set(BACKEND_PLAIN   pc_lang pc_lang_font libcd libspu libkernel libgpu pc_raster pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
 set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data pc_evt_entities)
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 

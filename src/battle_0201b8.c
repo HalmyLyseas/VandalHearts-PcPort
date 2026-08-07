@@ -2943,6 +2943,12 @@ u8 s_unitZ_80123204;
 
 #undef OBJF
 #define OBJF 030
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c) need to reach terrainText below, but it is a
+ * function-static: no external linkage, so it cannot be replaced by symbol like every other text
+ * table. Hand it to the language layer once, the first time this object runs. */
+extern void PC_LangApplyTerrainText(void *table, int bytes);
+#endif
 void Objf030_FieldInfo(Object *obj) {
    static s8 terrainText[10][12] = {"Plains   0%", "Prairie  5%", "Thicket 15%", "Barren   0%",
                                     "Water   20%", "Vile bog 0%", "Lava     0%", "Boundary30%",
@@ -2950,6 +2956,16 @@ void Objf030_FieldInfo(Object *obj) {
    // obj->state3: terrainInfoState
    Object *obj1;
    UnitStatus *unit;
+
+#ifdef PC_FEAT
+   {
+      static s32 langApplied = 0;
+      if (!langApplied) {
+         langApplied = 1;
+         PC_LangApplyTerrainText(terrainText, sizeof(terrainText));
+      }
+   }
+#endif
 
    if (gState.battleEval != BATTLE_EVAL_NONE) {
       obj->functionIndex = OBJF_NULL;
