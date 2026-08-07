@@ -72,6 +72,13 @@ def enc_plain(s):
     return s.encode("latin1")
 
 
+def fnv1a_str(text):
+    h = 14695981039346656037
+    for b in text.encode("utf-8"):
+        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return h
+
+
 # --- UTF-8 + glyph synthesis (decision D1/D2, exchange/80) ------------------------------------
 # Pointer strings carry REAL UTF-8; the engine (pc_lang_font.c) draws any codepoint the pack ships
 # a glyph for. Glyphs for accented Latin are SYNTHESISED from the disc's own letterforms: the US
@@ -559,9 +566,9 @@ def build(disc, work, outdir, lang, meta=None):
     # YES/NO) get full-width SJIS + krom codes for accents; everything else is UTF-8 feeding the
     # same font section as the rest of the pack.
     nlits = 0
+    recs = []
     lit_path = os.path.join(work, "strings", "literals.json")
     if os.path.exists(lit_path):
-        recs = []
         for e in json.load(open(lit_path))["entries"]:
             want = e.get("text") or ""
             if not want:
@@ -588,6 +595,43 @@ def build(disc, work, outdir, lang, meta=None):
             if len(raw) > 0xFFFF:
                 errors.append(f"{e['key']}: replacement too long"); continue
             recs.append((h, raw))
+    # The TACTICAL LAYER rides the same K_LITERAL mechanism: pc_balance.c resolves its flavor
+    # strings through PC_LangStr at patch-build time, so a record whose hash matches the ENGLISH
+    # tactical string swaps in the translation. Encoding follows the TARGET: gSpellNames entries
+    # are fixed-width 1-byte-code strings (charmap; <= 20 chars), descriptions are UTF-8.
+    tac_path = os.path.join(work, "strings", "tactical.json")
+    if os.path.exists(tac_path):
+        seen = set()
+        for e in json.load(open(tac_path))["entries"]:
+            want = e.get("text") or ""
+            en = e.get("en") or ""
+            if not want or not en:
+                continue
+            h = fnv1a_str(en)
+            if h in seen:
+                continue                       # addDescSwap patches two tables with ONE string
+            seen.add(h)
+            if e["key"].startswith("gSpellNames"):
+                out, ok = bytearray(), True
+                for c in want:
+                    if c.isascii():
+                        out.append(ord(c))
+                    else:
+                        code = charmap.code_for(c, errors, f"tactical {e['key']}")
+                        if code is None:
+                            ok = False; break
+                        out.append(code)
+                if not ok:
+                    continue
+                if len(out) > 20:
+                    errors.append(f"tactical {e['key']}: {len(out)} chars, record holds 20")
+                    continue
+                raw = bytes(out)
+            else:
+                raw = want.encode("utf-8")
+                used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
+            recs.append((h, raw))
+
         if recs:
             recs.sort()
             blob = struct.pack("<I", len(recs))

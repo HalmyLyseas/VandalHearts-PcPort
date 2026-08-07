@@ -24,6 +24,7 @@
 #include "battle.h"        /* gIsEnemyTurn */
 #include "pc_platform.h"   /* PC_SaveDir */
 #include "pc_balance.h"
+#include "pc_lang.h"   /* PC_LangStr: the Tactical layer is translatable */
 
 int gTacticalMode = 0;
 
@@ -153,7 +154,10 @@ static void addPatch(void *addr, unsigned char size, unsigned long tac) {
  * so it can't be repointed like gSpellDescriptions). Copies s (incl. NUL) over addr; restorable. */
 static void addStrPatch(void *addr, const char *s) {
     Patch *p;
-    unsigned int n = (unsigned int)strlen(s) + 1;
+    unsigned int n;
+    s = (const char *)PC_LangStr(s);           /* translatable (pack encodes fixed-width targets
+                                                  in 1-byte pack codes at build time) */
+    n = (unsigned int)strlen(s) + 1;
     if (s_nPatch >= MAX_PATCH || n > sizeof p->orig) return;
     p = &s_patch[s_nPatch++];
     p->addr = addr;
@@ -171,6 +175,10 @@ extern u8 *gItemDescriptions2[101];
 /* GAP 6: point an item's description (both the single-line and shop tables) at `flavor` in Tactical.
  * `flavor` is original authored text (static storage), NOT extracted ROM text. Normal keeps retail. */
 static void addDescSwap(int id, const char *flavor) {
+    /* v1.7 language packs: the TACTICAL LAYER is translatable text too -- offer the flavor string
+     * to the active pack by content (PC_LangStr; the literal itself when no pack / no entry).
+     * Resolved ONCE here, at patch-build time, so apply/restore stay simple value writes. */
+    flavor = (const char *)PC_LangStr(flavor);
     addPatch(&gItemDescriptions[id],  sizeof(char *), (unsigned long)(uintptr_t)flavor);
     addPatch(&gItemDescriptions2[id], sizeof(char *), (unsigned long)(uintptr_t)flavor);
 }
@@ -179,6 +187,7 @@ static void addDescSwap(int id, const char *flavor) {
  * Rng/Fld/MP hardcoded, NOT read from gSpells. Balance patches change the real gSpells fields (gameplay
  * is correct) but the display string stays stale. Repoint the reworked spells' info line in Tactical. */
 static void addSpellDescSwap(int id, const char *s) {
+    s = (const char *)PC_LangStr(s);           /* translatable, same as addDescSwap */
     addPatch(&gSpellDescriptions[id], sizeof(char *), (unsigned long)(uintptr_t)s);
 }
 

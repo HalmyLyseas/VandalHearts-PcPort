@@ -269,8 +269,11 @@ int VSync(int mode) {
         /* Stage-3 1.3: apply the Tactical-mode config default now -- first VSync is the earliest
          * post-constructor point, so pc_balance.c snapshots retail-pristine tables. (The title-menu
          * toggle + new-game/load hooks will become the interactive triggers in later increments.) */
-        PC_BalanceBoot();
+        /* ORDER MATTERS (v1.7): the language pack applies FIRST, so pc_balance's lazy pristine
+         * snapshots capture the PACK-APPLIED tables -- toggling Tactical OFF then restores the
+         * player's language, not retail English, on any entry both layers touch. */
         PC_LangBoot();   /* language pack: load + apply once (inert without a pack) */
+        PC_BalanceBoot();
     }
 
     if (mode < 0) {
