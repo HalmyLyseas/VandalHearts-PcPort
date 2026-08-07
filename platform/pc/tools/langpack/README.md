@@ -83,6 +83,33 @@ no in-game reload.
   (SELECT+START) stays English in every language. It is drawn by the port with its own small
   font, and keeping it out means every pack behaves the same way regardless of script.
 
+## How the game draws text — and what each sheet you draw will cover
+
+The game uses **two different fonts** and picks one per screen. A script the game has never seen
+(Cyrillic, Greek, Polish, Nordic) therefore needs its alphabet drawn **twice**, once at each size.
+They are independent files, so you can ship one before the other.
+
+| | **small sheet — 8×9 px** | **large sheet — 16×15 px** |
+|---|---|---|
+| **where your letters show up** | story dialogue, every menu, item and spell descriptions, spell names, character names, class names, terrain names, battle messages | item names in the shop, field and inventory; the TURN counter; YES/NO prompts |
+| **how much of the game** | almost all of it | a handful of screens |
+| **letters you can add** | **44** | no practical limit |
+| **if you don't supply it** | nothing readable renders — the pack is unusable | those screens stay English; everything else still works |
+| **drawing it** | very tight — plan on capitals only | roomier, and easier per letter |
+
+**You don't draw digits, punctuation or spaces.** Those already exist at both sizes and keep
+working untouched.
+
+**44 is the real ceiling, and it only applies to the small sheet.** It fits a full Russian
+alphabet (33) or Greek (~24) in capitals. It does *not* fit capitals and lowercase of a non-Latin
+script — that would need about 66. This is a hard limit of how the game stores its own font, not a
+setting. The game already prints most text in capitals in English, so capitals-only is not the
+regression it sounds like.
+
+**A practical way to stage the work:** translate everything *except* item names first and ship with
+only the small sheet. Untranslated item names keep their original text and render normally, so you
+get a playable, almost-complete pack while the large sheet is still being drawn.
+
 ## Supported characters
 
 **Encoding and repertoire are two different things.** Pack text files are written in **UTF-8** —
