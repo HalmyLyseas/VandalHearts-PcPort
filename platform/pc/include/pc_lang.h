@@ -35,6 +35,7 @@
  *   src/battle_0201b8.c  PC_LangApplyTerrainText()
  *   src/text.c           PC_LangUtf8Glyph(), PC_LangUtf8SeqLen()   (DrawText_Internal + msgbox)
  *   src/text.c           PC_LangApplyCharmap()       (GetGlyphIdxForAsciiChar's hand-off)
+ *   7 game files         PC_LangStr()                (via each file's PC_LANGSTR macro block)
  */
 
 #include <stddef.h>
@@ -90,5 +91,9 @@ const void *PC_LangKromGlyph(unsigned sjis);
 
 /* The raw K_CHARMAP blob (pc_lang.c owns it; the sheet patcher reads it). */
 const unsigned char *PC_LangCharmapBlob(unsigned *len);
+
+/* Literal replacement (the PC_LANGSTR macro in game files): content-hash lookup; returns the
+ * pack's string or the input literal untouched. */
+unsigned char *PC_LangStr(const char *lit);
 
 #endif /* PC_LANG_H */

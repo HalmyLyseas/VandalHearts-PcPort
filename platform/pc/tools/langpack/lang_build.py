@@ -31,7 +31,7 @@ import json, os, struct, sys, unicodedata
 from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR
 
 MAGIC = b"VHLANG\x01\x00"
-K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM = 1, 2, 3, 4, 5, 6
+K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL = 1, 2, 3, 4, 5, 6, 7
 GTEXT_BYTES = 10928   # symbol_addrs.txt: gText size 0x2ab0 -- LoadText unpacks a whole file here
 FONT_VRAM = 0x801012e4   # sFontGlyphBitmaps[128][9] -- base letterforms for glyph synthesis
 
@@ -553,6 +553,48 @@ def build(disc, work, outdir, lang, meta=None):
             sections.append((K_TEXT, lba, struct.pack("<I", len(patched)) + patched))
             nfiles += 1; nlines += n
     f.close()
+
+    # Code literals (K_LITERAL): entries keyed by content hash ("literal:<fnv1a>"), replacement
+    # encoded per the ORIGINAL literal's encoding -- SJIS literals (the TURN banners, the dojo
+    # YES/NO) get full-width SJIS + krom codes for accents; everything else is UTF-8 feeding the
+    # same font section as the rest of the pack.
+    nlits = 0
+    lit_path = os.path.join(work, "strings", "literals.json")
+    if os.path.exists(lit_path):
+        recs = []
+        for e in json.load(open(lit_path))["entries"]:
+            want = e.get("text") or ""
+            if not want:
+                continue
+            h = int(e["key"].split(":")[1], 16)
+            if e.get("encoding") == "sjis":
+                out, ok = bytearray(), True
+                for c in want:
+                    if c == "\n":
+                        out.append(0x0A)
+                    elif c.isascii():
+                        out += enc_sjis(c)
+                    else:
+                        code = krom.code_for(c, errors, e["key"])
+                        if code is None:
+                            ok = False; break
+                        out += bytes([(code >> 8) & 0xFF, code & 0xFF])
+                if not ok:
+                    continue
+                raw = bytes(out)
+            else:
+                raw = want.encode("utf-8")
+                used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
+            if len(raw) > 0xFFFF:
+                errors.append(f"{e['key']}: replacement too long"); continue
+            recs.append((h, raw))
+        if recs:
+            recs.sort()
+            blob = struct.pack("<I", len(recs))
+            for h, raw in recs:
+                blob += struct.pack("<QH", h, len(raw)) + raw
+            sections.append((K_LITERAL, 0, blob))
+            nlits = len(recs)
 
     # The font section is built LAST so it covers codepoints from every source (ptr tables AND
     # dialogue). Sorted by codepoint: the runtime binary-searches.

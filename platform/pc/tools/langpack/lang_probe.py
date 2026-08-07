@@ -64,6 +64,14 @@ PROBES = [
 #        a multi-byte inserted string; L4's probe text is made accented for this)
 #   L14: accented SUBSTITUTED dialogue rendered by the DrawText route (SHOP_T wraps at 30 cols,
 #        never sees the message box) -- the shop clerk's greeting
+# Increment 5 (PC_LANGSTR literals): replacements matched by content hash, found via their English.
+LITERALS = [
+    ("L15", "Battle results", "L15 R\u00e9sultats",
+     "the battle-results banner after a battle ends -- a replaced CODE literal, with an accent"),
+    ("L16", "Skill\nSpell\nItems", "L16\u00e9t\nSorts\nObjets",
+     "the party menu's Skill/Spell/Items panel -- the most-seen literal in the game"),
+]
+
 DIALOGUES = [
     ("L8", "EVENT01", 0, ["L8 DIALOGUE PROBE", "café déjà reçu éèêë"],
      "the opening scene, first message box -- line 2 is the UTF-8 probe"),
@@ -87,6 +95,14 @@ def main(disc, work, outdir):
             e["text"] = repl
         json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
 
+        p = os.path.join(stage, "strings", "literals.json")
+        doc = json.load(open(p))
+        for tag, en, text, _ in LITERALS:
+            hits = [e for e in doc["entries"] if e["en"] == en]
+            assert len(hits) == 1, (tag, en)
+            hits[0]["text"] = text
+        json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+
         for tag, stem, ei, lines, _ in DIALOGUES:
             p = os.path.join(stage, "strings", "dialogue", f"{stem}.json")
             doc = json.load(open(p))
@@ -105,6 +121,8 @@ def main(disc, work, outdir):
         print(f"  {tag:3}{table+'['+str(idx)+']':22}{repl:26}{where}")
     for tag, stem, ei, lines, where in DIALOGUES:
         print(f"  {tag:4}{stem+f' entry {ei+1}':21}{lines[0]:26}{where}")
+    for tag, en, text, where in LITERALS:
+        print(f"  {tag:4}{'literal':21}{text.splitlines()[0]:26}{where}")
     print("\nA probe that renders with its lowercase INTACT is not on the case-folding ASCII path.")
     return d
 

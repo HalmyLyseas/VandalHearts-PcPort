@@ -7,6 +7,17 @@
 #include "audio.h"
 
 #ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
+#ifdef PC_FEAT
 /* Stage 3 1.3 GAP 10 -- Trial rewards (pc_balance.c): per-chapter gold penalty per lost unit on trial
  * maps (mapNum <= 5) in Tactical. Normal keeps the retail gBattlePenalties table. */
 extern int gTacticalMode;
@@ -44,7 +55,7 @@ void Objf594_BattleResults(Object *obj) {
       CommitPartyStatus();
       DrawWindow(0x3e, 0, 180, 144, 36, 76, 16, WBS_CROSSED, 0);
       DisplayCustomWindow(0x3e, 0, 1, 2, 0, 0);
-      DrawText(12, 191, 25, 2, 0, "Battle results");
+      DrawText(12, 191, 25, 2, 0, PC_LANGSTR("Battle results"));
       DrawWindow(0x3c, 0, 0, 296, 162, 10, 39, WBS_DRAGON, 0);
       DisplayCustomWindow(0x3c, 0, 1, 2, 0, 0);
       DisplayCustomWindow(0x3d, 0, 1, 2, 0, 0);

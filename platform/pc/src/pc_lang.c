@@ -56,6 +56,7 @@ extern char *gItemDescriptions2[101];
 #define K_FONT  4
 #define K_CHARMAP 5
 #define K_KROM  6
+#define K_LITERAL 7
 #define MAX_TEXT_FILES 200
 
 /* Section ids for tables, matching lang_build.py's TABLES list. */
@@ -88,8 +89,12 @@ static struct {
     unsigned terrainLen;
     unsigned char *charmap;           /* deferred blob for the static map/bitmaps in text.c */
     unsigned charmapLen;
+    struct LangLit { unsigned long long hash; char *str; } *lits;   /* K_LITERAL, parsed */
+    int litsN;
     int tablesApplied, ptrsApplied, textPatched;
 } s_lang;
+
+static void LitLoad(const unsigned char *p, unsigned len);   /* defined below LangLoad */
 
 static unsigned RdU32(const unsigned char *p) {
     return (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
@@ -290,6 +295,7 @@ static void LangLoad(void) {
         else if (kind == K_TEXT)  AddText((int)id, buf + off, len);
         else if (kind == K_FONT)  PC_LangFontLoad(buf + off, len);   /* pc_lang_font.c */
         else if (kind == K_KROM)  PC_LangKromLoad(buf + off, len);   /* pc_lang_font.c */
+        else if (kind == K_LITERAL) LitLoad(buf + off, len);   /* consumed by PC_LangStr */
         else if (kind == K_CHARMAP) {                /* held until text.c's hand-off (like terrain) */
             s_lang.charmap = (unsigned char *)malloc(len);
             if (s_lang.charmap) {
@@ -305,6 +311,53 @@ static void LangLoad(void) {
     if (s_lang.textN)
         fprintf(stderr, "[lang] %d dialogue file(s) will be substituted as they load\n", s_lang.textN);
     free(buf);                                  /* sections were copied out where they are kept */
+}
+
+/* K_LITERAL section: u32 count, then per record u64 hash (FNV-1a of the C literal's bytes) +
+ * u16 len + the replacement bytes. Parsed into (hash, string) pairs at load. */
+static void LitLoad(const unsigned char *p, unsigned len) {
+    unsigned n, i, off2 = 4;
+    if (len < 4) return;
+    n = RdU32(p);
+    s_lang.lits = (struct LangLit *)malloc(n * sizeof(struct LangLit));
+    if (!s_lang.lits) return;
+    for (i = 0; i < n; i++) {
+        unsigned long long h = 0;
+        unsigned sl;
+        int b;
+        char *copy;
+        if (off2 + 10 > len) break;
+        for (b = 7; b >= 0; b--) h = (h << 8) | p[off2 + b];
+        sl = (unsigned)p[off2 + 8] | ((unsigned)p[off2 + 9] << 8);
+        off2 += 10;
+        if (off2 + sl > len) break;
+        copy = (char *)malloc(sl + 1);
+        if (!copy) break;
+        memcpy(copy, p + off2, sl);
+        copy[sl] = '\0';
+        s_lang.lits[i].hash = h;
+        s_lang.lits[i].str = copy;
+        off2 += sl;
+        s_lang.litsN = (int)i + 1;
+    }
+    fprintf(stderr, "[lang] %d code literal(s) replaced\n", s_lang.litsN);
+}
+
+/* Called (via the PC_LANGSTR macro, PC_FEAT builds only) wherever game code passes a string
+ * literal straight to a text-draw call. Identity is the literal's own CONTENT -- an FNV-1a hash,
+ * matching the exporter's -- so no id table exists to drift. Returns the pack's replacement, or
+ * the literal itself untouched (no pack / no entry): retail behaviour is the fallthrough. */
+unsigned char *PC_LangStr(const char *lit) {
+    if (!s_lang.loaded) LangLoad();
+    if (s_lang.litsN) {
+        unsigned long long h = 14695981039346656037ULL;
+        const unsigned char *q = (const unsigned char *)lit;
+        int i;
+        while (*q) h = (h ^ *q++) * 1099511628211ULL;
+        for (i = 0; i < s_lang.litsN; i++)
+            if (s_lang.lits[i].hash == h) return (unsigned char *)s_lang.lits[i].str;
+    }
+    return (unsigned char *)lit;
 }
 
 /* The raw K_CHARMAP blob, for pc_lang_font.c's F_WD sheet patcher -- the same records that rewrite

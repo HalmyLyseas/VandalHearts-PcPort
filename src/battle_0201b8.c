@@ -8,6 +8,17 @@
 #include "graphics.h"
 #include "audio.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
 typedef struct EnemyEventSpawn {
    u8 z, x, stripIdx, level, expMulti;
 } EnemyEventSpawn;
@@ -83,8 +94,8 @@ void ShowReceivedItemDialog(u8 item, u8 windowId, u8 param_3) {
 
    DrawWindow(windowId, 0, 0, 240, 36, 40, 90, WBS_CROSSED, 0);
    DrawText(80, 11, 25, 2, 0, gItemNames[item]);
-   DrawText(80 + len * 8, 11, 25, 2, 0, "!");
-   DrawText(16, 11, 25, 2, 0, "you got ");
+   DrawText(80 + len * 8, 11, 25, 2, 0, PC_LANGSTR("!"));
+   DrawText(16, 11, 25, 2, 0, PC_LANGSTR("you got "));
 
    // This references param_3 just enough to get the prologue/epilogue correct without otherwise
    // affecting codegen
@@ -103,10 +114,10 @@ void ShowDepotReceivedItemDialog(u8 item, u8 windowId, u8 param_3) {
 
    DrawWindow(windowId, 0, 0, 240, 72, 40, 90, WBS_CROSSED, 0);
    DrawText(80, 11, 25, 2, 0, gItemNames[item]);
-   DrawText(80 + len * 8, 11, 25, 2, 0, "!");
-   DrawText(16, 11, 25, 2, 0, "you got ");
-   DrawText(16, 28, 25, 2, 0, "Can't hold anymore.");
-   DrawText(16, 45, 25, 2, 0, "Sent to supply wagon.");
+   DrawText(80 + len * 8, 11, 25, 2, 0, PC_LANGSTR("!"));
+   DrawText(16, 11, 25, 2, 0, PC_LANGSTR("you got "));
+   DrawText(16, 28, 25, 2, 0, PC_LANGSTR("Can't hold anymore."));
+   DrawText(16, 45, 25, 2, 0, PC_LANGSTR("Sent to supply wagon."));
 
    if (param_3) {
       DisplayCustomWindow(windowId, 0, 1, 0, 0, 0);
@@ -354,7 +365,7 @@ void Objf597_BattleIntro(Object *obj) {
    case 4:
       if (--OBJ.timer == 0) {
          DrawWindow(0x42, 0, 0, 144, 64, 84, 90, WBS_DRAGON, 0);
-         DrawText(20, 24, 20, 0, 0, "Begin Battle");
+         DrawText(20, 24, 20, 0, 0, PC_LANGSTR("Begin Battle"));
          DisplayCustomWindow(0x42, 2, 1, 0, 0, 0);
          OBJ.timer = 30;
          obj->state++;
@@ -1738,7 +1749,7 @@ void Objf003_BattleActions(Object *obj) {
       gWindowChoiceHeight = 17;
       gWindowChoicesTopMargin = 10;
       DrawWindow(0x35, 316, 0, 80, 90, 115, 80, WBS_CROSSED, 4);
-      DrawText(316, 11, 20, 2, 0, "Action\nDone\nExamine\nPush");
+      DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Action\nDone\nExamine\nPush"));
       DisplayBasicWindow(0x35);
       gWindowActiveIdx = 0x35;
       gClearSavedPadState = 1;
@@ -1795,7 +1806,7 @@ void Objf003_BattleActions(Object *obj) {
       switch (obj->state2) {
       case 0:
          DrawWindow(0x34, 316, 0, 56, 36, 10, 152, WBS_CROSSED, 0);
-         DrawText(316, 11, 25, 0, 0, "Move");
+         DrawText(316, 11, 25, 0, 0, PC_LANGSTR("Move"));
          DisplayCustomWindow(0x34, 2, 1, 0, 0, 0);
          obj->state2++;
 
@@ -1975,7 +1986,7 @@ void Objf003_BattleActions(Object *obj) {
             if (OBJ.timer < 20 && s_hiddenItem_801231f0 == ITEM_NULL) {
                gClearSavedPadState = 1;
                DrawWindow(0x3c, 0, 0, 232, 36, 44, 90, WBS_CROSSED, 0);
-               DrawText(12, 11, 25, 2, 0, "you didn't find anything!");
+               DrawText(12, 11, 25, 2, 0, PC_LANGSTR("you didn't find anything!"));
                DisplayCustomWindow(0x3c, 0, 1, 0, 0, 0);
                OBJ.timer = 30;
                obj->state2++;
@@ -2019,7 +2030,7 @@ void Objf003_BattleActions(Object *obj) {
          gWindowChoiceHeight = 17;
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x36, 316, 0, 80, 72, 115, 80, WBS_CROSSED, 3);
-         DrawText(316, 11, 20, 2, 0, "Attack\nMagic\nItem");
+         DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Attack\nMagic\nItem"));
          DisplayBasicWindow(0x36);
          gWindowActiveIdx = 0x36;
          gClearSavedPadState = 1;
@@ -2072,7 +2083,7 @@ void Objf003_BattleActions(Object *obj) {
          gWindowChoiceHeight = 17;
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x37, 316, 0, 80, 54, 150, 100, WBS_CROSSED, 2);
-         DrawText(316, 11, 20, 2, 0, "Attack\nItem");
+         DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Attack\nItem"));
          DisplayBasicWindow(0x37);
          gWindowActiveIdx = 0x37;
          gClearSavedPadState = 1;
@@ -2281,7 +2292,7 @@ void Objf003_BattleActions(Object *obj) {
          gWindowChoiceHeight = 0x11;
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x35, 316, 0, 80, 108, 115, 60, WBS_CROSSED, 5);
-         DrawText(316, 11, 20, 2, 0, "Move\nAction\nDone\nExamine\nPush");
+         DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Move\nAction\nDone\nExamine\nPush"));
          DisplayBasicWindow(0x35);
          gWindowActiveIdx = 0x35;
          gClearSavedPadState = 1;
@@ -2630,7 +2641,7 @@ void Objf425_BattleOptions(Object *obj) {
       gWindowChoicesTopMargin = 10;
       DrawWindow(0x34, 0, 0, 176, 144, 62, 50, WBS_CROSSED, 7);
       DrawText(12, 11, 17, 2, 0,
-               "BATTLE CONDITION\nTURN OVER\nCHANGE ZOOM\nSTATUS\nOPTIONS\nSAVE\nLOAD");
+               PC_LANGSTR("BATTLE CONDITION\nTURN OVER\nCHANGE ZOOM\nSTATUS\nOPTIONS\nSAVE\nLOAD"));
       DisplayBasicWindowWithSetChoice(0x34, s_menuMem_battleOptions_801231fc);
       gWindowActiveIdx = 0x34;
       obj->state++;
@@ -2722,7 +2733,7 @@ void Objf425_BattleOptions(Object *obj) {
       switch (obj->state2) {
       case 0:
          DrawWindow(0x34, 256, 0, 88, 74, 105, 80, WBS_CROSSED, 3);
-         DrawText(260, 11, 10, 2, 0, "Close\nMedium\nDistant");
+         DrawText(260, 11, 10, 2, 0, PC_LANGSTR("Close\nMedium\nDistant"));
          DisplayBasicWindowWithSetChoice(0x34, gState.zoom);
          gWindowActiveIdx = 0x34;
          obj->state2++;
@@ -3607,7 +3618,7 @@ void Objf013_BattleMgr(Object *obj) {
          // ENEMY TURN
          DrawSjisText(
              20, 24, 20, 0, 0,
-             "\x82\x64\x82\x6d\x82\x64\x82\x6c\x82\x78\x81\x40\x82\x73\x82\x74\x82\x71\x82\x6d");
+             PC_LANGSTR("\x82\x64\x82\x6d\x82\x64\x82\x6c\x82\x78\x81\x40\x82\x73\x82\x74\x82\x71\x82\x6d"));
          DisplayCustomWindow(0x38, 2, 1, 0, 0, 0);
          OBJ.timer = 45;
          obj->state2++;
@@ -3682,8 +3693,8 @@ void Objf013_BattleMgr(Object *obj) {
             // PLAYER TURN
             DrawSjisText(
                 20, 24, 20, 0, 0,
-                "\x82\x6f\x82\x6b\x82\x60\x82\x78\x82\x64\x82\x71\x81\x40\x82\x73\x82\x74\x82"
-                "\x71\x82\x6d");
+                PC_LANGSTR("\x82\x6f\x82\x6b\x82\x60\x82\x78\x82\x64\x82\x71\x81\x40\x82\x73\x82\x74\x82"
+                "\x71\x82\x6d"));
             DisplayCustomWindow(0x38, 2, 1, 0, 0, 0);
             OBJ.timer = 45;
             obj->state2++;

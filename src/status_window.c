@@ -5,6 +5,17 @@
 #include "battle.h"
 #include "state.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
 u8 s_currentIdx_8012329c;
 
 void Objf596_StatusWindowMgr(Object *obj) {
@@ -117,19 +128,19 @@ void Objf595_StatusWindow(Object *obj) {
       }
       if (unit->spells[0] != SPELL_NULL && !hasItems) {
          DrawWindow(0x3c, 316, 0, 64, 54, 241, 90, WBS_CROSSED, 2);
-         DrawText(316, 11, 20, 2, 0, "Skill\nSpell");
+         DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Skill\nSpell"));
          DisplayBasicWindow(0x3c);
          obj->state2 += 2;
       }
       if (unit->spells[0] == SPELL_NULL && hasItems) {
          DrawWindow(0x3c, 316, 0, 64, 54, 241, 90, WBS_CROSSED, 2);
-         DrawText(316, 11, 20, 2, 0, "Skill\nItems");
+         DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Skill\nItems"));
          DisplayBasicWindow(0x3c);
          obj->state2 += 3;
       }
       if (unit->spells[0] != SPELL_NULL && hasItems) {
          DrawWindow(0x3c, 316, 0, 64, 72, 241, 90, WBS_CROSSED, 3);
-         DrawText(316, 11, 20, 2, 0, "Skill\nSpell\nItems");
+         DrawText(316, 11, 20, 2, 0, PC_LANGSTR("Skill\nSpell\nItems"));
          DisplayBasicWindow(0x3c);
          obj->state2 += 4;
       }

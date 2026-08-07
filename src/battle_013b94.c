@@ -9,6 +9,17 @@
 #include "graphics.h"
 
 #ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
+#ifdef PC_FEAT
 /* Stage-3 1.3: pc_balance.c -- the per-chapter Tactical level cap (GAP 1, returns 50 in Normal so the
  * XP-award guards are retail-identical until Tactical is on) + the mode flag (GAP 5 MYSTIC_ENERGY v3). */
 extern int TacticalCap(int chapter);
@@ -199,7 +210,7 @@ void Objf015_TargetingAttack(Object *obj) {
       break;
 
    case 4:
-      DrawText(40, 62, 25, 2, 0, "Treasure Chest");
+      DrawText(40, 62, 25, 2, 0, PC_LANGSTR("Treasure Chest"));
       obj->state++;
 
    // fallthrough

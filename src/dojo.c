@@ -7,6 +7,17 @@
 #include "window.h"
 #include "audio.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
 u8 gClassAdvancementNames[18][17] = {
     "",          "Champion", "Paragon", "Swordsman", "Duelist",    "Guardsman",
     "Dragoon",   "Bowman",   "Sniper",  "Hawknight", "Sky Lord",   "Sorcerer",
@@ -718,7 +729,7 @@ void Objf578_Dojo(Object *obj) {
       case 7:
          // YES/NO
          DrawWindow(0x39, 320, 80, 64, 54, 28, 175, WBS_CROSSED, 2);
-         DrawSjisText(324, 91, 10, 2, 0, "\x82\x78\x82\x64\x82\x72\n\x82\x6d\x82\x6e");
+         DrawSjisText(324, 91, 10, 2, 0, PC_LANGSTR("\x82\x78\x82\x64\x82\x72\n\x82\x6d\x82\x6e"));
          DisplayCustomWindow(0x39, 7, 1, 5, 0, 0);
          gWindowActiveIdx = 0x39;
          obj->state2++;

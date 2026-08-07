@@ -10,6 +10,17 @@
 #include "battle.h"
 #include "field.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
 void main(void);
 void UpdateState(void);
 void Objf582_MainMenu_Jpn(Object *obj);
@@ -322,12 +333,12 @@ void State_EventScene(void) {
       if (gState.scene == 94) {
          DrawWindow(0x34, 0, 0, 200, 81, 60, 79, WBS_DRAGON, 0);
          DisplayCustomWindow(0x34, 0, 1, 1, 0, 0);
-         DrawText(20, 24, 25, 2, 0, "The days go by one\nafter the other...");
+         DrawText(20, 24, 25, 2, 0, PC_LANGSTR("The days go by one\nafter the other..."));
       }
       if (gState.scene == 0) {
          DrawWindow(0x34, 0, 0, 184, 100, 68, 70, WBS_DRAGON, 0);
          DisplayCustomWindow(0x34, 0, 1, 1, 0, 0);
-         DrawText(24, 24, 25, 3, 0, "1254 AT\nGillbaris Island\n \"Castle ruins\"");
+         DrawText(24, 24, 25, 3, 0, PC_LANGSTR("1254 AT\nGillbaris Island\n \"Castle ruins\""));
       }
       if ((gState.scene != 0) && (gState.scene != 1) && (gState.scene != 94) &&
           (gState.scene != 7) && (gState.scene != 20) && (gState.scene != 3) &&

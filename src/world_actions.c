@@ -5,13 +5,24 @@
 #include "card.h"
 #include "audio.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
+ * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
+ * itself is returned. The matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
+
 u8 s_menuMem_config_801232ac;
 
 void ShowConfigMenu(Object *obj) {
    switch (obj->state2) {
    case 0:
       DrawWindow(0x34, 256, 0, 104, 74, 100, 80, WBS_CROSSED, 3);
-      DrawText(256, 10, 20, 2, 0, "Text Speed\nSound\nCamera\n");
+      DrawText(256, 10, 20, 2, 0, PC_LANGSTR("Text Speed\nSound\nCamera\n"));
       DisplayBasicWindowWithSetChoice(0x34, s_menuMem_config_801232ac);
       gWindowActiveIdx = 0x34;
       obj->state2++;
@@ -47,7 +58,7 @@ void ShowTextSpeedSettings(Object *obj) {
    switch (obj->state2) {
    case 0:
       DrawWindow(0x34, 256, 0, 80, 74, 112, 80, WBS_CROSSED, 3);
-      DrawText(260, 11, 10, 2, 0, "Fast\nNormal\nSlow");
+      DrawText(260, 11, 10, 2, 0, PC_LANGSTR("Fast\nNormal\nSlow"));
       DisplayBasicWindowWithSetChoice(0x34, 2 - gState.textSpeed);
       gWindowActiveIdx = 0x34;
       obj->state2++;
@@ -82,7 +93,7 @@ void ShowAudioSettings(Object *obj) {
    switch (obj->state2) {
    case 0:
       DrawWindow(0x34, 256, 0, 80, 54, 115, 80, WBS_CROSSED, 2);
-      DrawText(260, 11, 10, 2, 0, "Stereo\nMono");
+      DrawText(260, 11, 10, 2, 0, PC_LANGSTR("Stereo\nMono"));
       DisplayBasicWindowWithSetChoice(0x34, gState.mono);
       gWindowActiveIdx = 0x34;
       obj->state2++;
@@ -114,7 +125,7 @@ void ShowCameraSettings(Object *obj) {
    switch (obj->state2) {
    case 0:
       DrawWindow(0x34, 256, 0, 104, 54, 100, 80, WBS_CROSSED, 2);
-      DrawText(260, 11, 10, 2, 0, "Dynamic\nFixed");
+      DrawText(260, 11, 10, 2, 0, PC_LANGSTR("Dynamic\nFixed"));
       DisplayBasicWindowWithSetChoice(0x34, gState.cameraMode);
       gWindowActiveIdx = 0x34;
       obj->state2++;
@@ -157,7 +168,7 @@ s32 Objf598_WorldActions(Object *obj) {
       gWindowChoiceHeight = 17;
       gWindowChoicesTopMargin = 10;
       DrawWindow(0x34, 256, 0, 104, 126, 10, 16, WBS_CROSSED, 6);
-      DrawText(260, 11, 10, 2, 0, "Move\nItems\nStatus\nOptions\nSave\nLoad");
+      DrawText(260, 11, 10, 2, 0, PC_LANGSTR("Move\nItems\nStatus\nOptions\nSave\nLoad"));
       DisplayBasicWindowWithSetChoice(0x34, s_menuMem_worldActions_801232a8);
       gWindowActiveIdx = 0x34;
       obj->state++;
