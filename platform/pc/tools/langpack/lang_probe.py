@@ -12,7 +12,7 @@ One probe per text source, each tagged L1..L8, so a play session answers two que
 Nothing here is authored text -- these are markers, chosen to be impossible to mistake for content.
 
 Usage: ./lang_probe.py <disc.bin> <workdir> <outdir>
-       -> <outdir>/langpacks/en-probe/ (manifest name "Probes L1-L17" for the overlay picklist)
+       -> <outdir>/langpacks/en-probe/ (manifest name "Probes L1-L18" for the overlay picklist)
 """
 import json, os, shutil, subprocess, sys, tempfile
 
@@ -76,6 +76,16 @@ LITERALS = [
 # TACTICAL MODE ON, item 88 (Mad Book) highlighted in the items list.
 TACTICAL = [("L17", "Casts Spellbind", "L17 Sortil\u00e8ge")]
 
+# Increment 8 (port-UI overlay): OSD strings, replaced by content hash and CAPS-FOLDED at draw
+# time. L18a is written lowercase WITH accents to prove the fold (must show "L18 SAUVEGARDES");
+# L18b proves the template path (%d/%s survive) on the DETAIL screen.
+PORT_UI = [
+    ("L18a", "SAVE MANAGEMENT", "L18 sauveg\u00e0rdes",
+     "the overlay menu entry + saves screen title -- lowercase \u00e0 in the pack, must draw 'L18 SAUVEGARDES'"),
+    ("L18b", "SLOT %d   %s", "L18c %d - %s",
+     "the DETAIL screen rows (START on a backup) -- slot number and caption must still fill in"),
+]
+
 DIALOGUES = [
     ("L8", "EVENT01", 0, ["L8 DIALOGUE PROBE", "café déjà reçu éèêë"],
      "the opening scene, first message box -- line 2 is the UTF-8 probe"),
@@ -107,6 +117,14 @@ def main(disc, work, outdir):
                     e["text"] = text
         json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
 
+        p = os.path.join(stage, "strings", "port_ui.json")
+        doc = json.load(open(p))
+        for tag, en, text, _ in PORT_UI:
+            hits = [e for e in doc["entries"] if e["en"] == en]
+            assert len(hits) == 1, (tag, en)
+            hits[0]["text"] = text
+        json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+
         p = os.path.join(stage, "strings", "literals.json")
         doc = json.load(open(p))
         for tag, en, text, _ in LITERALS:
@@ -122,7 +140,7 @@ def main(disc, work, outdir):
             json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
 
         d, stats, nf, nl, ns, ng = lang_build.build(disc, stage, outdir, "en-probe",
-                                                    {"name": "Probes L1-L17", "version": "dev"})
+                                                    {"name": "Probes L1-L18", "version": "dev"})
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -138,6 +156,8 @@ def main(disc, work, outdir):
         print(f"  {tag:4}{'literal':21}{text.splitlines()[0]:26}{where}")
     for tag, en, text in TACTICAL:
         print(f"  {tag:4}{'tactical':21}{text:26}Tactical ON: Mad Book's description in the items list")
+    for tag, en, text, where in PORT_UI:
+        print(f"  {tag:4}{'port_ui':21}{text:26}{where}")
     print("\nA probe that renders with its lowercase INTACT is not on the case-folding ASCII path.")
     return d
 

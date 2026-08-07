@@ -90,7 +90,8 @@ static struct {
     unsigned terrainLen;
     unsigned char *charmap;           /* deferred blob for the static map/bitmaps in text.c */
     unsigned charmapLen;
-    struct LangLit { unsigned long long hash; char *str; } *lits;   /* K_LITERAL, parsed */
+    struct LangLit { unsigned long long hash; char *str; char *osd; } *lits;   /* K_LITERAL, parsed;
+                                         osd = lazily cached caps-folded form (PC_LangOsdStr) */
     int litsN;
     int tablesApplied, ptrsApplied, textPatched;
 } s_lang;
@@ -278,7 +279,11 @@ int PC_LangListPacks(char folders[][64], char names[][64], int max) {
         size_t r;
         int format = 0;
         if (e->d_name[0] == '.') continue;
-        snprintf(mpath, sizeof mpath, "%s/%s/manifest.json", root, e->d_name);
+        /* a folder name too long for the picklist buffers can't be a valid pack -- skip it
+         * (also proves to -Wformat-truncation that truncation is handled, not ignored) */
+        if (strlen(e->d_name) >= 64) continue;
+        if (snprintf(mpath, sizeof mpath, "%s/%s/manifest.json", root, e->d_name)
+            >= (int)sizeof mpath) continue;
         f = fopen(mpath, "r");
         if (!f) continue;
         r = fread(buf, 1, sizeof buf - 1, f);
@@ -288,9 +293,9 @@ int PC_LangListPacks(char folders[][64], char names[][64], int max) {
             continue;
         if (!MiniJsonInt(buf, "format", &format) || format > LANG_FORMAT)
             continue;
-        snprintf(folders[n], 64, "%s", e->d_name);
+        memcpy(folders[n], e->d_name, strlen(e->d_name) + 1);   /* length-checked above */
         if (!MiniJsonStr(buf, "name", names[n], 64))
-            snprintf(names[n], 64, "%s", e->d_name);
+            memcpy(names[n], e->d_name, strlen(e->d_name) + 1);
         n++;
     }
     closedir(d);
@@ -390,6 +395,7 @@ static void LitLoad(const unsigned char *p, unsigned len) {
         copy[sl] = '\0';
         s_lang.lits[i].hash = h;
         s_lang.lits[i].str = copy;
+        s_lang.lits[i].osd = NULL;
         off2 += sl;
         s_lang.litsN = (int)i + 1;
     }
@@ -411,6 +417,31 @@ unsigned char *PC_LangStr(const char *lit) {
             if (s_lang.lits[i].hash == h) return (unsigned char *)s_lang.lits[i].str;
     }
     return (unsigned char *)lit;
+}
+
+/* The overlay/OSD twin of PC_LangStr: the port's own UI renders with the 5x7 caps-only bitmap
+ * font, so a hit is returned CAPS-FOLDED to OSD-safe ASCII (PC_LangOsdFold), cached per literal.
+ * A miss returns the input untouched -- the English strings are already OSD-safe by authorship. */
+const char *PC_LangOsdStr(const char *lit) {
+    if (!s_lang.loaded) LangLoad();
+    if (s_lang.litsN) {
+        unsigned long long h = 14695981039346656037ULL;
+        const unsigned char *q = (const unsigned char *)lit;
+        int i;
+        while (*q) h = (h ^ *q++) * 1099511628211ULL;
+        for (i = 0; i < s_lang.litsN; i++)
+            if (s_lang.lits[i].hash == h) {
+                struct LangLit *L = &s_lang.lits[i];
+                if (!L->osd) {
+                    int cap = (int)strlen(L->str) + 2;   /* fold never grows: >=1 byte per char out */
+                    L->osd = (char *)malloc((size_t)cap);
+                    if (!L->osd) return lit;
+                    PC_LangOsdFold(L->str, L->osd, cap);
+                }
+                return L->osd;
+            }
+    }
+    return lit;
 }
 
 /* The raw K_CHARMAP blob, for pc_lang_font.c's F_WD sheet patcher -- the same records that rewrite

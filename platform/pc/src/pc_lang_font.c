@@ -269,3 +269,32 @@ int PC_LangUtf8Glyph(unsigned char **pp, int x, int y, int color) {
     }
     return 1;
 }
+
+/* --- OSD fold (the port's own overlay/OSD text) ---------------------------------------------
+ * The overlay renders with the port's 5x7 bitmap font: caps-only ASCII plus a handful of
+ * punctuation. A translated string is UTF-8 with accents; this folds it to what that font can
+ * draw -- uppercase, accents folded to their base letter ("Francais", not "Franais" or a box).
+ * One fold table for the whole port: pc_overlay.c's manifest-name fold and PC_LangOsdStr both
+ * call this. Latin-1-range codepoints fold; any other multi-byte sequence is skipped. */
+void PC_LangOsdFold(const char *in, char *out, int cap) {
+    static const char *fold = "AAAAAAACEEEEIIIIDNOOOOO*OUUUUY__aaaaaaaceeeeiiiidnooooo/ouuuuy_y";
+    int o = 0;
+    while (*in && o < cap - 2) {
+        unsigned char c = (unsigned char)*in++;
+        if (c == '%' && *in) {               /* printf placeholder: %d must NOT become %D */
+            out[o++] = '%'; out[o++] = *in++; continue;
+        }
+        if (c < 0x80) { out[o++] = (char)((c >= 'a' && c <= 'z') ? c - 32 : c); continue; }
+        if ((c == 0xC3 || c == 0xC2) && *in) {              /* 2-byte UTF-8, Latin-1 range */
+            unsigned cp = ((c & 0x1F) << 6) | ((unsigned char)*in & 0x3F);
+            in++;
+            if (cp >= 0xC0 && cp <= 0xFF) {
+                char f = fold[cp - 0xC0];
+                out[o++] = (char)((f >= 'a' && f <= 'z') ? f - 32 : f);
+            }
+            continue;
+        }
+        /* anything else (3/4-byte, stray) is skipped */
+    }
+    out[o] = '\0';
+}

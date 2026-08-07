@@ -98,32 +98,15 @@ static char s_langLabelBuf[LANG_MAX + 1][32];   /* uppercased, ascii-folded, '*'
 static const char *s_langChoice[LANG_MAX + 1 + 1];
 
 /* OSD-safe fold: the 5x7 font is caps-only ASCII, but manifest names may carry accents -- fold
- * Latin-1-range codepoints to their base letter instead of dropping them ("Francais", not "Franais"). */
-static void langFoldName(const char *in, char *out, int cap) {
-    static const char *fold = "AAAAAAACEEEEIIIIDNOOOOO*OUUUUY__aaaaaaaceeeeiiiidnooooo/ouuuuy_y";
-    int o = 0;
-    while (*in && o < cap - 2) {
-        unsigned char c = (unsigned char)*in++;
-        if (c < 0x80) { out[o++] = (char)((c >= 'a' && c <= 'z') ? c - 32 : c); continue; }
-        if ((c == 0xC3 || c == 0xC2) && *in) {              /* 2-byte UTF-8, Latin-1 range */
-            unsigned cp = ((c & 0x1F) << 6) | ((unsigned char)*in & 0x3F);
-            in++;
-            if (cp >= 0xC0 && cp <= 0xFF) {
-                char f = fold[cp - 0xC0];
-                out[o++] = (char)((f >= 'a' && f <= 'z') ? f - 32 : f);
-            }
-            continue;
-        }
-        /* anything else (3/4-byte, stray) is skipped */
-    }
-    out[o] = '\0';
-}
+ * Latin-1-range codepoints to their base letter instead of dropping them ("Francais", not
+ * "Franais"). The table lives in pc_lang_font.c (shared with PC_LangOsdStr's literal folding). */
+static void langFoldName(const char *in, char *out, int cap) { PC_LangOsdFold(in, out, cap); }
 
 static void langRefreshLabels(void) {
     int i, bootSel = 0;
     for (i = 0; i < s_langCount; i++)
         if (strcmp(s_langFolders[i], PC_LangBootFolder()) == 0) bootSel = i + 1;
-    snprintf(s_langLabelBuf[0], sizeof s_langLabelBuf[0], "OFF%s",
+    snprintf(s_langLabelBuf[0], sizeof s_langLabelBuf[0], "%s%s", PC_LangOsdStr("OFF"),
              (g_langSel != bootSel && g_langSel == 0) ? " *" : "");
     s_langChoice[0] = s_langLabelBuf[0];
     for (i = 0; i < s_langCount; i++) {
@@ -221,7 +204,8 @@ static int s_saveSel   = 0;                 /* SAVES cursor */
 
 static int  s_confKind = CONF_DELETE;       /* CONFIRM: which action */
 static char s_confFile[64];                 /* CONFIRM: target archive filename */
-static char s_confLabel[24];                /* CONFIRM: target archive display label */
+static char s_confLabel[48];                /* CONFIRM: target archive display label, or the
+                                             * return-to-title stakes warning (translatable) */
 static int  s_confSel  = 0;                 /* CONFIRM: option cursor */
 
 static PC_SaveCard s_detail;                /* DETAIL: the inspected archive's 3 slots */
@@ -326,7 +310,7 @@ static void startConfirm(int kind) {
 static void act_returnToTitle(void) {
     startConfirm(CONF_RETURN_TITLE);
     /* startConfirm may have copied an archive label; replace it with the stakes warning. */
-    strncpy(s_confLabel, "UNSAVED PROGRESS LOST", sizeof(s_confLabel) - 1);
+    strncpy(s_confLabel, PC_LangOsdStr("UNSAVED PROGRESS LOST"), sizeof(s_confLabel) - 1);
     s_confLabel[sizeof(s_confLabel) - 1] = '\0';
 }
 
@@ -409,11 +393,15 @@ void PC_OverlayInput(int b) {
 
 /* ---- renderer accessors ------------------------------------------------------------------------ */
 
+/* v1.7: every string the overlay hands to the renderer passes through PC_LangOsdStr -- a language
+ * pack's translation (caps-folded to the 5x7 OSD charset), or the English literal untouched. The
+ * panel auto-sizes to the widest string, so longer translations grow the box, never clip. */
 const char *PC_OverlayTitle(void) {
-    if (s_screen == OVL_SCREEN_SAVES) return "SAVE MANAGEMENT";
+    if (s_screen == OVL_SCREEN_SAVES) return PC_LangOsdStr("SAVE MANAGEMENT");
     /* CONFIRM: save-mgmt confirms belong to that screen; the return-to-title confirm is an OPTIONS action. */
-    if (s_screen == OVL_SCREEN_CONFIRM) return (s_confKind == CONF_RETURN_TITLE) ? "OPTIONS" : "SAVE MANAGEMENT";
-    return "OPTIONS";
+    if (s_screen == OVL_SCREEN_CONFIRM)
+        return PC_LangOsdStr((s_confKind == CONF_RETURN_TITLE) ? "OPTIONS" : "SAVE MANAGEMENT");
+    return PC_LangOsdStr("OPTIONS");
 }
 
 int  PC_OverlayCount(void)    { return N_ITEMS; }
@@ -424,19 +412,22 @@ int PC_OverlayItem(int i, const char **label, const char **valueText) {
     const Item *it;
     if (i < 0 || i >= N_ITEMS) { if (label) *label = ""; if (valueText) *valueText = NULL; return 0; }
     it = &s_items[i];
-    if (label) *label = it->label;
+    if (label) *label = PC_LangOsdStr(it->label);
     /* 1.6.1: when the HD PACK row is unusable, its value says WHY ("NO PACK" / "OUTDATED PACK" /
      * "WRONG GAME") instead of a meaningless OFF. With a valid pack it stays a plain ON/OFF -- the
      * content counts (75 BG, 16 FMV) are console-only ([HD] detect log): in-menu they were clutter,
      * and the OSD font has no '+' glyph anyway. */
     if (it->value == &g_vhHdPack && valueText) {
         const char *st = PC_HdPackStatusShort();
-        if (st) { *valueText = st; return 1; }
+        if (st) { *valueText = PC_LangOsdStr(st); return 1; }
     }
-    if (it->kind == OVL_TOGGLE) { if (valueText) *valueText = *it->value ? it->onText : it->offText; return 1; }
+    if (it->kind == OVL_TOGGLE) {
+        if (valueText) *valueText = PC_LangOsdStr(*it->value ? it->onText : it->offText);
+        return 1;
+    }
     if (it->kind == OVL_CHOICE) {
         if (valueText) {
-            if (it->choiceText) { *valueText = it->choiceText[*it->value]; }   /* text-labelled choice */
+            if (it->choiceText) { *valueText = PC_LangOsdStr(it->choiceText[*it->value]); }   /* text-labelled choice */
             else { snprintf(vbuf, sizeof(vbuf), "%s%d", it->prefix ? it->prefix : "", *it->value);
                    *valueText = vbuf; }
         }
@@ -454,10 +445,13 @@ const char *PC_OverlayItemWidestValue(int i) {
     if (i < 0 || i >= N_ITEMS) return NULL;
     it = &s_items[i];
     if (it->kind == OVL_CHOICE && it->choiceText) {
-        const char *best = it->choiceText[it->minv];
+        /* measure the TRANSLATED forms -- the panel is sized off this */
+        const char *best = PC_LangOsdStr(it->choiceText[it->minv]);
         int v;
-        for (v = it->minv + 1; v <= it->maxv; v++)
-            if (strlen(it->choiceText[v]) > strlen(best)) best = it->choiceText[v];
+        for (v = it->minv + 1; v <= it->maxv; v++) {
+            const char *t = PC_LangOsdStr(it->choiceText[v]);
+            if (strlen(t) > strlen(best)) best = t;
+        }
         return best;
     }
     { const char *val = NULL; PC_OverlayItem(i, NULL, &val); return val; }
@@ -481,8 +475,8 @@ int PC_OverlaySaveActive(int i) {   /* 1 if row i matches the current active car
 }
 
 const char *PC_OverlayConfirmMsg(void) {
-    if (s_confKind == CONF_RETURN_TITLE) return "RETURN TO TITLE?";
-    return (s_confKind == CONF_RESTORE) ? "REPLACE CURRENT CARD?" : "DELETE THIS BACKUP?";
+    if (s_confKind == CONF_RETURN_TITLE) return PC_LangOsdStr("RETURN TO TITLE?");
+    return PC_LangOsdStr((s_confKind == CONF_RESTORE) ? "REPLACE CURRENT CARD?" : "DELETE THIS BACKUP?");
 }
 int PC_OverlayConfirmCount(void) { return confCount(); }
 int PC_OverlayConfirmSelected(void) { return s_confSel; }
@@ -498,9 +492,9 @@ const char *PC_OverlayConfirmOption(int i) {
     static const char *RESTORE[3] = { "BACK UP THEN RESTORE", "RESTORE ONLY", "CANCEL" };
     static const char *DELETE_[2] = { "DELETE", "CANCEL" };
     static const char *RETTITLE[2] = { "RETURN TO TITLE", "CANCEL" };
-    if (s_confKind == CONF_RETURN_TITLE) return (i >= 0 && i < 2) ? RETTITLE[i] : "";
-    if (s_confKind == CONF_RESTORE)      return (i >= 0 && i < 3) ? RESTORE[i] : "";
-    return (i >= 0 && i < 2) ? DELETE_[i] : "";
+    if (s_confKind == CONF_RETURN_TITLE) return (i >= 0 && i < 2) ? PC_LangOsdStr(RETTITLE[i]) : "";
+    if (s_confKind == CONF_RESTORE)      return (i >= 0 && i < 3) ? PC_LangOsdStr(RESTORE[i]) : "";
+    return (i >= 0 && i < 2) ? PC_LangOsdStr(DELETE_[i]) : "";
 }
 
 const char *PC_OverlayDetailTitle(void) { return s_detailLabel; }

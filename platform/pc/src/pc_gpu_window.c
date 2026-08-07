@@ -12,6 +12,7 @@
 
 #include "pc_platform.h"
 #include "pc_overlay.h"
+#include "pc_lang.h"       /* PC_LangOsdStr: language-pack translation of the port's own UI text */
 
 static SDL_Window *s_window;
 static SDL_GLContext s_glCtx;
@@ -48,6 +49,8 @@ static void glyphRows(char c, unsigned char out[7]) {
      * need. bit4 = leftmost of 5 columns. Shared by osdDrawText (debug) and PC_GpuDrawOverlay. */
     static const struct { char c; unsigned char r[7]; } LETTERS[] = {
         {'-', {0, 0, 0, 0x1F, 0, 0, 0}},        {':', {0, 0x04, 0, 0, 0, 0x04, 0}},
+        /* v1.7: apostrophe + exclamation, for translated overlay strings (French elision etc.) */
+        {'\'', {0x04, 0x04, 0x08, 0, 0, 0, 0}}, {'!', {0x04, 0x04, 0x04, 0x04, 0x04, 0, 0x04}},
         {',', {0, 0, 0, 0, 0, 0x04, 0x08}},     {'(', {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02}},
         {')', {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08}},
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
@@ -269,10 +272,10 @@ static void drawMain(int w, int h) {
 /* SAVES: the archive browser -- flat list (scrolls), a position line if long, and a 2-line legend. */
 static void drawSaves(int w, int h) {
     int xbox = OVL_LABELS_XBOX;   /* PS: $=Square @=Circle ^=Triangle ~=Cross (glyph font entries) */
-    const char *L1 = xbox ? "X: BACK UP   B: RESTORE"       : "$: BACK UP   @: RESTORE";
-    const char *L2 = xbox ? "Y: DELETE   A: BACK"           : "^: DELETE   ~: BACK";
-    const char *L3 = "START: INSPECT FILE CONTENT";  /* START is the same label on both */
-    static const char *EMPTY = "(NO BACKUPS YET)";
+    const char *L1 = PC_LangOsdStr(xbox ? "X: BACK UP   B: RESTORE"  : "$: BACK UP   @: RESTORE");
+    const char *L2 = PC_LangOsdStr(xbox ? "Y: DELETE   A: BACK"      : "^: DELETE   ~: BACK");
+    const char *L3 = PC_LangOsdStr("START: INSPECT FILE CONTENT");  /* START is the same label on both */
+    const char *EMPTY = PC_LangOsdStr("(NO BACKUPS YET)");
     const int MAXVIS = 6;
     const char *title = PC_OverlayTitle();
     int count = PC_OverlaySaveCount(), sel = PC_OverlaySaveSelected();
@@ -379,14 +382,16 @@ static void drawConfirm(int w, int h) {
 
 /* DETAIL: the three regular slots inside the inspected archive. */
 static void drawDetail(int w, int h) {
-    const char *LEG = OVL_LABELS_XBOX ? "A: BACK" : "~: BACK";   /* ~ = PS Cross glyph */
+    const char *LEG = PC_LangOsdStr(OVL_LABELS_XBOX ? "A: BACK" : "~: BACK");   /* ~ = PS Cross glyph */
     const char *title = PC_OverlayDetailTitle();
     int scale, i, base, bodyLines;
     int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
     char rows[3][48];
     for (i = 0; i < 3; i++) {
         const char *cap = PC_OverlayDetailSlot(i);
-        snprintf(rows[i], sizeof(rows[i]), "SLOT %d   %s", i + 1, cap ? cap : "EMPTY");
+        /* the row is a translatable TEMPLATE (the builder verifies %d/%s survive translation) */
+        snprintf(rows[i], sizeof(rows[i]), PC_LangOsdStr("SLOT %d   %s"),
+                 i + 1, cap ? cap : PC_LangOsdStr("EMPTY"));
     }
     base = ovlTextPx(title, 1);
     if (ovlTextPx(LEG, 1) > base) base = ovlTextPx(LEG, 1);
@@ -634,12 +639,10 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         extern int PC_BattleSpeedGet(void);
         int spd = PC_BattleSpeedGet();
         if (spd > 1) {
-            static const char lbl[] = "BATTLE SPEED X";
-            char buf[sizeof(lbl) + 1];
-            int i = 0;
-            for (; lbl[i]; i++) buf[i] = lbl[i];
-            buf[i++] = (char)('0' + spd);
-            buf[i] = '\0';
+            char buf[48];
+            int i;
+            snprintf(buf, sizeof(buf), "%s%d", PC_LangOsdStr("BATTLE SPEED X"), spd);
+            i = (int)strlen(buf);
             osdDrawText(w, h, w - i * 6 * 2 - 4, 4, 2, buf, 0xFF, 0xFF, 0xFF, 0); /* white, transparent bg */
         }
     }

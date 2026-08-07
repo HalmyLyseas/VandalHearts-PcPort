@@ -26,7 +26,7 @@ cannot reproduce what the game shipped, the build fails rather than emitting a s
 Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en]
        -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
 """
-import json, os, struct, sys, unicodedata
+import json, os, re, struct, sys, unicodedata
 
 from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR
 
@@ -77,6 +77,31 @@ def fnv1a_str(text):
     for b in text.encode("utf-8"):
         h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
     return h
+
+
+# --- port-UI OSD fold (mirror of pc_lang_font.c's PC_LangOsdFold) -----------------------------
+# The overlay's 5x7 font is caps-only; the runtime folds translations before drawing. The builder
+# folds the same way to VALIDATE: every folded char must be in OSD_CHARS or the string won't draw.
+OSD_FOLD = "AAAAAAACEEEEIIIIDNOOOOO*OUUUUY__aaaaaaaceeeeiiiidnooooo/ouuuuy_y"
+OSD_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -:,().'/*?!%ds")
+#   %ds: printf placeholders pass through the fold verbatim (%d stays %d, never %D)
+
+
+def osd_fold(s):
+    out = []
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        o = ord(ch)
+        if ch == "%" and i + 1 < len(s):
+            out.append("%"); out.append(s[i + 1]); i += 2; continue
+        if o < 0x80:
+            out.append(ch.upper())
+        elif 0xC0 <= o <= 0xFF:
+            out.append(OSD_FOLD[o - 0xC0].upper())
+        # anything else is skipped, exactly like the C fold
+        i += 1
+    return "".join(out)
 
 
 # --- UTF-8 + glyph synthesis (decision D1/D2, exchange/80) ------------------------------------
@@ -632,13 +657,44 @@ def build(disc, work, outdir, lang, meta=None):
                 used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
             recs.append((h, raw))
 
-        if recs:
-            recs.sort()
-            blob = struct.pack("<I", len(recs))
-            for h, raw in recs:
-                blob += struct.pack("<QH", h, len(raw)) + raw
-            sections.append((K_LITERAL, 0, blob))
-            nlits = len(recs)
+    # PORT-UI strings (the options overlay / OSD) ride K_LITERAL too, keyed by the English string's
+    # hash (PC_LangOsdStr). Stored as written (UTF-8, mixed case); the RUNTIME caps-folds for the
+    # 5x7 OSD font -- so validation happens on the FOLDED form: every folded char must be drawable
+    # by that font, printf placeholders must survive translation, and button sentinels ($ @ ^ ~)
+    # may appear only where the English had them (they render as button icons).
+    pui_path = os.path.join(work, "strings", "port_ui.json")
+    if os.path.exists(pui_path):
+        for e in json.load(open(pui_path))["entries"]:
+            want = e.get("text") or ""
+            en = e.get("en") or ""
+            if not want or not en:
+                continue
+            folded = osd_fold(want)
+            bad = sorted({c for c in folded if c not in OSD_CHARS
+                          and not (c in "$@^~" and c in en)})
+            if bad:
+                errors.append(f"port_ui {e['key']}: fold result contains {' '.join(bad)!r} -- "
+                              f"not drawable by the 5x7 OSD font")
+                continue
+            if re.findall(r"%[a-zA-Z]", en) != re.findall(r"%[a-zA-Z]", want):
+                errors.append(f"port_ui {e['key']}: placeholder mismatch -- English has "
+                              f"{re.findall('%[a-zA-Z]', en)}, translation has "
+                              f"{re.findall('%[a-zA-Z]', want)}")
+                continue
+            missing = [c for c in "$@^~" if c in en and c not in want]
+            if missing:
+                errors.append(f"port_ui {e['key']}: button icon(s) {' '.join(missing)} dropped -- "
+                              f"they are the buttons the legend explains")
+                continue
+            recs.append((fnv1a_str(en), want.encode("utf-8")))
+
+    if recs:
+        recs.sort()
+        blob = struct.pack("<I", len(recs))
+        for h, raw in recs:
+            blob += struct.pack("<QH", h, len(raw)) + raw
+        sections.append((K_LITERAL, 0, blob))
+        nlits = len(recs)
 
     # The font section is built LAST so it covers codepoints from every source (ptr tables AND
     # dialogue). Sorted by codepoint: the runtime binary-searches.
