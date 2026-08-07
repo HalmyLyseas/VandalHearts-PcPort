@@ -115,6 +115,13 @@ def export(srcdir, workdir):
             if len(args) <= si:
                 continue
             arg = args[si].strip()
+            # The game's literals are wrapped in PC_LANGSTR(...) so a pack can replace them at
+            # run time. Unwrap before the literal test -- otherwise this exporter silently stops
+            # seeing the very strings it exists to find, and a fresh working set comes out with
+            # zero literals. (That regression shipped once: the wrap landed without this.)
+            unwrapped = re.match(r'PC_LANGSTR\s*\((.*)\)\s*$', arg, re.S)
+            if unwrapped:
+                arg = unwrapped.group(1).strip()
             if not arg.startswith('"'):
                 continue
             if base in SKIP_FILES:

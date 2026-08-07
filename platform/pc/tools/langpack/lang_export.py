@@ -151,19 +151,6 @@ def export(disc, outdir):
     json.dump(doc, open(path, "w"), indent=1, ensure_ascii=False)
     return path, doc, stats
 
-if __name__ == "__main__":
-    if len(sys.argv) < 3: raise SystemExit(__doc__)
-    path, doc, stats = export(sys.argv[1], sys.argv[2])
-    print(f"wrote {path}\n")
-    print(f"{'table':22}{'entries':>9}{'used':>7}{'longest':>9}  encoding")
-    for n, c, u, l, e in stats:
-        print(f"  {n:20}{c:>9}{u:>7}{l:>9}  {e}")
-    tot = sum(len(t['entries']) for t in doc['tables'].values())
-    used = sum(1 for t in doc['tables'].values() for e in t['entries'] if not e.get('unused'))
-    refs = sum(e.get('string_refs', 0) for t in doc['tables'].values() for e in t['entries'])
-    ctrl = sum(e.get('control_codes', 0) for t in doc['tables'].values() for e in t['entries'])
-    print(f"\n  TOTAL {used} translatable strings ({tot} slots) | #N refs: {refs} | $X codes: {ctrl}")
-
 
 # ---------------------------------------------------------------------------------------------
 # Dialogue: the on-disc text files. Stored BITWISE-INVERTED with CRLF lines (DecodeLineOfText reads
@@ -255,3 +242,23 @@ def export_dialogue(disc, outdir):
         json.dump(doc, open(os.path.join(d, f"{stem}.json"), "w"), indent=1, ensure_ascii=False)
         tot_files += 1; tot_entries += len(entries)
     return tot_files, tot_entries, tot_lines, over, dead
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3: raise SystemExit(__doc__)
+    path, doc, stats = export(sys.argv[1], sys.argv[2])
+    print(f"wrote {path}\n")
+    print(f"{'table':22}{'entries':>9}{'used':>7}{'longest':>9}  encoding")
+    for n, c, u, l, e in stats:
+        print(f"  {n:20}{c:>9}{u:>7}{l:>9}  {e}")
+    tot = sum(len(t['entries']) for t in doc['tables'].values())
+    used = sum(1 for t in doc['tables'].values() for e in t['entries'] if not e.get('unused'))
+    refs = sum(e.get('string_refs', 0) for t in doc['tables'].values() for e in t['entries'])
+    ctrl = sum(e.get('control_codes', 0) for t in doc['tables'].values() for e in t['entries'])
+    print(f"\n  TOTAL {used} translatable strings ({tot} slots) | #N refs: {refs} | $X codes: {ctrl}")
+
+    nf, ne, nl, over, dead = export_dialogue(sys.argv[1], sys.argv[2])
+    print(f"\nwrote {os.path.join(sys.argv[2], 'strings', 'dialogue')}/\n")
+    print(f"  {nf} dialogue file(s), {ne} entries, {nl} lines"
+          + (f" | {over} line(s) over budget" if over else "")
+          + (f" | {dead} skipped as unreachable" if dead else ""))
