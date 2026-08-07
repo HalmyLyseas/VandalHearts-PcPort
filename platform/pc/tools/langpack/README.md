@@ -29,6 +29,22 @@ regenerate everything from the disc.
                     <out>/langpacks/<name>/{manifest.json, strings.bin}
 ```
 
+`<disc>` is your own disc image, `<src>` is the repository's `src/` directory and `<bal>` is
+`platform/pc/src/pc_balance.c`. Run the four export steps in order into the same `<work>` folder;
+together they produce a complete working set (roughly 1,000 strings plus 1,176 dialogue entries).
+
+**Check the export worked** before starting to translate — an untouched working set should
+validate clean and build to an *empty* pack:
+
+```
+lang_validate.py <disc> <work>          ->  0 error(s), 0 warning(s)
+lang_build.py <disc> <work> <out> --lang test   ->  (0 sections)
+```
+
+Zero sections is the point, not a failure: a pack only carries what you changed, so "nothing
+translated yet" must produce nothing. If either step reports otherwise, the export is incomplete —
+fix that before translating, rather than after.
+
 `lang_probe.py` builds a labelled test pack (one marker per text source) for engine verification;
 `en_audit.py` scans the exported English for defects provable from the game's own data.
 
