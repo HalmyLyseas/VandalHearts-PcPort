@@ -44,6 +44,19 @@ version before loading anything, and displays its `name`/`version`. Everything e
 folder (a README, credits, notes in any language) belongs to the pack's authors; the loader reads
 only `manifest.json` and `strings.bin`.
 
+## When a pack applies
+
+**A pack applies at game start. Changing the selection requires a restart** — the in-game
+LANGUAGE setting marks a pending change with `*` and takes effect on the next launch. This is
+deliberate, not a limitation to be worked around: a pack rewrites structures the game builds once
+at boot (name tables, repointed string tables, the glyph sheet in video memory, Tactical Mode's
+patch set), and text already loaded for the current scene lives in buffers the game only refills
+on a scene change. A live switch would leave the game half in each language; the restart is the
+one point where everything is guaranteed coherent.
+
+For pack authors this sets the iteration loop: edit → `lang_build.py` → restart the game. There is
+no in-game reload.
+
 ## What the engine supports
 
 - **Fixed-width name tables keep their character budgets** — an accented letter costs one
