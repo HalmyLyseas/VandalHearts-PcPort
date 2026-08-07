@@ -311,7 +311,14 @@ class CharmapAssign:
         self.codes = [b for b in range(0x21, 0x7F)
                       if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
                       and chr(b) not in retail_chars]
-        self.slots = list(range(111, 128))   # NEVER slot 1 = GLYPH_BG, the window background
+        # Free glyph slots, 44 of them. Two exclusions inside this span, both learned the hard
+        # way and both invisible until something renders:
+        #   slot 1   = GLYPH_BG, the window background tile in the F_WD sheet (assigning it
+        #              tiled every window in the game with a letter)
+        #   slot 128 = where the retail map sends NUL and space; it has to stay blank
+        # The upper bound tracks src/text.c's PC-side sFontGlyphBitmaps[156] and DrawFontGlyph's
+        # matching index guard -- raise both together or glyphs simply do not draw.
+        self.slots = list(range(111, 128)) + list(range(129, 156))
 
     def reserve_literal(self, ch):
         """The translator used this ASCII char literally: it must never become a pack code."""
@@ -329,9 +336,18 @@ class CharmapAssign:
             errors.append(f"{ctx}: {ch!r} not synthesisable from the US font "
                           f"(lowercase+mark only for now) -- needs pack-supplied art")
             return None
-        if not self.codes or not self.slots:
-            errors.append(f"{ctx}: out of free codes/slots for {ch!r} "
-                          f"(18 shared slots; widening sFontGlyphBitmaps to [156] is decision D3)")
+        if not self.slots:
+            errors.append(f"{ctx}: out of glyph SLOTS for {ch!r} "
+                          f"(44 available: 111-127 and 129-155)")
+            return None
+        if not self.codes:
+            # The usual wall, and it is the CODE pool rather than the slot pool: a pack code has
+            # to be a byte that untranslated retail text can never produce, so every byte English
+            # text uses is off-limits, leaving ~17. A pack that translates EVERYTHING frees the
+            # letter bytes too -- that is the non-Latin mode, still to be built.
+            errors.append(f"{ctx}: out of free CODES for {ch!r} "
+                          f"(~17 bytes are unused by retail English text; a full-script pack "
+                          f"needs the non-Latin mode, which reclaims the letter bytes)")
             return None
         code, slot = self.codes.pop(0), self.slots.pop(0)
         self.assigned[cp] = (code, slot, rows)

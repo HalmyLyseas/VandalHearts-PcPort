@@ -820,7 +820,7 @@ void Objf351_MsgBoxText(Object *obj) {
 /* Forward declaration for the hand-off below: the initialized definition sits after this function
  * (same TU, same PERMUTER-conditional size). */
 #ifdef PERMUTER
-static u8 sFontGlyphBitmaps[129][9];
+static u8 sFontGlyphBitmaps[156][9];
 #else
 static u8 sFontGlyphBitmaps[128][9];
 #endif
@@ -871,14 +871,23 @@ u8 GetGlyphIdxForAsciiChar(u8 asc) {
  * guaranteed-contiguous, guaranteed-zero row -- the original 128 rows' data (from
  * assets/801012e4.inc) is completely unchanged.
  *
- * This widening is a PC-PORT-ONLY fix and MUST be gated: growing the array by one row adds
- * 9 bytes (12 after alignment) to text.c's .data, which shifts every following symbol and
- * breaks the stage-1 byte-exact match. The matching (PSX) build keeps the original [128]
- * size -- there the OOB "row 128" read lands on the linker's all-zero bytes at file offset
- * 0xf1f64 (the following data segment), reproducing the blank glyph exactly. `PERMUTER` is
- * defined only by the platform/pc build, never by the matching build. */
+ * This widening is a PC-PORT-ONLY fix and MUST be gated: growing the array adds rows to
+ * text.c's .data, which shifts every following symbol and breaks the stage-1 byte-exact
+ * match. The matching (PSX) build keeps the original [128] size -- there the OOB "row 128"
+ * read lands on the linker's all-zero bytes at file offset 0xf1f64 (the following data
+ * segment), reproducing the blank glyph exactly. `PERMUTER` is defined only by the
+ * platform/pc build, never by the matching build.
+ *
+ * The PC size is [156] rather than [129] to give LANGUAGE PACKS somewhere to put new
+ * letterforms (see platform/pc/include/pc_lang.h). A pack's charmap may claim slots
+ * 111-127 and 129-155 -- 44 in total, enough for a whole non-Latin alphabet. Two slots
+ * inside that span are NOT free and must never be assigned: 128 is where the retail map
+ * sends NUL and space (it has to stay blank), and 1 is the window-background tile in the
+ * F_WD sheet, which indexes the same numbers. Rows past the initializer are zero-filled by
+ * C, so with no pack loaded they are blank AND unreachable -- the retail map's largest
+ * value is 128, so nothing can address them. */
 #ifdef PERMUTER
-static u8 sFontGlyphBitmaps[129][9] = {
+static u8 sFontGlyphBitmaps[156][9] = {
 #else
 static u8 sFontGlyphBitmaps[128][9] = {
 #endif
@@ -898,7 +907,14 @@ void DrawFontGlyph(u8 glyphIdx, s32 x, s32 y, s32 color) {
    pInputData = &sFontGlyphBitmaps[glyphIdx][0];
    pOutputData = &buffer[0];
 
+   /* The upper bound follows the array size above: retail stops at the blank row 128, the PC
+    * build extends to the last language-pack slot. Without a pack nothing reaches past 128
+    * anyway, since that is the retail map's largest value. */
+#ifdef PERMUTER
+   if (y < 247 && glyphIdx <= 155) {
+#else
    if (y < 247 && glyphIdx <= 128) {
+#endif
       colorPlusOne = color + 1;
       for (i = 0; i < 9; i++) {
          byte = *pInputData++;
