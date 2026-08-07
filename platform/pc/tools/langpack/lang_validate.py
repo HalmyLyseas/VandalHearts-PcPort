@@ -107,11 +107,17 @@ def validate(disc, work, strict=False):
     for f in sorted(glob.glob(os.path.join(work, "strings", "dialogue", "*.json"))):
         doc = json.load(open(f))
         stem = doc["file"]
-        budget = SHOP_T_COLS if stem == "SHOP_T" else MSGBOX_COLS
-        hard = stem != "SHOP_T"
+        # Read the budget the EXPORTER recorded rather than restating the rule here -- it knows the
+        # render path per file, and per ENTRY where they differ (the battle condition panel is drawn
+        # by DrawText, not the message box). Falling back keeps older working sets valid.
+        fileb = doc.get("render") or ({"max_cols": SHOP_T_COLS, "wraps": True} if stem == "SHOP_T"
+                                      else {"max_cols": MSGBOX_COLS, "wraps": False})
         for e in doc["entries"]:
+            eb = e.get("render") or fileb
+            budget, hard = eb["max_cols"], not eb.get("wraps", False)
+            exempt = set(e.get("render_exempt", []))      # proven not drawn by this path
             for li, t in enumerate(e.get("text", [])):
-                if not t:
+                if not t or li in exempt:
                     continue
                 c = cols(t, st_entries)
                 if c > budget:

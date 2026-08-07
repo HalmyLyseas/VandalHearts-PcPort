@@ -176,6 +176,31 @@ def _budget(stem):
     return {"max_cols": 26, "wraps": False,
             "note": "drawn by the message box -- HARD CLIP past 26 columns, tail is lost"}
 
+
+# ENTRY-LEVEL exception. Budgets are per FILE except here: entry 1 of every battle file is the
+# victory/defeat condition panel, and it does NOT go through the message box at all --
+# battle_0201b8.c draws it with DrawText at 40 columns (line 340) and 34 columns (line 2784), which
+# WRAPS. Charging it the message box's 26-column hard clip flagged 41 lines of Konami's own shipped
+# text, and the disc is the oracle: a rule that fails retail is our rule being wrong. Budget is the
+# tighter of the two real call sites.
+# Lines PROVEN not to render through the message box, keyed by content (line numbers churn, text
+# does not). Same discipline as lang_export_literals.py's DEAD list: each needs a PROOF, never a
+# hunch -- a merely suspicious line stays in the working set and stays flagged.
+NOT_MSGBOX = {
+    "Zohar has joined your party.":
+        "join messages are drawn in their own full-width box, not the message box -- confirmed in "
+        "game 2026-08-06. The phrasing actually shown is SIBAI6[3] 'Zohar joined your party.' "
+        "(24 cols); this longer EVENT37 variant is an unused duplicate.",
+}
+
+
+def _entry_budget(stem, n):
+    if stem.startswith("B_TXT") and n == 1:
+        return {"max_cols": 34, "wraps": True,
+                "note": "battle condition panel -- drawn by DrawText (battle_0201b8.c), wraps; "
+                        "the narrower of its two call sites (34 and 40 columns)"}
+    return None
+
 def _iso(disc):
     f = open(disc, "rb")
     def sec(lba, n=1):
@@ -236,6 +261,18 @@ def export_dialogue(disc, outdir):
                 vis = _re.sub(r"\$.", "", s)                       # control codes cost no columns
                 if len(vis) > budget["max_cols"]: over += 1
         if cur and cur["en"]: entries.append(cur)
+        over -= sum(1 for e in entries for l in e["en"]
+                    if len(_re.sub(r"\$.", "", l)) > budget["max_cols"])   # undo the file-budget tally
+        for i, e in enumerate(entries, 1):
+            eb = _entry_budget(stem, i)
+            if eb: e["render"] = eb
+            lim = (eb or budget)["max_cols"]
+            exempt = [j for j, l in enumerate(e["en"]) if l in NOT_MSGBOX]
+            if exempt:
+                e["render_exempt"] = exempt
+                e["render_exempt_why"] = NOT_MSGBOX[e["en"][exempt[0]]]
+            over += sum(1 for j, l in enumerate(e["en"])
+                        if j not in exempt and len(_re.sub(r"\$.", "", l)) > lim)
         doc = {"file": stem, "render": budget, "count": len(entries),
                "markup": {"#N": "inserts gStringTable entry N", "$X": "control code"},
                "entries": entries}
