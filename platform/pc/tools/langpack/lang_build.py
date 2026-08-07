@@ -541,10 +541,12 @@ def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
         if ln.startswith(b"END"):
             break
         if ln == b"":
-            if not inside:
-                inside, n, li = True, n + 1, 0
-            else:
-                inside = False
+        # A blank line CLOSES the current entry and OPENS the next one, both at once. LoadText
+        # (src/text.c) does not advance its input pointer when it closes -- it re-reads the very
+        # same blank line, sees readingEntry == 0, and starts the next entry with it. Treating the
+        # blank as a toggle instead "spends" every second one, which orphaned every other entry:
+        # 11 entries where the game sees 21, and half of all dialogue never reached a translator.
+            inside, n, li = True, n + 1, 0
             continue
         if not inside:
             continue
@@ -583,11 +585,17 @@ def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
     # SECOND budget, and it is a different one: LoadText UNPACKS the whole file into gText[10928],
     # one shared buffer, so a file's entries must also fit there once the framing is stripped.
     # CopySjisString copies each line verbatim and LoadText writes one NUL per entry.
+    # Measure what is actually WRITTEN, which depends on the mode: a Latin pack puts UTF-8 in
+    # dialogue (2 bytes per accented character), a script pack puts 1-byte codes. Charging UTF-8
+    # lengths to a script pack inflated SAKABA_T from its real ~8.6 KB to 14.7 KB and failed the
+    # build on text the retail game loads without trouble.
+    def enc_len(t):
+        return len(t) if charmap is not None else len(t.encode("utf-8"))
     unpacked = sum(len(l) for e in doc["entries"] for l in e["en"]) + len(doc["entries"])
     for e in doc["entries"]:
         for i, t in enumerate(e.get("text", [])):
             if t:
-                unpacked += len(t.encode("utf-8")) - len(e["en"][i])
+                unpacked += enc_len(t) - len(e["en"][i])
     if unpacked > GTEXT_BYTES:
         errors.append(f"{stem}: unpacks to {unpacked} B, gText holds {GTEXT_BYTES} B")
         return None, 0

@@ -247,12 +247,13 @@ def export_dialogue(disc, outdir):
         for ln in lines:
             if ln.startswith(b"END"): break
             if ln == b"":
-                if not inside:
-                    inside = True; n += 1; cur = {"key": f"{stem}[{n}]", "en": [], "text": []}
-                else:
-                    inside = False
-                    if cur and cur["en"]: entries.append(cur)
-                    cur = None
+        # A blank line CLOSES the current entry and OPENS the next one, both at once. LoadText
+        # (src/text.c) does not advance its input pointer when it closes -- it re-reads the very
+        # same blank line, sees readingEntry == 0, and starts the next entry with it. Treating the
+        # blank as a toggle instead "spends" every second one, which orphaned every other entry:
+        # 11 entries where the game sees 21, and half of all dialogue never reached a translator.
+                if cur and cur["en"]: entries.append(cur)
+                inside = True; n += 1; cur = {"key": f"{stem}[{n}]", "en": [], "text": []}
                 continue
             if inside and cur is not None:
                 s = ln.decode("latin1")
