@@ -23,7 +23,9 @@ gCdFiles[] holds, so the runtime can match a read without knowing any filenames.
 Self-check: every UNEDITED entry is re-encoded and compared against the disc bytes. If the encoder
 cannot reproduce what the game shipped, the build fails rather than emitting a subtly wrong pack.
 
-Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en]
+Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en] [--packart <dir>]
+       --packart supplies the glyph sheets a non-Latin script needs; it also switches the pack to
+       1-byte codes throughout (script mode), since UTF-8 cannot carry Cyrillic through dialogue.
        -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
 """
 import json, os, re, struct, sys, unicodedata
@@ -137,6 +139,48 @@ def synth_glyphs(exe, cps, errors):
     return out
 
 
+# --- pack-supplied glyph art (NON-LATIN packs) ------------------------------------------------
+# A script the game has never drawn cannot be synthesised: there is no base letterform to build on.
+# Such a pack ships two sheets, small and large, each a 1-bit PNG of packed cells plus a manifest
+# listing one codepoint per cell in reading order. See the tools README.
+def load_packart(d, errors):
+    """<dir> -> ({cp: 9 rows of 8 bits}, {cp: 15 rows of 16 bits}); either may be empty."""
+    try:
+        from PIL import Image
+    except ImportError:
+        errors.append("pack art needs Pillow (pip install pillow)")
+        return {}, {}
+
+    def one(png, txt, w, h):
+        if not (os.path.exists(png) and os.path.exists(txt)):
+            return {}
+        cps = [int(l.split()[0][2:], 16) for l in open(txt, encoding="utf-8")
+               if l.strip() and not l.startswith("#")]
+        im = Image.open(png).convert("1")
+        per_row = im.width // w
+        out = {}
+        for n, cp in enumerate(cps):
+            cx, cy = (n % per_row) * w, (n // per_row) * h
+            rows = []
+            for y in range(h):
+                v = 0
+                for x in range(w):
+                    if im.getpixel((cx + x, cy + y)) == 0:      # black = ink
+                        v |= 1 << (w - 1 - x)
+                rows.append(v)
+            if any(rows):                                        # a blank cell means "not supplied"
+                # 8-wide rows become bytes, matching what synth_one returns so both glyph sources
+                # are interchangeable downstream; 16-wide rows stay ints for the krom packer.
+                out[cp] = bytes(rows) if w == 8 else rows
+        return out
+
+    small = one(os.path.join(d, "font8x9.png"),   os.path.join(d, "font8x9.txt"),   8, 9)
+    big   = one(os.path.join(d, "font16x15.png"), os.path.join(d, "font16x15.txt"), 16, 15)
+    if not small:
+        errors.append(f"{d}: no usable font8x9.png + font8x9.txt (the small sheet is mandatory)")
+    return small, big
+
+
 # --- 1-byte pack codes for fixed-width tables (decision D2, exchange/80) -----------------------
 # Fixed records keep byte = char = column: a non-ASCII character there gets a FREE 1-BYTE CODE
 # assigned by the builder, the retail map is rewritten so that code names a FREE GLYPH SLOT, and
@@ -247,7 +291,8 @@ def krom_synth(krom_data, cp):
 
 
 class KromAssign:
-    def __init__(self):
+    def __init__(self, art=None):
+        self.art = art or {}          # cp -> 15 rows of 16 bits, from the pack's large sheet
         self.krom_data = None
         self.assigned = {}   # cp -> (code, rows30)
         self.next = 0x8440   # DrawSjisGlyph's own guard ends at 0x843f; retail map never answers here
@@ -256,11 +301,15 @@ class KromAssign:
         cp = ord(ch)
         if cp in self.assigned:
             return self.assigned[cp][0]
-        if self.krom_data is None:
-            self.krom_data = load_krom_base()
-        rows = krom_synth(self.krom_data, cp)
+        if cp in self.art:
+            rows = b"".join(struct.pack(">H", r) for r in self.art[cp])   # 15 rows, MSB left
+        else:
+            if self.krom_data is None:
+                self.krom_data = load_krom_base()
+            rows = krom_synth(self.krom_data, cp)
         if rows is None:
-            errors.append(f"{ctx}: {ch!r} not synthesisable at 16x15 -- needs pack-supplied art")
+            errors.append(f"{ctx}: {ch!r} has no 16x15 glyph -- not synthesisable and absent from "
+                          f"the pack's font16x15 sheet (item names need it)")
             return None
         code = self.next
         self.next += 1
@@ -280,12 +329,24 @@ class KromAssign:
 
 
 class CharmapAssign:
-    def __init__(self, exe, retail_chars):
+    def __init__(self, exe, retail_chars, art=None):
         self.exe = exe
+        self.art = art or {}          # cp -> 9 rows, for scripts that cannot be synthesised
         self.assigned = {}   # cp -> (code, slot, rows)
-        self.codes = [b for b in range(0x21, 0x7F)
-                      if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
-                      and chr(b) not in retail_chars]
+        if art:
+            # SCRIPT MODE. A pack that replaces EVERY string leaves no untranslated English to
+            # collide with, so the letter bytes become assignable -- which is the whole reason a
+            # non-Latin alphabet fits at all (33 letters against ~17 spare punctuation codes
+            # otherwise). Uppercase first, punctuation after, so the common case is predictable.
+            # Digits and punctuation the game still prints are never taken.
+            self.codes = ([b for b in range(0x41, 0x5B)] +
+                          [b for b in range(0x21, 0x7F)
+                           if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
+                           and chr(b) not in retail_chars])
+        else:
+            self.codes = [b for b in range(0x21, 0x7F)
+                          if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
+                          and chr(b) not in retail_chars]
         # Free glyph slots, 44 of them. Two exclusions inside this span, both learned the hard
         # way and both invisible until something renders:
         #   slot 1   = GLYPH_BG, the window background tile in the F_WD sheet (assigning it
@@ -306,10 +367,10 @@ class CharmapAssign:
         cp = ord(ch)
         if cp in self.assigned:
             return self.assigned[cp][0]
-        rows = synth_one(self.exe, cp)
+        rows = self.art.get(cp) or synth_one(self.exe, cp)
         if rows is None:
-            errors.append(f"{ctx}: {ch!r} not synthesisable from the US font "
-                          f"(lowercase+mark only for now) -- needs pack-supplied art")
+            errors.append(f"{ctx}: {ch!r} has no glyph -- not synthesisable from the US font "
+                          f"(lowercase+mark only) and absent from the pack's font8x9 sheet")
             return None
         if not self.slots:
             errors.append(f"{ctx}: out of glyph SLOTS for {ch!r} "
@@ -336,6 +397,28 @@ class CharmapAssign:
         for code, slot, rows in recs:
             blob += bytes([code, slot]) + rows
         return blob
+
+
+def enc_codes(s, charmap, errors, ctx):
+    """SCRIPT MODE encoding: every non-ASCII character becomes its 1-byte pack code.
+
+    Latin packs put UTF-8 in pointer strings and dialogue (decision D1) because the glyph table is
+    unbounded there. A non-Latin pack cannot: Cyrillic in UTF-8 puts continuation bytes inside
+    0x81-0x9F, which the engine's two byte-pairing consumers read as SJIS leads (see
+    dialogue_bytes_safe). 1-byte codes sidestep that entirely and are what the fan translation used.
+    Returns None if any character has no code, so the caller can skip the entry."""
+    out = bytearray()
+    for ch in s:
+        if ch == "\n":
+            out.append(0x0A)
+        elif ord(ch) < 0x80:
+            out.append(ord(ch))
+        else:
+            code = charmap.code_for(ch, errors, ctx)
+            if code is None:
+                return None
+            out.append(code)
+    return bytes(out)
 
 
 def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=None, krom=None):
@@ -409,7 +492,7 @@ def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=Non
     return bytes(blob), edited
 
 
-def build_ptr(exe, vram, count, entries, name, errors, used_cps):
+def build_ptr(exe, vram, count, entries, name, errors, used_cps, charmap=None):
     """Only edited slots travel: (index, bytes). Length is unconstrained -- the runtime allocates.
     Encoding is UTF-8 (D1): the engine hook in DrawText_Internal consumes multi-byte sequences as
     one column each. Non-ASCII codepoints are collected so the font section can cover them."""
@@ -419,8 +502,13 @@ def build_ptr(exe, vram, count, entries, name, errors, used_cps):
         want = e.get("text") or ""
         if not want:
             continue
-        raw = want.encode("utf-8")
-        used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
+        if charmap is not None:                    # script mode: 1-byte codes, no UTF-8 anywhere
+            raw = enc_codes(want, charmap, errors, f"{name}[{i}]")
+            if raw is None:
+                continue
+        else:
+            raw = want.encode("utf-8")
+            used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
         if len(raw) > 511:
             errors.append(f"{name}[{i}]: {len(raw)} bytes, cap is 511"); continue
         out += struct.pack("<HH", i, len(raw)) + raw
@@ -439,7 +527,7 @@ def dialogue_bytes_safe(raw):
     return not any(0x81 <= b <= 0x9F or 0xE0 <= b <= 0xFC for b in raw)
 
 
-def build_text(raw_file, doc, stem, budget, errors, used_cps):
+def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
     """Substitute edited LINES inside the decoded file, keeping every other byte untouched."""
     edits = {}
     for ent in doc["entries"]:
@@ -464,6 +552,15 @@ def build_text(raw_file, doc, stem, budget, errors, used_cps):
         if ent and li < len(ent.get("text", [])):
             want = ent["text"][li]
             if want:
+                if charmap is not None:                # script mode: 1-byte codes
+                    raw = enc_codes(want, charmap, errors, f"{stem}[{n}] line {li}")
+                    if raw is None:
+                        li += 1
+                        continue
+                    lines[idx] = raw
+                    changed += 1
+                    li += 1
+                    continue
                 raw = want.encode("utf-8")
                 if not dialogue_bytes_safe(raw):
                     bad = ", ".join(f"{c!r}" for c in want if not dialogue_bytes_safe(c.encode("utf-8")))
@@ -513,7 +610,7 @@ def check_pack_name(lang):
                          f"lowercase [a-z0-9._-] only (e.g. en-fix, fr-fantrad, pt-br-fantrad)")
 
 
-def build(disc, work, outdir, lang, meta=None):
+def build(disc, work, outdir, lang, meta=None, packart=None):
     meta = meta or {}
     check_pack_name(lang)
     exe = read_exe(disc)
@@ -538,8 +635,14 @@ def build(disc, work, outdir, lang, meta=None):
     if os.path.exists(lit_path):
         for e in json.load(open(lit_path))["entries"]:
             retail_chars.update(e.get("en") or "")
-    charmap = CharmapAssign(exe, retail_chars)
-    krom = KromAssign()
+    art_small, art_big = ({}, {})
+    if packart:
+        art_small, art_big = load_packart(packart, errors)
+    charmap = CharmapAssign(exe, retail_chars, art=art_small or None)
+    krom = KromAssign(art=art_big or None)
+    # SCRIPT MODE is implied by pack art: with it, every string is encoded as 1-byte pack codes
+    # rather than UTF-8 (see enc_codes for why non-Latin cannot use the UTF-8 path).
+    script = bool(art_small)
 
     for tid, name, vram, kind, count, width, pad in TABLES:
         entries = tables[name]["entries"]
@@ -550,7 +653,8 @@ def build(disc, work, outdir, lang, meta=None):
             if n:
                 sections.append((K_FIXED, tid, blob))
         else:
-            blob, n = build_ptr(exe, vram, count, entries, name, errors, used_cps)
+            blob, n = build_ptr(exe, vram, count, entries, name, errors, used_cps,
+                                charmap if script else None)
             if n:
                 sections.append((K_PTR, tid, blob))
         if n:
@@ -571,7 +675,8 @@ def build(disc, work, outdir, lang, meta=None):
         lba, size = files[nm]
         nsec = (size + 2047) // 2048
         raw = sec(lba, nsec)[:size]
-        patched, n = build_text(raw, json.load(open(jp)), stem, nsec * 2048, errors, used_cps)
+        patched, n = build_text(raw, json.load(open(jp)), stem, nsec * 2048, errors,
+                                used_cps, charmap if script else None)
         if patched:
             sections.append((K_TEXT, lba, struct.pack("<I", len(patched)) + patched))
             nfiles += 1; nlines += n
@@ -605,6 +710,10 @@ def build(disc, work, outdir, lang, meta=None):
                 if not ok:
                     continue
                 raw = bytes(out)
+            elif script:
+                raw = enc_codes(want, charmap, errors, e["key"])
+                if raw is None:
+                    continue
             else:
                 raw = want.encode("utf-8")
                 used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
@@ -643,6 +752,10 @@ def build(disc, work, outdir, lang, meta=None):
                     errors.append(f"tactical {e['key']}: {len(out)} chars, record holds 20")
                     continue
                 raw = bytes(out)
+            elif script:
+                raw = enc_codes(want, charmap, errors, f"tactical {e['key']}")
+                if raw is None:
+                    continue
             else:
                 raw = want.encode("utf-8")
                 used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
@@ -741,7 +854,10 @@ if __name__ == "__main__":
         flag = f"--{k}"
         if flag in sys.argv:
             meta[k] = sys.argv[sys.argv.index(flag) + 1]
-    d, stats, nf, nl, ns, ng = build(sys.argv[1], sys.argv[2], sys.argv[3], lang, meta)
+    packart = None
+    if "--packart" in sys.argv:
+        packart = sys.argv[sys.argv.index("--packart") + 1]
+    d, stats, nf, nl, ns, ng = build(sys.argv[1], sys.argv[2], sys.argv[3], lang, meta, packart)
     print(f"wrote {d}/strings.bin  ({ns} sections)")
     for n, c in stats:
         print(f"  {n:22}{c:>5} entries")
