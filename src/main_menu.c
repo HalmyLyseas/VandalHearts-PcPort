@@ -6,6 +6,17 @@
 #include "audio.h"
 #include "cd_files.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): text held in the sText_* arrays below cannot be wrapped at the
+ * array itself -- a static initializer needs a compile-time constant. It is wrapped where the array
+ * is READ instead: PC_LangStr hashes whatever string it is handed at run time, so one wrap covers
+ * every entry in every array. Transparent in the matching build. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) ((u8 *)PC_LangStr((const char *)(s)))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
 extern void DrawText(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 color, u8 *text);
 
 #ifdef PC_FEAT
@@ -271,7 +282,7 @@ void DrawTextWindow(s8 **lines, s32 lineCount, s32 windowId, s32 x, s32 y, s32 d
       DrawWindow(windowId, x, y, paddedWidth + 8, lineCount * 18 + 18, dispX, dispY, borderStyle,
                  numChoices);
       for (i = 0; i < lineCount; i++) {
-         DrawText(halfPadding + x, (i * 18) + y + 11, 35, 0, 0, lines[i]);
+         DrawText(halfPadding + x, (i * 18) + y + 11, 35, 0, 0, PC_LANGSTR(lines[i]));
       }
    } else {
       textWidth = strlen(lines[0]) * 8;
@@ -287,7 +298,7 @@ void DrawTextWindow(s8 **lines, s32 lineCount, s32 windowId, s32 x, s32 y, s32 d
       DrawWindow(windowId, x, y, paddedWidth + 24, lineCount * 18 + 36, dispX, dispY, borderStyle,
                  numChoices);
       for (i = 0; i < lineCount; i++) {
-         DrawText(halfPadding + x + 8, (i * 18) + y + 20, 35, 0, 0, lines[i]);
+         DrawText(halfPadding + x + 8, (i * 18) + y + 20, 35, 0, 0, PC_LANGSTR(lines[i]));
       }
    }
 }

@@ -6,6 +6,17 @@
 #include "units.h"
 #include "window.h"
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): text held in the sPartyNames array below cannot be wrapped at the
+ * array itself -- a static initializer needs a compile-time constant. It is wrapped where the array
+ * is READ instead: PC_LangStr hashes whatever string it is handed at run time, so one wrap covers
+ * every entry in every array. Transparent in the matching build. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) ((u8 *)PC_LangStr((const char *)(s)))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
 static u8 *sPartyNames[15] = {
     "\x83\x5f\x83\x7e\x81\x5b",                         // Dummy
     "\x82\x60\x82\x93\x82\x88",                         // Ash
@@ -587,7 +598,7 @@ void ListParty(u8 top, u8 rows, s32 unused) {
          *pDst++ = 0x40;
       }
       pDst -= 12;
-      pSrc = sPartyNames[gCurrentParty[top + i]];
+      pSrc = PC_LANGSTR(sPartyNames[gCurrentParty[top + i]]);
       for (j = 0; j < 6; j++) {
          if (*pSrc != '\0') {
             *pDst++ = *pSrc++;

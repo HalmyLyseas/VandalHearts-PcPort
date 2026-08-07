@@ -36,6 +36,10 @@ DEAD = {
         "OBJF_MAIN_MENU_JPN = 582 is declared in object.h and sits in the dispatch table at "
         "obj_function_pointers.c:1166, but NOTHING in src/ ever assigns it to obj->functionIndex -- "
         "so the function is never entered in the US build.",
+    "literal:40feee2af0415efa":
+        "sPartyNames[0], the katakana 'dummy' slot. Index 0 is the party list's NULL TERMINATOR, "
+        "not a character: supplies.c writes gCurrentParty[j] = 0 to end the list and every consumer "
+        "loops `while (gCurrentParty[i] != 0)`, so slot 0 is never dereferenced as a name.",
 }
 
 # Hand annotations for sites whose behaviour a translator cannot infer from the string alone.
@@ -104,6 +108,54 @@ def decode(raw):
     return raw.decode("latin1"), "ascii"
 
 
+# Text held in ARRAYS rather than written at the draw call. The sweep above matches literals in the
+# draw call's argument list, so it cannot see these -- which is how the entire title screen, every
+# memory-card prompt and the party list stayed untranslated through a whole UAT pass.
+#
+# They are reachable anyway, because the code that CONSUMES the array can be wrapped: PC_LangStr
+# hashes whatever string it is handed at run time, so one wrap where the array is read covers every
+# entry in it. Curated rather than swept, because a blind scan for "array of char*" also matches
+# data tables; the self-check below fails the export if one of these disappears or grows.
+ARRAY_SOURCES = {
+    # file            array prefix or exact name      why it is reachable
+    "main_menu.c":   ("sText_",
+                      "every one is passed to DrawTextWindow, whose two DrawText calls are wrapped"),
+    "supplies.c":    ("sPartyNames",
+                      "read into the party-list buffer at supplies.c:590, which is wrapped"),
+}
+# Arrays that are defined but never drawn -- excluded WITH a reason, never on a hunch.
+ARRAY_DEAD = {
+    "sText_InBattleSaveOrBattleStart": "marked '// Unused' in the source",
+    "sUnused_80102364": "name says it; no reference anywhere in src/",
+    "sText_FileSaveCaptions": "caption BUFFERS, filled at run time -- the literals are empty",
+    "sText_FileLoadCaptions": "caption BUFFERS, filled at run time -- the literals are empty",
+    "sText_LanguageOptions": "retail language menu; the port never reaches it",
+}
+
+ARRAY_RX = re.compile(
+    r'\b(?:static\s+)?(?:const\s+)?(?:u8|s8|char)\s*\*\s*(\w+)\s*\[[^\]]*\]\s*=\s*\{(.*?)\n\};',
+    re.S)
+
+
+def scan_arrays(srcdir):
+    """-> [(array, index, raw bytes)] for every drawable string held in an array."""
+    out = []
+    for base, (prefix, _why) in ARRAY_SOURCES.items():
+        path = os.path.join(srcdir, base)
+        if not os.path.exists(path):
+            continue
+        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
+        for m in ARRAY_RX.finditer(text):
+            name, body = m.group(1), m.group(2)
+            if not name.startswith(prefix) or name in ARRAY_DEAD:
+                continue
+            for i, lit in enumerate(re.findall(r'"((?:[^"\\]|\\.)*)"', body)):
+                raw = unescape(f'"{lit}"')
+                if raw.strip():
+                    out.append((name, i, raw))
+    return out
+
+
 def export(srcdir, workdir):
     found, templates, skipped, dead = {}, 0, 0, 0
     for path in sorted(glob.glob(os.path.join(srcdir, "*.c"))):
@@ -145,6 +197,17 @@ def export(srcdir, workdir):
             e["sites"].append(f"{base}:{line}")
             if cols:
                 e["cols"].append(cols)
+
+    # Text held in arrays: same content-hash identity, same K_LITERAL delivery, reached through the
+    # wrap at the array's CONSUMER rather than at each element.
+    for arr, idx, raw in scan_arrays(srcdir):
+        en, enc = decode(raw)
+        key = f"literal:{fnv1a(raw):016x}"
+        if key in DEAD:
+            dead += 1; continue
+        e = found.setdefault(key, {"key": key, "en": en, "text": "",
+                                   "encoding": enc, "sites": [], "cols": []})
+        e["sites"].append(f"{arr}[{idx}]")
 
     entries = []
     for e in sorted(found.values(), key=lambda x: x["sites"][0]):
