@@ -17,7 +17,6 @@ regenerate everything from the disc.
   lang_export.py <disc> <work>            executable tables + on-disc dialogue -> <work>/strings/
   lang_export_literals.py <src> <work>    text hardcoded in the game code      -> strings/literals.json
   lang_export_tactical.py <bal> <work>    Tactical Mode text                   -> strings/tactical.json
-  lang_export_port_ui.py <src> <work>     the port's own UI (overlay, OSD)     -> strings/port_ui.json
   lang_group.py <work>                    entity-grouped translator views      -> <work>/translate/
                                |
                     (translate: edit translate/*.json and strings/dialogue/*.json --
@@ -64,10 +63,9 @@ no in-game reload.
   character, exactly like its plain form. One codepoint is one screen column everywhere.
 - **A pack is a diff**: untranslated entries show the original text, so a partial translation is a
   working translation.
-- **The port's own menus translate too** (`port_ui.json`): the options overlay renders with the
-  port's caps-only 5×7 OSD font, so translations are caps-folded at draw time — write naturally,
-  mixed case and accents are fine. The overlay panel auto-sizes, so there are no column budgets;
-  button icons (`$ @ ^ ~`, X/B/Y/A) and `%d`/`%s` placeholders must be kept — the builder checks.
+- **A pack covers the game's content, not the port's own UI.** The in-game options overlay
+  (SELECT+START) stays English in every language. It is drawn by the port with its own small
+  font, and keeping it out means every pack behaves the same way regardless of script.
 
 ## Supported characters
 

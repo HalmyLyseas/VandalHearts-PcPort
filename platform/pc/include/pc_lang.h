@@ -96,14 +96,6 @@ const unsigned char *PC_LangCharmapBlob(unsigned *len);
  * pack's string or the input literal untouched. */
 unsigned char *PC_LangStr(const char *lit);
 
-/* The overlay/OSD twin: same lookup, but a hit is caps-folded to what the port's 5x7 bitmap font
- * can draw (cached). For the port's OWN UI strings (pc_overlay.c / pc_gpu_window.c) -- game text
- * never goes through here. Miss = input untouched. */
-const char *PC_LangOsdStr(const char *lit);
-
-/* Fold UTF-8 to OSD-safe caps ASCII (accents -> base letter, unknown sequences skipped). The one
- * fold table for the whole port; used by PC_LangOsdStr and the overlay's manifest-name display. */
-void PC_LangOsdFold(const char *in, char *out, int cap);
 
 /* Overlay picklist support: enumerate installed packs (same game/format gate as loading, applied
  * quietly) and report the folder selected at boot ("" = none) so a pending change can show its

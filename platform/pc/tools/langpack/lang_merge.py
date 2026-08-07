@@ -22,7 +22,6 @@ Mappings mirror lang_group.py exactly:
   menus.json        key -> gStringTable[i]
   terrain.json      key -> terrainText[i]
   literals.json     key (content hash) -> strings/literals.json; option lists rejoin with \\n
-  port_ui.json      key (content hash) -> strings/port_ui.json (grouped by category in translate/)
   tactical sub-objects -> strings/tactical.json (same key namespace)
 
 Usage: ./lang_merge.py <workdir>
@@ -122,26 +121,6 @@ def merge(work):
                     nlit += 1
         save(lp_s, sdoc)
 
-    # port-UI: keyed by content hash like literals; the translate view is grouped by category,
-    # every group is a flat list of {key, en, text} entries
-    npui = 0
-    pp_t, pp_s = os.path.join(tp, "port_ui.json"), os.path.join(sp, "port_ui.json")
-    if os.path.exists(pp_t) and os.path.exists(pp_s):
-        tdoc, sdoc = load(pp_t), load(pp_s)
-        by_key = {e["key"]: e for e in sdoc["entries"]}
-        for cat, lst in tdoc.items():
-            if not isinstance(lst, list):
-                continue
-            for e in lst:
-                txt = e.get("text") or ""
-                if not txt:
-                    continue
-                tgt = by_key.get(e["key"])
-                if tgt is not None and (tgt.get("text") or "") != txt:
-                    tgt["text"] = txt
-                    npui += 1
-        save(pp_s, sdoc)
-
     # tactical layer: same table[idx] key namespace as the retail tables
     ntac = 0
     tacp = os.path.join(sp, "tactical.json")
@@ -154,13 +133,13 @@ def merge(work):
                 ntac += 1
         save(tacp, tdoc)
 
-    return stats, conflicts, nlit, ntac, npui
+    return stats, conflicts, nlit, ntac
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    stats, conflicts, nlit, ntac, npui = merge(sys.argv[1])
+    stats, conflicts, nlit, ntac = merge(sys.argv[1])
     tot = sum(stats.values())
     for src, n in sorted(stats.items()):
         print(f"  {src:24} {n:>4} field(s) merged")
@@ -168,11 +147,9 @@ if __name__ == "__main__":
         print(f"  {'literals.json':24} {nlit:>4} entry(ies) merged")
     if ntac:
         print(f"  {'tactical layer':24} {ntac:>4} entry(ies) merged")
-    if npui:
-        print(f"  {'port_ui.json':24} {npui:>4} entry(ies) merged")
     if conflicts:
         print(f"\n  {len(conflicts)} conflict(s) -- translate/ won, review these:")
         for c in conflicts[:10]:
             print(f"    {c}")
-    if not tot and not nlit and not ntac and not npui:
+    if not tot and not nlit and not ntac:
         print("  nothing to merge (no text fields set in translate/)")
