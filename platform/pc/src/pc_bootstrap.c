@@ -210,14 +210,21 @@ static int PC_GetExeDir(char *out, size_t outSize) {
     return 1;
 }
 
-/* The directory where the *end user's* files live (disc image, vandalhearts.ini). Normally this is
- * just the executable's own directory (PC_GetExeDir). But under an AppImage the executable runs from
+/* The directory where the *end user's* files live (disc image, vandalhearts.ini). VH_DEPLOY_DIR is
+ * an explicit override used by native packages whose signed/read-only executable lives somewhere
+ * different from user-owned config, saves, and game data (notably a macOS .app bundle). Normally
+ * this is just the executable's own directory (PC_GetExeDir). But under an AppImage it runs from
  * a read-only squashfs mounted at /tmp/.mount_XXXX/usr/bin -- the user can't drop their disc there.
  * The AppImage runtime exports $APPIMAGE = the absolute path of the .AppImage file itself, so its
  * dirname is where the user actually keeps things. Prefer that when present; otherwise fall back to
  * the exe dir. Harmless on Windows/native Linux (env var simply unset). Returns 1 on success. */
 int PC_GetDeployDir(char *out, size_t outSize) {
+    const char *deploy = getenv("VH_DEPLOY_DIR");
     const char *appimage = getenv("APPIMAGE");   /* set only when running as an AppImage */
+    if (deploy && *deploy) {
+        int n = snprintf(out, outSize, "%s", deploy);
+        return n >= 0 && (size_t)n < outSize;
+    }
     if (appimage && *appimage) {
         char *sep;
         snprintf(out, outSize, "%s", appimage);

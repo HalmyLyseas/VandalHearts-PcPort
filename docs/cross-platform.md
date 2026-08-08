@@ -261,12 +261,14 @@ Both stage under `platform/pc/dist/release/<tag>/` (gitignored) with `SHA256SUMS
 `RELEASE_NOTES.md`. Prereqs: `mingw-w64-gcc`, the `vh-deb12` container (see *Building a release* above),
 and `github-cli` authenticated (`gh auth login`).
 
-## macOS (Apple Silicon) — native build
+## macOS — native and Universal 2 builds
 
 The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
 cutscenes, HD movies/backgrounds, world map, towns, shops, saves, Tactical Mode and 2× battle speed.
 The SDL2 presentation layer explicitly selects Metal and the binary has no OpenGL framework dependency.
-It is still an early target: a complete playthrough, Intel validation, `.app` packaging, signing, and
+A dependency-minimal Universal 2 binary has passed the boot-to-title smoke test as both native arm64
+and forced x86_64 under Rosetta on Apple Silicon. A source-only local `.app` recipe is implemented and
+ad-hoc signing is validated for both slices. A complete Intel-hardware/full-game playthrough and Apple
 notarisation have not been done.
 
 ```sh
@@ -289,3 +291,9 @@ cannot use the Linux port's fixed low-address work buffers because arm64 Mach-O 
 4 GB. The native port therefore uses host storage for those buffers while preserving PS1 offsets.
 WebP backgrounds and FFmpeg HD video are enabled by default. They can be omitted from a minimal build
 with `-DVH_WEBP=OFF -DVH_HDVIDEO=OFF`.
+
+For the reproducible Universal 2 command, official SDL framework hash, external game-data layout, and
+local signing recipe, see [`platform/pc/packaging/macos/README.md`](../platform/pc/packaging/macos/README.md).
+The generated executable embeds data reconstructed from the user's game/BIOS inputs, so generated apps
+remain local and gitignored; the recipe never uploads an app or places a disc, BIOS, HD pack, or save
+inside the signed bundle.

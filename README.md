@@ -47,8 +47,10 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 - **Platforms: Windows, Linux, and macOS**, from a single source tree. The Windows `.exe` is
   cross-compiled from Linux with MinGW-w64; Linux ships as an AppImage. The native macOS CMake build
   has been tested on Apple Silicon through the first battle and its surrounding cutscenes, world map,
-  towns, shops, saves, Tactical Mode, fast-forward and HD pack. Full-playthrough validation and application
-  packaging remain to be done. See [docs/cross-platform.md](docs/cross-platform.md).
+  towns, shops, saves, Tactical Mode, fast-forward and HD pack. A dependency-minimal Universal 2 build
+  has also passed boot-to-title tests in both native arm64 and x86_64/Rosetta modes. Source-only local
+  `.app` packaging is available; full-playthrough and notarisation validation remain to be done. See
+  [docs/cross-platform.md](docs/cross-platform.md).
 
 ## Where to start
 
@@ -68,7 +70,7 @@ Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derive
 |---|---|---|
 | **Windows** | `.zip` — `vandalhearts_pc.exe`, 8 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
 | **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 |
-| **macOS** | Build from source (packaging is not implemented yet) | Apple Silicon; Homebrew SDL2, OpenAL Soft, WebP and FFmpeg |
+| **macOS** | Build from source; local `.app` recipe | macOS 11+; Universal 2 base build or Apple Silicon HD build |
 
 Put your disc image in a `game/` folder next to the executable and launch — the disc is
 auto-detected and verified, settings live in the in-game overlay (**SELECT + START**) and
