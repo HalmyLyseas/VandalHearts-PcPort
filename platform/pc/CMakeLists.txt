@@ -65,7 +65,9 @@ file(CREATE_LINK ${PC_DIR}/include/inline_gte.h ${STAGE_DIR}/inline_gte.h SYMBOL
 
 # ---- external libs ----------------------------------------------------------------------------
 find_package(SDL2 REQUIRED)
-find_package(OpenGL REQUIRED)
+if(NOT APPLE)
+    find_package(OpenGL REQUIRED)
+endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)   # data-file + data-segment generators
 # libgpu.c's threaded hi-res rasterizer (P1) uses pthreads. Threads::Threads resolves to -lpthread on
 # Linux, winpthreads on MinGW (bundled as libwinpthread-1.dll), nothing on macOS -- so the link is
@@ -261,7 +263,7 @@ if(WIN32)
     set(_GEN_AL_LIB "-lOpenAL32")
     set(_GEN_SDL_LIB "-lSDL2")
 elseif(APPLE)
-    set(_GEN_GL_LIB "-framework OpenGL")
+    set(_GEN_GL_LIB "")
     set(_GEN_AL_LIB "-framework OpenAL")
     set(_GEN_SDL_LIB "${SDL2_GEN_LIB}")
 else()
@@ -339,7 +341,10 @@ set_source_files_properties(${GENERATED_C} PROPERTIES GENERATED TRUE
 
 # ---- final executable -------------------------------------------------------------------------
 add_executable(vandalhearts_pc $<TARGET_OBJECTS:vh_objs> ${GENERATED_C})
-target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} OpenGL::GL m Threads::Threads)
+target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} m Threads::Threads)
+if(NOT APPLE)
+    target_link_libraries(vandalhearts_pc PRIVATE OpenGL::GL)
+endif()
 if(VH_WEBP)
     target_link_libraries(vandalhearts_pc PRIVATE ${WEBP_LIB})
 endif()
