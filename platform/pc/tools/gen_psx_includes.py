@@ -35,7 +35,9 @@ def main():
     if not data.startswith(b"PS-X EXE"):
         raise SystemExit("not a PS-X EXE: %s" % exe)
     os.makedirs(output_dir, exist_ok=True)
-    model_size = 0x138
+    # sizeof(MapTileModel) == 304 (0x130): 22 SVECTORs, gfx, faces, shades, faceCt, height.
+    # Using 0x138 here shifted every model after the first by eight bytes and corrupted geometry.
+    model_size = 0x130
     models = data[file_offset(0x801009bc):file_offset(0x801009bc) + model_size * 4]
     with open(os.path.join(output_dir, "801009bc.inc"), "w") as out:
         out.write(",\n".join(map_model(models[i:i + model_size]) for i in range(0, len(models), model_size)))

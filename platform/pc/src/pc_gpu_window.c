@@ -443,7 +443,7 @@ int PC_GpuInit(int width, int height, const char *title) {
          * SDL2's native Wayland backend crashed during EGL setup ("Proxy and queue point to
          * different wl_displays") -- but ONLY while pc_bootstrap.c mapped page 0
          * (PSX_NULL_MIRROR_BASE) to absorb transient NULL reads. Stage 2.2/2.3 removed that mapping
-         * (NULL reads are handled by per-site PC_PORT guards + the fault handler, no page-0 mapping),
+         * (known NULL reads have per-site PC_PORT guards; Linux i386 also has a fault-handler net),
          * so the trigger is gone: verified by running native Wayland with the current build, full
          * speed, no crash. */
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return 0;

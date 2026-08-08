@@ -56,6 +56,11 @@ unless noted otherwise.
 - **macOS validation.** The native Apple Silicon build is tested through the first battle and its
   surrounding game systems, but has not yet had a complete playthrough or Intel Mac validation. See
   [cross-platform.md](cross-platform.md).
+- **macOS low/NULL reads can still crash.** The Linux i386 `SIGSEGV` instruction fixup is not
+  implemented on macOS. Known `gStringTable` NULL/sentinel entries are normalized to an empty string
+  by the PC constructor, and most other known transient reads have `PC_PORT` source guards. Any
+  remaining unguarded low-pointer path will still terminate the macOS build instead of being emulated
+  as a zero read. See [memory-safety.md](memory-safety.md).
 
 ---
 

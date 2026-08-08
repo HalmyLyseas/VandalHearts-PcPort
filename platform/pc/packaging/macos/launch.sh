@@ -31,12 +31,11 @@ done
 # Otherwise discover a user-supplied raw disc image. Nothing is copied into the app bundle.
 if [[ -z "${VH_DISC_IMAGE:-}" ]]; then
     for search_dir in "$support_dir/game" "$distribution_dir/game" "$distribution_dir"; do
-        for candidate in "$search_dir"/*.bin; do
-            if [[ -f "$candidate" ]]; then
-                export VH_DISC_IMAGE="$candidate"
-                break 2
-            fi
-        done
+        candidate="$(find "$search_dir" -maxdepth 1 -type f -iname '*.bin' -print -quit 2>/dev/null || true)"
+        if [[ -n "$candidate" ]]; then
+            export VH_DISC_IMAGE="$candidate"
+            break
+        fi
     done
 fi
 

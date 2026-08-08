@@ -22,8 +22,8 @@
 #if defined(_WIN32)
 /* Windows (MinGW-w64, Stage 2.4): Win32 replaces the POSIX facilities used below -- VirtualAlloc for
  * the fixed PSX RAM ranges, VirtualProtect (over the PE sections) for the .rodata remap. There is no
- * POSIX signal/backtrace/mmap path here: the 64-bit build absorbs transient PSX NULL reads with
- * source-level PC_PORT guards, not a fault handler, so Windows needs no signal machinery to run. */
+ * POSIX signal/backtrace/mmap path here. Windows does not implement low-address instruction
+ * emulation; it depends on source-level PC_PORT guards, and any remaining path will crash. */
 #include <windows.h>          /* VirtualAlloc, VirtualProtect, GetModuleHandle, PE headers, GetModuleFileNameA */
 #else
 #include <unistd.h>
@@ -161,9 +161,9 @@ static void PC_ReservePsxRam(void) {
     ReservePsxMemory(PSX_RAM_BASE, PSX_RAM_SIZE, "PSX RAM range");
     ReservePsxMemory(PSX_SCRATCHPAD_BASE, PSX_SCRATCHPAD_SIZE, "PSX Scratchpad RAM");
 #endif
-    /* The KUSEG NULL-mirror (address 0) is deliberately NOT mapped: the portable NULL-read fixup
-     * handler (see PC_SigCrash) absorbs transient NULL/low-address reads without privilege, and
-     * letting the accesses fault is exactly what lets the handler log each site. */
+    /* The KUSEG NULL-mirror (address 0) is deliberately NOT mapped. Native Linux i386 can diagnose
+     * and emulate the limited access forms handled by PC_SigCrash; other hosts depend on explicit
+     * PC_PORT guards and will report then terminate on an unknown low-address access. */
 }
 
 /* The default disc path used to be a plain relative literal
@@ -484,15 +484,16 @@ static void PC_SigUsr1(int sig) { (void)sig; PC_DumpDiag("\n*** SIGUSR1: call st
 #endif /* !_WIN32 */
 
 /* ---- NULL-read fixup (Stage 2.2): make a transient PSX-style NULL/low-address access survive on a
- * native host, portably, instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
+ * native Linux i386 host instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
  * (KUSEG) is real 2MB RAM, so game code that transiently dereferences a not-yet-assigned pointer
  * just reads garbage for a frame; on a host, address 0 faults. Rather than map address 0 (privileged,
  * and impossible on Windows/macOS), we catch the fault, emulate the access as reading 0 (identical to
  * what the old MAP_ANONYMOUS zero page returned) or discarding the store, step over the instruction,
  * log the site once, and continue. Un-guarded sites therefore no longer crash -- they surface in
- * vh_null_reads.log so they can be given an explicit source-level guard later. Currently x86-32
- * (-m32) only. (The old privileged low-page-mapping fallback was retired -- this handler is the sole
- * path; nothing runs privileged.) */
+ * vh_null_reads.log so they can be given an explicit source-level guard later. Currently native
+ * Linux x86-32 (-m32) only: Darwin's ucontext layout and arm64/x86-64 instructions are not decoded,
+ * and Windows has no POSIX signal path. (The old privileged low-page-mapping fallback was retired;
+ * nothing runs privileged.) */
 
 #if defined(__i386__) && !defined(_WIN32)
 /* Decode the memory-access instruction at `ip` (the faulting one). Returns its length and, for a
@@ -695,7 +696,7 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
  *   - Linux: dl_iterate_phdr -> mprotect each PF_R-only PT_LOAD of the main program.
  *   - Windows (MinGW): PE section walk of the main module -> VirtualProtect each read-only,
  *     non-executable initialized-data section (.rdata) to PAGE_READWRITE.
- *   - macOS (Apple Silicon): dyld segment walk + mprotect  -- TODO, its 2.4 phase.
+ *   - macOS: dyld segment/section walk + mprotect.
  * Best-effort: failures are non-fatal (the on-fault path or a later crash will surface a real
  * problem); success just means string-literal writes never fault. */
 #if defined(__linux__)

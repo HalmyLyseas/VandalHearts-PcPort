@@ -19,7 +19,9 @@ SLUS_004.47) and a constructor rewrites each gStringTable[i] to point at the
 embedded copy. Static-initialized data is ready before any constructor runs, so
 the rewrite is safe; the handful of runtime self-copies the game does
 (gStringTable[0]/[32] = gStringTable[x]) just copy the already-fixed pointers.
-NULL entries (88..99) are left untouched.
+NULL entries (88..99), plus the PC port's added sentinel entry 100, are normalized to a stable empty
+string. This matches the zero read produced by the Linux i386 fault fixup without relying on
+architecture-specific fault decoding, and makes every in-range table lookup safe on all PC targets.
 
 Stage-2 PC-port backend file only; the matching build never sees it.
 """
@@ -83,6 +85,7 @@ def main():
     lines.append(" * to the embedded string below at startup. See the generator header. */")
     lines.append("")
     lines.append("extern unsigned char *gStringTable[101];")
+    lines.append("static unsigned char s_pc_empty_string[] = \"\";")
     lines.append("")
     lines.append("static const char *const s_pc_strings[%d] = {" % COUNT)
     for i, s in enumerate(strings):
@@ -96,10 +99,10 @@ def main():
     lines.append("static void PC_FixupStringTable(void) {")
     lines.append("    int i;")
     lines.append("    for (i = 0; i < %d; i++) {" % COUNT)
-    lines.append("        if (s_pc_strings[i]) {")
-    lines.append("            gStringTable[i] = (unsigned char *)s_pc_strings[i];")
-    lines.append("        }")
+    lines.append("        gStringTable[i] = s_pc_strings[i]")
+    lines.append("            ? (unsigned char *)s_pc_strings[i] : s_pc_empty_string;")
     lines.append("    }")
+    lines.append("    gStringTable[%d] = s_pc_empty_string; /* PC sentinel used transiently by dojo.c */" % COUNT)
     lines.append("}")
     lines.append("")
     open(OUT, "w").write("\n".join(lines))

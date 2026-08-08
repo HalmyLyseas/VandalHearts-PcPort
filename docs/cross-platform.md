@@ -15,13 +15,20 @@ plus a couple of build shims. The few things that genuinely differ per OS:
 | Executable's own path (`PC_GetExePath`) | `/proc/self/exe` | `GetModuleFileNameA` | `_NSGetExecutablePath` |
 | Reserve the fixed PSX RAM ranges | `mmap(MAP_FIXED)` | `VirtualAlloc` | not used; host-backed work buffers |
 | Make read-only data writable at startup | `dl_iterate_phdr` + `mprotect` | PE section walk + `VirtualProtect` | dyld section walk + `mprotect` |
-| Fault handler (safety net) | POSIX `sigaction` | not needed (see below) | not needed; source guards + startup remap |
+| Fault handler (safety net) | POSIX diagnostics; low-read fixup on i386 only | not implemented; source guards + startup remap | not implemented; crashes on an unguarded low read |
 | Present the software framebuffer | SDL2 + OpenGL | SDL2 + OpenGL | SDL2 Metal renderer |
 
-The fault handler is a *net*, not the primary mechanism: the 64-bit build absorbs transient NULL reads
-with source-level `PC_PORT` guards, and the startup remap handles read-only-data writes. So Windows
-needs no signal machinery at all to run — the POSIX handler is simply compiled out there. See
-[memory-safety.md](memory-safety.md).
+The Linux i386 fault handler is a load-bearing safety net for retail behavior that still performs
+low/NULL reads; source-level `PC_PORT` guards cover known high-traffic sites, and the startup remap
+separately handles read-only-data writes. Windows and macOS do not implement the low-read instruction
+fixup. The PC string-table constructor therefore normalizes the 12 retail NULL slots and the added
+entry-100 sentinel to a stable empty string on every host. That removes the known table-specific
+crash, but any other unguarded low-pointer path will still crash on macOS. See
+[memory-safety.md](memory-safety.md) and [known_issues.md](known_issues.md).
+
+The host-backed sound work RAM, scratchpad, movie ring, and string-table changes are gated by
+`PC_PORT`, not by `__APPLE__`: they therefore change native runtime behavior on Linux and Windows as
+well as macOS. The matching PS1 branches remain separate and byte-identical.
 
 ## Windows (MinGW-w64)
 
@@ -59,7 +66,8 @@ Six things, all guarded so the Linux build is untouched:
 
 1. **`pc_bootstrap.c`** — Win32 branches: `VirtualAlloc` for the fixed PSX RAM ranges, a
    `VirtualProtect` PE-section walk for the read-only-data remap, and all the POSIX
-   signal/backtrace/ucontext code compiled out (the 64-bit build needs no fault handler).
+   signal/backtrace/ucontext code compiled out. Windows has no low-read emulation; known paths require
+   source guards or normalized host data.
 2. **`include/pc_win_compat.h`** — MinGW's `<sys/types.h>` lacks the BSD `u_char`/`u_short`/… aliases
    the clean-room PsyQ headers use (glibc supplies them); this shim defines them, force-included on
    Windows only.

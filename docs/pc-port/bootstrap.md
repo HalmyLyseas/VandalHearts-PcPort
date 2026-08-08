@@ -37,7 +37,9 @@ literals in `src/` are valid again:
 Mach-O layout reserves the low 4 GB, so macOS uses host-backed work buffers instead. Failure is
 non-fatal (it only matters once a code path actually touches that literal). See
 [../memory-safety.md](../memory-safety.md) for the full rationale. Note that address 0 is deliberately
-**not** mapped — leaving it unmapped is what lets the fault handler log each transient NULL read.
+**not** mapped. The native Linux i386 fault handler can log and emulate its supported access forms;
+macOS, Windows, and the default Linux x86-64 build instead depend on source-level guards and
+terminate after diagnostics on an unknown low-address access.
 
 ## Making read-only data writable
 
@@ -46,19 +48,21 @@ segments writable up front, so the game's in-place string-literal writes never f
 `dl_iterate_phdr` + `mprotect` (Linux), a PE-section walk + `VirtualProtect` (Windows), and a dyld
 section walk + `mprotect` (macOS). See [../cross-platform.md](../cross-platform.md).
 
-## The fault handler (POSIX net)
+## The fault handler and crash diagnostics
 
-On POSIX, a `SIGSEGV`/`SIGBUS` handler (`sigaction` with `SA_SIGINFO`) is installed as a safety net for
-anything the startup passes miss:
+On POSIX, a `SIGSEGV`/`SIGBUS` handler (`sigaction` with `SA_SIGINFO`) provides crash diagnostics. Two
+additional recovery paths exist on native Linux x86 hosts:
 
 - a **low-address read** (`< 2 MB`) is emulated — decode the faulting instruction, zero the destination
   register, step over it — mirroring what reading from PSX RAM's start would have returned;
 - a **read-only-data write** makes the page writable and retries the store.
 
-Each distinct site is logged once to `vh_null_reads.log`, so unguarded spots surface for a proper
-source-level fix. On Windows this handler is compiled out entirely — the 64-bit build absorbs NULL
-reads with `PC_PORT` source guards and needs no signal machinery. The instruction-decode NULL fixup is
-x86-specific; the read-only-data retry works on any x86 (32- and 64-bit).
+Each emulated i386 site is logged once to `vh_null_reads.log`, so it can receive a proper source-level
+fix. Low-read instruction emulation is implemented only for native Linux i386. It is **not
+implemented** on macOS, Windows, or the default Linux x86-64 build; those targets rely on `PC_PORT`
+guards and normalized host data, and an unknown low read remains a real crash. The read-only-data
+retry works on native Linux x86-32/x86-64, while all three supported OSes also perform a proactive
+startup remap. Windows compiles out the POSIX handler entirely.
 
 ## Mounting and validating the disc
 
