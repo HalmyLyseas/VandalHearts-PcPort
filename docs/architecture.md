@@ -5,7 +5,7 @@ This project has two distinct layers, kept deliberately separate:
 1. A **matching decompilation** of the US PlayStation 1 release of *Vandal Hearts* (`SLUS_004.47`)
    — C source that recompiles to a byte-for-byte identical copy of the original executable.
 2. A **native PC port** built on top of that source — every PlayStation hardware dependency replaced
-   with a portable equivalent (SDL2 + OpenGL + OpenAL), so the game runs on a modern desktop from its
+   with a portable equivalent (SDL2 + Metal/OpenGL + OpenAL), so the game runs on a modern desktop from its
    own disc data.
 
 Understanding why these are separate, and how the port avoids disturbing the match, is the key to
@@ -46,7 +46,7 @@ PC those names resolve to portable C reimplementations instead of Sony's asm.
    platform/pc/src/lib*.c         (portable reimplementations)
       │
       ▼
-   SDL2 (window/input) · OpenGL (blit) · OpenAL (audio output)
+   SDL2 (window/input) · Metal on macOS / OpenGL elsewhere (blit) · OpenAL (audio output)
 ```
 
 The six subsystem backends each replace one PSX hardware unit:

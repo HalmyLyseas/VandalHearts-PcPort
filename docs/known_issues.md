@@ -53,8 +53,9 @@ unless noted otherwise.
 - **HD PACK toggle timing (v1.6).** Turning HD **on** mid-scene takes effect from the next
   screen/background load (each background is identified as the game uploads it); turning it **off** is
   immediate. See [hd-pack.md](hd-pack.md).
-- **macOS.** Only **Windows** and **Linux** are supported. macOS is scaffolded in the build but not
-  built or tested — see [cross-platform.md](cross-platform.md).
+- **macOS validation.** The native Apple Silicon build is tested through the first battle and its
+  surrounding game systems, but has not yet had a complete playthrough or Intel Mac validation. See
+  [cross-platform.md](cross-platform.md).
 
 ---
 

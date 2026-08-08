@@ -26,14 +26,15 @@ All of this lives in `platform/pc/src/pc_bootstrap.c`, run before `main()` via c
 [pc-port/bootstrap.md](pc-port/bootstrap.md) for the startup sequence; the memory-safety-relevant
 pieces are:
 
-- **Reserve the real PSX RAM ranges.** At startup the port maps the exact PSX addresses as real,
+- **Reserve the real PSX RAM ranges.** On Linux and Windows the port maps the exact PSX addresses as real,
   writable memory — the 2 MB KUSEG RAM at `0x80000000` and the 1 KB Scratchpad at `0x1f800000` — so
   every hard-coded literal is a valid buffer again, exactly as on hardware. `mmap(MAP_FIXED)` on
-  POSIX, `VirtualAlloc` at the fixed address on Windows.
+  Linux, `VirtualAlloc` at the fixed address on Windows. Apple Silicon cannot map those low addresses,
+  so the macOS port uses host-backed storage for the remaining scratch/work buffers.
 - **Make read-only data writable at startup.** Rather than trap every literal write, the port makes
   the executable's read-only data segments writable once, up front. This is per-OS: `dl_iterate_phdr`
-  + `mprotect` on Linux; a PE-section walk + `VirtualProtect` on Windows; a dyld walk on macOS is the
-  one remaining stub (see [cross-platform.md](cross-platform.md)).
+  + `mprotect` on Linux; a PE-section walk + `VirtualProtect` on Windows; and a dyld section walk +
+  `mprotect` on macOS (see [cross-platform.md](cross-platform.md)).
 - **A portable fault handler as the safety net.** A `SIGSEGV`/`SIGBUS` handler (POSIX) catches
   anything the startup passes miss: a low-address read is emulated as reading zero and stepped over; a
   read-only-data write makes the page writable and retries. Each distinct site is logged once to

@@ -1,21 +1,22 @@
 # Cross-platform (Windows, Linux packaging & macOS)
 
-The port targets Linux, Windows, and macOS. Linux and Windows have full-playthrough validation;
-macOS has a native Apple Silicon build and title-screen smoke test (see the end of this page). This is Stage 2.4 of the
-roadmap.
+The port targets Linux, Windows, and macOS. Linux and Windows have full-playthrough validation. The
+native Apple Silicon build has been validated through the first battle and surrounding game systems
+(see the end of this page). This is Stage 2.4 of the roadmap.
 
 ## The portability model
 
-The backends are ordinary portable C over SDL2 / OpenAL / OpenGL, so most of the code is
+The backends are ordinary portable C over SDL2 / OpenAL and a thin host presentation layer, so most of the code is
 platform-neutral. The OS-specific surface is small and concentrated in `platform/pc/src/pc_bootstrap.c`
-plus a couple of build shims. The three things that genuinely differ per OS:
+plus a couple of build shims. The few things that genuinely differ per OS:
 
 | Concern | Linux | Windows | macOS |
 |---|---|---|---|
 | Executable's own path (`PC_GetExePath`) | `/proc/self/exe` | `GetModuleFileNameA` | `_NSGetExecutablePath` |
-| Reserve the fixed PSX RAM ranges | `mmap(MAP_FIXED)` | `VirtualAlloc` | `mmap` (untested) |
-| Make read-only data writable at startup | `dl_iterate_phdr` + `mprotect` | PE section walk + `VirtualProtect` | dyld walk — **stub** |
-| Fault handler (safety net) | POSIX `sigaction` | not needed (see below) | not implemented (ARM) |
+| Reserve the fixed PSX RAM ranges | `mmap(MAP_FIXED)` | `VirtualAlloc` | not used; host-backed work buffers |
+| Make read-only data writable at startup | `dl_iterate_phdr` + `mprotect` | PE section walk + `VirtualProtect` | dyld section walk + `mprotect` |
+| Fault handler (safety net) | POSIX `sigaction` | not needed (see below) | not needed; source guards + startup remap |
+| Present the software framebuffer | SDL2 + OpenGL | SDL2 + OpenGL | SDL2 Metal renderer |
 
 The fault handler is a *net*, not the primary mechanism: the 64-bit build absorbs transient NULL reads
 with source-level `PC_PORT` guards, and the startup remap handles read-only-data writes. So Windows
@@ -262,9 +263,11 @@ and `github-cli` authenticated (`gh auth login`).
 
 ## macOS (Apple Silicon) — native build
 
-The port now builds natively with AppleClang and has been smoke-tested through the title screen on
-Apple Silicon. It is still an early target: a complete playthrough, Intel validation, `.app`
-packaging, signing, and notarisation have not been done.
+The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
+cutscenes, HD movies/backgrounds, world map, towns, shops, saves, Tactical Mode and 2× battle speed.
+The SDL2 presentation layer explicitly selects Metal and the binary has no OpenGL framework dependency.
+It is still an early target: a complete playthrough, Intel validation, `.app` packaging, signing, and
+notarisation have not been done.
 
 ```sh
 brew install cmake sdl2 openal-soft webp ffmpeg

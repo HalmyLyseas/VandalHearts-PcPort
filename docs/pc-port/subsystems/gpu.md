@@ -10,7 +10,7 @@ bridge and the `DrawOTag` walker), `pc_raster.c` (the framebuffers — a real
 1024&nbsp;×&nbsp;512 BGR555 VRAM plus the hi-res buffer — and the
 **software rasteriser** for the four primitive types the game actually uses),
 `pc_hdpack.c` (the optional HD background replacement), `pc_gpu_trace.c` (the
-record/replay regression harness), and `pc_gpu_window.c` (SDL2 + OpenGL, used
+record/replay regression harness), and `pc_gpu_window.c` (SDL2 + Metal on macOS or OpenGL elsewhere, used
 *only* for the last step: blitting the finished framebuffer to a resizable
 window each frame). This is the "OT → per-frame primitive list
 → rasterise" translation the interface contract calls for, not a 1:1 re-submission
@@ -153,7 +153,8 @@ slicing one TIM with pointer arithmetic).
 
 The game renders a native **320×240** frame. `PC_GpuPresent`
 (`pc_gpu_window.c`) converts the visible VRAM region (per the current `DISPENV`)
-from BGR555 to RGB, then blits it with `glDrawPixels` + `glPixelZoom`. The
+from BGR555 to RGB, then uploads it to the host presentation backend: a streaming SDL texture on
+the explicit Metal renderer on macOS, or `glDrawPixels` + `glPixelZoom` on Linux/Windows. The
 window opens at `native × scale`; **`VH_SCALE`** overrides the integer factor
 (default 2 → 640×480, clamped 1–8). The viewport is recomputed every frame to a
 letterboxed, aspect-preserving rectangle, so live resize / maximise work without

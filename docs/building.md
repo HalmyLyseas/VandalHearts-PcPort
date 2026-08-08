@@ -5,7 +5,7 @@ There are two independent builds, matching the two layers in [architecture.md](a
 - **The matching decompilation** — rebuilds the original `SLUS_004.47` and proves byte-identity. Uses
   a period-correct MIPS toolchain; you only need this to verify the decomp or work on `src/`.
 - **The native PC port** — builds the playable desktop binary. Uses a normal host compiler + SDL2 /
-  OpenAL / OpenGL. This is what most contributors build.
+  OpenAL and Metal (macOS) or OpenGL (other targets). This is what most contributors build.
 
 Both builds reconstruct a few game/BIOS-derived files locally from your own copy of the game; nothing
 copyrighted is committed (see [NOTICE](../NOTICE) and [pc-port/data-segment.md](pc-port/data-segment.md)).
@@ -56,7 +56,7 @@ Everything below runs from `platform/pc/`.
 ### What you need
 
 - A host C compiler (GCC or Clang).
-- **SDL2**, **OpenAL** (e.g. OpenAL Soft), **OpenGL**, **libwebp**, and **libav / ffmpeg** (`libavformat`,
+- **SDL2**, **OpenAL** (e.g. OpenAL Soft), **OpenGL** on Linux/Windows, **libwebp**, and **libav / ffmpeg** (`libavformat`,
   `libavcodec`, `libavutil`, `libswscale`) development libraries. libwebp + libav power the 1.6 HD pack
   (`.webp` backgrounds, `.mp4` movies); build without them via `make link NO_WEBP=1 NO_HDVIDEO=1` /
   `cmake -DVH_WEBP=OFF -DVH_HDVIDEO=OFF`, which drops HD-pack support (native `.hdi`/MDEC fallbacks).

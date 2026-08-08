@@ -13,7 +13,7 @@ The project has three stages, **all completed**:
    This is the foundation the port is built on, and it is still enforced on every change.
 2. **De-consolization → native PC port.** Each PlayStation hardware interface — GPU packet
    submission, GTE matrix math, CD-ROM / XA audio, SPU, MDEC video, pad input — is replaced with a
-   portable equivalent (SDL2 + OpenGL + OpenAL), so the game boots and runs on a modern desktop from
+   portable equivalent (SDL2 + Metal/OpenGL + OpenAL), so the game boots and runs on a modern desktop from
    its own data.
 3. **New features.** A PC-only layer of additions on top of the faithful port: reworked controls with
    an at-a-glance enemy threat overlay, an in-game options and save-management overlay, an opt-in
@@ -46,8 +46,9 @@ playthroughs on both Windows and Linux, including the endgame and credits.
   game, which together fixed seven real out-of-bounds bugs latent in the retail game.
 - **Platforms: Windows, Linux, and macOS**, from a single source tree. The Windows `.exe` is
   cross-compiled from Linux with MinGW-w64; Linux ships as an AppImage. The native macOS CMake build
-  has been smoke-tested on Apple Silicon through the title screen; full-playthrough validation and
-  application packaging remain to be done. See [docs/cross-platform.md](docs/cross-platform.md).
+  has been tested on Apple Silicon through the first battle and its surrounding cutscenes, world map,
+  towns, shops, saves, Tactical Mode, fast-forward and HD pack. Full-playthrough validation and application
+  packaging remain to be done. See [docs/cross-platform.md](docs/cross-platform.md).
 
 ## Where to start
 

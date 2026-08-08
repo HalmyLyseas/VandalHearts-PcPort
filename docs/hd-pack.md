@@ -110,7 +110,8 @@ from frame 0 and never seeks. Movies present at full window resolution and are i
 ## Dependencies
 
 The port links **libwebp** (for `.webp` backgrounds) and **libav / ffmpeg** (`libavformat`, `libavcodec`,
-`libavutil`, `libswscale` — for `.mp4` movies) by default, alongside SDL2 / OpenAL / OpenGL — see
+`libavutil`, `libswscale` — for `.mp4` movies) by default, alongside SDL2 / OpenAL and the host
+presentation backend (Metal on macOS, OpenGL elsewhere) — see
 [building.md](building.md). Build without them via `make link NO_WEBP=1 NO_HDVIDEO=1` /
 `cmake -DVH_WEBP=OFF -DVH_HDVIDEO=OFF`; without libwebp the pack must use raw `.hdi` backgrounds, and
 without libav the movies fall back to the native MDEC FMVs.

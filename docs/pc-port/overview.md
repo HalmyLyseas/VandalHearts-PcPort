@@ -25,8 +25,8 @@ Two pieces make that swap happen:
    directory symlink for `PsyQ/` pointing at *our* clean-room headers — same effect as replacing
    `include/PsyQ/`, without touching the real tree.
 
-The backends themselves (`platform/pc/src/lib*.c`) implement those signatures over SDL2 (window,
-input, GL context), OpenGL (the framebuffer blit), and OpenAL (audio output).
+The backends themselves (`platform/pc/src/lib*.c`) implement those signatures over SDL2 (window and
+input), Metal on macOS or OpenGL elsewhere (the framebuffer blit), and OpenAL (audio output).
 
 ## Behavioural reimplementation, not emulation
 
@@ -63,7 +63,7 @@ Beyond the six subsystems, `platform/pc/src/pc_*.c` provides the startup and sup
   and opens the window. See [bootstrap.md](bootstrap.md).
 - **The data-segment generator** (`tools/build_data_segment.py`) — mid-build, reconstructs the raw
   data segment the linker script expects. See [data-segment.md](data-segment.md).
-- **`pc_gpu_window.c`** — the SDL2 window, GL context, and the 320×240 → scaled present.
+- **`pc_gpu_window.c`** — the SDL2 window, host presentation backend, and the 320×240 → scaled present.
 - **Hand-written and generated data files** (`pc_*_data.c`, and the gitignored generated ones) — game
   data tables the port needs that aren't produced by the normal link. See
   [data-segment.md](data-segment.md).

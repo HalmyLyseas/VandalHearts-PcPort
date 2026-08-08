@@ -33,7 +33,8 @@ literals in `src/` are valid again:
 - **`0x80000000`, 2 MB** — the KUSEG main RAM.
 - **`0x1f800000`, 1 KB** — the Scratchpad ("fast RAM").
 
-`mmap(MAP_FIXED_NOREPLACE)` on POSIX, `VirtualAlloc` at the fixed address on Windows. Failure is
+`mmap(MAP_FIXED_NOREPLACE)` on Linux, `VirtualAlloc` at the fixed address on Windows. Apple Silicon's
+Mach-O layout reserves the low 4 GB, so macOS uses host-backed work buffers instead. Failure is
 non-fatal (it only matters once a code path actually touches that literal). See
 [../memory-safety.md](../memory-safety.md) for the full rationale. Note that address 0 is deliberately
 **not** mapped — leaving it unmapped is what lets the fault handler log each transient NULL read.
@@ -42,8 +43,8 @@ non-fatal (it only matters once a code path actually touches that literal). See
 
 `PC_Bootstrap` first calls `PC_MakeRodataWritable`, which makes the executable's read-only data
 segments writable up front, so the game's in-place string-literal writes never fault. Per-OS:
-`dl_iterate_phdr` + `mprotect` (Linux), a PE-section walk + `VirtualProtect` (Windows), a dyld walk
-(macOS — currently a stub). See [../cross-platform.md](../cross-platform.md).
+`dl_iterate_phdr` + `mprotect` (Linux), a PE-section walk + `VirtualProtect` (Windows), and a dyld
+section walk + `mprotect` (macOS). See [../cross-platform.md](../cross-platform.md).
 
 ## The fault handler (POSIX net)
 
@@ -69,7 +70,8 @@ x86-specific; the read-only-data retry works on any x86 (32- and 64-bit).
    `PC_FatalDiscError` prints a clear message — **and pops a `MessageBox` on Windows** for double-click
    users — then exits, rather than booting into a blank window.
 
-Only after a valid mount does `PC_GpuInit` open the SDL2 window and GL context.
+Only after a valid mount does `PC_GpuInit` open the SDL2 window and host presentation backend
+(Metal on macOS, OpenGL elsewhere).
 
 ## Crash diagnostics (POSIX)
 
