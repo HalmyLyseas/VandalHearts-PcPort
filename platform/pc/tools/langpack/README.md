@@ -55,7 +55,9 @@ translated yet" must produce nothing. If either step reports otherwise, the expo
 fix that before translating, rather than after.
 
 `lang_probe.py` builds a labelled test pack (one marker per text source) for engine verification;
-`en_audit.py` scans the exported English for defects provable from the game's own data.
+`en_audit.py` scans the exported English for defects provable from the game's own data;
+`lang_template.py` reads a finished non-Latin translation and works out which letters it needs drawn
+(see *Drawing a non-Latin script* below).
 
 ## Pack naming
 
@@ -128,10 +130,27 @@ dialogue path), which is why a script pack must translate **everything**: any un
 would render as nonsense, so the builder refuses an incomplete one (translate it all;
 `--allow-incomplete` exists only for mid-work testing).
 
-### The quick way: generate a starting sheet
+### The quick way: derive the letters, then generate a starting sheet
 
-You do **not** have to draw an alphabet from scratch. `gen_packart.py` rasterises a bitmap font (GNU
-Unifont, bundled as `unifont-subset.bdf`) straight into both sheets:
+You do **not** have to work out which letters you need, nor draw them from scratch.
+
+**1. Which letters does my translation need?** `lang_template.py` reads the translation you've already
+written (the working set's `strings/`) and lists every letter the game cannot draw on its own — the
+exact set a `--packart` sheet must supply:
+
+```
+lang_template.py <work>              # report: the letters, split by sheet, + the command to run
+lang_template.py <work> --out <dir>  # …and rasterise a starting sheet for exactly those letters
+```
+
+It skips ASCII (the game has it) and accented Latin the builder synthesises for free, so what remains
+is precisely what needs drawing. If nothing does, it says so — the translation builds as a Latin pack.
+The `--out` form hands the derived letters straight to `gen_packart.py` (below), so one command turns a
+finished translation into a drawable sheet.
+
+**2. Draw them from a bitmap font.** `gen_packart.py` rasterises GNU Unifont (bundled as
+`unifont-subset.bdf`) straight into both sheets — call it directly for a whole alphabet, or let
+`lang_template --out` call it for exactly your translation's letters:
 
 ```
 gen_packart.py <dir> --script ru          # a preset alphabet (ru = Russian, el = Greek)
@@ -139,7 +158,7 @@ gen_packart.py <dir> --script el
 gen_packart.py <dir> --cps U+0410-U+042F  # or explicit codepoints
 ```
 
-It writes `font8x9.*` + `font16x15.*` ready for `--packart <dir>`, plus `proof_8x9.png` /
+Either way it writes `font8x9.*` + `font16x15.*` ready for `--packart <dir>`, plus `proof_8x9.png` /
 `proof_16x15.png` — each cell magnified with its codepoint, so you can confirm every letter came out
 right. The **16×15 sheet is production quality**; the **8×9 sheet is legible** and a good base — a
 team may want to hand-tweak a few of the densest letters, but nobody has to start from a blank grid.

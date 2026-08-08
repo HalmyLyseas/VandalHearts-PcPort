@@ -152,6 +152,20 @@ def save(out, name, png, txt, W, H, cps):
     proof.save(os.path.join(out, f"proof_{name.replace('font', '')}.png"))
 
 
+def generate(out, cps, font=DEFAULT_FONT):
+    """Rasterise `cps` into out/font8x9.* + font16x15.* (+ proofs). Returns [(name, made, missing)],
+    so a caller (gen_packart's own CLI, or lang_template.py) can report what landed. The one place
+    the sheet files are actually written -- keep both entry points going through here."""
+    os.makedirs(out, exist_ok=True)
+    glyphs = parse_bdf(font)
+    made = []
+    for (W, H), name in ((SMALL, "font8x9"), (LARGE, "font16x15")):
+        png, txt, missing = build(glyphs, cps, W, H, 0.5)
+        save(out, name, png, txt, W, H, cps)
+        made.append((name, len(cps) - len(missing), missing))
+    return made
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
         raise SystemExit(__doc__)
@@ -166,12 +180,8 @@ def main():
         cps = parse_cps(sys.argv[sys.argv.index("--cps") + 1])
     else:
         raise SystemExit("give --script <name> or --cps U+....")
-    os.makedirs(out, exist_ok=True)
-    glyphs = parse_bdf(font)
-    for (W, H), name in ((SMALL, "font8x9"), (LARGE, "font16x15")):
-        png, txt, missing = build(glyphs, cps, W, H, 0.5)
-        save(out, name, png, txt, W, H, cps)
-        print(f"{name}: {len(cps) - len(missing)}/{len(cps)} glyphs"
+    for name, n, missing in generate(out, cps, font):
+        print(f"{name}: {n}/{len(cps)} glyphs"
               + (f"  MISSING {[hex(c) for c in missing]} (not in {os.path.basename(font)})"
                  if missing else ""))
     print(f"wrote {out}/  -- review proof_8x9.png / proof_16x15.png, then build with "
