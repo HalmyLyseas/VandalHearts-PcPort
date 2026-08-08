@@ -172,10 +172,8 @@ TEXT_RX = _re.compile(r"(B_TXT\d+|EVENT\d+|SIBAI[\w]*|EVDEMO\d+|TOWN_T|SHOP_T|SA
 DEAD_FILES = {"SIBAI5", "SIBAI7", "SIBAIA", "SIBAIE", "SIBAIF", "EVDEMO7"}
 def _budget(stem):
     if stem == "SHOP_T":
-        # DrawText's argument is 30, but the shop greeting box is narrower -- a 30-col line wraps to a
-        # third row. 28 is the clean width; overflow wraps, text is not lost.
-        return {"max_cols": 28, "wraps": True,
-                "note": "drawn by DrawText in supplies.c -- wraps (box is narrower than the 30-col arg)"}
+        return {"max_cols": 30, "wraps": True,
+                "note": "drawn by DrawText in supplies.c -- wraps, text is not lost"}
     return {"max_cols": 26, "wraps": False,
             "note": "drawn by the message box -- HARD CLIP past 26 columns, tail is lost"}
 

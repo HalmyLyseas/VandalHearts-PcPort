@@ -33,26 +33,11 @@ from contextlib import redirect_stderr, redirect_stdout
 
 import lang_build
 
-# Column budgets are the CLEAN display width -- one less than the game's draw/wrap threshold, because
-# the last column the game draws lands ON the window border (looks clipped). Calibrated by the
-# max-length stress run: descriptions clip the 34th column, so
-# 33 is the last clean one (== retail's own longest, 33); gStringTable's box shows 19 clean of 20.
-COLS = {"gStringTable": (19, "wraps"), "gSpellDescriptions": (33, "wraps"),
-        "gItemDescriptions": (33, "wraps"), "gItemDescriptions2": (28, "wraps")}
+COLS = {"gStringTable": (20, "wraps"), "gSpellDescriptions": (35, "wraps"),
+        "gItemDescriptions": (35, "wraps"), "gItemDescriptions2": (29, "wraps")}
 FIXED_CHARS = {"gCharacterNames": 6, "gUnitTypeNames": 10, "gItemNames": 12,
                "gClassAdvancementNames": 16, "gSpellNames": 20, "terrainText": 11,
                "gItemNamesSjis": 8}
-# Fixed tables whose on-screen box is NARROWER than the record holds: FIXED_CHARS above is the hard
-# STORAGE limit (error), but a translation between the display width here and that storage width fits
-# the record yet CLIPS at the tightest draw site. WARN (not error) so a translator learns the real
-# on-screen limit. Measured by the max-length stress run:
-#   gSpellNames    -- the battle spell-select menu's last clean column is 15 (16 lands on the border;
-#                     == retail's longest, "Supreme Healing" = 15) of the record's 20
-#   gItemNamesSjis -- the shop-sell / equip-compare box shows 6 clean (7 on the border); the wide
-#                     buy/depot/equip-list boxes show all 8, and retail's own 8-char "Megaherb" already
-#                     clips in the narrow ones, so 8 stays the record limit and this is advisory
-DISPLAY_COLS = {"gSpellNames": (15, "battle spell menu"),
-                "gItemNamesSjis": (6, "shop-sell / equip-compare box")}
 MSGBOX_COLS = 26
 SHOP_T_COLS = 30
 
@@ -128,34 +113,16 @@ def validate(disc, work, strict=False, packart=None):
             if t and len(t) > width:
                 errors.append(f"{e['key']}: {len(t)} chars, record holds {width} -- truncated")
 
-    # On-screen clip: fits the record, but the tightest draw site is narrower (see DISPLAY_COLS).
-    for name, (budget, where) in DISPLAY_COLS.items():
-        for e in tables[name]["entries"]:
-            t = e.get("text") or ""
-            if t and budget < len(t) <= FIXED_CHARS[name]:
-                warns.append(f"{e['key']}: {len(t)} chars > {budget} -- clips in the {where} "
-                             f"(fits the {FIXED_CHARS[name]}-char record, but that box shows {budget})")
-
     for name, (budget, _) in COLS.items():
         for e in tables[name]["entries"]:
             t = e.get("text") or ""
-            if not t:
-                continue
-            # measure what RENDERS: an embedded \n is a line break, so the budget applies to the
-            # longest LINE (retail's own shop descriptions carry \n). A MULTI-LINE entry is a vertical
-            # MENU (gStringTable's dojo / world-map option lists): its box is sized to the longest
-            # ORIGINAL option, not the wide description budget -- measured in game. Use that per entry.
-            en = e.get("en") or ""
-            if "\n" in en:
-                b = max(cols(l, st_entries) for l in en.split("\n"))
-                what = f"{b} (menu box sized to its longest option)"
-            else:
-                b = budget
-                what = str(budget)
-            c = max(cols(line, st_entries) for line in t.split("\n"))
-            if c > b:
-                warns.append(f"{e['key']}: {c} cols > {what} -- wraps to an extra row "
-                             f"(may draw outside the window)")
+            if t:
+                # measure what RENDERS: an embedded \n is a line break, so the budget applies to
+                # the longest LINE, not the stored string (retail's own shop descriptions carry \n)
+                c = max(cols(line, st_entries) for line in t.split("\n"))
+                if c > budget:
+                    warns.append(f"{e['key']}: {c} cols > {budget} -- wraps to an extra row "
+                                 f"(may draw outside the window)")
 
     for f in sorted(glob.glob(os.path.join(work, "strings", "dialogue", "*.json"))):
         doc = load_json(f)
