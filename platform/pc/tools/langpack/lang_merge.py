@@ -13,6 +13,10 @@ Direction is ONE-WAY, translate/ -> strings/: the grouped view is the human-faci
 both carry a (different) translation, translate/ wins and the conflict is REPORTED, never silent.
 Dialogue has no grouped view (its files are already entity-shaped) and is untouched here.
 
+The grouped view ROUND-TRIPS: lang_group carries the existing strings/ translation into translate/,
+so re-grouping does not blank a translator's work, and a field the translator CLEARS is a deliberate
+revert to English -- reported by default (never silently kept), applied with --revert-cleared.
+
 Mappings mirror lang_group.py exactly:
   items.json        id -> gItemNamesSjis / gItemNames / gItemDescriptions / gItemDescriptions2
   spells.json       id -> gSpellNames / gSpellDescriptions
@@ -45,22 +49,37 @@ FIELDS = {
 }
 
 
-def merge(work):
+def merge(work, revert_cleared=False):
     tp, sp = os.path.join(work, "translate"), os.path.join(work, "strings")
     tables = load(os.path.join(sp, "tables.json"))
     T = tables["tables"]
-    stats, conflicts = {}, []
+    stats, conflicts, reverts = {}, [], []
 
     def put(table, idx, text, src):
-        e = T[table]["entries"][idx]
+        # translate/ is the human layer and now round-trips (lang_group carries the existing
+        # translation into the view), so an EMPTY field where strings/ has text is a deliberate
+        # clear -- reverting to English. Silently keeping the old text would ship a translation the
+        # author removed. Report it always; apply it only with --revert-cleared.
+        ents = T[table]["entries"]
+        if idx >= len(ents):
+            return                       # this group row has no slot in this table (they differ in
+                                         # length -- gItemNames runs 139, gItemNamesSjis only 101)
+        e = ents[idx]
         old = e.get("text") or ""
-        if old and old != text:
+        if old == text:
+            return
+        if text == "":
+            reverts.append(f"{table}[{idx}]: strings/ has {old!r}, {src} cleared it")
+            if revert_cleared:
+                e["text"] = ""
+                stats[f"{src} (revert)"] = stats.get(f"{src} (revert)", 0) + 1
+            return
+        if old:
             conflicts.append(f"{table}[{idx}]: strings/ had {old!r}, {src} says {text!r}")
-        if old != text:
-            e["text"] = text
-            stats[src] = stats.get(src, 0) + 1
+        e["text"] = text
+        stats[src] = stats.get(src, 0) + 1
 
-    tac_edits = {}                                  # key -> (text, src)
+    tac_edits = {}                                  # key -> (text, src); text "" = cleared
 
     for kind, fields in FIELDS.items():
         p = os.path.join(tp, f"{kind}.json")
@@ -70,32 +89,28 @@ def merge(work):
             i = e["id"]
             for fname, table in fields:
                 t = (e["fields"].get(fname) or {}).get("text") or ""
-                if t:
-                    put(table, i, t, f"{kind}.json")
+                put(table, i, t, f"{kind}.json")
             for fname, sub in (e.get("tactical") or {}).items():
                 t = sub.get("text") or ""
-                if t:
-                    for fn2, table in fields:
-                        if fn2 == fname:
-                            tac_edits[f"{table}[{i}]"] = (t, f"{kind}.json(tactical)")
+                for fn2, table in fields:
+                    if fn2 == fname:
+                        tac_edits[f"{table}[{i}]"] = (t, f"{kind}.json(tactical)")
 
     p = os.path.join(tp, "classes.json")
     if os.path.exists(p):
         for e in load(p)["entries"]:
             t = e.get("text") or ""
-            if t:
-                for key in e["appears_in"]:
-                    table, idx = key[:-1].split("[")
-                    put(table, int(idx), t, "classes.json")
+            for key in e["appears_in"]:
+                table, idx = key[:-1].split("[")
+                put(table, int(idx), t, "classes.json")
 
     for kind in ("menus", "terrain"):
         p = os.path.join(tp, f"{kind}.json")
         if os.path.exists(p):
             for e in load(p)["entries"]:
                 t = e.get("text") or ""
-                if t:
-                    table, idx = e["key"][:-1].split("[")
-                    put(table, int(idx), t, f"{kind}.json")
+                table, idx = e["key"][:-1].split("[")
+                put(table, int(idx), t, f"{kind}.json")
 
     save(os.path.join(sp, "tables.json"), tables)
 
@@ -108,17 +123,22 @@ def merge(work):
         for bucket in ("menus", "messages"):
             for e in tdoc.get(bucket, []):
                 if e.get("options"):
-                    if not any(o.get("text") for o in e["options"]):
-                        continue
-                    txt = "\n".join(o.get("text") or o["en"] for o in e["options"])
+                    txt = ("\n".join(o.get("text") or o["en"] for o in e["options"])
+                           if any(o.get("text") for o in e["options"]) else "")
                 else:
                     txt = e.get("text") or ""
-                    if not txt:
-                        continue
                 tgt = by_key.get(e["key"])
-                if tgt is not None and (tgt.get("text") or "") != txt:
-                    tgt["text"] = txt
-                    nlit += 1
+                if tgt is None:
+                    continue
+                old = tgt.get("text") or ""
+                if old == txt:
+                    continue
+                if txt == "":
+                    reverts.append(f"literal {e['key']}: strings/ has a translation, cleared")
+                    if revert_cleared:
+                        tgt["text"] = ""; nlit += 1
+                    continue
+                tgt["text"] = txt; nlit += 1
         save(lp_s, sdoc)
 
     # tactical layer: same table[idx] key namespace as the retail tables
@@ -128,18 +148,29 @@ def merge(work):
         tdoc = load(tacp)
         for e in tdoc["entries"]:
             hit = tac_edits.get(e["key"])
-            if hit and (e.get("text") or "") != hit[0]:
-                e["text"] = hit[0]
-                ntac += 1
+            if not hit:
+                continue
+            new, src = hit
+            old = e.get("text") or ""
+            if old == new:
+                continue
+            if new == "":
+                reverts.append(f"{e['key']} (tactical): strings/ has {old!r}, {src} cleared it")
+                if revert_cleared:
+                    e["text"] = ""; ntac += 1
+                continue
+            e["text"] = new; ntac += 1
         save(tacp, tdoc)
 
-    return stats, conflicts, nlit, ntac
+    return stats, conflicts, reverts, nlit, ntac
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    stats, conflicts, nlit, ntac = merge(sys.argv[1])
+    revert_cleared = "--revert-cleared" in sys.argv
+    work = next(a for a in sys.argv[1:] if not a.startswith("-"))
+    stats, conflicts, reverts, nlit, ntac = merge(work, revert_cleared)
     tot = sum(stats.values())
     for src, n in sorted(stats.items()):
         print(f"  {src:24} {n:>4} field(s) merged")
@@ -151,5 +182,16 @@ if __name__ == "__main__":
         print(f"\n  {len(conflicts)} conflict(s) -- translate/ won, review these:")
         for c in conflicts[:10]:
             print(f"    {c}")
-    if not tot and not nlit and not ntac:
-        print("  nothing to merge (no text fields set in translate/)")
+    if reverts:
+        if revert_cleared:
+            print(f"\n  {len(reverts)} field(s) reverted to English (--revert-cleared).")
+        else:
+            print(f"\n  {len(reverts)} field(s) CLEARED in translate/ but still set in strings/ -- "
+                  f"LEFT AS-IS.\n  Re-run with --revert-cleared to remove them (revert to English), "
+                  f"or restore the text in translate/:")
+            for r in reverts[:10]:
+                print(f"    {r}")
+            if len(reverts) > 10:
+                print(f"    ... and {len(reverts) - 10} more")
+    if not tot and not nlit and not ntac and not reverts:
+        print("  nothing to merge (no text fields changed in translate/)")

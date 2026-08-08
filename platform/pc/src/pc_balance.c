@@ -151,14 +151,22 @@ static void addPatch(void *addr, unsigned char size, unsigned long tac) {
 }
 
 /* In-place fixed-width string patch (e.g. gSpellNames[] -- a char[][21] array, NOT a pointer table,
- * so it can't be repointed like gSpellDescriptions). Copies s (incl. NUL) over addr; restorable. */
-static void addStrPatch(void *addr, const char *s) {
+ * so it can't be repointed like gSpellDescriptions). Copies s (incl. NUL) over addr; restorable.
+ * `dstWidth` is the record width at addr: the replacement must fit it, or the apply memcpy would run
+ * into the NEXT record. A translation pack encodes these targets <= dstWidth-1 chars at build time,
+ * so a reject here means a mis-built pack -- log and skip rather than corrupt the neighbour. */
+static void addStrPatch(void *addr, const char *s, unsigned int dstWidth) {
     Patch *p;
     unsigned int n;
     s = (const char *)PC_LangStr(s);           /* translatable (pack encodes fixed-width targets
                                                   in 1-byte pack codes at build time) */
     n = (unsigned int)strlen(s) + 1;
-    if (s_nPatch >= MAX_PATCH || n > sizeof p->orig) return;
+    if (s_nPatch >= MAX_PATCH) return;
+    if (n > dstWidth || n > sizeof p->orig) {  /* dstWidth bounds the record; orig[] bounds the snapshot */
+        fprintf(stderr, "[balance] string patch %u B exceeds the %u B record -- skipped "
+                        "(rebuild the language pack)\n", n, dstWidth);
+        return;
+    }
     p = &s_patch[s_nPatch++];
     p->addr = addr;
     p->size = (unsigned char)n;
@@ -236,7 +244,7 @@ static void ensureInit(void) {
     addPatch(&gSpellsEx[26][SPELL_EX_OBJF_TARGET], 2, 128);
     addPatch(&gSpellsEx[26][SPELL_EX_OBJF_DEFEAT], 2, 129);
     addPatch(&gSpellLevelRequirement[26], 1, 21);                              /* mage learns it @21 (Spread Force's slot) */
-    addStrPatch(gSpellNames[26], "Thunder Ball");                             /* was "Stone Shower" */
+    addStrPatch(gSpellNames[26], "Thunder Ball", sizeof gSpellNames[0]);      /* was "Stone Shower" */
 
     /* Spell-list swaps (gSpellLists[party][path][slot], s32). Monk path=1 slot 3; mage path=0 slot 7. */
     addPatch(&gSpellLists[4][1][3],  4, 13); addPatch(&gSpellLists[5][1][3],  4, 13);  /* Eleni/Huxley Monk -> Spread Force */

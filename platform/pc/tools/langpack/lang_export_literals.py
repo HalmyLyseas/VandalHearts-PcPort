@@ -42,15 +42,82 @@ DEAD = {
         "loops `while (gCurrentParty[i] != 0)`, so slot 0 is never dereferenced as a name.",
 }
 
-# Hand annotations for sites whose behaviour a translator cannot infer from the string alone.
+# Hand annotations for sites whose behaviour a translator cannot infer from the string alone. Keyed
+# by the entry's own `literal:<fnv1a>` key (same identity the export uses everywhere), so the retail
+# text is not spelled out here -- the annotation describes the site, it does not quote it.
 NOTES = {
-    "you got ": ("⚠ SENTENCE ASSEMBLED BY PIXEL POSITION, not concatenation: battle_0201b8.c draws "
-                 "\"you got \" at x=16, the item name at x=80 and \"!\" at x=80+len*8. A longer "
-                 "translation will overlap the item name -- this site needs its x positions moved, "
-                 "not just its text replaced."),
-    "!": ("⚠ the tail of the \"you got <item>!\" line -- see that entry; the three pieces are "
-          "positioned independently."),
+    # the item-pickup line's leading phrase
+    "literal:f22b155f50c44ff6":
+        ("⚠ SENTENCE ASSEMBLED BY PIXEL POSITION, not concatenation: battle_0201b8.c draws this "
+         "leading phrase at x=16, the item name at x=80 and the trailing mark at x=80+len*8. A "
+         "longer translation will overlap the item name -- this site needs its x positions moved, "
+         "not just its text replaced."),
+    # the trailing mark of the item-pickup line
+    "literal:af639c4c86017fcc":
+        ("⚠ the tail of the item-pickup line -- see the leading-phrase entry; the three pieces are "
+         "positioned independently."),
+    # the after-battle experience popup's leading phrase
+    "literal:a06b1d432c61c1d6":
+        ("⚠ the PREFIX of the after-battle experience popup: ShowExpDialog (battle_0190dc.c) draws "
+         "this phrase, then the number, then the second line. Keep it short -- it shares a "
+         "20-column line with the number, which is placed right after whatever you write here."),
 }
+
+# PC_LANGSTR-wrapped literals that are NOT a draw-call argument -- e.g. a prefix composed into a
+# buffer before drawing (ShowExpDialog builds "You got <N>" so the number can follow a translated
+# prefix of any length). The draw-call sweep below cannot see these, which is the exact blind spot
+# that let the experience popup go untranslated through a whole UAT. Listed per file so a blind scan
+# does not pull in unrelated macro uses; the count is a self-check (a removed wrap fails the export).
+WRAPPED_LITERAL_FILES = {
+    "battle_0190dc.c": 2,   # "You got " (composed) + "  experience points." (also seen at its draw call)
+}
+PC_LANGSTR_RX = re.compile(r'PC_LANGSTR\s*\(\s*("(?:[^"\\]|\\.)*")\s*\)')
+
+
+def scan_wrapped(srcdir):
+    """-> [(file, raw bytes)] for PC_LANGSTR-wrapped literals in the curated files, with a
+    self-check so a wrap that silently disappears fails the export instead of dropping a string."""
+    out = []
+    for base, expect in WRAPPED_LITERAL_FILES.items():
+        path = os.path.join(srcdir, base)
+        if not os.path.exists(path):
+            continue
+        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
+        lits = PC_LANGSTR_RX.findall(text)
+        if len(lits) < expect:
+            raise SystemExit(f"{base}: expected >= {expect} PC_LANGSTR literal(s), found {len(lits)} "
+                             f"-- a wrap was removed? update WRAPPED_LITERAL_FILES or restore it")
+        for lit in lits:
+            out.append((base, unescape(lit)))
+    return out
+
+
+# A single string held in a char ARRAY (not a pointer array), reached only through a pointer to it:
+# sEmptyFileCaption, the "Empty" placeholder for an unused save/load slot. The draw-call sweep sees a
+# variable, and scan_arrays matches pointer arrays -- so neither finds it. Its draws are wrapped
+# (DrawTextWindow, and the load-menu DrawText calls), so a pack can replace it once it is exported.
+# Curated by (file, symbol); a rename or removal fails the self-check below.
+CHAR_ARRAY_LITERALS = {
+    "main_menu.c": ["sEmptyFileCaption"],
+}
+
+
+def scan_char_arrays(srcdir):
+    """-> [(symbol, raw bytes)] for the curated `TYPE name[] = "literal";` definitions."""
+    out = []
+    for base, names in CHAR_ARRAY_LITERALS.items():
+        path = os.path.join(srcdir, base)
+        if not os.path.exists(path):
+            continue
+        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
+        for name in names:
+            m = re.search(r'\b(?:static\s+)?(?:const\s+)?(?:u8|s8|char)\s+' + re.escape(name) +
+                          r'\s*\[\s*\]\s*=\s*("(?:[^"\\]|\\.)*")\s*;', text)
+            if not m:
+                raise SystemExit(f"{base}: char-array literal {name} not found -- renamed or removed? "
+                                 f"update CHAR_ARRAY_LITERALS")
+            out.append((name, unescape(m.group(1))))
+    return out
 
 
 def unescape(c_literal):
@@ -128,7 +195,9 @@ ARRAY_DEAD = {
     "sText_InBattleSaveOrBattleStart": "marked '// Unused' in the source",
     "sUnused_80102364": "name says it; no reference anywhere in src/",
     "sText_FileSaveCaptions": "caption BUFFERS, filled at run time -- the literals are empty",
-    "sText_FileLoadCaptions": "caption BUFFERS, filled at run time -- the literals are empty",
+    # sText_FileLoadCaptions is NOT dead: slots 0-2 are empty run-time buffers (skipped by the
+    # non-empty filter in scan_arrays), but slot 3 is a real constant, "In-battle save", drawn in
+    # the load menu. Kept translatable; the empties still contribute nothing.
     "sText_LanguageOptions": "retail language menu; the port never reaches it",
 }
 
@@ -209,6 +278,30 @@ def export(srcdir, workdir):
                                    "encoding": enc, "sites": [], "cols": []})
         e["sites"].append(f"{arr}[{idx}]")
 
+    # PC_LANGSTR wraps that are not a draw-call argument (composed into a buffer first). Only add the
+    # ones the draw-call sweep did not already find -- a literal seen at its draw call keeps that
+    # entry (and its column budget); this fills in the ones with no draw call of their own.
+    for base, raw in scan_wrapped(srcdir):
+        key = f"literal:{fnv1a(raw):016x}"
+        if key in DEAD:
+            dead += 1; continue
+        if key in found:
+            continue
+        en, enc = decode(raw)
+        found[key] = {"key": key, "en": en, "text": "", "encoding": enc,
+                      "sites": [f"{base} (composed, not a draw-call arg)"], "cols": []}
+
+    # Single-string char arrays drawn through a pointer (sEmptyFileCaption).
+    for name, raw in scan_char_arrays(srcdir):
+        key = f"literal:{fnv1a(raw):016x}"
+        if key in DEAD:
+            dead += 1; continue
+        if key in found:
+            continue
+        en, enc = decode(raw)
+        found[key] = {"key": key, "en": en, "text": "", "encoding": enc,
+                      "sites": [name], "cols": []}
+
     entries = []
     for e in sorted(found.values(), key=lambda x: x["sites"][0]):
         lines = e["en"].split("\n")
@@ -232,7 +325,7 @@ def export(srcdir, workdir):
             item["options"] = lines
             item["options_note"] = ("one menu option per line -- keep the same number of lines, the "
                                     "game indexes them by position")
-        n = NOTES.get(e["en"])
+        n = NOTES.get(e["key"])
         if n:
             item["warning"] = n
         entries.append(item)

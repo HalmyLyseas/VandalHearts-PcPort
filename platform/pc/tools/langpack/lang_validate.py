@@ -23,9 +23,11 @@ Two layers, deliberately distinct:
     ONE column, a 2-byte SJIS pair is ONE column. #N insertions are counted at the referenced
     string's own width.
 
-Usage: ./lang_validate.py <disc.bin> <workdir> [--strict]
+Usage: ./lang_validate.py <disc.bin> <workdir> [--strict] [--packart <dir>]
+       --packart validates a NON-LATIN working set in script mode (pass the same sheets you build
+       with); without it a Cyrillic/Greek set is checked as if it were Latin and mis-reports.
 """
-import glob, io, json, os, re, sys, tempfile
+import glob, io, json, os, re, shutil, sys, tempfile
 from contextlib import redirect_stderr, redirect_stdout
 
 import lang_build
@@ -65,23 +67,40 @@ def cols(s, string_table=None):
     return out
 
 
-def validate(disc, work, strict=False):
+def validate(disc, work, strict=False, packart=None):
     errors, warns = [], []
 
     # --- layer 1: dry-run build ----------------------------------------------------------------
+    # Pass --packart so a NON-LATIN working set is validated in the mode it will actually build in
+    # (script mode / 1-byte codes); without it the builder would reject every Cyrillic string as a
+    # bad Latin one. allow_incomplete keeps an unfinished script pack from hard-failing here, so the
+    # other errors (glyph capacity, collisions, budgets) still surface; completeness is reported
+    # separately below.
     tmp = tempfile.mkdtemp(prefix="lang_validate_")
     buf = io.StringIO()
     built = True
     try:
         with redirect_stdout(buf), redirect_stderr(buf):
-            lang_build.build(disc, work, tmp, "validate")
+            # The dry-run name must PASS check_pack_name, or build() bails at the name check before
+            # running a single hard-rule test -- which silently made this whole layer a no-op while
+            # the name was "validate". "zz-validate" satisfies the <tag>-<desc> convention.
+            lang_build.build(disc, work, tmp, "zz-validate", packart=packart, allow_incomplete=True)
     except SystemExit:
         built = False
     if not built:
         for ln in buf.getvalue().splitlines():
             ln = ln.strip()
-            if ln and ln != "BUILD FAILED:":
+            # Keep the hard-rule errors (listed under "BUILD FAILED:"); drop the builder's own
+            # progress/notes ("[lang] ...": font loaded, untranslated note, incomplete warning) --
+            # they are stderr chatter, not validation findings.
+            if ln and ln != "BUILD FAILED:" and not ln.startswith("[lang]"):
                 errors.append(f"[build] {ln}")
+    if packart:                                    # script mode: incompleteness renders as nonsense
+        n = lang_build.count_untranslated(work)
+        if n:
+            (errors if strict else warns).append(
+                f"{n} string(s) untranslated -- a non-Latin pack renders each as nonsense; the final "
+                f"build refuses an incomplete pack (this is a warning so mid-work validation is usable)")
 
     # --- layer 2: render budgets ---------------------------------------------------------------
     tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
@@ -125,6 +144,46 @@ def validate(disc, work, strict=False):
                            + ("HARD CLIP, tail lost on screen" if hard else "wraps"))
                     (errors if hard else warns).append(msg)
 
+    # Code literals: the exporter records a per-call-site column budget on each one (`limit.max_cols`,
+    # the tightest DrawText site). The builder does not police it, so a literal that overflows its
+    # menu slot sailed through unchecked -- e.g. the world menu and the option panels at 10 cols.
+    lp = os.path.join(work, "strings", "literals.json")
+    if os.path.exists(lp):
+        for e in json.load(open(lp))["entries"]:
+            t = e.get("text") or ""
+            lim = e.get("limit")
+            if not t or not lim:
+                continue                          # untranslated, or a site with no recorded budget
+            budget = lim["max_cols"]
+            for line in t.split("\n"):            # a multi-line menu literal: each line has the budget
+                c = cols(line, st_entries)
+                if c > budget:
+                    warns.append(f"literal {e['key']}: {c} cols > {budget} -- wraps "
+                                 f"(overflow costs a row; {lim.get('note', '')})".rstrip(" ;"))
+
+    # Tactical layer: its strings target the retail tables, so they carry those tables' budgets --
+    # gSpellNames a 20-char HARD record, the two description tables a wrapping column count. Neither
+    # was checked (only the builder's 20-char gSpellNames rule fired, via the dry-run).
+    tp = os.path.join(work, "strings", "tactical.json")
+    if os.path.exists(tp):
+        for e in json.load(open(tp))["entries"]:
+            t = e.get("text") or ""
+            if not t:
+                continue
+            key = e["key"]
+            table = key.split("[")[0]
+            if table in FIXED_CHARS:              # gSpellNames: hard record width in characters
+                w = FIXED_CHARS[table]
+                if len(t) > w:
+                    errors.append(f"tactical {key}: {len(t)} chars > {w} -- record truncates")
+            elif table in COLS:                   # descriptions: wrapping column budget
+                budget = COLS[table][0]
+                c = max(cols(line, st_entries) for line in t.split("\n"))
+                if c > budget:
+                    warns.append(f"tactical {key}: {c} cols > {budget} -- wraps to an extra row")
+
+    shutil.rmtree(tmp, ignore_errors=True)         # the dry-run pack held translated content -- drop it
+
     if strict:
         errors, warns = errors + warns, []
     return errors, warns
@@ -134,7 +193,9 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
     strict = "--strict" in sys.argv
-    errors, warns = validate(sys.argv[1], sys.argv[2], strict)
+    packart = sys.argv[sys.argv.index("--packart") + 1] if "--packart" in sys.argv else None
+    pos = [a for a in sys.argv[1:] if not a.startswith("-") and a != packart]
+    errors, warns = validate(pos[0], pos[1], strict, packart)
     for w in warns:
         print(f"  warn : {w}")
     for e in errors:

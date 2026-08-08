@@ -31,6 +31,8 @@ commitments.
   controls, features, troubleshooting in one printable document).
 - **[hd-pack.md](hd-pack.md)** — the optional 1.6 HD background pack: installing one, the HD PACK option,
   and building a pack with the tools in `platform/pc/tools/hdpack/`.
+- **[language-packs.md](language-packs.md)** — the optional language packs: installing and selecting one,
+  what a pack covers, and building one with the tools in `platform/pc/tools/langpack/`.
 - **[gameplay-additions.md](gameplay-additions.md)** — the optional Stage-3 QoL features (twin-stick
   camera, unit-cycle, enemy threat overlay, save management) and what they do.
 - **[tactical-mode.md](tactical-mode.md)** — the opt-in 1.3 gameplay rebalance (level cap, class

@@ -64,12 +64,13 @@ PROBES = [
 #        a multi-byte inserted string; L4's probe text is made accented for this)
 #   L14: accented SUBSTITUTED dialogue rendered by the DrawText route (SHOP_T wraps at 30 cols,
 #        never sees the message box) -- the shop clerk's greeting
-# Increment 5 (PC_LANGSTR literals): replacements matched by content hash, found via their English.
+# Increment 5 (PC_LANGSTR literals): replacements matched by the entry's own `literal:<hash>` key,
+# so the retail English is not embedded here (it lives only on the player's disc, hashed at export).
 LITERALS = [
-    ("L15", "Battle results", "L15 R\u00e9sultats",
+    ("L15", "literal:ea126cddb07855e5", "L15 R\u00e9sultats",
      "the battle-results banner after a battle ends -- a replaced CODE literal, with an accent"),
-    ("L16", "Skill\nSpell\nItems", "L16\u00e9t\nSorts\nObjets",
-     "the party menu's Skill/Spell/Items panel -- the most-seen literal in the game"),
+    ("L16", "literal:5d75bd4732d1eb30", "L16\u00e9t\nSorts\nObjets",
+     "the party menu's skill/spell/items panel -- the most-seen literal in the game"),
 ]
 
 # Increment 7 (Tactical layer): a tactical flavor string, replaced by content hash -- visible with
@@ -81,8 +82,9 @@ DIALOGUES = [
      "the opening scene, first message box -- line 2 is the UTF-8 probe"),
     ("L13", "EVENT01", 1, ["L13 menu ref: #33", "", ""],
      "the opening scene, SECOND box -- the #33 insert must render 'L4 Vallée' with its accent"),
-    ("L14", "SHOP_T", 0, ["L14 bienvenüe éh.", "What can I do for you?"],
-     "any shop: the clerk's greeting -- accents through the DrawText dialogue route"),
+    ("L14", "SHOP_T", 0, ["L14 bienvenüe éh.", ""],
+     "any shop: the clerk's greeting -- accents through the DrawText dialogue route; line 2 left "
+     "untranslated so it renders retail unchanged"),
 ]
 
 
@@ -109,9 +111,9 @@ def main(disc, work, outdir):
 
         p = os.path.join(stage, "strings", "literals.json")
         doc = json.load(open(p))
-        for tag, en, text, _ in LITERALS:
-            hits = [e for e in doc["entries"] if e["en"] == en]
-            assert len(hits) == 1, (tag, en)
+        for tag, key, text, _ in LITERALS:
+            hits = [e for e in doc["entries"] if e["key"] == key]
+            assert len(hits) == 1, (tag, key)
             hits[0]["text"] = text
         json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
 
@@ -134,7 +136,7 @@ def main(disc, work, outdir):
         print(f"  {tag:3}{table+'['+str(idx)+']':22}{repl:26}{where}")
     for tag, stem, ei, lines, where in DIALOGUES:
         print(f"  {tag:4}{stem+f' entry {ei+1}':21}{lines[0]:26}{where}")
-    for tag, en, text, where in LITERALS:
+    for tag, key, text, where in LITERALS:
         print(f"  {tag:4}{'literal':21}{text.splitlines()[0]:26}{where}")
     for tag, en, text in TACTICAL:
         print(f"  {tag:4}{'tactical':21}{text:26}Tactical ON: Mad Book's description in the items list")

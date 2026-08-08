@@ -43,7 +43,9 @@ void PC_LangFontLoad(const unsigned char *p, unsigned len) {
     unsigned n, i;
     if (len < 4) return;
     n = (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
-    if (4 + n * 13u > len) {
+    /* Divide form: n is pack-supplied, `4 + n * 13u` wraps u32 for large n and would pass -- the
+     * parse loop (and the malloc) would then trust a count the section cannot hold. */
+    if (n > (len - 4) / 13) {
         fprintf(stderr, "[lang] font section truncated (%u glyphs, %u bytes)\n", n, len);
         return;
     }
@@ -148,9 +150,12 @@ static void DrawGlyphBitmap(const unsigned char *rows, int x, int y, int color) 
 
 extern const unsigned char *PC_LangCharmapBlob(unsigned *len);   /* pc_lang.c */
 
-static unsigned SheetInkNibble(const unsigned short *pix, int w) {
+static unsigned SheetInkNibble(const unsigned short *pix, int w, int h) {
     int counts[16] = {0}, r, hw, n, best = 4, bestCt = 0;
     int row0 = (68 / FWD_CELLS_PER_ROW) * FWD_CELL_H, col = (68 % FWD_CELLS_PER_ROW) * FWD_CELL_W;
+    if (row0 + FWD_CELL_H > h) return (unsigned)best;   /* 'A' cell not in this upload slice: default
+                                                        * ink 4 (DrawFontGlyph's packing), don't read
+                                                        * past the buffer -- same guard the stamp uses */
     for (r = 0; r < FWD_CELL_H; r++)
         for (hw = 0; hw < FWD_CELL_W; hw++) {
             unsigned v = pix[(row0 + r) * w + col + hw];
@@ -170,8 +175,8 @@ void PC_LangPatchFwdUpload(int px, int py, int pw, int ph, unsigned short *pix) 
     if (!blob || len < 4) return;
     n = (unsigned)blob[0] | ((unsigned)blob[1] << 8) | ((unsigned)blob[2] << 16) |
         ((unsigned)blob[3] << 24);
-    if (4 + n * 11u > len) return;
-    ink = SheetInkNibble(pix, pw);
+    if (n > (len - 4) / 11) return;          /* divide form: the addition wraps for hostile n */
+    ink = SheetInkNibble(pix, pw, ph);
     for (i = 0; i < n; i++) {
         const unsigned char *rec = blob + 4 + i * 11;
         int slot = rec[1], r;
@@ -209,7 +214,7 @@ void PC_LangKromLoad(const unsigned char *p, unsigned len) {
     unsigned n, i;
     if (len < 4) return;
     n = (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
-    if (4 + n * 32u > len) {
+    if (n > (len - 4) / 32) {                /* divide form: the addition wraps for hostile n */
         fprintf(stderr, "[lang] krom section truncated (%u glyphs, %u B)\n", n, len);
         return;
     }

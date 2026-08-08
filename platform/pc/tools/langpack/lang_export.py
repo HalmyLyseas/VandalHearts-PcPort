@@ -183,14 +183,23 @@ def _budget(stem):
 # WRAPS. Charging it the message box's 26-column hard clip flagged 41 lines of Konami's own shipped
 # text, and the disc is the oracle: a rule that fails retail is our rule being wrong. Budget is the
 # tighter of the two real call sites.
-# Lines PROVEN not to render through the message box, keyed by content (line numbers churn, text
-# does not). Same discipline as lang_export_literals.py's DEAD list: each needs a PROOF, never a
-# hunch -- a merely suspicious line stays in the working set and stays flagged.
+# Lines PROVEN not to render through the message box. Keyed by the FNV-1a hash of the line's own
+# bytes -- NOT the text itself, so no retail dialogue is committed to the repo (same reason and same
+# discipline as lang_export_literals.py's DEAD list; each still needs a PROOF, never a hunch). The
+# proof describes WHERE the line is (event/index), it does not quote it. Rebuild a hash for a new
+# entry with `fnv_hex("<the line>")`.
+def fnv_hex(s):
+    h = 14695981039346656037
+    for b in s.encode("utf-8"):
+        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return f"{h:016x}"
+
+
 NOT_MSGBOX = {
-    "Zohar has joined your party.":
+    "f95e2f015c479781":     # EVENT37's party-join line
         "join messages are drawn in their own full-width box, not the message box -- confirmed in "
-        "game 2026-08-06. The phrasing actually shown is SIBAI6[3] 'Zohar joined your party.' "
-        "(24 cols); this longer EVENT37 variant is an unused duplicate.",
+        "game 2026-08-06. The phrasing actually shown is the shorter SIBAI6[3] variant (24 cols); "
+        "this longer EVENT37 duplicate is unused.",
 }
 
 
@@ -200,6 +209,35 @@ def _entry_budget(stem, n):
                 "note": "battle condition panel -- drawn by DrawText (battle_0201b8.c), wraps; "
                         "the narrower of its two call sites (34 and 40 columns)"}
     return None
+
+
+def walk_dialogue(lines):
+    """THE ONE definition of the on-disc dialogue format. `lines` is a decoded file (the '\\r\\n'-split
+    inverse-obfuscated bytes). Yields (entry_n, line_idx, arr_idx, raw_line) for every CONTENT line,
+    walking EXACTLY as the game's LoadText does (src/text.c) so export and build share one walker and
+    cannot drift:
+
+      A blank line CLOSES the current entry and OPENS the next one, both at once. LoadText does not
+      advance its input pointer when it closes -- it re-reads the very same blank line, sees
+      readingEntry == 0, and starts the next entry with it. Treating the blank as a toggle instead
+      "spent" every second one, orphaning every other entry: 11 entries where the game sees 21, and
+      half of all dialogue never reached a translator (fixed b4c44f0 -- do not reintroduce).
+
+    entry_n is the game's 1-based entry number (it counts EVERY blank, including empty entries, so a
+    translator's keys line up with what the game loads); arr_idx is the position in `lines`, for a
+    consumer that mutates it in place (build_text). END terminates."""
+    inside, n, li = False, 0, 0
+    for idx, ln in enumerate(lines):
+        if ln.startswith(b"END"):
+            break
+        if ln == b"":
+            inside, n, li = True, n + 1, 0
+            continue
+        if not inside:
+            continue
+        yield n, li, idx, ln
+        li += 1
+
 
 def _iso(disc):
     f = open(disc, "rb")
@@ -241,37 +279,25 @@ def export_dialogue(disc, outdir):
         ex, sz = files[nm]
         raw = sec(ex, (sz + 2047)//2048)[:sz]
         text = bytes(~b & 0xFF for b in raw)                      # the whole "obfuscation"
-        lines = text.split(b"\r\n")
         budget = _budget(stem)
-        entries, cur, inside, n = [], None, False, 0
-        for ln in lines:
-            if ln.startswith(b"END"): break
-            if ln == b"":
-        # A blank line CLOSES the current entry and OPENS the next one, both at once. LoadText
-        # (src/text.c) does not advance its input pointer when it closes -- it re-reads the very
-        # same blank line, sees readingEntry == 0, and starts the next entry with it. Treating the
-        # blank as a toggle instead "spends" every second one, which orphaned every other entry:
-        # 11 entries where the game sees 21, and half of all dialogue never reached a translator.
-                if cur and cur["en"]: entries.append(cur)
-                inside = True; n += 1; cur = {"key": f"{stem}[{n}]", "en": [], "text": []}
-                continue
-            if inside and cur is not None:
-                s = ln.decode("latin1")
-                cur["en"].append(s); cur["text"].append("")
-                tot_lines += 1
-                vis = _re.sub(r"\$.", "", s)                       # control codes cost no columns
-                if len(vis) > budget["max_cols"]: over += 1
-        if cur and cur["en"]: entries.append(cur)
-        over -= sum(1 for e in entries for l in e["en"]
-                    if len(_re.sub(r"\$.", "", l)) > budget["max_cols"])   # undo the file-budget tally
+        # Group content lines by the game's entry number, using the ONE shared walker (walk_dialogue),
+        # so this and build_text can never read the format differently.
+        by_entry = {}
+        for n, li, idx, ln in walk_dialogue(text.split(b"\r\n")):
+            by_entry.setdefault(n, []).append(ln.decode("latin1"))
+        entries = []
+        for n in sorted(by_entry):
+            en_lines = by_entry[n]
+            entries.append({"key": f"{stem}[{n}]", "en": en_lines, "text": [""] * len(en_lines)})
+            tot_lines += len(en_lines)
         for i, e in enumerate(entries, 1):
             eb = _entry_budget(stem, i)
             if eb: e["render"] = eb
             lim = (eb or budget)["max_cols"]
-            exempt = [j for j, l in enumerate(e["en"]) if l in NOT_MSGBOX]
+            exempt = [j for j, l in enumerate(e["en"]) if fnv_hex(l) in NOT_MSGBOX]
             if exempt:
                 e["render_exempt"] = exempt
-                e["render_exempt_why"] = NOT_MSGBOX[e["en"][exempt[0]]]
+                e["render_exempt_why"] = NOT_MSGBOX[fnv_hex(e["en"][exempt[0]])]
             over += sum(1 for j, l in enumerate(e["en"])
                         if j not in exempt and len(_re.sub(r"\$.", "", l)) > lim)
         doc = {"file": stem, "render": budget, "count": len(entries),

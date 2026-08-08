@@ -24,13 +24,16 @@ Self-check: every UNEDITED entry is re-encoded and compared against the disc byt
 cannot reproduce what the game shipped, the build fails rather than emitting a subtly wrong pack.
 
 Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en] [--packart <dir>]
+                       [--allow-incomplete]
        --packart supplies the glyph sheets a non-Latin script needs; it also switches the pack to
        1-byte codes throughout (script mode), since UTF-8 cannot carry Cyrillic through dialogue.
+       --allow-incomplete builds a non-Latin pack that still has untranslated strings (each renders
+       as nonsense) -- for testing only; a finished non-Latin pack must be complete.
        -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
 """
 import json, os, re, struct, sys, unicodedata
 
-from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR
+from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR, walk_dialogue
 
 MAGIC = b"VHLANG\x01\x00"
 K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL = 1, 2, 3, 4, 5, 6, 7
@@ -72,6 +75,49 @@ def enc_sjis(s):
 
 def enc_plain(s):
     return s.encode("latin1")
+
+
+def drawn_chars(s):
+    """Yield the characters the game actually DRAWS, consuming control codes exactly as the
+    message-box parser does (src/text.c Objf351_MsgBoxText, cases '$' and '#'):
+      $W $F $P $O eat their operand letter; $S $T eat the letter then the digits after it;
+      #<digits> is a string-table insertion (eaten); the first '#' of '##' is eaten, the second
+      draws. A '$'/'#' before an UNRECOGNISED byte is consumed alone, so that byte draws -- which
+      is the parser's own fallthrough. Used to tell a consumed control-code operand (safe) from a
+      drawn character (which a non-Latin pack must be able to render)."""
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if c == "$" and i + 1 < n:
+            code = s[i + 1]
+            if code in "WwFfPpOo":
+                i += 2; continue                       # $ + operand letter, both consumed
+            if code in "SsTt":
+                i += 2                                 # $ + operand letter
+                while i < n and s[i].isdigit():
+                    i += 1                             # ...then the numeric argument
+                continue
+            i += 1; continue                           # unrecognised: $ eaten, operand drawn next
+        if c == "#" and i + 1 < n:
+            if s[i + 1] == "#":
+                i += 1                                 # first # eaten; the second draws
+                yield "#"; i += 1; continue
+            if s[i + 1].isdigit():
+                i += 2
+                while i < n and s[i].isdigit():
+                    i += 1
+                continue
+            i += 1; continue                           # lone # before a non-digit: eaten
+        yield c
+        i += 1
+
+
+def pack_code_collisions(s, charmap):
+    """The DRAWN ASCII characters of `s` whose byte a script-mode pack reassigns to a glyph slot.
+    Emitting one would draw the wrong script's letter -- the silent-nonsense failure a non-Latin
+    pack must never ship. Control-code operands are excluded because the parser consumes them."""
+    return sorted({ch for ch in drawn_chars(s)
+                   if ord(ch) < 0x80 and ord(ch) in charmap.pack_code_bytes})
 
 
 def fnv1a_str(text):
@@ -133,7 +179,7 @@ def synth_glyphs(exe, cps, errors):
         rows = synth_one(exe, cp)
         if rows is None:
             errors.append(f"U+{cp:04X} {chr(cp)!r}: not synthesisable from the US font "
-                          f"(lowercase+mark only for now) -- needs pack-supplied art")
+                          f"(lowercase+mark only) -- supply a drawn glyph for it via --packart")
             continue
         out.append((cp, rows))
     return out
@@ -347,6 +393,10 @@ class CharmapAssign:
             self.codes = [b for b in range(0x21, 0x7F)
                           if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
                           and chr(b) not in retail_chars]
+        # The bytes this pack can hand to a glyph slot -- captured before any get popped, so the
+        # collision guard (pack_code_collisions) can tell whether a DRAWN ASCII byte would be
+        # reassigned. Script mode adds A-Z here; a Latin pack never reassigns letters.
+        self.pack_code_bytes = set(self.codes)
         # Free glyph slots, 44 of them. Two exclusions inside this span, both learned the hard
         # way and both invisible until something renders:
         #   slot 1   = GLYPH_BG, the window background tile in the F_WD sheet (assigning it
@@ -407,6 +457,18 @@ def enc_codes(s, charmap, errors, ctx):
     0x81-0x9F, which the engine's two byte-pairing consumers read as SJIS leads (see
     dialogue_bytes_safe). 1-byte codes sidestep that entirely and are what the fan translation used.
     Returns None if any character has no code, so the caller can skip the entry."""
+    # A non-Latin pack reassigns the letter (and some punctuation) bytes to its own glyphs, so any
+    # LATIN character left in the text -- an untranslated word, a Latin proper noun -- would draw as
+    # a Cyrillic/Greek letter, not itself. That is the silent nonsense the framework exists to stop,
+    # and unlike a Latin pack it cannot degrade gracefully. Refuse it at build time. (Control-code
+    # operands like the W of $W are consumed by the parser, never drawn, so drawn_chars excludes
+    # them -- which is why the proven Russian pack, full of $W/$T6, still builds.)
+    bad = pack_code_collisions(s, charmap)
+    if bad:
+        errors.append(f"{ctx}: {', '.join(repr(c) for c in bad)} would draw as a pack glyph, not "
+                      f"itself -- Latin left in a non-Latin pack renders as nonsense; translate or "
+                      f"remove it")
+        return None
     out = bytearray()
     for ch in s:
         if ch == "\n":
@@ -421,7 +483,8 @@ def enc_codes(s, charmap, errors, ctx):
     return bytes(out)
 
 
-def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=None, krom=None):
+def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=None, krom=None,
+                script=False):
     """Whole-table blob: original record bytes, with edited records re-encoded."""
     base = foff(vram)
     blob = bytearray(exe[base:base + count * width])
@@ -470,6 +533,16 @@ def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=Non
                 continue
             raw = bytes(out)
         else:
+            # A pure-ASCII TRANSLATED field skips the charmap branch above, so in script mode its
+            # letter bytes would reach enc_plain and then draw as reassigned pack glyphs -- the same
+            # nonsense enc_codes refuses on the pointer/dialogue paths. Guard it here too.
+            if want and script and not sjis and charmap is not None:
+                bad = pack_code_collisions(want, charmap)
+                if bad:
+                    errors.append(f"{name}[{i}]: {', '.join(repr(c) for c in bad)} would draw as a "
+                                  f"pack glyph, not itself -- Latin in a non-Latin pack renders as "
+                                  f"nonsense; translate or remove it")
+                    continue
             try:
                 raw = enc_sjis(src) if sjis else enc_plain(src)
             except Exception as ex:
@@ -527,6 +600,38 @@ def dialogue_bytes_safe(raw):
     return not any(0x81 <= b <= 0x9F or 0xE0 <= b <= 0xFC for b in raw)
 
 
+def gtext_occupancy(plain):
+    """Exact bytes LoadText writes into gText[10928] for a decoded dialogue file -- simulated the way
+    the game does it (src/text.c LoadText/CopySjisString/DecodeLineOfText), because reconstructing it
+    from the working set's entries silently under-counts:
+      * every CONTENT line costs len + 1 -- DecodeLineOfText appends '\\n' and CopySjisString copies
+        it (the '\\n' is not a byte-pair lead, so it is one byte);
+      * every entry CLOSE and the terminating END each write one NUL;
+      * a blank line closes the current entry AND re-opens the next (LoadText does not advance its
+        input on the close), so blanks between entries are counted once as a close;
+      * entries the exporter dropped as empty are still blank lines here, so their NULs are counted.
+    Operates on the PATCHED bytes, so the per-line length already reflects the real encoding (1-byte
+    script codes or multi-byte UTF-8) -- no separate mode arithmetic needed."""
+    lines = plain.split(b"\r\n")
+    reading, entry, total, i = 0, 1, 0, 0
+    while entry <= 100 and i < len(lines):
+        ln = lines[i]
+        if ln[:3] == b"END":
+            total += 1                      # END writes a NUL, then stops
+            break
+        if ln == b"":
+            if reading == 0:
+                reading = 1; entry += 1; i += 1       # open: advance past the blank
+            else:
+                reading = 0; total += 1               # close: NUL, re-read the same blank (no advance)
+            continue
+        if len(ln) >= 2 and (0x81 <= ln[0] <= 0x9F or 0xE0 <= ln[0] <= 0xFC) and ln[1] == 0x94:
+            i += 1; continue                # SJIS-comment line: skipped, not copied
+        total += len(ln) + 1                # content + the appended '\n' -- the game's else branch
+        i += 1                              # copies regardless of entry state, so do not gate on it
+    return total
+
+
 def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
     """Substitute edited LINES inside the decoded file, keeping every other byte untouched."""
     edits = {}
@@ -534,46 +639,33 @@ def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
         edits[ent["key"]] = ent
     plain = bytearray(~b & 0xFF for b in raw_file)
     lines = plain.split(b"\r\n")
-    # Re-walk exactly as LoadText does, so line indices line up with the exporter's entries.
-    inside, n, li = False, 0, 0
     changed = 0
-    for idx, ln in enumerate(lines):
-        if ln.startswith(b"END"):
-            break
-        if ln == b"":
-        # A blank line CLOSES the current entry and OPENS the next one, both at once. LoadText
-        # (src/text.c) does not advance its input pointer when it closes -- it re-reads the very
-        # same blank line, sees readingEntry == 0, and starts the next entry with it. Treating the
-        # blank as a toggle instead "spends" every second one, which orphaned every other entry:
-        # 11 entries where the game sees 21, and half of all dialogue never reached a translator.
-            inside, n, li = True, n + 1, 0
-            continue
-        if not inside:
-            continue
+    # ONE walker, shared with the exporter (walk_dialogue), so the entry/line numbering that keys the
+    # translations here is guaranteed to match the numbering the translator saw.
+    for n, li, idx, ln in walk_dialogue(lines):
         ent = edits.get(f"{stem}[{n}]")
-        if ent and li < len(ent.get("text", [])):
-            want = ent["text"][li]
-            if want:
-                if charmap is not None:                # script mode: 1-byte codes
-                    raw = enc_codes(want, charmap, errors, f"{stem}[{n}] line {li}")
-                    if raw is None:
-                        li += 1
-                        continue
-                    lines[idx] = raw
-                    changed += 1
-                    li += 1
-                    continue
-                raw = want.encode("utf-8")
-                if not dialogue_bytes_safe(raw):
-                    bad = ", ".join(f"{c!r}" for c in want if not dialogue_bytes_safe(c.encode("utf-8")))
-                    errors.append(f"{stem}[{n}] line {li}: {bad} unsafe in dialogue (byte collides "
-                                  f"with the engine's SJIS lead ranges) -- lowercase accents are "
-                                  f"safe, most uppercase accents are not")
-                else:
-                    lines[idx] = raw
-                    used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
-                    changed += 1
-        li += 1
+        if not ent or li >= len(ent.get("text", [])):
+            continue
+        want = ent["text"][li]
+        if not want:
+            continue
+        if charmap is not None:                    # script mode: 1-byte codes
+            raw = enc_codes(want, charmap, errors, f"{stem}[{n}] line {li}")
+            if raw is None:
+                continue
+            lines[idx] = raw
+            changed += 1
+            continue
+        raw = want.encode("utf-8")
+        if not dialogue_bytes_safe(raw):
+            bad = ", ".join(f"{c!r}" for c in want if not dialogue_bytes_safe(c.encode("utf-8")))
+            errors.append(f"{stem}[{n}] line {li}: {bad} unsafe in dialogue (byte collides "
+                          f"with the engine's SJIS lead ranges) -- lowercase accents are "
+                          f"safe, most uppercase accents are not")
+        else:
+            lines[idx] = raw
+            used_cps.update(ord(c) for c in want if ord(c) > 0x7F)
+            changed += 1
     if not changed:
         return None, 0
     new = b"\r\n".join(lines)
@@ -583,19 +675,11 @@ def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
         errors.append(f"{stem}: patched file is {len(new)} B, the game reads only {budget} B")
         return None, 0
     # SECOND budget, and it is a different one: LoadText UNPACKS the whole file into gText[10928],
-    # one shared buffer, so a file's entries must also fit there once the framing is stripped.
-    # CopySjisString copies each line verbatim and LoadText writes one NUL per entry.
-    # Measure what is actually WRITTEN, which depends on the mode: a Latin pack puts UTF-8 in
-    # dialogue (2 bytes per accented character), a script pack puts 1-byte codes. Charging UTF-8
-    # lengths to a script pack inflated SAKABA_T from its real ~8.6 KB to 14.7 KB and failed the
-    # build on text the retail game loads without trouble.
-    def enc_len(t):
-        return len(t) if charmap is not None else len(t.encode("utf-8"))
-    unpacked = sum(len(l) for e in doc["entries"] for l in e["en"]) + len(doc["entries"])
-    for e in doc["entries"]:
-        for i, t in enumerate(e.get("text", [])):
-            if t:
-                unpacked += enc_len(t) - len(e["en"][i])
+    # one shared buffer, so a file's entries must also fit there once the framing is stripped. Measure
+    # it by simulating LoadText on the PATCHED bytes -- exact, and it charges the real encoding a
+    # script pack writes (1-byte codes, not UTF-8; charging UTF-8 lengths once inflated SAKABA_T from
+    # its real ~8.6 KB to 14.7 KB and failed on text the retail game loads without trouble).
+    unpacked = gtext_occupancy(new)
     if unpacked > GTEXT_BYTES:
         errors.append(f"{stem}: unpacks to {unpacked} B, gText holds {GTEXT_BYTES} B")
         return None, 0
@@ -618,7 +702,35 @@ def check_pack_name(lang):
                          f"lowercase [a-z0-9._-] only (e.g. en-fix, fr-fantrad, pt-br-fantrad)")
 
 
-def build(disc, work, outdir, lang, meta=None, packart=None):
+def count_untranslated(work):
+    """Entries with English to translate but an empty translation. A Latin pack renders these as the
+    original English (a partial translation is still playable); a non-Latin pack renders EVERY one as
+    nonsense, because the charmap reassigns the letter codes -- so in script mode completeness is a
+    correctness requirement, not a nicety. Filler/dead records have empty `en` and are not counted."""
+    n = 0
+    tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    for t in tables.values():
+        for e in t["entries"]:
+            if (e.get("en") or "").strip() and not (e.get("text") or "").strip():
+                n += 1
+    for fn in ("literals.json", "tactical.json"):
+        p = os.path.join(work, "strings", fn)
+        if os.path.exists(p):
+            for e in json.load(open(p))["entries"]:
+                if (e.get("en") or "").strip() and not (e.get("text") or "").strip():
+                    n += 1
+    dd = os.path.join(work, "strings", "dialogue")
+    if os.path.isdir(dd):
+        for fn in os.listdir(dd):
+            for e in json.load(open(os.path.join(dd, fn)))["entries"]:
+                en, tx = e.get("en") or [], e.get("text") or []
+                for i, l in enumerate(en):
+                    if l.strip() and not (i < len(tx) and (tx[i] or "").strip()):
+                        n += 1
+    return n
+
+
+def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=False):
     meta = meta or {}
     check_pack_name(lang)
     exe = read_exe(disc)
@@ -627,8 +739,8 @@ def build(disc, work, outdir, lang, meta=None, packart=None):
     used_cps = set()
 
     # Every character retail text actually draws, from every source -- a pack code must never be a
-    # character retail uses, or retail text would sprout pack glyphs. Literals included: menus like
-    # "Skill\nSpell\nItems" go through the same map.
+    # character retail uses, or retail text would sprout pack glyphs. Literals are included too: the
+    # hardcoded menu strings go through the same map.
     retail_chars = set()
     for t in tables.values():
         for e in t["entries"]:
@@ -652,12 +764,30 @@ def build(disc, work, outdir, lang, meta=None, packart=None):
     # rather than UTF-8 (see enc_codes for why non-Latin cannot use the UTF-8 path).
     script = bool(art_small)
 
+    # In script mode an untranslated string renders as nonsense (the charmap reassigns the letter
+    # codes), so completeness is a correctness requirement -- refuse an incomplete non-Latin pack
+    # unless the author is deliberately building a partial one for testing. A Latin pack degrades
+    # gracefully, so there it is only worth a note.
+    untr = count_untranslated(work)
+    if untr:
+        if not script:
+            print(f"[lang] note: {untr} string(s) untranslated -- they will show the original "
+                  f"English (fine for a Latin pack).", file=sys.stderr)
+        elif allow_incomplete:
+            print(f"[lang] WARNING: {untr} string(s) untranslated -- a non-Latin pack renders each "
+                  f"one as NONSENSE. Building anyway (--allow-incomplete).", file=sys.stderr)
+        else:
+            errors.append(f"{untr} string(s) untranslated -- a non-Latin pack renders every "
+                          f"untranslated string as nonsense (the pack reassigns the letter codes). "
+                          f"Finish the translation, or pass --allow-incomplete to build a partial "
+                          f"pack for testing.")
+
     for tid, name, vram, kind, count, width, pad in TABLES:
         entries = tables[name]["entries"]
         if kind == "fixed":
             blob, n = build_fixed(exe, vram, count, width, pad, entries, name, errors,
                                   charmap if name in CHARMAP_TABLES else None,
-                                  krom if name == "gItemNamesSjis" else None)
+                                  krom if name == "gItemNamesSjis" else None, script=script)
             if n:
                 sections.append((K_FIXED, tid, blob))
         else:
@@ -844,8 +974,8 @@ def print_repertoire():
     print("  " + " ".join(lower))
     print(f"\nUppercase -- item-name path only ({len(upper)}):")
     print("  " + " ".join(upper))
-    print("\nNot composable (needs pack-supplied art, pipeline not built):")
-    print("  å ø æ ß ð þ œ ¡ ¿ · -- and every non-Latin script")
+    print("\nNot synthesised from the US font -- supply drawn glyph art with --packart:")
+    print("  å ø æ ß ð þ œ ¡ ¿ · -- and every non-Latin script (Cyrillic, Greek: proven in game)")
 
 
 if __name__ == "__main__":
@@ -865,7 +995,9 @@ if __name__ == "__main__":
     packart = None
     if "--packart" in sys.argv:
         packart = sys.argv[sys.argv.index("--packart") + 1]
-    d, stats, nf, nl, ns, ng = build(sys.argv[1], sys.argv[2], sys.argv[3], lang, meta, packart)
+    allow_incomplete = "--allow-incomplete" in sys.argv
+    d, stats, nf, nl, ns, ng = build(sys.argv[1], sys.argv[2], sys.argv[3], lang, meta, packart,
+                                     allow_incomplete)
     print(f"wrote {d}/strings.bin  ({ns} sections)")
     for n, c in stats:
         print(f"  {n:22}{c:>5} entries")

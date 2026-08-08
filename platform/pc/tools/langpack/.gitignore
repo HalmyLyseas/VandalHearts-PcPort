@@ -1,1 +1,17 @@
 __pycache__/
+
+# Working sets and built packs are generated from YOUR OWN disc: they contain retail game text and
+# must NEVER be committed (this repo ships no game text). These rules catch them by STRUCTURE, so a
+# working set or pack created anywhere under this tools directory is ignored regardless of the folder
+# name you choose. The recommended place to work is platform/pc/tools/langpack/work/ (below).
+/work/
+/work*/
+/out/
+/out*/
+/packs/
+/langpacks/
+# A working set is a folder holding strings/ + translate/; a built pack holds langpacks/<name>/.
+# Match those wherever they land under this directory.
+**/strings/
+**/translate/
+**/langpacks/

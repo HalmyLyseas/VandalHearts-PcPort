@@ -14,6 +14,16 @@ extern int TrialEnemyExpMulti(int chapter);
 #endif
 #endif
 
+#ifdef PC_FEAT
+/* Language packs (platform/pc/src/pc_lang.c): the two literals in ShowExpDialog are offered to the
+ * active pack by content hash; with no pack, or no entry, the literal itself is returned. The
+ * matching build expands the macro to the bare literal. */
+extern u8 *PC_LangStr(const char *lit);
+#define PC_LANGSTR(s) (PC_LangStr(s))
+#else
+#define PC_LANGSTR(s) (s)
+#endif
+
 void EmbedIntAsSjis(s32, u8 *, u8);
 void EmbedExp(s32, s8 *, u8);
 u8 GetItemNameLength(u8);
@@ -389,6 +399,37 @@ u8 GetItemNameLength(u8 item) {
 
 void ShowExpDialog(s32 exp, u8 windowId) {
    u8 numDigits;
+#ifdef PC_FEAT
+   /* Language packs: retail embeds the number into line 1 at a FIXED byte offset (8 = the length of
+    * "You got "), which a translated prefix of any other length would misplace. Compose line 1 in a
+    * local buffer instead, so the number follows the (possibly translated) prefix; the digits are
+    * script-neutral. Line 2 is a plain replaceable literal. With no pack the layout is byte-for-byte
+    * the retail one. Both literals are exported by lang_export_literals.py -- the prefix through its
+    * PC_LANGSTR scan (it is not a draw-call argument), line 2 through the draw-call sweep. */
+   u8 line1[64];
+   u8 *prefix = PC_LANGSTR("You got ");
+   s32 pl = 0;
+   while (prefix[pl] != '\0' && pl < 54) {
+      line1[pl] = prefix[pl];
+      pl++;
+   }
+   numDigits = 1;
+   if (exp >= 10) {
+      numDigits = 2;
+   }
+   if (exp >= 100) {
+      numDigits = 3;
+   }
+   if (exp >= 1000) {
+      numDigits = 4;
+   }
+   EmbedExp(exp, (s8 *)&line1[pl], numDigits);
+   line1[pl + numDigits + 4] = '\0';
+   DrawWindow(windowId, 0, 0, 192, 45, 60, 82, WBS_CROSSED, 0);
+   DrawText(12, 9, 20, 2, 0, line1);
+   DrawText(12, 21, 20, 2, 0, PC_LANGSTR("  experience points."));
+   DisplayBasicWindow(windowId);
+#else
    s8 *pLine1 = "You got            ";
    s8 *pLine2 = "  experience points.";
 
@@ -407,6 +448,7 @@ void ShowExpDialog(s32 exp, u8 windowId) {
    DrawText(12, 9, 20, 2, 0, pLine1);
    DrawText(12, 21, 20, 2, 0, pLine2);
    DisplayBasicWindow(windowId);
+#endif
 }
 
 s32 s_hp_801231c4;

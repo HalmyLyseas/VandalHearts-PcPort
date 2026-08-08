@@ -23,15 +23,24 @@ regenerate everything from the disc.
                      every entry carries its English source and its display limit)
                                |
   lang_merge.py <work>                    fold translate/ edits back into strings/
+                                          (--revert-cleared: a field you emptied reverts to English)
   lang_validate.py <disc> <work>          hard rules + on-screen budget lint
   lang_build.py <disc> <work> <out> --lang <name> [--name --author --version --notes]
+                                          [--packart <dir>]        non-Latin script: your glyph sheets
+                                          [--allow-incomplete]     script mode: build with gaps (testing)
                                |
                     <out>/langpacks/<name>/{manifest.json, strings.bin}
 ```
 
 `<disc>` is your own disc image, `<src>` is the repository's `src/` directory and `<bal>` is
 `platform/pc/src/pc_balance.c`. Run the four export steps in order into the same `<work>` folder;
-together they produce a complete working set (roughly 1,000 strings plus 1,176 dialogue entries).
+together they produce a complete working set (roughly 1,000 strings plus 2,273 dialogue entries).
+
+**Where to put `<work>` and `<out>`.** They hold text extracted from your disc, so they must never
+be committed. Use `platform/pc/tools/langpack/work/` and `.../out/` (both already git-ignored), or
+any location outside the repository. The `.gitignore` here also ignores any `strings/`,
+`translate/` or `langpacks/` folder created under this directory, whatever you name it — but a path
+outside the repo is the surest choice.
 
 **Check the export worked** before starting to translate — an untouched working set should
 validate clean and build to an *empty* pack:
@@ -110,14 +119,50 @@ regression it sounds like.
 only the small sheet. Untranslated item names keep their original text and render normally, so you
 get a playable, almost-complete pack while the large sheet is still being drawn.
 
+## Drawing a non-Latin script
+
+A script the game has never drawn (Cyrillic, Greek, Nordic, Polish) needs its letters drawn as glyph
+art and passed to the builder with `--packart <dir>`. Supplying art also switches the whole pack to
+**script mode** (1-byte codes throughout — UTF-8 cannot carry these letters through the game's
+dialogue path), which is why a script pack must translate **everything**: any untranslated string
+would render as nonsense, so the builder refuses an incomplete one (translate it all;
+`--allow-incomplete` exists only for mid-work testing).
+
+The `<dir>` holds up to two sheets, each a **PNG image + a `.txt` manifest**:
+
+| files | cell size | covers | required? |
+|---|---|---|---|
+| `font8x9.png` + `font8x9.txt` | 8×9 px | the small font — almost everything | **yes** |
+| `font16x15.png` + `font16x15.txt` | 16×15 px | the large font — item names, TURN, YES/NO | optional (those screens stay in the original text without it) |
+
+**The PNG** is a 1-bit image of the letters packed into a grid of cells, filled **left to right, then
+top to bottom** (reading order). A cell is exactly the cell size above; the image width fixes how many
+cells per row (`width ÷ cell width`). **A black pixel is ink** (part of the letter); white is
+background. An **all-white cell means "not supplied"** and is skipped — handy for leaving a gap.
+
+**The `.txt`** lists which codepoint each cell holds, one per line, in the **same reading order** as
+the cells, as `U+XXXX` (hex). Lines starting with `#` are comments; blank lines are ignored. So cell 0
+(top-left) is the first `U+XXXX` line, cell 1 the next, and so on.
+
+You draw **only the letters your alphabet adds** — 33 for Russian, ~24 for Greek. Digits,
+punctuation and spaces already exist and must not be redrawn. Rendering the sheet back out is the
+best check: every letter should land in the cell its codepoint predicts.
+
 ## Supported characters
 
 **Encoding and repertoire are two different things.** Pack text files are written in **UTF-8** —
-that is the encoding, not a capability claim. What can *render* is defined by glyph supply, which
-today is the synthesiser: **ASCII, plus any Latin letter that decomposes into a base letter (a–z)
-and one of six marks**. Accented glyphs are composed automatically from the game's own letterforms;
-no art skills are needed inside this repertoire. Everything outside it needs pack-supplied art
-(pipeline not yet built) and is refused at build time — never silently dropped.
+that is the encoding, not a capability claim. What can *render* is defined by glyph supply, and there
+are two sources:
+
+- **the synthesiser (no art needed):** ASCII, plus any Latin letter that decomposes into a base
+  letter (a–z) and one of six marks. Accented glyphs are composed automatically from the game's own
+  letterforms — no drawing required inside this repertoire.
+- **pack-supplied glyph art (`--packart`):** everything else — Nordic (`å ø æ ð þ`), Polish
+  (`ł ż ą ę`), and every non-Latin script (Cyrillic and Greek are drawn and proven in game). You
+  draw the letters once; see *Drawing a non-Latin script* below.
+
+A codepoint with neither a synthesised nor a supplied glyph is **refused at build time** — never
+silently dropped.
 
 Generated by `lang_build.py --repertoire` (regenerate after any mark change — this table cannot
 drift from what the builder enforces):
@@ -133,8 +178,8 @@ Uppercase -- item-name path only (66):
   À Á Â Ã Ä Ç È É Ê Ë Ì Í Î Ï Ñ Ò Ó Ô Õ Ö Ù Ú Û Ü Ý Ć Ĉ Ĝ Ģ Ĥ Ĩ Ĵ Ķ Ĺ Ļ Ń Ņ Ŕ Ŗ
   Ś Ŝ Ş Ţ Ũ Ŵ Ŷ Ÿ Ź Ǵ Ǹ Ȩ Ḑ Ḧ Ḩ Ḱ Ḿ Ṕ Ṽ Ẁ Ẃ Ẅ Ẍ Ẑ Ẽ Ỳ Ỹ
 
-Not composable (needs pack-supplied art, pipeline not built):
-  å ø æ ß ð þ œ ¡ ¿ · -- and every non-Latin script
+Not synthesised from the US font -- supply drawn glyph art with --packart:
+  å ø æ ß ð þ œ ¡ ¿ · -- and every non-Latin script (Cyrillic, Greek: proven in game)
 ```
 
 Uppercase accents outside item names: use the accepted convention of unaccented capitals
@@ -144,9 +189,10 @@ Uppercase accents outside item names: use the accepted convention of unaccented 
 
 | status | languages |
 |---|---|
-| **full** | Italian, Portuguese |
-| **with standard substitutions** | French (`œ`→`oe`), German (`ß`→`ss`), Spanish (`¡ ¿` not yet renderable), Catalan (`l·l` middle dot not yet renderable) |
-| **not yet — needs pack art** | Swedish / Danish / Norwegian / Icelandic (`å ø æ ð þ`), Polish (`ł ż ą ę`), every non-Latin script (Cyrillic, Greek, CJK) |
+| **full, no art** | Italian, Portuguese |
+| **with standard substitutions, no art** | French (`œ`→`oe`), German (`ß`→`ss`), Spanish (`¡ ¿` not yet renderable), Catalan (`l·l` middle dot not yet renderable) |
+| **needs pack art (`--packart`)** | Swedish / Danish / Norwegian / Icelandic (`å ø æ ð þ`), Polish (`ł ż ą ę`); every non-Latin script — **Cyrillic and Greek work today** once you draw their sheets, proven in game |
+| **not possible** | CJK — thousands of characters against ~44 glyph slots, and 8×9 px is too small for a legible kanji |
 
 Validation is two-layered: `lang_build` enforces the hard rules (record widths, encoding safety,
 glyph capacity) and refuses to build a broken pack; `lang_validate` additionally lints what fits

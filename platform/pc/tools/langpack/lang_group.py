@@ -50,7 +50,7 @@ def load(work):
     p = os.path.join(work, "strings", "tactical.json")
     if os.path.exists(p):
         for e in json.load(open(p))["entries"]:
-            tac[e["key"]] = e["en"]
+            tac[e["key"]] = e                       # keep the whole entry: en AND any existing text
     return tables, tac
 
 def group(work):
@@ -64,10 +64,11 @@ def group(work):
             for fname, table, limit in spec["fields"]:
                 ents = tables[table]["entries"]
                 en = (ents[i].get("en") or "") if i < len(ents) else ""   # tables differ in length
-                fields[fname] = {"en": en, "text": "", "limit": limit}
+                txt = (ents[i].get("text") or "") if i < len(ents) else ""
+                fields[fname] = {"en": en, "text": txt, "limit": limit}    # carry existing translation
                 t = tac.get(f"{table}[{i}]")
                 if t is not None:
-                    tactical[fname] = {"en": t, "text": "",
+                    tactical[fname] = {"en": t.get("en") or "", "text": t.get("text") or "",
                                        "note": "shown INSTEAD of the retail text in Tactical Mode"}
             if not any(f["en"].strip() for f in fields.values()):
                 skipped += 1
@@ -93,7 +94,8 @@ def group(work):
         report.append((kind, len(entries), skipped,
                        sum(1 for e in entries if "tactical" in e)))
     # menus: no entity to group by -- flat list, unused slots dropped
-    men = [{"key": e["key"], "en": e["en"], "text": "", "limit": WRAP(20, 2, "world-map/menu panels, 17px rows")}
+    men = [{"key": e["key"], "en": e["en"], "text": e.get("text") or "",
+            "limit": WRAP(20, 2, "world-map/menu panels, 17px rows")}
            for e in tables["gStringTable"]["entries"] if (e.get("en") or "").strip()]
     json.dump({"kind": "menus", "note": "menu / world-map strings; no entity grouping applies",
                "count": len(men), "entries": men},
@@ -113,6 +115,8 @@ def group(work):
             slot = seen.setdefault(en, {"en": en, "text": "", "appears_in": [],
                                         "limit": HARD(width)})
             slot["appears_in"].append(e["key"])
+            if not slot["text"] and (e.get("text") or ""):     # carry existing translation (any of the
+                slot["text"] = e["text"]                       # fanned-out entries -- they agree post-merge)
             slot["limit"] = HARD(min(slot["limit"]["max_chars"], width))
     cls = sorted(seen.values(), key=lambda s: s["appears_in"][0])
     json.dump({"kind": "classes",
@@ -124,7 +128,7 @@ def group(work):
 
     # terrain: its own file. No entity to pair it with, and its constraint is unlike anything else --
     # so folding it into menus.json would attach the wrong limit.
-    ter = [{"key": e["key"], "en": e["en"], "text": "",
+    ter = [{"key": e["key"], "en": e["en"], "text": e.get("text") or "",
             "limit": {"max_chars": 11, "hard": True,
                       "note": ("fixed record -- text past 11 characters is LOST. "
                                "⚠ ALIGNMENT IS PART OF THE STRING: the spaces before the percentage "

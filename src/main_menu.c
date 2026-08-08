@@ -1229,9 +1229,9 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
                        numChoices);
             for (i = 0; i < numChoices; i++) {
                if (i < 4 && !OBJ.slotOccupied[i]) {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, sText_FileLoadCaptions[i]);
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, PC_LANGSTR(sText_FileLoadCaptions[i]));
                } else {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, sText_FileLoadCaptions[i]);
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, PC_LANGSTR(sText_FileLoadCaptions[i]));
                }
             }
             obj->state2++;
@@ -1309,9 +1309,9 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
                        numChoices);
             for (i = 0; i < numChoices; i++) {
                if (i < 4 && !OBJ.slotOccupied[i]) {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, sText_FileLoadCaptions[i]);
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, PC_LANGSTR(sText_FileLoadCaptions[i]));
                } else {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, sText_FileLoadCaptions[i]);
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, PC_LANGSTR(sText_FileLoadCaptions[i]));
                }
             }
             DisplayBasicWindow(0x3d);

@@ -126,7 +126,10 @@ static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
         fprintf(stderr, "[lang] %-18s %5u B held for the battle hook\n", kTables[id].name, len);
         return;
     }
-    if (id >= NTABLES || !kTables[id].fixed) { fprintf(stderr, "[lang] bad FIXED id %d\n", id); return; }
+    /* id is a pack-supplied u32 cast to int: >= 0x80000000 arrives NEGATIVE and would sail past a
+     * one-sided >= NTABLES test into kTables[id] -- here that garbage entry supplies a memcpy
+     * DESTINATION. Both bounds, always. */
+    if (id < 0 || id >= NTABLES || !kTables[id].fixed) { fprintf(stderr, "[lang] bad FIXED id %d\n", id); return; }
     if (len != kTables[id].bytes) {
         fprintf(stderr, "[lang] %s: pack has %u B, the table is %zu B -- skipped (rebuild the pack)\n",
                 kTables[id].name, len, kTables[id].bytes);
@@ -139,7 +142,7 @@ static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
 
 static void ApplyPtr(int id, const unsigned char *p, unsigned len) {
     unsigned n, i, off = 4;
-    if (id >= NTABLES || !kTables[id].ptr) { fprintf(stderr, "[lang] bad PTR id %d\n", id); return; }
+    if (id < 0 || id >= NTABLES || !kTables[id].ptr) { fprintf(stderr, "[lang] bad PTR id %d\n", id); return; }   /* both bounds: see ApplyFixed */
     if (len < 4) return;
     n = RdU32(p);
     for (i = 0; i < n; i++) {
@@ -325,6 +328,14 @@ static void LangLoad(void) {
     if (!f) { fprintf(stderr, "[lang] no pack at %s\n", path); return; }
     fseek(f, 0, SEEK_END); size = ftell(f); fseek(f, 0, SEEK_SET);
     if (size < 12) { fclose(f); fprintf(stderr, "[lang] %s is too small to be a pack\n", path); return; }
+    /* A pack is a third-party download: every number in it is hostile until checked. First line of
+     * defence is a size cap -- it keeps all the u32 offset arithmetic below well below wrap range
+     * (a full translation measures in hundreds of KB; 128 MB is absurd headroom). */
+    if (size > 0x08000000L) {
+        fclose(f);
+        fprintf(stderr, "[lang] %s is %ld B -- not plausibly a language pack, refused\n", path, size);
+        return;
+    }
     buf = (unsigned char *)malloc((size_t)size);
     if (!buf) { fclose(f); return; }
     if (fread(buf, 1, (size_t)size, f) != (size_t)size) { free(buf); fclose(f); return; }
@@ -343,10 +354,14 @@ static void LangLoad(void) {
     off = 12;
     for (i = 0; i < nsec; i++) {
         unsigned kind, id, len;
-        if (off + 12 > (unsigned)size) break;
+        /* Subtraction form on both checks: `len` comes straight from the pack, so `off + len` can
+         * wrap u32 and pass an addition-form test with len bytes then read off the end of buf.
+         * Invariant: off <= size at the top of every iteration (12 <= size checked at open; each
+         * pass advances off by 12 + len only after both checks). */
+        if ((unsigned)size - off < 12) break;
         kind = RdU32(buf + off); id = RdU32(buf + off + 4); len = RdU32(buf + off + 8);
         off += 12;
-        if (off + len > (unsigned)size) break;
+        if (len > (unsigned)size - off) break;
         if (kind == K_FIXED)      ApplyFixed((int)id, buf + off, len);
         else if (kind == K_PTR)   ApplyPtr((int)id, buf + off, len);
         else if (kind == K_TEXT)  AddText((int)id, buf + off, len);
@@ -376,6 +391,13 @@ static void LitLoad(const unsigned char *p, unsigned len) {
     unsigned n, i, off2 = 4;
     if (len < 4) return;
     n = RdU32(p);
+    /* Records are >= 10 B each, so a count the section cannot hold is a lie -- and it must be
+     * caught HERE: n * sizeof wraps at 32-bit (the M32 A/B build), and even where it doesn't, a
+     * multi-GB malloc can "succeed" under overcommit. */
+    if (n > (len - 4) / 10) {
+        fprintf(stderr, "[lang] literal section truncated (%u records, %u B) -- skipped\n", n, len);
+        return;
+    }
     s_lang.lits = (struct LangLit *)malloc(n * sizeof(struct LangLit));
     if (!s_lang.lits) return;
     for (i = 0; i < n; i++) {
@@ -439,7 +461,8 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
     if (!s_lang.charmap || s_lang.charmapLen < 4) return;
     p = s_lang.charmap;
     n = RdU32(p);
-    if (4 + n * 11u > s_lang.charmapLen) {
+    /* Divide form: n is pack-supplied, `4 + n * 11u` wraps u32 for large n and would pass. */
+    if (n > (s_lang.charmapLen - 4) / 11) {
         fprintf(stderr, "[lang] charmap section truncated (%u records, %u B)\n", n, s_lang.charmapLen);
         return;
     }
