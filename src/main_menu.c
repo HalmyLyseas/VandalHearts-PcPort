@@ -13,8 +13,56 @@
  * every entry in every array. Transparent in the matching build. */
 extern u8 *PC_LangStr(const char *lit);
 #define PC_LANGSTR(s) ((u8 *)PC_LangStr((const char *)(s)))
+
+static s32 CapSame(const u8 *a, const char *b) {
+   while (*b) {
+      if (*a++ != (u8)*b++) {
+         return 0;
+      }
+   }
+   return *a == '\0';
+}
+
+static u8 s_capBuf[40];
+
+/* The save-slot caption is stored in the card file as ENGLISH ("Chap. 1 Sct. 1  L5    0:06", built
+ * by card.c's Card_UpdateCaption). We translate it HERE, at DISPLAY time, by recomposing it from the
+ * pack's labels + the same numbers -- so the save file stays language-neutral (portable, and read
+ * correctly under any pack or none, and every existing save is fixed retroactively). Non-caption
+ * text and the Empty / In-battle-save captions fall through to the normal content-hash lookup. The
+ * numbers sit at the fixed offsets the retail template uses. */
+static u8 *TranslateCaption(u8 *stored) {
+   if (stored[0] == 'C' && stored[1] == 'h' && stored[2] == 'a' && stored[3] == 'p' &&
+       stored[4] == '.') {
+      u8 *lc = PC_LANGSTR("Chap.");
+      u8 *ls = PC_LANGSTR("Sct.");
+      u8 *ll = PC_LANGSTR("L");
+      if (!CapSame(lc, "Chap.") || !CapSame(ls, "Sct.") || !CapSame(ll, "L")) {
+         s32 i = 0, j;
+         u8 *s;
+         for (s = lc; *s && i < 30; s++) s_capBuf[i++] = *s;
+         s_capBuf[i++] = ' '; s_capBuf[i++] = stored[6]; s_capBuf[i++] = ' ';
+         for (s = ls; *s && i < 33; s++) s_capBuf[i++] = *s;
+         s_capBuf[i++] = ' '; s_capBuf[i++] = stored[13]; s_capBuf[i++] = ' ';
+         for (s = ll; *s && i < 35; s++) s_capBuf[i++] = *s;
+         s_capBuf[i++] = stored[17];                            /* level: 1st digit */
+         if (stored[18] >= '0' && stored[18] <= '9') {          /* 2nd digit if present */
+            s_capBuf[i++] = stored[18];
+         }
+         s_capBuf[i++] = ' '; s_capBuf[i++] = ' ';
+         for (j = 20; stored[j] != '\0' && i < 39; j++) {       /* time: "  H:MM", as-is */
+            s_capBuf[i++] = stored[j];
+         }
+         s_capBuf[i] = '\0';
+         return s_capBuf;
+      }
+      return stored;                                           /* labels not translated */
+   }
+   return PC_LANGSTR(stored);                                  /* Empty / In-battle save / menus */
+}
 #else
 #define PC_LANGSTR(s) (s)
+#define TranslateCaption(s) (s)
 #endif
 
 extern void DrawText(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 color, u8 *text);
@@ -282,7 +330,7 @@ void DrawTextWindow(s8 **lines, s32 lineCount, s32 windowId, s32 x, s32 y, s32 d
       DrawWindow(windowId, x, y, paddedWidth + 8, lineCount * 18 + 18, dispX, dispY, borderStyle,
                  numChoices);
       for (i = 0; i < lineCount; i++) {
-         DrawText(halfPadding + x, (i * 18) + y + 11, 35, 0, 0, PC_LANGSTR(lines[i]));
+         DrawText(halfPadding + x, (i * 18) + y + 11, 35, 0, 0, TranslateCaption(lines[i]));
       }
    } else {
       textWidth = strlen(lines[0]) * 8;
@@ -298,7 +346,7 @@ void DrawTextWindow(s8 **lines, s32 lineCount, s32 windowId, s32 x, s32 y, s32 d
       DrawWindow(windowId, x, y, paddedWidth + 24, lineCount * 18 + 36, dispX, dispY, borderStyle,
                  numChoices);
       for (i = 0; i < lineCount; i++) {
-         DrawText(halfPadding + x + 8, (i * 18) + y + 20, 35, 0, 0, PC_LANGSTR(lines[i]));
+         DrawText(halfPadding + x + 8, (i * 18) + y + 20, 35, 0, 0, TranslateCaption(lines[i]));
       }
    }
 }
@@ -1229,9 +1277,9 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
                        numChoices);
             for (i = 0; i < numChoices; i++) {
                if (i < 4 && !OBJ.slotOccupied[i]) {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, PC_LANGSTR(sText_FileLoadCaptions[i]));
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, TranslateCaption(sText_FileLoadCaptions[i]));
                } else {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, PC_LANGSTR(sText_FileLoadCaptions[i]));
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, TranslateCaption(sText_FileLoadCaptions[i]));
                }
             }
             obj->state2++;
@@ -1309,9 +1357,9 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
                        numChoices);
             for (i = 0; i < numChoices; i++) {
                if (i < 4 && !OBJ.slotOccupied[i]) {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, PC_LANGSTR(sText_FileLoadCaptions[i]));
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 1, TranslateCaption(sText_FileLoadCaptions[i]));
                } else {
-                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, PC_LANGSTR(sText_FileLoadCaptions[i]));
+                  DrawText(halfPadding, (i * 18) + 63, 35, 0, 0, TranslateCaption(sText_FileLoadCaptions[i]));
                }
             }
             DisplayBasicWindow(0x3d);

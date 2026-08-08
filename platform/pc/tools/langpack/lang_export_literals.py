@@ -72,6 +72,11 @@ NOTES = {
 WRAPPED_LITERAL_FILES = {
     "battle_0190dc.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
     "battle_0201b8.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
+    # the save-slot caption labels, recomposed at display time with the numbers (main_menu.c
+    # TranslateCaption; the caption is stored English in the save and translated only for display)
+    "main_menu.c": {"66eb39dcbe1a877b": "save-slot caption: the chapter label ('Chap.')",
+                    "21c52824b66774d1": "save-slot caption: the section label ('Sct.')",
+                    "af64014c86022b6b": "save-slot caption: the level label ('L')"},
 }
 PC_LANGSTR_RX = re.compile(r'PC_LANGSTR\s*\(\s*("(?:[^"\\]|\\.)*")\s*\)')
 

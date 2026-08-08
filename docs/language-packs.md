@@ -45,8 +45,15 @@ name, version, author and notes.
 Every place the game draws text is reachable: story dialogue, all menus and battle messages, item
 and spell names and their descriptions, character and class names, terrain names, the strings
 hardcoded in the game's code (menus like the party panel, "Battle results", the after-battle
-experience message), and the Tactical Mode flavour text. A pack is a **diff** — an entry it does not
-translate keeps the original text, so a partial Latin translation is still a working translation.
+experience message), the Tactical Mode flavour text, and the save/load slot captions. A pack is a
+**diff** — an entry it does not translate keeps the original text, so a partial Latin translation is
+still a working translation.
+
+The save-slot caption (`Chap. 1 Sct. 1  L5   0:15`) is translated at **display time**: the caption
+stored in the save file stays language-neutral English, and its labels are swapped for the pack's
+when the load/save menu draws it. So the save file stays portable (it still round-trips to emulators
+and console, and reads correctly under any pack or none), and even saves made before a pack was
+installed show the translated caption.
 
 ## What a pack does not cover
 
@@ -60,9 +67,6 @@ These are deliberate, not omissions:
   number.** These are not text: the game spells them out as lists of picture numbers baked into the
   window layout, so there is no string for a pack to replace. They are short, universally understood
   abbreviations, already Latin in the Japanese original.
-- **Save-slot captions written inside a save file stay in their original language.** The caption is
-  composed and stored in the save at save time; it is a real memory-card image that still round-trips
-  to emulators and console, and rewriting it would break that compatibility.
 
 ## Languages
 
