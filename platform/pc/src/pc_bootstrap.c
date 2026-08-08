@@ -30,12 +30,16 @@
 #include <sys/mman.h>
 #include <signal.h>
 #include <execinfo.h>
-#include <ucontext.h>         /* ucontext_t, greg_t, REG_* -- for the NULL-read fixup handler */
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(__APPLE__)
+#include <ucontext.h>         /* Linux x86 ucontext_t/REG_* -- NULL/.rodata fault fixups */
+#endif
 #include <fcntl.h>            /* open() for the null-read log */
 #endif
 
 #if defined(__APPLE__)
-#include <mach-o/dyld.h>      /* _NSGetExecutablePath */
+#include <mach-o/dyld.h>      /* _NSGetExecutablePath, main image header and slide */
+#include <mach-o/loader.h>    /* Mach-O segment and section layouts */
+#include <mach/vm_prot.h>
 #endif
 
 #include "pc_platform.h"
@@ -106,6 +110,7 @@
 #define PSX_NULL_MIRROR_BASE ((void *)0x00000000UL)
 #define PSX_NULL_MIRROR_SIZE PSX_RAM_SIZE
 
+#if !defined(__APPLE__)
 static int ReservePsxMemory(void *base, size_t size, const char *label) {
 #if defined(_WIN32)
     /* Win32 has no mmap: VirtualAlloc the fixed low address directly. On Win64 these PSX ranges
@@ -146,11 +151,16 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
     return 1;
 #endif /* _WIN32 */
 }
+#endif
 
 __attribute__((constructor))
 static void PC_ReservePsxRam(void) {
+#if defined(__APPLE__)
+    /* arm64 Mach-O reserves the low 4GiB. PC_PORT call sites use host-backed work buffers. */
+#else
     ReservePsxMemory(PSX_RAM_BASE, PSX_RAM_SIZE, "PSX RAM range");
     ReservePsxMemory(PSX_SCRATCHPAD_BASE, PSX_SCRATCHPAD_SIZE, "PSX Scratchpad RAM");
+#endif
     /* The KUSEG NULL-mirror (address 0) is deliberately NOT mapped: the portable NULL-read fixup
      * handler (see PC_SigCrash) absorbs transient NULL/low-address reads without privilege, and
      * letting the accesses fault is exactly what lets the handler log each site. */
@@ -574,7 +584,7 @@ static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
  * on it and is still required under -m64 (the game mutates string literals in place). Windows is
  * excluded: it has no ucontext_t/mprotect fault path -- the startup PE-section remap (below)
  * makes .rodata writable there without any on-fault handler. */
-#if defined(__i386__) || defined(__x86_64__)
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(__APPLE__)
 #define PC_HAVE_WRITE_FAULT_INFO 1
 static int PC_IsWriteFault(void *ucv) {   /* x86 page-fault error code bit 1 == write */
     return (((ucontext_t *)ucv)->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
@@ -620,6 +630,9 @@ static int PC_MakePageWritable(uintptr_t addr) {
 
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
+#if defined(__APPLE__)
+    (void)fault;
+#endif
 #if defined(__i386__)
     /* PSX NULL-region (< 2MB main-RAM size) access: emulate reading 0 / discarding the store and
      * carry on, instead of dying. */
@@ -725,10 +738,61 @@ static void PC_MakeRodataWritable(void) {
         }
     }
 }
+#elif defined(__APPLE__)
+static int PC_MachSectionNeedsWrite(const struct section_64 *sec) {
+    unsigned type = sec->flags & SECTION_TYPE;
+    return type == S_CSTRING_LITERALS || type == S_4BYTE_LITERALS ||
+           type == S_8BYTE_LITERALS || type == S_16BYTE_LITERALS ||
+           strncmp(sec->sectname, "__const", sizeof(sec->sectname)) == 0;
+}
+
+static int PC_MachProt(vm_prot_t prot) {
+    int out = 0;
+    if (prot & VM_PROT_READ) out |= PROT_READ;
+    if (prot & VM_PROT_WRITE) out |= PROT_WRITE;
+    if (prot & VM_PROT_EXECUTE) out |= PROT_EXEC;
+    return out;
+}
+
+static void PC_MakeRodataWritable(void) {
+    const struct mach_header *mh = _dyld_get_image_header(0);
+    intptr_t slide = _dyld_get_image_vmaddr_slide(0);
+    const struct mach_header_64 *mh64;
+    const struct load_command *cmd;
+    long ps = sysconf(_SC_PAGESIZE);
+    uint32_t i;
+    if (!mh || mh->magic != MH_MAGIC_64) return;
+    if (ps <= 0) ps = 4096;
+    mh64 = (const struct mach_header_64 *)mh;
+    cmd = (const struct load_command *)((const char *)mh64 + sizeof(*mh64));
+    for (i = 0; i < mh64->ncmds; i++) {
+        if (cmd->cmd == LC_SEGMENT_64) {
+            const struct segment_command_64 *seg = (const struct segment_command_64 *)cmd;
+            const struct section_64 *sec = (const struct section_64 *)(seg + 1);
+            uint32_t j;
+            if (!(seg->initprot & (VM_PROT_WRITE | VM_PROT_EXECUTE))) {
+                for (j = 0; j < seg->nsects; j++) {
+                    uintptr_t start, end, pstart, pend;
+                    if (!sec[j].size || !PC_MachSectionNeedsWrite(&sec[j])) continue;
+                    start = (uintptr_t)(slide + (intptr_t)sec[j].addr);
+                    end = start + (uintptr_t)sec[j].size;
+                    pstart = start & ~((uintptr_t)ps - 1);
+                    pend = (end + (uintptr_t)ps - 1) & ~((uintptr_t)ps - 1);
+                    if (mprotect((void *)pstart, (size_t)(pend - pstart),
+                                 PC_MachProt(seg->initprot) | PROT_WRITE) != 0) {
+                        fprintf(stderr, "PC_Bootstrap: could not make Mach-O %.16s writable\n",
+                                sec[j].sectname);
+                    }
+                }
+            }
+        }
+        if (cmd->cmdsize < sizeof(*cmd)) break;
+        cmd = (const struct load_command *)((const char *)cmd + cmd->cmdsize);
+    }
+}
 #else
 static void PC_MakeRodataWritable(void) {
-    /* macOS: implemented in its Stage-2.4 phase (dyld segment walk + mprotect). Until then that
-     * build relies on the on-fault path, so this is where its startup remap goes. */
+    /* Unsupported POSIX/Mach-O variant: no startup remap is available. */
 }
 #endif
 

@@ -37,6 +37,11 @@ set(PROJECT_ROOT ${PC_DIR}/../..)
 set(SRC_DIR      ${PROJECT_ROOT}/src)
 set(GEN_DIR      ${CMAKE_BINARY_DIR}/datagen)     # generator's VH_BUILD_DIR (staging + work + output)
 set(STAGE_DIR    ${GEN_DIR}/include_stage)
+set(GEN_ASSET_DIR ${GEN_DIR}/generated_assets)
+
+set(VH_PSX_EXE "${PROJECT_ROOT}/SLUS_004.47" CACHE FILEPATH "Original US PS-X EXE used for generated data")
+set(VH_KROM_SOURCE "${PROJECT_ROOT}/../psy-q/3.6/PSYQ/BIN/KROMDAT.BIN" CACHE FILEPATH
+    "PsyQ KROMDAT.BIN or a PS1 BIOS containing the same font data")
 
 # Windows: force-include the MinGW compat shim (BSD u_char/u_short/... the PsyQ headers use) ahead of
 # every TU, at directory scope so it precedes the per-source -std/-include options and reaches the
@@ -69,6 +74,10 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 find_library(OPENAL_LIB NAMES openal OpenAL32 REQUIRED)   # 'openal' on Linux, 'OpenAL32' on MinGW/Windows
 find_path(OPENAL_INCLUDE_DIR AL/al.h)
+if(APPLE)
+    # The data generator links outside CMake targets and needs a concrete SDL library path.
+    find_library(SDL2_GEN_LIB NAMES SDL2 SDL2-2.0 REQUIRED)
+endif()
 
 # libwebp: STANDARD HD-pack dependency (1.6). .webp replacements are ~7x smaller than raw .hdi (a full
 # background pack is ~20MB vs ~150MB), so it ships on by default. -DVH_WEBP=OFF builds without it (the
@@ -93,6 +102,17 @@ endif()
 
 # ---- source lists -----------------------------------------------------------------------------
 file(GLOB GAME_SRCS ${SRC_DIR}/*.c)
+file(MAKE_DIRECTORY ${GEN_ASSET_DIR}/assets)
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_psx_includes.py
+            ${VH_PSX_EXE} ${GEN_ASSET_DIR}/assets
+    COMMAND_ERROR_IS_FATAL ANY)
+if(APPLE)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_apple_forward_decls.py
+                ${SRC_DIR} ${STAGE_DIR}/apple_void_forward_decls.h
+        COMMAND_ERROR_IS_FATAL ANY)
+endif()
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
 set(BACKEND_PLAIN   libcd libspu libkernel libgpu pc_raster pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
@@ -103,6 +123,9 @@ set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 # game source gets its known-benign 1996-C warning classes silenced; PORT code compiles -Wall -Wextra
 # and must stay warning-clean, so a new warning there is signal.
 set(GAME_WARN "-Wno-incompatible-pointer-types;-Wno-builtin-declaration-mismatch;-Wno-discarded-qualifiers;-Wno-pointer-to-int-cast;-Wno-int-to-pointer-cast;-Wno-int-conversion")
+if(APPLE)
+    set(GAME_WARN "-Wno-incompatible-pointer-types;-Wno-ignored-qualifiers;-Wno-pointer-to-int-cast;-Wno-int-to-pointer-cast;-Wno-int-conversion;-Wno-error=implicit-function-declaration")
+endif()
 set(PORT_WARN "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers")
 
 set(ALL_OBJ_SRCS ${GAME_SRCS})
@@ -119,8 +142,10 @@ foreach(_g ${GENERATED_DATA_C})
     string(REPLACE "pc_" "" _base "${_g}")   # gen_<base>.py, e.g. pc_string_table -> gen_string_table.py
     add_custom_command(
         OUTPUT ${PC_DIR}/src/${_g}.c
-        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_${_base}.py
-        DEPENDS ${PC_DIR}/tools/gen_${_base}.py
+        COMMAND ${CMAKE_COMMAND} -E env "VH_PSX_EXE=${VH_PSX_EXE}"
+                "VH_KROM_SOURCE=${VH_KROM_SOURCE}"
+                ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_${_base}.py
+        DEPENDS ${PC_DIR}/tools/gen_${_base}.py ${VH_PSX_EXE} ${VH_KROM_SOURCE}
         WORKING_DIRECTORY ${PC_DIR}
         COMMENT "Generating src/${_g}.c (from the byte-exact binary / PsyQ KROMDAT)"
         VERBATIM)
@@ -158,8 +183,15 @@ foreach(_g ${GAME_SRCS})
     set_source_files_properties(${_g} PROPERTIES
         COMPILE_DEFINITIONS "PERMUTER;PC_PORT;PC_FEAT"
         COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt;-include;${PC_DIR}/include/cmake_game_prelude.h;${GAME_WARN}"
-        INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
+        INCLUDE_DIRECTORIES "${STAGE_DIR};${GEN_ASSET_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
 endforeach()
+if(APPLE)
+    foreach(_g ${GAME_SRCS})
+        set_property(SOURCE ${_g} APPEND PROPERTY COMPILE_OPTIONS "-fwritable-strings")
+        get_filename_component(_apple_stem ${_g} NAME_WE)
+        set_property(SOURCE ${_g} APPEND PROPERTY COMPILE_DEFINITIONS "VH_APPLE_TU_${_apple_stem}")
+    endforeach()
+endif()
 # Always-on runtime-gated probes (Makefile: UNCONDITIONAL, self-gating at runtime).
 set_property(SOURCE ${SRC_DIR}/window.c ${SRC_DIR}/object.c ${SRC_DIR}/main_menu.c
              APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_UI_LOG)
@@ -227,9 +259,15 @@ endforeach()
 if(WIN32)
     set(_GEN_GL_LIB "-lopengl32")
     set(_GEN_AL_LIB "-lOpenAL32")
+    set(_GEN_SDL_LIB "-lSDL2")
+elseif(APPLE)
+    set(_GEN_GL_LIB "-framework OpenGL")
+    set(_GEN_AL_LIB "-framework OpenAL")
+    set(_GEN_SDL_LIB "${SDL2_GEN_LIB}")
 else()
     set(_GEN_GL_LIB "-lGL")
     set(_GEN_AL_LIB "-lopenal")
+    set(_GEN_SDL_LIB "-lSDL2")
 endif()
 # libgpu.o references WebPDecodeRGBA/WebPFree (under VH_HD_WEBP); the probe link must resolve them so they
 # don't pollute the undefined-symbol list the generator harvests.
@@ -260,7 +298,8 @@ set(GEN_ENV
     "VH_BUILD_DIR=${GEN_DIR}"
     "VH_CC=${CMAKE_C_COMPILER}"
     "VH_OBJ_FILES=$<JOIN:$<TARGET_OBJECTS:vh_objs>, >"
-    "VH_LINK_LIBS=-lSDL2 ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
+    "VH_PSX_EXE=${VH_PSX_EXE}"
+    "VH_LINK_LIBS=${_GEN_SDL_LIB} ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
 if(VH_SANITIZE)
     list(APPEND GEN_ENV "VH_SAN=${VH_SANITIZE}")
 endif()
@@ -307,7 +346,7 @@ if(VH_HDVIDEO)
         target_link_libraries(vandalhearts_pc PRIVATE ${AVFORMAT_LIB} ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB})
     endif()
 endif()
-if(NOT WIN32)
+if(UNIX AND NOT APPLE)
     # -rdynamic: the crash-dump backtrace in pc_bootstrap.c needs dynamic symbols. Linux/POSIX only
     # -- the Windows build has no backtrace()/signal path, and MinGW ld does not take -rdynamic.
     target_link_options(vandalhearts_pc PRIVATE -rdynamic)
