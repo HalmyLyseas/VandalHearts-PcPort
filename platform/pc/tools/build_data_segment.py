@@ -28,6 +28,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -36,6 +37,7 @@ os.chdir(ROOT)
 
 PROJECT_ROOT = os.path.join(ROOT, '..', '..')
 ELF = os.path.join(PROJECT_ROOT, 'build', 'SLUS_004.47.elf')
+PSX_EXE = os.environ.get('VH_PSX_EXE', os.path.join(PROJECT_ROOT, 'SLUS_004.47'))
 SYMBOL_ADDRS = os.path.join(PROJECT_ROOT, 'symbol_addrs.txt')
 # Stage 2.3: BUILD_DIR is settable so 32- and 64-bit trees can be generated side by side
 # (the safest way to A/B the -m64 flip). Defaults to 'build', i.e. unchanged behaviour.
@@ -234,9 +236,17 @@ def find_undefined_symbols():
     # missing lib just leaves more names undefined -- harmless for discovery.
     r = sh([*CC_CMD, *M32, *SAN, *objs, *libs,
             '-o', f'{WORK_DIR}/symprobe'])   # scratch target -- never the real binary
+    link_output = r.stderr + '\n' + r.stdout
     names = set()
-    for m in re.finditer(r"undefined reference to [`']([A-Za-z_]\w*)'", r.stderr):
+    for m in re.finditer(r"undefined reference to [`']([A-Za-z_]\w*)'", link_output):
         names.add(m.group(1))
+    # Apple ld groups undefined symbols as: "_symbol", referenced from:. Mach-O's leading
+    # underscore is linker decoration, not part of the C identifier.
+    for m in re.finditer(r'^\s+"_([A-Za-z_]\w*)", referenced from:', link_output, re.MULTILINE):
+        names.add(m.group(1))
+    if r.returncode != 0 and not names:
+        print("probe link failed before yielding undefined symbols:\n" +
+              "\n".join(link_output.splitlines()[:20]), file=sys.stderr)
     return sorted(names), r.returncode == 0
 
 
@@ -399,17 +409,31 @@ def run_sizeof_probe(results):
     return sizes, skip
 
 
-SECTIONS = None  # filled from readelf -S
+SECTIONS = None  # filled from ELF readelf output or the PS-X EXE header
+DATA_IMAGE = ELF
 
 
 def load_sections():
-    global SECTIONS
-    out = sh(['mipsel-linux-gnu-readelf', '-S', ELF]).stdout
-    sections = []
-    for m in re.finditer(r'PROGBITS\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+)', out):
-        addr, off, size = (int(x, 16) for x in m.groups())
-        sections.append((addr, off, size))
-    SECTIONS = sections
+    global SECTIONS, DATA_IMAGE
+    readelf = os.environ.get('VH_READELF', 'mipsel-linux-gnu-readelf')
+    if os.path.exists(ELF) and shutil.which(readelf):
+        out = sh([readelf, '-S', ELF]).stdout
+        sections = []
+        for m in re.finditer(r'PROGBITS\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+)', out):
+            addr, off, size = (int(x, 16) for x in m.groups())
+            sections.append((addr, off, size))
+        if sections:
+            SECTIONS = sections
+            DATA_IMAGE = ELF
+            return
+    with open(PSX_EXE, 'rb') as f:
+        hdr = f.read(0x800)
+    if not hdr.startswith(b'PS-X EXE') or len(hdr) < 0x20:
+        raise SystemExit(f'not a PS-X EXE: {PSX_EXE}')
+    load_addr = int.from_bytes(hdr[0x18:0x1c], 'little')
+    load_size = int.from_bytes(hdr[0x1c:0x20], 'little')
+    SECTIONS = [(load_addr, 0x800, load_size)]
+    DATA_IMAGE = PSX_EXE
 
 
 def vram_to_file_offset(vram):
@@ -425,24 +449,26 @@ def load_vram_addrs():
         m = re.match(r'([A-Za-z_]\w*)\s*=\s*(0x[0-9a-fA-F]+)\s*;', line)
         if m:
             addrs[m.group(1)] = int(m.group(2), 16)
-    nm_out = sh(['mipsel-linux-gnu-nm', ELF]).stdout
-    for line in nm_out.splitlines():
-        parts = line.split()
-        if len(parts) == 3:
-            addr_hex, _, name = parts
-            name = name.split('.')[0]
-            if name not in addrs:
-                try:
-                    addrs[name] = int(addr_hex, 16)
-                except ValueError:
-                    pass
+    nm = os.environ.get('VH_NM', 'mipsel-linux-gnu-nm')
+    if os.path.exists(ELF) and shutil.which(nm):
+        nm_out = sh([nm, ELF]).stdout
+        for line in nm_out.splitlines():
+            parts = line.split()
+            if len(parts) == 3:
+                addr_hex, _, name = parts
+                name = name.split('.')[0]
+                if name not in addrs:
+                    try:
+                        addrs[name] = int(addr_hex, 16)
+                    except ValueError:
+                        pass
     return addrs
 
 
 def generate(results, sizes, unresolved_by_probe):
     vram_addrs = load_vram_addrs()
     load_sections()
-    with open(ELF, 'rb') as f:
+    with open(DATA_IMAGE, 'rb') as f:
         elf_bytes = f.read()
 
     headers = sorted(f for f in os.listdir(STAGE_DIR) if f.endswith('.h') and f != 'pc_forward_decls.h')

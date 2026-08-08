@@ -29,11 +29,11 @@ import struct
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VH = os.path.abspath(os.path.join(HERE, "..", "..", ".."))   # tools -> pc -> platform -> vh
-SLUS = os.path.join(VH, "SLUS_004.47")
-INC = os.path.join(VH, "assets", "8010102c.inc")
+SLUS = os.environ.get("VH_PSX_EXE", os.path.join(VH, "SLUS_004.47"))
 OUT = os.path.join(VH, "platform", "pc", "src", "pc_string_table.c")
 
 COUNT = 100
+TABLE_ADDR = 0x8010102c
 LOAD_ADDR = 0x80010000
 FILE_BASE = 0x800
 
@@ -65,8 +65,7 @@ def c_escape(s):
 
 def main():
     data = open(SLUS, "rb").read()
-    ptrs = [int(x, 16) for x in re.findall(r"0x([0-9a-fA-F]+)", open(INC).read())]
-    assert len(ptrs) == COUNT, "expected %d entries, got %d" % (COUNT, len(ptrs))
+    ptrs = struct.unpack_from("<%dI" % COUNT, data, foff(TABLE_ADDR))
 
     strings = []
     for p in ptrs:
@@ -83,7 +82,7 @@ def main():
     lines.append(" * holds absolute PSX addresses that dangle on the PC port. We rewrite each entry")
     lines.append(" * to the embedded string below at startup. See the generator header. */")
     lines.append("")
-    lines.append("extern unsigned char *gStringTable[%d];" % COUNT)
+    lines.append("extern unsigned char *gStringTable[101];")
     lines.append("")
     lines.append("static const char *const s_pc_strings[%d] = {" % COUNT)
     for i, s in enumerate(strings):

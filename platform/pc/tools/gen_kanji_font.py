@@ -38,10 +38,11 @@ never sees it.
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# tools -> pc -> platform -> vh -> vandalHearts_decomp
-ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-KROMDAT = os.path.join(ROOT, "psy-q", "3.6", "PSYQ", "BIN", "KROMDAT.BIN")
-OUT = os.path.join(ROOT, "vh", "platform", "pc", "src", "pc_kanji_font.c")
+PC_DIR = os.path.abspath(os.path.join(HERE, ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(PC_DIR, "..", ".."))
+KROMDAT = os.environ.get("VH_KROM_SOURCE",
+                         os.path.join(PROJECT_ROOT, "..", "psy-q", "3.6", "PSYQ", "BIN", "KROMDAT.BIN"))
+OUT = os.path.join(PC_DIR, "src", "pc_kanji_font.c")
 
 GLYPH_BYTES = 30
 NUM_GLYPHS = 209          # indices 0..208 (through lowercase 'z')
@@ -49,6 +50,10 @@ NUM_GLYPHS = 209          # indices 0..208 (through lowercase 'z')
 def main():
     with open(KROMDAT, "rb") as f:
         krom = f.read()
+    # KROMDAT is byte-identical to the BIOS font region. Accepting a full user-owned BIOS avoids a
+    # second proprietary SDK input; charset 2 begins at ROM offset 0x66000.
+    if len(krom) == 512 * 1024:
+        krom = krom[0x66000:]
     n = NUM_GLYPHS * GLYPH_BYTES
     if len(krom) < n:
         raise SystemExit(f"KROMDAT.BIN too small: {len(krom)} < {n}")

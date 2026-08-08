@@ -27,7 +27,7 @@ import struct
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VH = os.path.abspath(os.path.join(HERE, "..", "..", ".."))   # tools -> pc -> platform -> vh
-SLUS = os.path.join(VH, "SLUS_004.47")
+SLUS = os.environ.get("VH_PSX_EXE", os.path.join(VH, "SLUS_004.47"))
 OUT = os.path.join(VH, "platform", "pc", "src", "pc_item_descriptions.c")
 
 LOAD_ADDR = 0x80010000
