@@ -28,6 +28,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -162,7 +163,9 @@ def strip_comments(text):
 # `VH_TARGET_MARCH=` through `cmake -E env` makes it treat the next token as the command -> a
 # "permission denied" that silently stopped the generator from ever running under CMake).
 _march = os.environ.get('VH_TARGET_MARCH', '')
-M32 = [_march] if _march else []
+# Historically this was one flag (-m32/-m64). Cross-architecture macOS builds need the two-token
+# spelling `-arch x86_64` (and Universal 2 needs it twice), so parse it as a normal argument string.
+M32 = shlex.split(_march)
 _TARGET_IS_32 = (M32 == ['-m32'])
 
 # Build-system-agnostic hooks (Stage 2.4 CMake / cross-compile). All optional; when unset the

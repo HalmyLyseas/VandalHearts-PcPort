@@ -15,8 +15,13 @@
  * M1 = pitch step + LINEAR interpolation + flat gain (short click-avoidance
  * ramps), no ADSR/Gaussian/reverb yet. Those land in M3/M4/M5.
  */
+#if defined(__APPLE__)
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
+#else
 #include <AL/al.h>
 #include <AL/alc.h>
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>

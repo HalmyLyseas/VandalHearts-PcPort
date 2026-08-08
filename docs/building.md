@@ -30,6 +30,12 @@ The exact, machine-specific setup recipe (where each tool was sourced, the `PATH
 overrides this environment needs) lives in the `decomp-build` skill (`.claude/skills/decomp-build/`).
 That skill is the authoritative setup reference; this page is the overview.
 
+On macOS, Homebrew supplies native `mipsel-linux-gnu-binutils`, but the exact decompals GCC 2.5.7
+and 2.6.3 PSX frontends are 32-bit i386 **Linux ELF** executables. Rosetta runs Intel Mach-O, not
+Linux ELF, so the byte-matching build still needs Linux (a VM/container or a Linux build host).
+Do not substitute the available GCC 2.7/2.8 macOS builds: compiler version and code generation are
+part of the byte-identity check.
+
 ### Build and verify
 
 ```sh

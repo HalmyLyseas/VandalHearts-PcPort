@@ -32,8 +32,13 @@
  */
 #include <stdio.h>
 #include <string.h>
+#if defined(__APPLE__)
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
+#else
 #include <AL/al.h>
 #include <AL/alc.h>
+#endif
 
 typedef unsigned char u8;
 typedef short s16;

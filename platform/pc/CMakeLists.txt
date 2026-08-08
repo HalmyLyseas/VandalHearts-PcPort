@@ -75,7 +75,12 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)   # data-file + data-segme
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 find_library(OPENAL_LIB NAMES openal OpenAL32 REQUIRED)   # 'openal' on Linux, 'OpenAL32' on MinGW/Windows
-find_path(OPENAL_INCLUDE_DIR AL/al.h)
+if(NOT APPLE)
+    find_path(OPENAL_INCLUDE_DIR AL/al.h REQUIRED)
+else()
+    # The SDK framework exposes headers as <OpenAL/al.h>; no Homebrew include path is needed.
+    set(OPENAL_INCLUDE_DIR "")
+endif()
 if(APPLE)
     # The data generator links outside CMake targets and needs a concrete SDL library path.
     find_library(SDL2_GEN_LIB NAMES SDL2 SDL2-2.0 REQUIRED)
@@ -265,7 +270,14 @@ if(WIN32)
 elseif(APPLE)
     set(_GEN_GL_LIB "")
     set(_GEN_AL_LIB "-framework OpenAL")
-    set(_GEN_SDL_LIB "${SDL2_GEN_LIB}")
+    if(SDL2_GEN_LIB MATCHES "\\.framework$")
+        # find_library returns the framework directory. A raw clang link needs -F/-framework;
+        # passing the directory as though it were a dylib fails before undefined-symbol discovery.
+        get_filename_component(_SDL2_FRAMEWORK_PARENT "${SDL2_GEN_LIB}" DIRECTORY)
+        set(_GEN_SDL_LIB "-F${_SDL2_FRAMEWORK_PARENT} -framework SDL2")
+    else()
+        set(_GEN_SDL_LIB "${SDL2_GEN_LIB}")
+    endif()
 else()
     set(_GEN_GL_LIB "-lGL")
     set(_GEN_AL_LIB "-lopenal")
@@ -312,6 +324,16 @@ set(GEN_ENV
     "VH_OBJ_FILES=$<JOIN:$<TARGET_OBJECTS:vh_objs>, >"
     "VH_PSX_EXE=${VH_PSX_EXE}"
     "VH_LINK_LIBS=${_GEN_SDL_LIB} ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    # CMake adds -arch to its own compile/link commands, but the data generator invokes clang
+    # directly. Keep its undefined-symbol link and executable sizeof probe on the same slice(s).
+    set(_GEN_APPLE_ARCH_FLAGS "")
+    foreach(_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+        string(APPEND _GEN_APPLE_ARCH_FLAGS " -arch ${_arch}")
+    endforeach()
+    string(STRIP "${_GEN_APPLE_ARCH_FLAGS}" _GEN_APPLE_ARCH_FLAGS)
+    list(APPEND GEN_ENV "VH_TARGET_MARCH=${_GEN_APPLE_ARCH_FLAGS}")
+endif()
 if(VH_SANITIZE)
     list(APPEND GEN_ENV "VH_SAN=${VH_SANITIZE}")
 endif()
