@@ -22,20 +22,24 @@
 #if defined(_WIN32)
 /* Windows (MinGW-w64, Stage 2.4): Win32 replaces the POSIX facilities used below -- VirtualAlloc for
  * the fixed PSX RAM ranges, VirtualProtect (over the PE sections) for the .rodata remap. There is no
- * POSIX signal/backtrace/mmap path here: the 64-bit build absorbs transient PSX NULL reads with
- * source-level PC_PORT guards, not a fault handler, so Windows needs no signal machinery to run. */
+ * POSIX signal/backtrace/mmap path here. Windows does not implement low-address instruction
+ * emulation; it depends on source-level PC_PORT guards, and any remaining path will crash. */
 #include <windows.h>          /* VirtualAlloc, VirtualProtect, GetModuleHandle, PE headers, GetModuleFileNameA */
 #else
 #include <unistd.h>
 #include <sys/mman.h>
 #include <signal.h>
 #include <execinfo.h>
-#include <ucontext.h>         /* ucontext_t, greg_t, REG_* -- for the NULL-read fixup handler */
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(__APPLE__)
+#include <ucontext.h>         /* Linux x86 ucontext_t/REG_* -- NULL/.rodata fault fixups */
+#endif
 #include <fcntl.h>            /* open() for the null-read log */
 #endif
 
 #if defined(__APPLE__)
-#include <mach-o/dyld.h>      /* _NSGetExecutablePath */
+#include <mach-o/dyld.h>      /* _NSGetExecutablePath, main image header and slide */
+#include <mach-o/loader.h>    /* Mach-O segment and section layouts */
+#include <mach/vm_prot.h>
 #endif
 
 #include "pc_platform.h"
@@ -106,6 +110,7 @@
 #define PSX_NULL_MIRROR_BASE ((void *)0x00000000UL)
 #define PSX_NULL_MIRROR_SIZE PSX_RAM_SIZE
 
+#if !defined(__APPLE__)
 static int ReservePsxMemory(void *base, size_t size, const char *label) {
 #if defined(_WIN32)
     /* Win32 has no mmap: VirtualAlloc the fixed low address directly. On Win64 these PSX ranges
@@ -146,14 +151,19 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
     return 1;
 #endif /* _WIN32 */
 }
+#endif
 
 __attribute__((constructor))
 static void PC_ReservePsxRam(void) {
+#if defined(__APPLE__)
+    /* arm64 Mach-O reserves the low 4GiB. PC_PORT call sites use host-backed work buffers. */
+#else
     ReservePsxMemory(PSX_RAM_BASE, PSX_RAM_SIZE, "PSX RAM range");
     ReservePsxMemory(PSX_SCRATCHPAD_BASE, PSX_SCRATCHPAD_SIZE, "PSX Scratchpad RAM");
-    /* The KUSEG NULL-mirror (address 0) is deliberately NOT mapped: the portable NULL-read fixup
-     * handler (see PC_SigCrash) absorbs transient NULL/low-address reads without privilege, and
-     * letting the accesses fault is exactly what lets the handler log each site. */
+#endif
+    /* The KUSEG NULL-mirror (address 0) is deliberately NOT mapped. Native Linux i386 can diagnose
+     * and emulate the limited access forms handled by PC_SigCrash; other hosts depend on explicit
+     * PC_PORT guards and will report then terminate on an unknown low-address access. */
 }
 
 /* The default disc path used to be a plain relative literal
@@ -200,14 +210,21 @@ static int PC_GetExeDir(char *out, size_t outSize) {
     return 1;
 }
 
-/* The directory where the *end user's* files live (disc image, vandalhearts.ini). Normally this is
- * just the executable's own directory (PC_GetExeDir). But under an AppImage the executable runs from
+/* The directory where the *end user's* files live (disc image, vandalhearts.ini). VH_DEPLOY_DIR is
+ * an explicit override used by native packages whose signed/read-only executable lives somewhere
+ * different from user-owned config, saves, and game data (notably a macOS .app bundle). Normally
+ * this is just the executable's own directory (PC_GetExeDir). But under an AppImage it runs from
  * a read-only squashfs mounted at /tmp/.mount_XXXX/usr/bin -- the user can't drop their disc there.
  * The AppImage runtime exports $APPIMAGE = the absolute path of the .AppImage file itself, so its
  * dirname is where the user actually keeps things. Prefer that when present; otherwise fall back to
  * the exe dir. Harmless on Windows/native Linux (env var simply unset). Returns 1 on success. */
 int PC_GetDeployDir(char *out, size_t outSize) {
+    const char *deploy = getenv("VH_DEPLOY_DIR");
     const char *appimage = getenv("APPIMAGE");   /* set only when running as an AppImage */
+    if (deploy && *deploy) {
+        int n = snprintf(out, outSize, "%s", deploy);
+        return n >= 0 && (size_t)n < outSize;
+    }
     if (appimage && *appimage) {
         char *sep;
         snprintf(out, outSize, "%s", appimage);
@@ -405,6 +422,24 @@ static int HasBinExt(const char *name) {
     return e[0] == '.' && (e[1]|0x20) == 'b' && (e[2]|0x20) == 'i' && (e[3]|0x20) == 'n';
 }
 
+/* Validate a discovery candidate before choosing it. Multi-track dumps commonly contain several .bin
+ * files; only the data track has the USA executable header at raw-CD LBA 23, user-data offset 24. */
+static int HasVandalHeartsBoot(const char *path) {
+    enum { RAW_SECTOR_SIZE = 2352, DATA_OFFSET = 24, BOOT_LBA = 23 };
+    unsigned char magic[8];
+    FILE *f = fopen(path, "rb");
+    size_t n;
+    if (!f) return 0;
+    if (fseek(f, (long)BOOT_LBA * RAW_SECTOR_SIZE + DATA_OFFSET, SEEK_SET) != 0) {
+        fclose(f);
+        return 0;
+    }
+    n = fread(magic, 1, sizeof(magic), f);
+    if (ferror(f)) { fclose(f); return 0; }
+    fclose(f);
+    return n == sizeof(magic) && memcmp(magic, "PS-X EXE", sizeof(magic)) == 0;
+}
+
 /* Return (into out) the first "*.bin" found directly inside `dir`, or 0 if none / dir unreadable.
  * Forward slash in the joined path is fine on all three OSes (Win32 accepts '/'). */
 static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
@@ -414,8 +449,10 @@ static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
     while ((ent = readdir(d)) != NULL) {
         if (HasBinExt(ent->d_name)) {
             snprintf(out, outSize, "%s/%s", dir, ent->d_name);
-            closedir(d);
-            return 1;
+            if (HasVandalHeartsBoot(out)) {
+                closedir(d);
+                return 1;
+            }
         }
     }
     closedir(d);
@@ -424,7 +461,7 @@ static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
 
 /* Locate the disc image with NO configuration needed for the common cases (Stage 2.4 QoL). Anchored
  * to the executable's own directory (via PC_GetExePath, cwd-independent), tried in order:
- *   1. a `game/` folder next to the .exe holding a *.bin  -- the recommended portable-binary layout;
+ *   1. a `game/` folder next to the .exe holding a valid *.bin -- the recommended portable-binary layout;
  *   2. a *.bin sitting directly beside the .exe;
  *   3. the dev repo layout (game/ four levels up from platform/pc/build*).
  * VH_DISC_IMAGE (checked by the caller) still overrides all of this. Whatever this returns, a failed
@@ -467,15 +504,16 @@ static void PC_SigUsr1(int sig) { (void)sig; PC_DumpDiag("\n*** SIGUSR1: call st
 #endif /* !_WIN32 */
 
 /* ---- NULL-read fixup (Stage 2.2): make a transient PSX-style NULL/low-address access survive on a
- * native host, portably, instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
+ * native Linux i386 host instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
  * (KUSEG) is real 2MB RAM, so game code that transiently dereferences a not-yet-assigned pointer
  * just reads garbage for a frame; on a host, address 0 faults. Rather than map address 0 (privileged,
  * and impossible on Windows/macOS), we catch the fault, emulate the access as reading 0 (identical to
  * what the old MAP_ANONYMOUS zero page returned) or discarding the store, step over the instruction,
  * log the site once, and continue. Un-guarded sites therefore no longer crash -- they surface in
- * vh_null_reads.log so they can be given an explicit source-level guard later. Currently x86-32
- * (-m32) only. (The old privileged low-page-mapping fallback was retired -- this handler is the sole
- * path; nothing runs privileged.) */
+ * vh_null_reads.log so they can be given an explicit source-level guard later. Currently native
+ * Linux x86-32 (-m32) only: Darwin's ucontext layout and arm64/x86-64 instructions are not decoded,
+ * and Windows has no POSIX signal path. (The old privileged low-page-mapping fallback was retired;
+ * nothing runs privileged.) */
 
 #if defined(__i386__) && !defined(_WIN32)
 /* Decode the memory-access instruction at `ip` (the faulting one). Returns its length and, for a
@@ -574,7 +612,7 @@ static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
  * on it and is still required under -m64 (the game mutates string literals in place). Windows is
  * excluded: it has no ucontext_t/mprotect fault path -- the startup PE-section remap (below)
  * makes .rodata writable there without any on-fault handler. */
-#if defined(__i386__) || defined(__x86_64__)
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(__APPLE__)
 #define PC_HAVE_WRITE_FAULT_INFO 1
 static int PC_IsWriteFault(void *ucv) {   /* x86 page-fault error code bit 1 == write */
     return (((ucontext_t *)ucv)->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
@@ -618,8 +656,15 @@ static int PC_MakePageWritable(uintptr_t addr) {
 }
 #endif /* __i386__ || __x86_64__ */
 
+static volatile sig_atomic_t s_crashHandlerActive;
+
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
+    if (s_crashHandlerActive) _exit(128 + sig);  /* async-safe fail-closed path for a handler re-fault */
+    s_crashHandlerActive = 1;
+#if defined(__APPLE__)
+    (void)fault;
+#endif
 #if defined(__i386__)
     /* PSX NULL-region (< 2MB main-RAM size) access: emulate reading 0 / discarding the store and
      * carry on, instead of dying. */
@@ -637,6 +682,7 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
             }
             g[REG_EIP] = (greg_t)((uintptr_t)ip + len);
             PC_LogNullRead(ip, fault, isWrite);
+            s_crashHandlerActive = 0;
             return;                                /* resume the game */
         }
         PC_DumpDiag("\n*** NULL-region fault but UNDECODABLE instruction -- extend VhDecodeMemAccess ***\n");
@@ -653,6 +699,7 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
      * decoder, nothing here is 32-bit-specific: si_addr + the x86 write bit + mprotect. */
 #if defined(PC_HAVE_WRITE_FAULT_INFO)
     if (ucv && fault >= PSX_NULL_MIRROR_SIZE && PC_IsWriteFault(ucv) && PC_MakePageWritable(fault)) {
+        s_crashHandlerActive = 0;
         return;                                    /* page now writable -> retry the faulting store */
     }
 #endif
@@ -675,7 +722,7 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
  *   - Linux: dl_iterate_phdr -> mprotect each PF_R-only PT_LOAD of the main program.
  *   - Windows (MinGW): PE section walk of the main module -> VirtualProtect each read-only,
  *     non-executable initialized-data section (.rdata) to PAGE_READWRITE.
- *   - macOS (Apple Silicon): dyld segment walk + mprotect  -- TODO, its 2.4 phase.
+ *   - macOS: dyld segment/section walk + mprotect.
  * Best-effort: failures are non-fatal (the on-fault path or a later crash will surface a real
  * problem); success just means string-literal writes never fault. */
 #if defined(__linux__)
@@ -725,10 +772,61 @@ static void PC_MakeRodataWritable(void) {
         }
     }
 }
+#elif defined(__APPLE__)
+static int PC_MachSectionNeedsWrite(const struct section_64 *sec) {
+    unsigned type = sec->flags & SECTION_TYPE;
+    return type == S_CSTRING_LITERALS || type == S_4BYTE_LITERALS ||
+           type == S_8BYTE_LITERALS || type == S_16BYTE_LITERALS ||
+           strncmp(sec->sectname, "__const", sizeof(sec->sectname)) == 0;
+}
+
+static int PC_MachProt(vm_prot_t prot) {
+    int out = 0;
+    if (prot & VM_PROT_READ) out |= PROT_READ;
+    if (prot & VM_PROT_WRITE) out |= PROT_WRITE;
+    if (prot & VM_PROT_EXECUTE) out |= PROT_EXEC;
+    return out;
+}
+
+static void PC_MakeRodataWritable(void) {
+    const struct mach_header *mh = _dyld_get_image_header(0);
+    intptr_t slide = _dyld_get_image_vmaddr_slide(0);
+    const struct mach_header_64 *mh64;
+    const struct load_command *cmd;
+    long ps = sysconf(_SC_PAGESIZE);
+    uint32_t i;
+    if (!mh || mh->magic != MH_MAGIC_64) return;
+    if (ps <= 0) ps = 4096;
+    mh64 = (const struct mach_header_64 *)mh;
+    cmd = (const struct load_command *)((const char *)mh64 + sizeof(*mh64));
+    for (i = 0; i < mh64->ncmds; i++) {
+        if (cmd->cmd == LC_SEGMENT_64) {
+            const struct segment_command_64 *seg = (const struct segment_command_64 *)cmd;
+            const struct section_64 *sec = (const struct section_64 *)(seg + 1);
+            uint32_t j;
+            if (!(seg->initprot & (VM_PROT_WRITE | VM_PROT_EXECUTE))) {
+                for (j = 0; j < seg->nsects; j++) {
+                    uintptr_t start, end, pstart, pend;
+                    if (!sec[j].size || !PC_MachSectionNeedsWrite(&sec[j])) continue;
+                    start = (uintptr_t)(slide + (intptr_t)sec[j].addr);
+                    end = start + (uintptr_t)sec[j].size;
+                    pstart = start & ~((uintptr_t)ps - 1);
+                    pend = (end + (uintptr_t)ps - 1) & ~((uintptr_t)ps - 1);
+                    if (mprotect((void *)pstart, (size_t)(pend - pstart),
+                                 PC_MachProt(seg->initprot) | PROT_WRITE) != 0) {
+                        fprintf(stderr, "PC_Bootstrap: could not make Mach-O %.16s writable\n",
+                                sec[j].sectname);
+                    }
+                }
+            }
+        }
+        if (cmd->cmdsize < sizeof(*cmd)) break;
+        cmd = (const struct load_command *)((const char *)cmd + cmd->cmdsize);
+    }
+}
 #else
 static void PC_MakeRodataWritable(void) {
-    /* macOS: implemented in its Stage-2.4 phase (dyld segment walk + mprotect). Until then that
-     * build relies on the on-fault path, so this is where its startup remap goes. */
+    /* Unsupported POSIX/Mach-O variant: no startup remap is available. */
 }
 #endif
 
@@ -769,8 +867,8 @@ static void PC_Bootstrap(void) {
 #if !defined(_WIN32)
     signal(SIGUSR1, PC_SigUsr1);        /* kill -USR1 <pid> -> stack dump (freeze diagnosis) */
     /* SIGSEGV/SIGBUS via sigaction+SA_SIGINFO so the handler gets the faulting address (si_addr) and
-     * CPU context (for the NULL-read fixup). SA_NODEFER lets a genuine re-fault inside the handler
-     * still terminate rather than deadlock. */
+     * CPU context (for the NULL-read fixup). SA_NODEFER plus s_crashHandlerActive makes a handler
+     * re-fault terminate immediately through async-safe _exit instead of recursively diagnosing. */
     {
         struct sigaction sa;
         memset(&sa, 0, sizeof(sa));

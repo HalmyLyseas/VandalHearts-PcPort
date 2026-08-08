@@ -5,7 +5,7 @@ There are two independent builds, matching the two layers in [architecture.md](a
 - **The matching decompilation** — rebuilds the original `SLUS_004.47` and proves byte-identity. Uses
   a period-correct MIPS toolchain; you only need this to verify the decomp or work on `src/`.
 - **The native PC port** — builds the playable desktop binary. Uses a normal host compiler + SDL2 /
-  OpenAL / OpenGL. This is what most contributors build.
+  OpenAL and Metal (macOS) or OpenGL (other targets). This is what most contributors build.
 
 Both builds reconstruct a few game/BIOS-derived files locally from your own copy of the game; nothing
 copyrighted is committed (see [NOTICE](../NOTICE) and [pc-port/data-segment.md](pc-port/data-segment.md)).
@@ -29,6 +29,12 @@ copyrighted is committed (see [NOTICE](../NOTICE) and [pc-port/data-segment.md](
 The exact, machine-specific setup recipe (where each tool was sourced, the `PATH`/`CROSS`/`PYTHON`
 overrides this environment needs) lives in the `decomp-build` skill (`.claude/skills/decomp-build/`).
 That skill is the authoritative setup reference; this page is the overview.
+
+On macOS, Homebrew supplies native `mipsel-linux-gnu-binutils`, but the exact decompals GCC 2.5.7
+and 2.6.3 PSX frontends are 32-bit i386 **Linux ELF** executables. Rosetta runs Intel Mach-O, not
+Linux ELF, so the byte-matching build still needs Linux (a VM/container or a Linux build host).
+Do not substitute the available GCC 2.7/2.8 macOS builds: compiler version and code generation are
+part of the byte-identity check.
 
 ### Build and verify
 
@@ -56,7 +62,7 @@ Everything below runs from `platform/pc/`.
 ### What you need
 
 - A host C compiler (GCC or Clang).
-- **SDL2**, **OpenAL** (e.g. OpenAL Soft), **OpenGL**, **libwebp**, and **libav / ffmpeg** (`libavformat`,
+- **SDL2**, **OpenAL** (e.g. OpenAL Soft), **OpenGL** on Linux/Windows, **libwebp**, and **libav / ffmpeg** (`libavformat`,
   `libavcodec`, `libavutil`, `libswscale`) development libraries. libwebp + libav power the 1.6 HD pack
   (`.webp` backgrounds, `.mp4` movies); build without them via `make link NO_WEBP=1 NO_HDVIDEO=1` /
   `cmake -DVH_WEBP=OFF -DVH_HDVIDEO=OFF`, which drops HD-pack support (native `.hdi`/MDEC fallbacks).
@@ -135,4 +141,5 @@ cmake --build build_win
 
 The result is a self-contained `build_win/` folder: `vandalhearts_pc.exe`, `vandalhearts.ini`, and the
 runtime DLLs (SDL2, OpenAL, and the MinGW runtime) copied in beside it — ready to zip and run on a
-stock Windows 10/11 machine. macOS is not currently built; see [cross-platform.md](cross-platform.md).
+stock Windows 10/11 machine. For the native Apple Silicon build, see
+[cross-platform.md](cross-platform.md#macos-apple-silicon--native-build).

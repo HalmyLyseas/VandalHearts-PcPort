@@ -1,4 +1,4 @@
-/* CMake-build-only force-include prelude for the game sources (../../src/*.c).
+/* CMake-build-only force-include prelude for the decompiled game C sources.
  *
  * It combines the two things the Makefile passes on the command line -- `-D'asm(x)='` and
  * `-include pc_forward_decls.h` -- into ONE header, because CMake per-source COMPILE_OPTIONS both
@@ -13,3 +13,15 @@
 #endif
 
 #include "pc_forward_decls.h"
+#if defined(__APPLE__)
+#include "common.h"
+#include "graphics.h"
+#include "object.h"
+#include "units.h"
+#include "field.h"
+#include "battle.h"
+#include "window.h"
+#include "audio.h"
+#include "state.h"
+#include "apple_void_forward_decls.h"
+#endif

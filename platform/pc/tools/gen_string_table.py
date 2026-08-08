@@ -19,7 +19,9 @@ SLUS_004.47) and a constructor rewrites each gStringTable[i] to point at the
 embedded copy. Static-initialized data is ready before any constructor runs, so
 the rewrite is safe; the handful of runtime self-copies the game does
 (gStringTable[0]/[32] = gStringTable[x]) just copy the already-fixed pointers.
-NULL entries (88..99) are left untouched.
+NULL entries (88..99), plus the PC port's added sentinel entry 100, are normalized to a stable empty
+string. This matches the zero read produced by the Linux i386 fault fixup without relying on
+architecture-specific fault decoding, and makes every in-range table lookup safe on all PC targets.
 
 Stage-2 PC-port backend file only; the matching build never sees it.
 """
@@ -29,11 +31,12 @@ import struct
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VH = os.path.abspath(os.path.join(HERE, "..", "..", ".."))   # tools -> pc -> platform -> vh
-SLUS = os.path.join(VH, "SLUS_004.47")
-INC = os.path.join(VH, "assets", "8010102c.inc")
-OUT = os.path.join(VH, "platform", "pc", "src", "pc_string_table.c")
+SLUS = os.environ.get("VH_PSX_EXE", os.path.join(VH, "SLUS_004.47"))
+OUT = os.environ.get("VH_GENERATED_OUT",
+                     os.path.join(VH, "platform", "pc", "src", "pc_string_table.c"))
 
 COUNT = 100
+TABLE_ADDR = 0x8010102c
 LOAD_ADDR = 0x80010000
 FILE_BASE = 0x800
 
@@ -65,8 +68,7 @@ def c_escape(s):
 
 def main():
     data = open(SLUS, "rb").read()
-    ptrs = [int(x, 16) for x in re.findall(r"0x([0-9a-fA-F]+)", open(INC).read())]
-    assert len(ptrs) == COUNT, "expected %d entries, got %d" % (COUNT, len(ptrs))
+    ptrs = struct.unpack_from("<%dI" % COUNT, data, foff(TABLE_ADDR))
 
     strings = []
     for p in ptrs:
@@ -83,7 +85,8 @@ def main():
     lines.append(" * holds absolute PSX addresses that dangle on the PC port. We rewrite each entry")
     lines.append(" * to the embedded string below at startup. See the generator header. */")
     lines.append("")
-    lines.append("extern unsigned char *gStringTable[%d];" % COUNT)
+    lines.append("extern unsigned char *gStringTable[101];")
+    lines.append("static unsigned char s_pc_empty_string[] = \"\";")
     lines.append("")
     lines.append("static const char *const s_pc_strings[%d] = {" % COUNT)
     for i, s in enumerate(strings):
@@ -97,10 +100,10 @@ def main():
     lines.append("static void PC_FixupStringTable(void) {")
     lines.append("    int i;")
     lines.append("    for (i = 0; i < %d; i++) {" % COUNT)
-    lines.append("        if (s_pc_strings[i]) {")
-    lines.append("            gStringTable[i] = (unsigned char *)s_pc_strings[i];")
-    lines.append("        }")
+    lines.append("        gStringTable[i] = s_pc_strings[i]")
+    lines.append("            ? (unsigned char *)s_pc_strings[i] : s_pc_empty_string;")
     lines.append("    }")
+    lines.append("    gStringTable[%d] = s_pc_empty_string; /* PC sentinel used transiently by dojo.c */" % COUNT)
     lines.append("}")
     lines.append("")
     open(OUT, "w").write("\n".join(lines))

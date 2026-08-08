@@ -64,7 +64,7 @@ Each PSX hardware unit and its portable replacement:
 
 | Doc | Subsystem |
 |---|---|
-| [pc-port/subsystems/gpu.md](pc-port/subsystems/gpu.md) | GPU — rasteriser, ordering table, primitives (SDL2 + OpenGL) |
+| [pc-port/subsystems/gpu.md](pc-port/subsystems/gpu.md) | GPU — rasteriser, ordering table, primitives (SDL2 + Metal/OpenGL presentation) |
 | [pc-port/subsystems/gte.md](pc-port/subsystems/gte.md) | GTE — fixed-point 3D geometry math |
 | [pc-port/subsystems/spu.md](pc-port/subsystems/spu.md) | SPU / sound — software SPU + the SEQ music sequencer |
 | [pc-port/subsystems/cd-xa.md](pc-port/subsystems/cd-xa.md) | CD-ROM & XA audio — disc image model, timing, streaming |

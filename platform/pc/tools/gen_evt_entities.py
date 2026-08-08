@@ -16,9 +16,9 @@ See memory milestone_cutscene_units_fixed for the full story (found via BizHawk 
 import struct, re, sys, os
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))  # vh/ (tools is 4 deep)
-EXE  = os.path.join(ROOT, "build/SLUS_004.47")
+EXE  = os.environ.get("VH_PSX_EXE", os.path.join(ROOT, "build/SLUS_004.47"))
 SYMS = os.path.join(ROOT, "symbol_addrs.txt")
-OUT  = os.path.join(ROOT, "platform/pc/src/pc_evt_entities.c")
+OUT  = os.environ.get("VH_GENERATED_OUT", os.path.join(ROOT, "platform/pc/src/pc_evt_entities.c"))
 
 d = open(EXE, "rb").read()
 t = struct.unpack_from("<I", d, 0x18)[0]          # PS-X EXE load addr (0x80010000)

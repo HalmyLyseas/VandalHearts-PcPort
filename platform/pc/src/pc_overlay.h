@@ -37,6 +37,7 @@ int  PC_OverlaySaveSelected(void);
 const char *PC_OverlaySaveLabel(int i);   /* row i's display label ("2026-07-25 15:30"), or NULL */
 int  PC_OverlaySaveActive(int i);         /* 1 if row i is byte-identical to the current card */
 int  PC_OverlaySaveHasActive(void);       /* 1 if there is an active card to back up */
+const char *PC_OverlaySaveStatus(void);   /* most recent save operation result, or empty */
 
 /* CONFIRM screen -- a small prompt. */
 const char *PC_OverlayConfirmMsg(void);    /* the question line */

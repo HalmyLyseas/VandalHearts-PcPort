@@ -37,6 +37,12 @@ set(PROJECT_ROOT ${PC_DIR}/../..)
 set(SRC_DIR      ${PROJECT_ROOT}/src)
 set(GEN_DIR      ${CMAKE_BINARY_DIR}/datagen)     # generator's VH_BUILD_DIR (staging + work + output)
 set(STAGE_DIR    ${GEN_DIR}/include_stage)
+set(GEN_ASSET_DIR ${GEN_DIR}/generated_assets)
+set(GEN_DATA_DIR ${GEN_DIR}/generated_sources)
+
+set(VH_PSX_EXE "${PROJECT_ROOT}/SLUS_004.47" CACHE FILEPATH "Original US PS-X EXE used for generated data")
+set(VH_KROM_SOURCE "${PROJECT_ROOT}/../psy-q/3.6/PSYQ/BIN/KROMDAT.BIN" CACHE FILEPATH
+    "PsyQ KROMDAT.BIN or a PS1 BIOS containing the same font data")
 
 # Windows: force-include the MinGW compat shim (BSD u_char/u_short/... the PsyQ headers use) ahead of
 # every TU, at directory scope so it precedes the per-source -std/-include options and reaches the
@@ -60,7 +66,9 @@ file(CREATE_LINK ${PC_DIR}/include/inline_gte.h ${STAGE_DIR}/inline_gte.h SYMBOL
 
 # ---- external libs ----------------------------------------------------------------------------
 find_package(SDL2 REQUIRED)
-find_package(OpenGL REQUIRED)
+if(NOT APPLE)
+    find_package(OpenGL REQUIRED)
+endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)   # data-file + data-segment generators
 # libgpu.c's threaded hi-res rasterizer (P1) uses pthreads. Threads::Threads resolves to -lpthread on
 # Linux, winpthreads on MinGW (bundled as libwinpthread-1.dll), nothing on macOS -- so the link is
@@ -68,7 +76,33 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)   # data-file + data-segme
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 find_library(OPENAL_LIB NAMES openal OpenAL32 REQUIRED)   # 'openal' on Linux, 'OpenAL32' on MinGW/Windows
-find_path(OPENAL_INCLUDE_DIR AL/al.h)
+if(NOT APPLE)
+    find_path(OPENAL_INCLUDE_DIR AL/al.h REQUIRED)
+else()
+    # The SDK framework exposes headers as <OpenAL/al.h>; no Homebrew include path is needed.
+    set(OPENAL_INCLUDE_DIR "")
+endif()
+
+# macOS responsibility gate: every offset-based data extractor must consume the byte-exact US
+# executable. The stamp depends on the input itself, so replacing a file at the same path after
+# configuration re-runs validation before any generated source or include is rebuilt.
+set(PSX_VALIDATION_DEP ${VH_PSX_EXE})
+if(APPLE)
+    set(PSX_VALIDATION_STAMP ${GEN_DIR}/validated-slus-00447.stamp)
+    add_custom_command(
+        OUTPUT ${PSX_VALIDATION_STAMP}
+        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/validate_psx_exe.py ${VH_PSX_EXE}
+        COMMAND ${CMAKE_COMMAND} -E touch ${PSX_VALIDATION_STAMP}
+        DEPENDS ${VH_PSX_EXE} ${PC_DIR}/tools/validate_psx_exe.py
+        COMMENT "Validating byte-exact SLUS_004.47 input"
+        VERBATIM)
+    add_custom_target(vh_validate_psx DEPENDS ${PSX_VALIDATION_STAMP})
+    set(PSX_VALIDATION_DEP ${PSX_VALIDATION_STAMP})
+endif()
+if(APPLE)
+    # The data generator links outside CMake targets and needs a concrete SDL library path.
+    find_library(SDL2_GEN_LIB NAMES SDL2 SDL2-2.0 REQUIRED)
+endif()
 
 # libwebp: STANDARD HD-pack dependency (1.6). .webp replacements are ~7x smaller than raw .hdi (a full
 # background pack is ~20MB vs ~150MB), so it ships on by default. -DVH_WEBP=OFF builds without it (the
@@ -92,7 +126,27 @@ if(VH_HDVIDEO)
 endif()
 
 # ---- source lists -----------------------------------------------------------------------------
-file(GLOB GAME_SRCS ${SRC_DIR}/*.c)
+file(GLOB GAME_SRCS CONFIGURE_DEPENDS ${SRC_DIR}/*.c)
+file(MAKE_DIRECTORY ${GEN_ASSET_DIR}/assets)
+file(MAKE_DIRECTORY ${GEN_DATA_DIR})
+set(PSX_INCLUDE_OUTPUTS
+    ${GEN_ASSET_DIR}/assets/801009bc.inc
+    ${GEN_ASSET_DIR}/assets/80100e9c.inc
+    ${GEN_ASSET_DIR}/assets/801012e4.inc)
+add_custom_command(
+    OUTPUT ${PSX_INCLUDE_OUTPUTS}
+    COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_psx_includes.py
+            ${VH_PSX_EXE} ${GEN_ASSET_DIR}/assets
+    DEPENDS ${PC_DIR}/tools/gen_psx_includes.py ${PSX_VALIDATION_DEP}
+    COMMENT "Generating build-local PS-X include assets"
+    VERBATIM)
+add_custom_target(vh_generated_assets DEPENDS ${PSX_INCLUDE_OUTPUTS})
+if(APPLE)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_apple_forward_decls.py
+                ${SRC_DIR} ${STAGE_DIR}/apple_void_forward_decls.h
+        COMMAND_ERROR_IS_FATAL ANY)
+endif()
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
 set(BACKEND_PLAIN   libcd libspu libkernel libgpu pc_raster pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_hdvideo)
@@ -103,12 +157,16 @@ set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 # game source gets its known-benign 1996-C warning classes silenced; PORT code compiles -Wall -Wextra
 # and must stay warning-clean, so a new warning there is signal.
 set(GAME_WARN "-Wno-incompatible-pointer-types;-Wno-builtin-declaration-mismatch;-Wno-discarded-qualifiers;-Wno-pointer-to-int-cast;-Wno-int-to-pointer-cast;-Wno-int-conversion")
+if(APPLE)
+    set(GAME_WARN "-Wno-incompatible-pointer-types;-Wno-ignored-qualifiers;-Wno-pointer-to-int-cast;-Wno-int-to-pointer-cast;-Wno-int-conversion;-Wno-error=implicit-function-declaration")
+endif()
 set(PORT_WARN "-Wall;-Wextra;-Wno-unused-parameter;-Wno-missing-field-initializers")
-
-set(ALL_OBJ_SRCS ${GAME_SRCS})
-foreach(_b ${BACKEND_PLAIN} libetc pc_diag pc_battle_speed libsnd libgte pc_gpu_window pc_balance ${DATA_PERM} ${DATA_PLAIN})
-    list(APPEND ALL_OBJ_SRCS ${PC_DIR}/src/${_b}.c)
-endforeach()
+if(APPLE)
+    # Treat warnings in port-owned translation units as errors on the Mac responsibility path. OpenAL
+    # framework deprecation is a known SDK-level warning until that backend is replaced, not a source defect.
+    list(APPEND PORT_WARN "-Werror" "-Wno-deprecated-declarations" "-Wno-macro-redefined"
+         "-Wno-incompatible-library-redeclaration")
+endif()
 
 # ---- GENERATED game/BIOS-derived data files (gitignored; regenerated at build) ----------------
 # Reconstruct copyrighted content (Konami UI text, PS1 BIOS kanji glyphs) from the user's OWN copy
@@ -117,20 +175,40 @@ endforeach()
 set(GENERATED_DATA_C pc_kanji_font pc_spell_descriptions pc_item_descriptions pc_evt_entities pc_string_table)
 foreach(_g ${GENERATED_DATA_C})
     string(REPLACE "pc_" "" _base "${_g}")   # gen_<base>.py, e.g. pc_string_table -> gen_string_table.py
+    set(_generated_source ${GEN_DATA_DIR}/${_g}.c)
     add_custom_command(
-        OUTPUT ${PC_DIR}/src/${_g}.c
-        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_${_base}.py
-        DEPENDS ${PC_DIR}/tools/gen_${_base}.py
+        OUTPUT ${_generated_source}
+        COMMAND ${CMAKE_COMMAND} -E env "VH_PSX_EXE=${VH_PSX_EXE}"
+                "VH_KROM_SOURCE=${VH_KROM_SOURCE}"
+                "VH_GENERATED_OUT=${_generated_source}"
+                ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_${_base}.py
+        DEPENDS ${PC_DIR}/tools/gen_${_base}.py ${PSX_VALIDATION_DEP} ${VH_KROM_SOURCE}
         WORKING_DIRECTORY ${PC_DIR}
-        COMMENT "Generating src/${_g}.c (from the byte-exact binary / PsyQ KROMDAT)"
+        COMMENT "Generating build-local ${_g}.c (from the byte-exact binary / PsyQ KROMDAT)"
         VERBATIM)
-    set_source_files_properties(${PC_DIR}/src/${_g}.c PROPERTIES GENERATED TRUE)
+    set_source_files_properties(${_generated_source} PROPERTIES GENERATED TRUE)
+endforeach()
+
+function(vh_source_path output stem)
+    list(FIND GENERATED_DATA_C "${stem}" _generated_idx)
+    if(_generated_idx GREATER -1)
+        set(${output} "${GEN_DATA_DIR}/${stem}.c" PARENT_SCOPE)
+    else()
+        set(${output} "${PC_DIR}/src/${stem}.c" PARENT_SCOPE)
+    endif()
+endfunction()
+
+set(ALL_OBJ_SRCS ${GAME_SRCS})
+foreach(_b ${BACKEND_PLAIN} libetc pc_diag pc_battle_speed libsnd libgte pc_gpu_window pc_balance ${DATA_PERM} ${DATA_PLAIN})
+    vh_source_path(_source "${_b}")
+    list(APPEND ALL_OBJ_SRCS ${_source})
 endforeach()
 
 # ---- OBJECT library: everything except the generated data segment -----------------------------
 # An OBJECT library so the generator can be handed the real object paths ($<TARGET_OBJECTS:...>);
 # CMake's object layout does not match the Makefile glob the generator used to assume.
 add_library(vh_objs OBJECT ${ALL_OBJ_SRCS})
+add_dependencies(vh_objs vh_generated_assets)
 
 # Common include dirs for our own backend/data files.
 target_include_directories(vh_objs PRIVATE ${PC_DIR}/include ${STAGE_DIR}
@@ -158,8 +236,15 @@ foreach(_g ${GAME_SRCS})
     set_source_files_properties(${_g} PROPERTIES
         COMPILE_DEFINITIONS "PERMUTER;PC_PORT;PC_FEAT"
         COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt;-include;${PC_DIR}/include/cmake_game_prelude.h;${GAME_WARN}"
-        INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
+        INCLUDE_DIRECTORIES "${STAGE_DIR};${GEN_ASSET_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
 endforeach()
+if(APPLE)
+    foreach(_g ${GAME_SRCS})
+        set_property(SOURCE ${_g} APPEND PROPERTY COMPILE_OPTIONS "-fwritable-strings")
+        get_filename_component(_apple_stem ${_g} NAME_WE)
+        set_property(SOURCE ${_g} APPEND PROPERTY COMPILE_DEFINITIONS "VH_APPLE_TU_${_apple_stem}")
+    endforeach()
+endif()
 # Always-on runtime-gated probes (Makefile: UNCONDITIONAL, self-gating at runtime).
 set_property(SOURCE ${SRC_DIR}/window.c ${SRC_DIR}/object.c ${SRC_DIR}/main_menu.c
              APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_UI_LOG)
@@ -185,7 +270,8 @@ set_source_files_properties(${PC_DIR}/src/pc_gpu_window.c PROPERTIES
 
 # -- hand-written data files: DATA_PERM need gnu89+PERMUTER+stage -------------------------------
 foreach(_d ${DATA_PERM})
-    set_source_files_properties(${PC_DIR}/src/${_d}.c PROPERTIES
+    vh_source_path(_data_source "${_d}")
+    set_source_files_properties(${_data_source} PROPERTIES
         COMPILE_DEFINITIONS "PERMUTER"
         COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt"
         INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
@@ -202,8 +288,9 @@ set_source_files_properties(${PC_DIR}/src/pc_balance.c PROPERTIES
 # -- warning policy on PORT code (the same 18 stems the Makefile treats as backend) ---------------
 # MUST come after every set_source_files_properties above: that call OVERWRITES COMPILE_OPTIONS,
 # so these appends would otherwise be silently clobbered (bit pc_balance/libgte on first attempt).
-foreach(_b ${BACKEND_PLAIN} libetc libsnd libgte pc_gpu_window pc_balance)
-    set_property(SOURCE ${PC_DIR}/src/${_b}.c APPEND PROPERTY COMPILE_OPTIONS "${PORT_WARN}")
+foreach(_b ${BACKEND_PLAIN} libetc pc_diag pc_battle_speed libsnd libgte pc_gpu_window pc_balance)
+    vh_source_path(_port_source "${_b}")
+    set_property(SOURCE ${_port_source} APPEND PROPERTY COMPILE_OPTIONS "${PORT_WARN}")
 endforeach()
 foreach(_b libetc libsnd pc_balance)   # compile through the staged game headers -> game csqrt(int) decl
     set_property(SOURCE ${PC_DIR}/src/${_b}.c APPEND PROPERTY COMPILE_OPTIONS "-fno-builtin-csqrt")
@@ -227,19 +314,42 @@ endforeach()
 if(WIN32)
     set(_GEN_GL_LIB "-lopengl32")
     set(_GEN_AL_LIB "-lOpenAL32")
+    set(_GEN_SDL_LIB "-lSDL2")
+elseif(APPLE)
+    set(_GEN_GL_LIB "")
+    set(_GEN_AL_LIB "-framework OpenAL")
+    if(SDL2_GEN_LIB MATCHES "\\.framework$")
+        # find_library returns the framework directory. A raw clang link needs -F/-framework;
+        # passing the directory as though it were a dylib fails before undefined-symbol discovery.
+        get_filename_component(_SDL2_FRAMEWORK_PARENT "${SDL2_GEN_LIB}" DIRECTORY)
+        set(_GEN_SDL_LIB "-F${_SDL2_FRAMEWORK_PARENT} -framework SDL2")
+    else()
+        set(_GEN_SDL_LIB "${SDL2_GEN_LIB}")
+    endif()
 else()
     set(_GEN_GL_LIB "-lGL")
     set(_GEN_AL_LIB "-lopenal")
+    set(_GEN_SDL_LIB "-lSDL2")
 endif()
 # libgpu.o references WebPDecodeRGBA/WebPFree (under VH_HD_WEBP); the probe link must resolve them so they
 # don't pollute the undefined-symbol list the generator harvests.
 set(_GEN_WEBP_LIB "")
 if(VH_WEBP)
-    set(_GEN_WEBP_LIB "-lwebp")
+    if(APPLE)
+        set(_GEN_WEBP_LIB "${WEBP_LIB}")
+    else()
+        set(_GEN_WEBP_LIB "-lwebp")
+    endif()
 endif()
 set(_GEN_AV_LIBS "")
 if(VH_HDVIDEO)
-    set(_GEN_AV_LIBS "-lavformat -lavcodec -lavutil -lswscale")
+    if(APPLE)
+        # The probe is a raw compiler invocation, outside CMake's target link interface. Use the
+        # concrete Homebrew/CMake results so it does not depend on a global /opt/homebrew search path.
+        set(_GEN_AV_LIBS "${AVFORMAT_LIB} ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB}")
+    else()
+        set(_GEN_AV_LIBS "-lavformat -lavcodec -lavutil -lswscale")
+    endif()
     if(WIN32)
         # The generator's undefined-symbol PROBE link (VH_LINK_LIBS) runs the cross linker directly. The
         # STATIC libav lives outside the default MinGW lib path, so without -L<prefix>/lib the probe link
@@ -256,11 +366,23 @@ if(VH_HDVIDEO)
     endif()
 endif()
 set(GENERATED_C ${GEN_DIR}/generated_data.c)
+set(GENERATED_STAMP ${GEN_DIR}/generated_data.stamp)
 set(GEN_ENV
     "VH_BUILD_DIR=${GEN_DIR}"
     "VH_CC=${CMAKE_C_COMPILER}"
     "VH_OBJ_FILES=$<JOIN:$<TARGET_OBJECTS:vh_objs>, >"
-    "VH_LINK_LIBS=-lSDL2 ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
+    "VH_PSX_EXE=${VH_PSX_EXE}"
+    "VH_LINK_LIBS=${_GEN_SDL_LIB} ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    # CMake adds -arch to its own compile/link commands, but the data generator invokes clang
+    # directly. Keep its undefined-symbol link and executable sizeof probe on the same slice(s).
+    set(_GEN_APPLE_ARCH_FLAGS "")
+    foreach(_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+        string(APPEND _GEN_APPLE_ARCH_FLAGS " -arch ${_arch}")
+    endforeach()
+    string(STRIP "${_GEN_APPLE_ARCH_FLAGS}" _GEN_APPLE_ARCH_FLAGS)
+    list(APPEND GEN_ENV "VH_TARGET_MARCH=${_GEN_APPLE_ARCH_FLAGS}")
+endif()
 if(VH_SANITIZE)
     list(APPEND GEN_ENV "VH_SAN=${VH_SANITIZE}")
 endif()
@@ -276,21 +398,30 @@ if(WIN32)
     list(APPEND GEN_ENV "VH_HOST_CC=gcc")
 endif()
 add_custom_command(
-    OUTPUT ${GENERATED_C}
+    OUTPUT ${GENERATED_STAMP}
+    BYPRODUCTS ${GENERATED_C}
     COMMAND ${CMAKE_COMMAND} -E env ${GEN_ENV}
             ${Python3_EXECUTABLE} ${PC_DIR}/tools/build_data_segment.py
-    DEPENDS vh_objs $<TARGET_OBJECTS:vh_objs> ${PC_DIR}/tools/build_data_segment.py
+    COMMAND ${CMAKE_COMMAND} -E touch ${GENERATED_STAMP}
+    DEPENDS vh_objs $<TARGET_OBJECTS:vh_objs> ${PC_DIR}/tools/build_data_segment.py ${PSX_VALIDATION_DEP}
     WORKING_DIRECTORY ${PC_DIR}
     COMMENT "Generating data segment (generated_data.c)"
     VERBATIM)
 set_source_files_properties(${GENERATED_C} PROPERTIES GENERATED TRUE
+    OBJECT_DEPENDS ${GENERATED_STAMP}
     COMPILE_DEFINITIONS "PERMUTER"
     COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt"
     INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
+if(APPLE)
+    set_property(SOURCE ${GENERATED_C} APPEND PROPERTY COMPILE_OPTIONS "-Wno-macro-redefined")
+endif()
 
 # ---- final executable -------------------------------------------------------------------------
 add_executable(vandalhearts_pc $<TARGET_OBJECTS:vh_objs> ${GENERATED_C})
-target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} OpenGL::GL m Threads::Threads)
+target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} m Threads::Threads)
+if(NOT APPLE)
+    target_link_libraries(vandalhearts_pc PRIVATE OpenGL::GL)
+endif()
 if(VH_WEBP)
     target_link_libraries(vandalhearts_pc PRIVATE ${WEBP_LIB})
 endif()
@@ -307,7 +438,7 @@ if(VH_HDVIDEO)
         target_link_libraries(vandalhearts_pc PRIVATE ${AVFORMAT_LIB} ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB})
     endif()
 endif()
-if(NOT WIN32)
+if(UNIX AND NOT APPLE)
     # -rdynamic: the crash-dump backtrace in pc_bootstrap.c needs dynamic symbols. Linux/POSIX only
     # -- the Windows build has no backtrace()/signal path, and MinGW ld does not take -rdynamic.
     target_link_options(vandalhearts_pc PRIVATE -rdynamic)
@@ -381,3 +512,28 @@ set_target_properties(vandalhearts_pc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAK
 add_custom_command(TARGET vandalhearts_pc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PC_DIR}/vandalhearts.ini $<TARGET_FILE_DIR:vandalhearts_pc>
     COMMENT "Copying vandalhearts.ini next to the binary")
+
+if(APPLE)
+    string(REPLACE ";" "," _MAC_ARCHITECTURES "${CMAKE_OSX_ARCHITECTURES}")
+    if(NOT _MAC_ARCHITECTURES)
+        set(_MAC_ARCHITECTURES "native")
+    endif()
+    # This deliberately runs on every default build.  Git can become dirty, or HEAD can move,
+    # without changing an object-file timestamp; tying the manifest only to the link step would
+    # therefore leave plausible-looking but stale provenance beside an unchanged executable.
+    add_custom_target(vh_macos_buildinfo ALL
+        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_macos_buildinfo.py
+                --repo ${PROJECT_ROOT}
+                --binary $<TARGET_FILE:vandalhearts_pc>
+                --psx ${VH_PSX_EXE}
+                --krom ${VH_KROM_SOURCE}
+                --output $<TARGET_FILE_DIR:vandalhearts_pc>/VH_BUILDINFO.txt
+                --compiler ${CMAKE_C_COMPILER}
+                --architectures ${_MAC_ARCHITECTURES}
+                --build-type ${CMAKE_BUILD_TYPE}
+                --webp ${VH_WEBP}
+                --hdvideo ${VH_HDVIDEO}
+        DEPENDS vandalhearts_pc ${PC_DIR}/tools/gen_macos_buildinfo.py
+        COMMENT "Writing macOS reproducibility manifest"
+        VERBATIM)
+endif()

@@ -26,24 +26,31 @@ All of this lives in `platform/pc/src/pc_bootstrap.c`, run before `main()` via c
 [pc-port/bootstrap.md](pc-port/bootstrap.md) for the startup sequence; the memory-safety-relevant
 pieces are:
 
-- **Reserve the real PSX RAM ranges.** At startup the port maps the exact PSX addresses as real,
+- **Reserve the real PSX RAM ranges.** On Linux and Windows the port maps the exact PSX addresses as real,
   writable memory — the 2 MB KUSEG RAM at `0x80000000` and the 1 KB Scratchpad at `0x1f800000` — so
   every hard-coded literal is a valid buffer again, exactly as on hardware. `mmap(MAP_FIXED)` on
-  POSIX, `VirtualAlloc` at the fixed address on Windows.
+  Linux, `VirtualAlloc` at the fixed address on Windows. Apple Silicon cannot map those low addresses,
+  so the macOS port uses host-backed storage for the remaining scratch/work buffers.
 - **Make read-only data writable at startup.** Rather than trap every literal write, the port makes
   the executable's read-only data segments writable once, up front. This is per-OS: `dl_iterate_phdr`
-  + `mprotect` on Linux; a PE-section walk + `VirtualProtect` on Windows; a dyld walk on macOS is the
-  one remaining stub (see [cross-platform.md](cross-platform.md)).
-- **A portable fault handler as the safety net.** A `SIGSEGV`/`SIGBUS` handler (POSIX) catches
-  anything the startup passes miss: a low-address read is emulated as reading zero and stepped over; a
-  read-only-data write makes the page writable and retries. Each distinct site is logged once to
-  `vh_null_reads.log`, so unguarded spots surface for a proper source-level fix instead of crashing.
-  In a healthy run this file never appears.
+  + `mprotect` on Linux; a PE-section walk + `VirtualProtect` on Windows; and a dyld section walk +
+  `mprotect` on macOS (see [cross-platform.md](cross-platform.md)).
+- **Platform-specific fault diagnostics and recovery.** The POSIX `SIGSEGV`/`SIGBUS` handler reports
+  crashes. On native Linux i386 it can additionally emulate supported low-address reads as zero and
+  step over them; on native Linux x86 it can retry a read-only-data write after changing protection.
+  Each emulated i386 site is logged once to `vh_null_reads.log`, so it surfaces for a proper
+  source-level fix instead of crashing.
+  In a healthy run this file never appears. The low-read instruction fixup is currently implemented
+  only for Linux i386; it is **not implemented** on macOS, Windows, or the default Linux x86-64 build.
+  This distinction is load-bearing. The PC string-table constructor now normalizes its 12 retail NULL
+  entries and entry-100 sentinel to a stable empty string, removing that known class without a signal
+  handler. Other unguarded low-pointer paths still need explicit source guards on every target that
+  lacks the i386 fixup.
 
 The payoff of Stage 2.2 was removing every privileged crutch: earlier versions mapped page 0 (needing
 `CAP_SYS_RAWIO` / `setcap`) and parsed `/proc`. The current build **runs unprivileged, no root, no
-setcap**, and the running path is signal- and arch-free on the platforms whose startup remap is
-implemented.
+setcap**. Startup remapping removes the read-only-data-write faults, but does not replace Linux's
+low-read instruction fixup on macOS or Windows.
 
 ## Going 64-bit (Stage 2.3)
 
@@ -107,8 +114,18 @@ ASAN's blind spot, worth knowing: a buffer that is a *slice* of a larger array
 ### UBSan — works at 64-bit
 
 UBSan has no shadow memory, so it runs at the default 64-bit (`make ubsan`, or the CMake
-`-DVH_SANITIZE="-fsanitize=bounds …"`). It's the bounds-checking pass that ASAN's arena collision
-rules out at 64-bit.
+`-DVH_SANITIZE="-fsanitize=bounds …"`). On macOS, add `null` while hunting unknown low-pointer paths:
+
+```sh
+cmake -S platform/pc -B platform/pc/build_macos_ubsan \
+  -DVH_SANITIZE="-fsanitize=null,bounds -fno-omit-frame-pointer"
+cmake --build platform/pc/build_macos_ubsan
+```
+
+This produces a source-level diagnostic before the ordinary crash for instrumentable NULL
+dereferences. It cannot prove that every scene is safe: coverage still depends on the battles,
+cutscenes, menus, and save states exercised. It is also the bounds-checking pass that ASAN's arena
+collision rules out at 64-bit on Linux.
 
 ### Struct-width diffing — what neither sanitizer sees
 
@@ -128,6 +145,6 @@ between build widths. The `sizeof`-diff method stays in the toolkit for the *nex
 | Tool | What it catches | Constraint |
 |---|---|---|
 | `make asan32` + `run_asan.sh` | out-of-bounds on globals/heap | 32-bit only (shadow vs arena) |
-| `make ubsan` / CMake `VH_SANITIZE` | bounds, UB | works at 64-bit |
+| `make ubsan` / CMake `VH_SANITIZE` | bounds, null/UB when selected | works at 64-bit; needs runtime coverage |
 | `tools/struct_width_diff.sh` | layout drift in serialized structs | the class sanitizers miss |
 | `vh_null_reads.log` | NULL-region reads / rodata writes the remap missed | appears only on a real fault |

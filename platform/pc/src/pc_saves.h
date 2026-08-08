@@ -33,6 +33,11 @@ int  PC_SaveReadCard(const char *file, PC_SaveCard *out);
 /* Fill `out` (up to `cap`) with the archives, newest first. Returns the count (0 if none / no folder). */
 int  PC_SaveArchiveList(PC_SaveArchive *out, int cap);
 
+/* Allocate and return the complete archive list. The caller owns `*out` and releases it with
+ * PC_SaveArchiveListFree. Returns -1 on allocation/I/O failure, otherwise the count (possibly 0). */
+int  PC_SaveArchiveListAlloc(PC_SaveArchive **out);
+void PC_SaveArchiveListFree(PC_SaveArchive *out);
+
 /* 1 if an active card file exists (so "Back up" has something to copy). */
 int  PC_SaveHasActive(void);
 
