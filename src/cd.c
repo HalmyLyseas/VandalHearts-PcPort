@@ -59,20 +59,27 @@ typedef struct SeqSet {
    void *bufferPtr;
 } SeqSet;
 
-// TODO: Replace addresses w/ relocs
-SoundSet gSoundSets[13] = {{0, CDF_SD_JOU_VH, CDF_SD_JOU_VB, (void *)0x80140878},
-                           {1, CDF_SD_SEQ_VH, CDF_SD_SEQ_VB, (void *)0x80141878},
-                           {2, CDF_SD_BAT_VH, CDF_SD_BAT_VB, (void *)0x80144878},
-                           {2, CDF_SD_TORI_VH, CDF_SD_TORI_VB, (void *)0x80144878},
-                           {2, CDF_SD_TAKI_VH, CDF_SD_TAKI_VB, (void *)0x80144878},
-                           {2, CDF_SD_KAZE_VH, CDF_SD_KAZE_VB, (void *)0x80144878},
-                           {2, CDF_SD_BIBI_VH, CDF_SD_BIBI_VB, (void *)0x80144878},
-                           {2, CDF_SD_ZIHI_VH, CDF_SD_ZIHI_VB, (void *)0x80144878},
-                           {2, CDF_SD_RIN_VH, CDF_SD_RIN_VB, (void *)0x80144878},
-                           {2, CDF_SD_AMA_VH, CDF_SD_AMA_VB, (void *)0x80144878},
-                           {2, CDF_SD_BERA_VH, CDF_SD_BERA_VB, (void *)0x80144878},
-                           {2, CDF_SD_DOR_VH, CDF_SD_DOR_VB, (void *)0x80144878},
-                           {2, CDF_SD_HI_VH, CDF_SD_HI_VB, (void *)0x80144878}};
+#ifdef PC_PORT
+/* These were anonymous fixed PS1-RAM addresses. Some hosts cannot map the PS1 address range, so
+ * give the three overlapping sound work areas equivalent offsets in a real host allocation. */
+static u8 sPcSoundWorkRam[0xc0000];
+#define SOUND_WORK_PTR(addr) ((void *)&sPcSoundWorkRam[(addr) - 0x80140000])
+#else
+#define SOUND_WORK_PTR(addr) ((void *)(addr))
+#endif
+SoundSet gSoundSets[13] = {{0, CDF_SD_JOU_VH, CDF_SD_JOU_VB, SOUND_WORK_PTR(0x80140878)},
+                           {1, CDF_SD_SEQ_VH, CDF_SD_SEQ_VB, SOUND_WORK_PTR(0x80141878)},
+                           {2, CDF_SD_BAT_VH, CDF_SD_BAT_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_TORI_VH, CDF_SD_TORI_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_TAKI_VH, CDF_SD_TAKI_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_KAZE_VH, CDF_SD_KAZE_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_BIBI_VH, CDF_SD_BIBI_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_ZIHI_VH, CDF_SD_ZIHI_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_RIN_VH, CDF_SD_RIN_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_AMA_VH, CDF_SD_AMA_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_BERA_VH, CDF_SD_BERA_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_DOR_VH, CDF_SD_DOR_VB, SOUND_WORK_PTR(0x80144878)},
+                           {2, CDF_SD_HI_VH, CDF_SD_HI_VB, SOUND_WORK_PTR(0x80144878)}};
 
 SeqSet gSeqSets[38] = {
     {CDF_SD_S00_BIN, gSeqData}, {CDF_SD_S01_BIN, gSeqData}, {CDF_SD_S02_BIN, gSeqData},
@@ -1256,7 +1263,11 @@ void Movie_InitDecoder(void) {
 }
 
 void Movie_Init(CdlLOC *location, u32 endFrame, void (*strCallback)(), void (*endCallback)()) {
+#ifdef PC_PORT
+   static void *ringBufAddr = &gScratch3_80180210[291520];
+#else
    static void *ringBufAddr = (void *)0x801c74d0; //&gScratch3_80180210[291520]; //FIXME (reloc)
+#endif
 
    DecDCTReset(0);
    s_movieFinished_8012326c = 0;

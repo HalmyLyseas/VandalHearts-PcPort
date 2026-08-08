@@ -134,13 +134,17 @@ void Objf798_ResetInputState(Object *);
  * The extra entry is implicitly NULL, so behaviour is unchanged -- this only makes the existing
  * outcome deterministic instead of dependent on linker padding. The initializer list keeps
  * supplying exactly the 100 real entries, so nothing about the matching build shifts. */
-#ifdef PERMUTER
+#ifdef PC_PORT
+/* The native port reconstructs these PSX-address pointers from the user's executable in
+ * gen_string_table.py, then installs host pointers from a constructor. */
+u8 *gStringTable[101] = {0};
+#elif defined(PERMUTER)
 u8 *gStringTable[101] = {
 #else
 u8 *gStringTable[100] = {
-#endif
 #include "assets/8010102c.inc"
 };
+#endif
 
 u8 **s_stringTable_80123348;
 
