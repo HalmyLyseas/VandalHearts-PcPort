@@ -63,32 +63,37 @@ NOTES = {
          "20-column line with the number, which is placed right after whatever you write here."),
 }
 
-# PC_LANGSTR-wrapped literals that are NOT a draw-call argument -- e.g. a prefix composed into a
-# buffer before drawing (ShowExpDialog builds "You got <N>" so the number can follow a translated
-# prefix of any length). The draw-call sweep below cannot see these, which is the exact blind spot
-# that let the experience popup go untranslated through a whole UAT. Listed per file so a blind scan
-# does not pull in unrelated macro uses; the count is a self-check (a removed wrap fails the export).
+# PC_LANGSTR-wrapped literals that are NOT a draw-call argument -- a prefix composed into a buffer
+# before drawing (ShowExpDialog builds "You got <N>"; Objf425 builds "TURN <n>"), so the number can
+# follow a translated prefix of any length. The draw-call sweep below cannot see these -- the exact
+# blind spot that let the experience popup go untranslated through a whole UAT. Keyed per file by the
+# {content hash: what it is} of the composed literal, so a removed or changed wrap fails the export
+# PRECISELY (the hash is the literal's identity, so no retail bytes are spelled out here).
 WRAPPED_LITERAL_FILES = {
-    "battle_0190dc.c": 2,   # "You got " (composed) + "  experience points." (also seen at its draw call)
+    "battle_0190dc.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
+    "battle_0201b8.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
 }
 PC_LANGSTR_RX = re.compile(r'PC_LANGSTR\s*\(\s*("(?:[^"\\]|\\.)*")\s*\)')
 
 
 def scan_wrapped(srcdir):
-    """-> [(file, raw bytes)] for PC_LANGSTR-wrapped literals in the curated files, with a
-    self-check so a wrap that silently disappears fails the export instead of dropping a string."""
+    """-> [(file, raw bytes)] for the single-string PC_LANGSTR literals in the curated files. Verifies
+    each EXPECTED composed literal (by hash) is present, so one silently disappearing fails the export
+    instead of dropping a string. (Returns every match; the caller keeps only the not-already-found
+    ones, i.e. the composed literals -- the draw-call ones are handled by the sweep above.)"""
     out = []
-    for base, expect in WRAPPED_LITERAL_FILES.items():
+    for base, expected in WRAPPED_LITERAL_FILES.items():
         path = os.path.join(srcdir, base)
         if not os.path.exists(path):
             continue
         text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
-        lits = PC_LANGSTR_RX.findall(text)
-        if len(lits) < expect:
-            raise SystemExit(f"{base}: expected >= {expect} PC_LANGSTR literal(s), found {len(lits)} "
-                             f"-- a wrap was removed? update WRAPPED_LITERAL_FILES or restore it")
-        for lit in lits:
-            out.append((base, unescape(lit)))
+        raws = [unescape(lit) for lit in PC_LANGSTR_RX.findall(text)]
+        have = {f"{fnv1a(r):016x}" for r in raws}
+        for h, desc in expected.items():
+            if h not in have:
+                raise SystemExit(f"{base}: expected PC_LANGSTR literal {h} ({desc}) not found -- a "
+                                 f"wrap was removed or changed? update WRAPPED_LITERAL_FILES")
+        out += [(base, r) for r in raws]
     return out
 
 

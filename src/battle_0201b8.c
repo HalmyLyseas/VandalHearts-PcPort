@@ -2461,7 +2461,9 @@ u8 s_menuMem_battleOptions_801231fc;
 void Objf425_BattleOptions(Object *obj) {
    // TODO: eliminate goto; earlier attempt to re-write in a more natural way threw off a bunch of
    // stuff; need to try other variations
+#ifndef PC_FEAT
    static u8 turnBuffer[13] = "\x82\x73\x82\x74\x82\x71\x82\x6d\x81\x40\x81\x40";
+#endif
    s32 i;
    UnitStatus *unit;
    s16 dx, dz;
@@ -2618,6 +2620,35 @@ void Objf425_BattleOptions(Object *obj) {
             if (turn > 99) {
                turn %= 100;
             }
+#ifdef PC_FEAT
+            {
+               /* Language packs: retail embeds the number into a static "TURN  " buffer at a fixed
+                * offset. Compose it in a local buffer so the number (full-width digits, script-
+                * neutral) follows the translated prefix -- the same shape as ShowExpDialog. The
+                * "TURN" prefix is a PC_LANGSTR literal (exported via the wrapped-literal scan, since
+                * it is composed rather than passed to a draw call). With no pack the layout is
+                * byte-for-byte the retail one. */
+               u8 tb[32];
+               const u8 *pfx = (const u8 *)PC_LANGSTR("\x82\x73\x82\x74\x82\x71\x82\x6d");
+               s32 pl = 0;
+               while (pfx[pl] != '\0' && pl < 24) {
+                  tb[pl] = pfx[pl];
+                  pl++;
+               }
+               // SJIS 8140: Space, 824F: Zero
+               tb[pl] = 0x81;
+               tb[pl + 1] = 0x40;
+               tb[pl + 2] = 0x82;
+               tb[pl + 3] = 0x4f + (turn % 10);
+               if (turn > 9) {
+                  i = (turn / 10);
+                  tb[pl] = 0x82;
+                  tb[pl + 1] = 0x4f + i;
+               }
+               tb[pl + 4] = 0;
+               DrawSjisText(260, 131, 10, 2, 0, tb);
+            }
+#else
             // SJIS 8140: Space, 824F: Zero
             turnBuffer[8] = 0x81;
             turnBuffer[9] = 0x40;
@@ -2631,6 +2662,7 @@ void Objf425_BattleOptions(Object *obj) {
             }
 
             DrawSjisText(260, 131, 10, 2, 0, turnBuffer);
+#endif
             DisplayBasicWindow(0x35);
          } // Circle
       }
