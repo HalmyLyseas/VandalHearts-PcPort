@@ -24,11 +24,13 @@ Self-check: every UNEDITED entry is re-encoded and compared against the disc byt
 cannot reproduce what the game shipped, the build fails rather than emitting a subtly wrong pack.
 
 Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en] [--packart <dir>]
-                       [--allow-incomplete]
+                       [--allow-incomplete] [--mixed-case]
        --packart supplies the glyph sheets a non-Latin script needs; it also switches the pack to
        1-byte codes throughout (script mode), since UTF-8 cannot carry Cyrillic through dialogue.
        --allow-incomplete builds a non-Latin pack that still has untranslated strings (each renders
        as nonsense) -- for testing only; a finished non-Latin pack must be complete.
+       --mixed-case (D4, Latin packs) renders text in the case it is written instead of the retail
+       ALL-CAPS folding -- reuses the font's own lowercase a-z, no new art. The translator's choice.
        -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
 """
 import os, re, struct, sys, unicodedata
@@ -380,6 +382,7 @@ class CharmapAssign:
         self.exe = exe
         self.art = art or {}          # cp -> 9 rows, for scripts that cannot be synthesised
         self.assigned = {}   # cp -> (code, slot, rows)
+        self.mixed = []      # D4: (code, slot, rows) records restoring true mixed case
         if art:
             # SCRIPT MODE. A pack that replaces EVERY string leaves no untranslated English to
             # collide with, so the letter bytes become assignable -- which is the whole reason a
@@ -414,6 +417,23 @@ class CharmapAssign:
             self.codes.remove(b)
         return any(cp for cp, (code, _, _) in self.assigned.items() if code == b)
 
+    def enable_mixed_case(self):
+        """D4: restore true mixed case. The 8x9 font already holds lowercase a-z at glyph slots
+        13-38 (13='a' ... 38='z'), drawn by the game but never reached -- GetGlyphIdxForAsciiChar
+        folds a-z onto the UPPERCASE slots 68-93. Re-point the 26 lowercase codes to those slots.
+
+        The records CARRY the lowercase bitmap (not map-only), because two stores index this map:
+        DrawFontGlyph reads sFontGlyphBitmaps (lowercase already at 13-38), but the STRIP path
+        (gCharacterNames / gUnitTypeNames / gItemNames -> StringToGlyphs -> DrawGlyphStrip) reads a
+        SEPARATE glyph SHEET (F_WD) whose slots 13-38 are empty -- a map-only record would leave those
+        names' lowercase blank on the character screen. Stamping the real 8x9 art fills the sheet cell
+        too (PC_LangPatchFwdUpload); the write into sFontGlyphBitmaps[13-38] is a no-op (already there).
+        Zero NEW art -- it is the font's own lowercase. Latin packs only (a script pack reassigns the
+        a-z bytes to its own letters, so it sets its own case in its sheets)."""
+        o = foff(FONT_VRAM)
+        self.mixed = [(0x61 + i, 13 + i, bytes(self.exe[o + (13 + i) * 9: o + (13 + i) * 9 + 9]))
+                      for i in range(26)]
+
     def code_for(self, ch, errors, ctx):
         cp = ord(ch)
         if cp in self.assigned:
@@ -441,7 +461,9 @@ class CharmapAssign:
         return code
 
     def section(self):
-        recs = sorted((code, slot, rows) for code, slot, rows in self.assigned.values())
+        recs = [(code, slot, rows) for code, slot, rows in self.assigned.values()]
+        recs += list(self.mixed)          # D4 records (carry the lowercase bitmap; enable_mixed_case)
+        recs.sort()
         if not recs:
             return None
         blob = struct.pack("<I", len(recs))
@@ -731,7 +753,8 @@ def count_untranslated(work):
     return n
 
 
-def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=False):
+def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=False,
+          mixed_case=False):
     meta = meta or {}
     check_pack_name(lang)
     exe = read_exe(disc)
@@ -764,6 +787,14 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     # SCRIPT MODE is implied by pack art: with it, every string is encoded as 1-byte pack codes
     # rather than UTF-8 (see enc_codes for why non-Latin cannot use the UTF-8 path).
     script = bool(art_small)
+    # D4: mixed-case restoration, a per-pack Latin-only option. A script pack reassigns the a-z
+    # bytes to its own letters, so mixed case there lives in the drawn sheets, not this remap.
+    if mixed_case and not script:
+        charmap.enable_mixed_case()
+    elif mixed_case and script:
+        print("[lang] note: --mixed-case ignored for a non-Latin (--packart) pack -- it sets its "
+              "own case in the drawn sheets.", file=sys.stderr)
+        mixed_case = False
 
     # In script mode an untranslated string renders as nonsense (the charmap reassigns the letter
     # codes), so completeness is a correctness requirement -- refuse an incomplete non-Latin pack
@@ -950,6 +981,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
                "version": meta.get("version") or "",
                "notes": meta.get("notes") or "",
                "contains": ["strings"],
+               "mixed_case": mixed_case,
                "tables_edited": dict(stats), "dialogue_files": nfiles, "dialogue_lines": nlines,
                "font_glyphs": nglyphs}, os.path.join(d, "manifest.json"))
     return d, stats, nfiles, nlines, len(sections), nglyphs
@@ -996,8 +1028,9 @@ if __name__ == "__main__":
     if "--packart" in sys.argv:
         packart = sys.argv[sys.argv.index("--packart") + 1]
     allow_incomplete = "--allow-incomplete" in sys.argv
+    mixed_case = "--mixed-case" in sys.argv
     d, stats, nf, nl, ns, ng = build(sys.argv[1], sys.argv[2], sys.argv[3], lang, meta, packart,
-                                     allow_incomplete)
+                                     allow_incomplete, mixed_case)
     print(f"wrote {d}/strings.bin  ({ns} sections)")
     for n, c in stats:
         print(f"  {n:22}{c:>5} entries")

@@ -28,6 +28,7 @@ regenerate everything from the disc.
   lang_build.py <disc> <work> <out> --lang <name> [--name --author --version --notes]
                                           [--packart <dir>]        non-Latin script: your glyph sheets
                                           [--allow-incomplete]     script mode: build with gaps (testing)
+                                          [--mixed-case]           render text in the case you wrote it
                                |
                     <out>/langpacks/<name>/{manifest.json, strings.bin}
 ```
@@ -96,6 +97,12 @@ no in-game reload.
   character, exactly like its plain form. One codepoint is one screen column everywhere.
 - **A pack is a diff**: untranslated entries show the original text, so a partial translation is a
   working translation.
+- **Mixed case is a choice (`--mixed-case`).** By default the game renders almost all text in
+  ALL-CAPS — it folds `a`–`z` onto its uppercase letterforms (only shop/field item names escape).
+  Pass `--mixed-case` at build time and the pack renders text in the case you actually wrote it
+  (`Café déjà reçu`, not `CAFÉ DÉJÀ REÇU`), reusing the font's own lowercase glyphs — no new art.
+  It is the translator's decision, baked into the pack; there is no player-facing toggle. Latin
+  packs only (a non-Latin pack sets its own case in its drawn sheets).
 - **A pack covers the game's content, not the port's own UI.** The in-game options overlay
   (SELECT+START) stays English in every language. It is drawn by the port with its own small
   font, and keeping it out means every pack behaves the same way regardless of script.

@@ -79,8 +79,9 @@ These are deliberate, not omissions:
 - **CJK is not possible** — thousands of characters against ~44 free glyph slots, and the game's 8×9
   pixel letter cells are too small for a legible kanji.
 
-Text is mostly capitals, as the game itself is in English; shop and inventory item names are the
-only place that shows mixed case.
+Text is mostly capitals by default, as the game itself is in English. A pack can opt into **true
+mixed case** at build time (the `--mixed-case` builder option), rendering text in the case it was
+written — the translator's choice, baked into the pack.
 
 ## Making a pack
 
