@@ -328,10 +328,23 @@ def export(srcdir, workdir):
                             "it may be unreachable" if item["japanese"] else
                             "live text that happens to be stored as 2-byte full-width Shift-JIS")
         if e["cols"]:
-            item["limit"] = {"max_cols": min(e["cols"]), "wraps": True,
-                             "note": (f"drawn with a {min(e['cols'])}-column budget"
-                                      + (" (tightest of several call sites)" if len(set(e["cols"])) > 1 else "")
-                                      + "; wraps rather than clipping, so overflow costs a row")}
+            # DrawText's column argument is a generous WRAP threshold, NOT the visible box width -- the
+            # max-length stress run showed two different cases:
+            #   * a MULTI-LINE menu (Move/Action/Done/...) draws in a box sized to its LONGEST OPTION,
+            #     far narrower than the threshold (Examine=7 in a box whose DrawText arg is 20). Filling
+            #     to the threshold wraps every option and hides half of them. Budget = longest option.
+            #   * a SINGLE-LINE literal draws in a box ~= the threshold, but the last column lands on the
+            #     border, so the clean width is threshold - 1.
+            if len(lines) > 1:
+                clean = max(len(l) for l in lines)
+                note = (f"menu box is sized to its longest option ({clean} cols); the DrawText argument "
+                        f"({min(e['cols'])}) is a generous wrap limit, not the box width -- a longer "
+                        f"option wraps and hides the next")
+            else:
+                clean = min(e["cols"]) - 1
+                note = (f"clean width {clean} (the DrawText budget is {min(e['cols'])}, but the box is one "
+                        f"column narrower, so the last column lands on the border)")
+            item["limit"] = {"max_cols": clean, "wraps": True, "note": note}
         if len(lines) > 1:
             item["options"] = lines
             item["options_note"] = ("one menu option per line -- keep the same number of lines, the "
