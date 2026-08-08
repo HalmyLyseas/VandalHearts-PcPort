@@ -273,11 +273,21 @@ endif()
 # don't pollute the undefined-symbol list the generator harvests.
 set(_GEN_WEBP_LIB "")
 if(VH_WEBP)
-    set(_GEN_WEBP_LIB "-lwebp")
+    if(APPLE)
+        set(_GEN_WEBP_LIB "${WEBP_LIB}")
+    else()
+        set(_GEN_WEBP_LIB "-lwebp")
+    endif()
 endif()
 set(_GEN_AV_LIBS "")
 if(VH_HDVIDEO)
-    set(_GEN_AV_LIBS "-lavformat -lavcodec -lavutil -lswscale")
+    if(APPLE)
+        # The probe is a raw compiler invocation, outside CMake's target link interface. Use the
+        # concrete Homebrew/CMake results so it does not depend on a global /opt/homebrew search path.
+        set(_GEN_AV_LIBS "${AVFORMAT_LIB} ${AVCODEC_LIB} ${AVUTIL_LIB} ${SWSCALE_LIB}")
+    else()
+        set(_GEN_AV_LIBS "-lavformat -lavcodec -lavutil -lswscale")
+    endif()
     if(WIN32)
         # The generator's undefined-symbol PROBE link (VH_LINK_LIBS) runs the cross linker directly. The
         # STATIC libav lives outside the default MinGW lib path, so without -L<prefix>/lib the probe link

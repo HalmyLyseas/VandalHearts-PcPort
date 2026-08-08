@@ -67,7 +67,7 @@ Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derive
 |---|---|---|
 | **Windows** | `.zip` — `vandalhearts_pc.exe`, 8 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
 | **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 |
-| **macOS** | Build from source (packaging is not implemented yet) | Apple Silicon; Homebrew SDL2 and OpenAL Soft |
+| **macOS** | Build from source (packaging is not implemented yet) | Apple Silicon; Homebrew SDL2, OpenAL Soft, WebP and FFmpeg |
 
 Put your disc image in a `game/` folder next to the executable and launch — the disc is
 auto-detected and verified, settings live in the in-game overlay (**SELECT + START**) and

@@ -267,12 +267,11 @@ Apple Silicon. It is still an early target: a complete playthrough, Intel valida
 packaging, signing, and notarisation have not been done.
 
 ```sh
-brew install cmake sdl2 openal-soft
+brew install cmake sdl2 openal-soft webp ffmpeg
 
 cd platform/pc
 cmake -S . -B build-macos \
-  -DCMAKE_PREFIX_PATH="$(brew --prefix sdl2);$(brew --prefix openal-soft)" \
-  -DVH_WEBP=OFF -DVH_HDVIDEO=OFF \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix sdl2);$(brew --prefix openal-soft);$(brew --prefix webp);$(brew --prefix ffmpeg)" \
   -DVH_PSX_EXE=/absolute/path/to/SLUS_004.47 \
   -DVH_KROM_SOURCE=/absolute/path/to/SCPH5500.BIN
 cmake --build build-macos -j
@@ -285,3 +284,5 @@ The build-time generators require a byte-exact US PS1 executable and either `KRO
 Japanese PS1 BIOS containing the kanji ROM; supply these from legally owned copies. Apple Silicon
 cannot use the Linux port's fixed low-address work buffers because arm64 Mach-O reserves the low
 4 GB. The native port therefore uses host storage for those buffers while preserving PS1 offsets.
+WebP backgrounds and FFmpeg HD video are enabled by default. They can be omitted from a minimal build
+with `-DVH_WEBP=OFF -DVH_HDVIDEO=OFF`.
