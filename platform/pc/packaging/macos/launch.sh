@@ -16,6 +16,12 @@ fi
 
 export VH_DEPLOY_DIR="$support_dir"
 
+is_vandal_hearts_disc() {
+    local magic
+    magic="$(dd if="$1" bs=1 skip=54120 count=8 2>/dev/null || true)"
+    [[ "$magic" == "PS-X EXE" ]]
+}
+
 # A .bin dropped onto the app (or opened with it) wins. Ignore LaunchServices' own -psn argument.
 for argument in "$@"; do
     case "$argument" in
@@ -31,11 +37,12 @@ done
 # Otherwise discover a user-supplied raw disc image. Nothing is copied into the app bundle.
 if [[ -z "${VH_DISC_IMAGE:-}" ]]; then
     for search_dir in "$support_dir/game" "$distribution_dir/game" "$distribution_dir"; do
-        candidate="$(find "$search_dir" -maxdepth 1 -type f -iname '*.bin' -print -quit 2>/dev/null || true)"
-        if [[ -n "$candidate" ]]; then
-            export VH_DISC_IMAGE="$candidate"
-            break
-        fi
+        while IFS= read -r candidate; do
+            if [[ -n "$candidate" ]] && is_vandal_hearts_disc "$candidate"; then
+                export VH_DISC_IMAGE="$candidate"
+                break 2
+            fi
+        done < <(find "$search_dir" -maxdepth 1 -type f -iname '*.bin' -print 2>/dev/null || true)
     done
 fi
 

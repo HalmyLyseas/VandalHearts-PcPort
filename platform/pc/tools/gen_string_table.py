@@ -32,7 +32,8 @@ import struct
 HERE = os.path.dirname(os.path.abspath(__file__))
 VH = os.path.abspath(os.path.join(HERE, "..", "..", ".."))   # tools -> pc -> platform -> vh
 SLUS = os.environ.get("VH_PSX_EXE", os.path.join(VH, "SLUS_004.47"))
-OUT = os.path.join(VH, "platform", "pc", "src", "pc_string_table.c")
+OUT = os.environ.get("VH_GENERATED_OUT",
+                     os.path.join(VH, "platform", "pc", "src", "pc_string_table.c"))
 
 COUNT = 100
 TABLE_ADDR = 0x8010102c

@@ -422,6 +422,24 @@ static int HasBinExt(const char *name) {
     return e[0] == '.' && (e[1]|0x20) == 'b' && (e[2]|0x20) == 'i' && (e[3]|0x20) == 'n';
 }
 
+/* Validate a discovery candidate before choosing it. Multi-track dumps commonly contain several .bin
+ * files; only the data track has the USA executable header at raw-CD LBA 23, user-data offset 24. */
+static int HasVandalHeartsBoot(const char *path) {
+    enum { RAW_SECTOR_SIZE = 2352, DATA_OFFSET = 24, BOOT_LBA = 23 };
+    unsigned char magic[8];
+    FILE *f = fopen(path, "rb");
+    size_t n;
+    if (!f) return 0;
+    if (fseek(f, (long)BOOT_LBA * RAW_SECTOR_SIZE + DATA_OFFSET, SEEK_SET) != 0) {
+        fclose(f);
+        return 0;
+    }
+    n = fread(magic, 1, sizeof(magic), f);
+    if (ferror(f)) { fclose(f); return 0; }
+    fclose(f);
+    return n == sizeof(magic) && memcmp(magic, "PS-X EXE", sizeof(magic)) == 0;
+}
+
 /* Return (into out) the first "*.bin" found directly inside `dir`, or 0 if none / dir unreadable.
  * Forward slash in the joined path is fine on all three OSes (Win32 accepts '/'). */
 static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
@@ -431,8 +449,10 @@ static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
     while ((ent = readdir(d)) != NULL) {
         if (HasBinExt(ent->d_name)) {
             snprintf(out, outSize, "%s/%s", dir, ent->d_name);
-            closedir(d);
-            return 1;
+            if (HasVandalHeartsBoot(out)) {
+                closedir(d);
+                return 1;
+            }
         }
     }
     closedir(d);
@@ -441,7 +461,7 @@ static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
 
 /* Locate the disc image with NO configuration needed for the common cases (Stage 2.4 QoL). Anchored
  * to the executable's own directory (via PC_GetExePath, cwd-independent), tried in order:
- *   1. a `game/` folder next to the .exe holding a *.bin  -- the recommended portable-binary layout;
+ *   1. a `game/` folder next to the .exe holding a valid *.bin -- the recommended portable-binary layout;
  *   2. a *.bin sitting directly beside the .exe;
  *   3. the dev repo layout (game/ four levels up from platform/pc/build*).
  * VH_DISC_IMAGE (checked by the caller) still overrides all of this. Whatever this returns, a failed
@@ -636,8 +656,12 @@ static int PC_MakePageWritable(uintptr_t addr) {
 }
 #endif /* __i386__ || __x86_64__ */
 
+static volatile sig_atomic_t s_crashHandlerActive;
+
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
+    if (s_crashHandlerActive) _exit(128 + sig);  /* async-safe fail-closed path for a handler re-fault */
+    s_crashHandlerActive = 1;
 #if defined(__APPLE__)
     (void)fault;
 #endif
@@ -658,6 +682,7 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
             }
             g[REG_EIP] = (greg_t)((uintptr_t)ip + len);
             PC_LogNullRead(ip, fault, isWrite);
+            s_crashHandlerActive = 0;
             return;                                /* resume the game */
         }
         PC_DumpDiag("\n*** NULL-region fault but UNDECODABLE instruction -- extend VhDecodeMemAccess ***\n");
@@ -674,6 +699,7 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
      * decoder, nothing here is 32-bit-specific: si_addr + the x86 write bit + mprotect. */
 #if defined(PC_HAVE_WRITE_FAULT_INFO)
     if (ucv && fault >= PSX_NULL_MIRROR_SIZE && PC_IsWriteFault(ucv) && PC_MakePageWritable(fault)) {
+        s_crashHandlerActive = 0;
         return;                                    /* page now writable -> retry the faulting store */
     }
 #endif
@@ -841,8 +867,8 @@ static void PC_Bootstrap(void) {
 #if !defined(_WIN32)
     signal(SIGUSR1, PC_SigUsr1);        /* kill -USR1 <pid> -> stack dump (freeze diagnosis) */
     /* SIGSEGV/SIGBUS via sigaction+SA_SIGINFO so the handler gets the faulting address (si_addr) and
-     * CPU context (for the NULL-read fixup). SA_NODEFER lets a genuine re-fault inside the handler
-     * still terminate rather than deadlock. */
+     * CPU context (for the NULL-read fixup). SA_NODEFER plus s_crashHandlerActive makes a handler
+     * re-fault terminate immediately through async-safe _exit instead of recursively diagnosing. */
     {
         struct sigaction sa;
         memset(&sa, 0, sizeof(sa));

@@ -4,16 +4,19 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 [--identity <codesign identity>] <vandalhearts_pc> <SDL2.framework> [output-dir]" >&2
+    echo "usage: $0 [--identity <codesign identity>] [--tag <version>] <vandalhearts_pc> <SDL2.framework> [output-dir]" >&2
     exit 2
 }
 
 identity="-"
-if [[ "${1:-}" == "--identity" ]]; then
-    [[ $# -ge 4 ]] || usage
-    identity="$2"
-    shift 2
-fi
+tag=""
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --identity) [[ $# -ge 2 ]] || usage; identity="$2"; shift 2 ;;
+        --tag)      [[ $# -ge 2 ]] || usage; tag="$2"; shift 2 ;;
+        *) usage ;;
+    esac
+done
 [[ $# -ge 2 && $# -le 3 ]] || usage
 
 binary="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
@@ -22,12 +25,17 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pc_dir="$(cd "$script_dir/../.." && pwd)"
 output_dir="${3:-$pc_dir/dist/macos}"
 app="$output_dir/Vandal Hearts.app"
+buildinfo="$(dirname "$binary")/VH_BUILDINFO.txt"
 
 [[ -x "$binary" ]] || { echo "error: executable not found: $binary" >&2; exit 2; }
+[[ -f "$buildinfo" ]] || { echo "error: build provenance missing beside executable: $buildinfo" >&2; exit 2; }
 [[ -f "$sdl_framework/SDL2" ]] || { echo "error: SDL2.framework is incomplete: $sdl_framework" >&2; exit 2; }
 if ! otool -L "$binary" | grep -q '@rpath/SDL2.framework/'; then
     echo "error: executable was not linked against the relocatable SDL2.framework" >&2
     exit 2
+fi
+if [[ -n "$tag" ]]; then
+    "$script_dir/check-release.sh" "$tag" "$binary" "$buildinfo"
 fi
 if [[ -e "$app" ]]; then
     echo "error: output already exists; move it aside first: $app" >&2
@@ -39,6 +47,7 @@ cp "$binary" "$app/Contents/MacOS/vandalhearts_pc"
 cp "$script_dir/launch.sh" "$app/Contents/MacOS/Vandal Hearts Launcher"
 cp "$script_dir/Info.plist" "$app/Contents/Info.plist"
 cp "$pc_dir/vandalhearts.ini" "$app/Contents/Resources/vandalhearts.ini"
+cp "$buildinfo" "$app/Contents/Resources/VH_BUILDINFO.txt"
 ditto "$sdl_framework" "$app/Contents/Frameworks/SDL2.framework"
 chmod 755 "$app/Contents/MacOS/Vandal Hearts Launcher" "$app/Contents/MacOS/vandalhearts_pc"
 
@@ -73,10 +82,15 @@ codesign "${sign_args[@]}" "$app/Contents/MacOS/vandalhearts_pc"
     shasum -a 256 \
         'MacOS/Vandal Hearts Launcher' MacOS/vandalhearts_pc \
         Frameworks/SDL2.framework/SDL2 Info.plist Resources/vandalhearts.ini \
+        Resources/VH_BUILDINFO.txt \
         > Resources/SHA256SUMS.txt
 )
 codesign "${sign_args[@]}" "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
+
+if [[ -n "$tag" ]]; then
+    "$script_dir/check-release.sh" "$tag" "$binary" "$buildinfo" "$app"
+fi
 
 echo "Created local app: $app"
 echo "Game data stays external: drag a .bin onto the app, place it beside the app,"

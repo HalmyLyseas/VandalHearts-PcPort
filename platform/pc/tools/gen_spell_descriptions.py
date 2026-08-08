@@ -23,7 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # tools -> pc -> platform -> vh
 VH = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 SLUS = os.environ.get("VH_PSX_EXE", os.path.join(VH, "SLUS_004.47"))
-OUT = os.path.join(VH, "platform", "pc", "src", "pc_spell_descriptions.c")
+OUT = os.environ.get("VH_GENERATED_OUT",
+                     os.path.join(VH, "platform", "pc", "src", "pc_spell_descriptions.c"))
 
 TABLE_ADDR = 0x800ee9f8
 COUNT = 72

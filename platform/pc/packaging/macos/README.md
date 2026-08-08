@@ -36,10 +36,17 @@ platform/pc/packaging/macos/make-app.sh \
 ```
 
 The default is an ad-hoc signature. For a local Developer ID identity, add
-`--identity 'Developer ID Application: Name (TEAMID)'`. The script does not notarize or upload.
+`--identity 'Developer ID Application: Name (TEAMID)'`. CMake writes `VH_BUILDINFO.txt` beside the
+executable with the exact source commit, input hashes, compiler, options, architectures, and binary
+hash; the app recipe embeds that manifest. The script does not notarize or upload.
 It refuses to overwrite an existing app and scans the bundle for common game, BIOS, HD-pack, and
 save formats before signing. Output goes under the already-ignored `platform/pc/dist/` directory.
 
 At runtime, drag a raw `.bin` onto the app, place it in a `game` directory beside the app, or put it
 in `~/Library/Application Support/Vandal Hearts/game/`. Configuration and saves also live in that
 Application Support directory, outside the signed bundle.
+
+For a tagged local validation build, pass `--tag vX.Y.Z`. This runs `check-release.sh`, which rejects
+unsafe tag names and proves that the tag, local/pushed branch, build manifest, binary, and optional app
+all refer to the same clean source commit. This addresses the otherwise easy-to-miss edge case where a
+release asset is built from one checkout while a release tool creates its tag from another commit.

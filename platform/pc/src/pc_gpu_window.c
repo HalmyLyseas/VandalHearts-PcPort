@@ -282,6 +282,7 @@ static void drawSaves(int w, int h) {
     static const char *EMPTY = "(NO BACKUPS YET)";
     const int MAXVIS = 6;
     const char *title = PC_OverlayTitle();
+    const char *status = PC_OverlaySaveStatus();
     int count = PC_OverlaySaveCount(), sel = PC_OverlaySaveSelected();
     int scale, i, base, visN, scrollOff = 0, showPos, bodyLines;
     int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
@@ -292,6 +293,7 @@ static void drawSaves(int w, int h) {
     if (ovlTextPx(L2, 1) > base) base = ovlTextPx(L2, 1);
     if (ovlTextPx(L3, 1) > base) base = ovlTextPx(L3, 1);
     if (count == 0 && ovlTextPx(EMPTY, 1) > base) base = ovlTextPx(EMPTY, 1);
+    if (status && status[0] && ovlTextPx(status, 1) > base) base = ovlTextPx(status, 1);
     for (i = 0; i < count; i++) { int lw = ovlTextPx(PC_OverlaySaveLabel(i), 1); if (lw > base) base = lw; }
 
     visN = (count < MAXVIS) ? count : MAXVIS;
@@ -302,7 +304,7 @@ static void drawSaves(int w, int h) {
         if (scrollOff > count - MAXVIS) scrollOff = count - MAXVIS;
     }
     showPos = (count > MAXVIS) ? 1 : 0;
-    bodyLines = visN + showPos + 1 /*separator*/ + 3 /*legend*/;
+    bodyLines = visN + showPos + ((status && status[0]) ? 1 : 0) + 1 /*separator*/ + 3 /*legend*/;
 
     scale = ovlSharedScale(w);   /* all screens use the main list's scale (consistent) */
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
@@ -332,6 +334,12 @@ static void drawSaves(int w, int h) {
     if (showPos) {
         snprintf(posbuf, sizeof(posbuf), "( %d / %d )", sel + 1, count);
         ovlText(w, h, px + (panelW - ovlTextPx(posbuf, scale)) / 2, ty, scale, posbuf, 130, 134, 142);
+        ty += lineH;
+    }
+    if (status && status[0]) {
+        int bad = strstr(status, "FAILED") != NULL || strstr(status, "INVALID") != NULL;
+        ovlText(w, h, px + (panelW - ovlTextPx(status, scale)) / 2, ty, scale, status,
+                bad ? 235 : 150, bad ? 112 : 210, bad ? 112 : 160);
         ty += lineH;
     }
     ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200);
