@@ -1,0 +1,23 @@
+unifont-subset.bdf
+==================
+
+This file is a SUBSET of GNU Unifont (version 17.0.03), trimmed to the codepoint ranges the language
+tooling generates glyph art for -- Latin-1 Supplement + Latin Extended (U+00A0..U+024F), Greek and
+Coptic (U+0370..U+03FF), and Cyrillic (U+0400..U+04FF), 832 glyphs. It is used by gen_packart.py as
+the raw bitmap source when generating a non-Latin pack's glyph sheets. Every glyph is Unifont's own
+unmodified pixels; only the character set was reduced.
+
+GNU Unifont is dual-licensed under the SIL Open Font License version 1.1 and the GNU GPL version 2 or
+later with the GNU Font Embedding Exception. This project is GPL-2.0, and this subset is included and
+used under the GPLv2+ terms. The original copyright and license notice is preserved in the file's BDF
+header (the COPYRIGHT / *_LICENSE properties).
+
+  Copyright (C) 1998-2025 Roman Czyborra, Paul Hardy, Qianqian Fang, Andrew Miller, Johnnie Weaver,
+  David Corbett, Aella Chiana Moskopp, Rebecca Bettencourt, Minseo Lee, Ho-Seok Ee, et al.
+
+  GNU Unifont: https://unifoundry.com/unifont/
+  OFL 1.1:     https://scripts.sil.org/OFL
+  GPLv2:       https://www.gnu.org/licenses/gpl-2.0.html
+
+To regenerate this subset from a full unifont.bdf, keep the BDF header and only the STARTCHAR blocks
+whose ENCODING falls in the ranges above (updating the CHARS count).

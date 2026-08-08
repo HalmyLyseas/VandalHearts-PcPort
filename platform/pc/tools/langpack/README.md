@@ -128,6 +128,25 @@ dialogue path), which is why a script pack must translate **everything**: any un
 would render as nonsense, so the builder refuses an incomplete one (translate it all;
 `--allow-incomplete` exists only for mid-work testing).
 
+### The quick way: generate a starting sheet
+
+You do **not** have to draw an alphabet from scratch. `gen_packart.py` rasterises a bitmap font (GNU
+Unifont, bundled as `unifont-subset.bdf`) straight into both sheets:
+
+```
+gen_packart.py <dir> --script ru          # a preset alphabet (ru = Russian, el = Greek)
+gen_packart.py <dir> --script el
+gen_packart.py <dir> --cps U+0410-U+042F  # or explicit codepoints
+```
+
+It writes `font8x9.*` + `font16x15.*` ready for `--packart <dir>`, plus `proof_8x9.png` /
+`proof_16x15.png` — each cell magnified with its codepoint, so you can confirm every letter came out
+right. The **16×15 sheet is production quality**; the **8×9 sheet is legible** and a good base — a
+team may want to hand-tweak a few of the densest letters, but nobody has to start from a blank grid.
+KROMDAT / the PlayStation BIOS is not involved. (Unifont is OFL/GPL; see `NOTICE-unifont.txt`.)
+
+### The format, if you draw or edit sheets by hand
+
 The `<dir>` holds up to two sheets, each a **PNG image + a `.txt` manifest**:
 
 | files | cell size | covers | required? |
