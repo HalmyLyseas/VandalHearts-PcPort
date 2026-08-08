@@ -14,7 +14,8 @@ Nothing here is authored text -- these are markers, chosen to be impossible to m
 Usage: ./lang_probe.py <disc.bin> <workdir> <outdir>
        -> <outdir>/langpacks/en-probe/ (manifest name "Probes L1-L17" for the overlay picklist)
 """
-import json, os, shutil, subprocess, sys, tempfile
+import os, shutil, subprocess, sys, tempfile
+from lang_io import load_json, write_json
 
 import lang_build
 
@@ -95,33 +96,33 @@ def main(disc, work, outdir):
         shutil.copytree(work, stage)
 
         p = os.path.join(stage, "strings", "tables.json")
-        doc = json.load(open(p))
+        doc = load_json(p)
         for tag, table, idx, repl, _ in PROBES:
             e = doc["tables"][table]["entries"][idx]
             e["text"] = repl
-        json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+        write_json(doc, p)
 
         p = os.path.join(stage, "strings", "tactical.json")
-        doc = json.load(open(p))
+        doc = load_json(p)
         for tag, en, text in TACTICAL:
             for e in doc["entries"]:
                 if e["en"] == en:
                     e["text"] = text
-        json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+        write_json(doc, p)
 
         p = os.path.join(stage, "strings", "literals.json")
-        doc = json.load(open(p))
+        doc = load_json(p)
         for tag, key, text, _ in LITERALS:
             hits = [e for e in doc["entries"] if e["key"] == key]
             assert len(hits) == 1, (tag, key)
             hits[0]["text"] = text
-        json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+        write_json(doc, p)
 
         for tag, stem, ei, lines, _ in DIALOGUES:
             p = os.path.join(stage, "strings", "dialogue", f"{stem}.json")
-            doc = json.load(open(p))
+            doc = load_json(p)
             doc["entries"][ei]["text"] = lines
-            json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+            write_json(doc, p)
 
         d, stats, nf, nl, ns, ng = lang_build.build(disc, stage, outdir, "en-probe",
                                                     {"name": "Probes L1-L17", "version": "dev"})

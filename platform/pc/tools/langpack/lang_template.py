@@ -23,9 +23,10 @@ Usage: ./lang_template.py <workdir>              report only (+ the gen_packart 
        ./lang_template.py <workdir> --out <dir>  also rasterise a starting sheet into <dir>
        ./lang_template.py <workdir> --out <dir> --font other.bdf
 """
-import json, os, sys, unicodedata
+import os, sys, unicodedata
 
 from lang_build import MARKS, KROM_MARKS, drawn_chars, count_untranslated
+from lang_io import load_json
 
 # The two glyph surfaces, and which text sources land on each. Item names (and the SJIS literals --
 # the TURN banner, the dojo YES/NO) draw through the 16x15 "krom" font; everything else through the
@@ -68,7 +69,7 @@ def collect(work):
             if cp > 0x7F:
                 used.setdefault(cp, set()).add(surface)
 
-    tables = json.load(open(os.path.join(sdir, "tables.json"), encoding="utf-8"))["tables"]
+    tables = load_json(os.path.join(sdir, "tables.json"))["tables"]
     for name, t in tables.items():
         surface = "large" if name in LARGE_TABLES else "small"
         for e in t["entries"]:
@@ -76,18 +77,18 @@ def collect(work):
 
     lit = os.path.join(sdir, "literals.json")
     if os.path.exists(lit):
-        for e in json.load(open(lit, encoding="utf-8"))["entries"]:
+        for e in load_json(lit)["entries"]:
             add(e.get("text"), "large" if e.get("encoding") == "sjis" else "small")
 
     tac = os.path.join(sdir, "tactical.json")
     if os.path.exists(tac):
-        for e in json.load(open(tac, encoding="utf-8"))["entries"]:
+        for e in load_json(tac)["entries"]:
             add(e.get("text"), "small")               # spell names + descriptions both draw 8x9
 
     dd = os.path.join(sdir, "dialogue")
     if os.path.isdir(dd):
         for fn in os.listdir(dd):
-            for e in json.load(open(os.path.join(dd, fn), encoding="utf-8"))["entries"]:
+            for e in load_json(os.path.join(dd, fn))["entries"]:
                 for line in (e.get("text") or []):
                     add(line, "small")
     return used

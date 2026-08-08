@@ -42,6 +42,12 @@ any location outside the repository. The `.gitignore` here also ignores any `str
 `translate/` or `langpacks/` folder created under this directory, whatever you name it — but a path
 outside the repo is the surest choice.
 
+**Save your edited JSON as UTF-8.** The whole chain is UTF-8, and the tools read and write it as
+UTF-8 on every platform (not the system default — that matters on Windows, where the default is a
+legacy code page). Any editor's plain "UTF-8" save is correct; if a file is saved in another encoding
+the tools stop with a message naming the file and the offending byte rather than silently corrupting
+the text.
+
 **Check the export worked** before starting to translate — an untouched working set should
 validate clean and build to an *empty* pack:
 

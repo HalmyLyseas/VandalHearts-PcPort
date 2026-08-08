@@ -15,7 +15,8 @@ entity, so they stay a flat list.
 
 Usage: ./lang_group.py <workdir>          (expects strings/tables.json [+ strings/tactical.json])
 """
-import json, os, sys
+import os, sys
+from lang_io import load_json, write_json
 
 HARD = lambda n: {"max_chars": n, "hard": True,
                   "note": f"fixed record -- text past {n} characters is LOST"}
@@ -45,11 +46,11 @@ GROUPS = {
 }
 
 def load(work):
-    tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    tables = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     tac = {}
     p = os.path.join(work, "strings", "tactical.json")
     if os.path.exists(p):
-        for e in json.load(open(p))["entries"]:
+        for e in load_json(p)["entries"]:
             tac[e["key"]] = e                       # keep the whole entry: en AND any existing text
     return tables, tac
 
@@ -90,16 +91,15 @@ def group(work):
                         "the full name stay consistent"),
                "hidden_unused_slots": skipped,
                "count": len(entries), "entries": entries}
-        json.dump(doc, open(os.path.join(out, f"{kind}.json"), "w"), indent=1, ensure_ascii=False)
+        write_json(doc, os.path.join(out, f"{kind}.json"))
         report.append((kind, len(entries), skipped,
                        sum(1 for e in entries if "tactical" in e)))
     # menus: no entity to group by -- flat list, unused slots dropped
     men = [{"key": e["key"], "en": e["en"], "text": e.get("text") or "",
             "limit": WRAP(20, 2, "world-map/menu panels, 17px rows")}
            for e in tables["gStringTable"]["entries"] if (e.get("en") or "").strip()]
-    json.dump({"kind": "menus", "note": "menu / world-map strings; no entity grouping applies",
-               "count": len(men), "entries": men},
-              open(os.path.join(out, "menus.json"), "w"), indent=1, ensure_ascii=False)
+    write_json({"kind": "menus", "note": "menu / world-map strings; no entity grouping applies",
+               "count": len(men), "entries": men}, os.path.join(out, "menus.json"))
     report.append(("menus", len(men), 0, 0))
 
     # classes: grouped BY NAME, not by index. gClassAdvancementNames is a strict subset of
@@ -119,11 +119,10 @@ def group(work):
                 slot["text"] = e["text"]                       # fanned-out entries -- they agree post-merge)
             slot["limit"] = HARD(min(slot["limit"]["max_chars"], width))
     cls = sorted(seen.values(), key=lambda s: s["appears_in"][0])
-    json.dump({"kind": "classes",
+    write_json({"kind": "classes",
                "note": ("class names; the same name is stored in two tables (status panel + dojo) -- "
                         "translate it once here and both stay consistent"),
-               "count": len(cls), "entries": cls},
-              open(os.path.join(out, "classes.json"), "w"), indent=1, ensure_ascii=False)
+               "count": len(cls), "entries": cls}, os.path.join(out, "classes.json"))
     report.append(("classes", len(cls), 0, 0))
 
     # terrain: its own file. No entity to pair it with, and its constraint is unlike anything else --
@@ -135,12 +134,11 @@ def group(work):
                                "are what line the numbers up in the box. Keep the total at 11 and "
                                "pad by hand; do not let an editor trim trailing spaces.")}}
            for e in tables["terrainText"]["entries"]]
-    json.dump({"kind": "terrain",
+    write_json({"kind": "terrain",
                "note": ("battle terrain info box, bottom-left of the screen, one line. The percentage "
                         "is the tile's evasion bonus and is TEXT, not computed -- it will not follow "
                         "a rule change on its own."),
-               "count": len(ter), "entries": ter},
-              open(os.path.join(out, "terrain.json"), "w"), indent=1, ensure_ascii=False)
+               "count": len(ter), "entries": ter}, os.path.join(out, "terrain.json"))
     report.append(("terrain", len(ter), 0, 0))
     return report
 

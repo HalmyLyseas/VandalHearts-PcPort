@@ -16,7 +16,8 @@ Markup is PRESERVED verbatim and counted, never "cleaned":
 
 Usage: ./lang_export.py <disc.bin> <outdir>
 """
-import json, os, re, struct, sys, unicodedata
+import os, re, struct, sys, unicodedata
+from lang_io import write_json
 
 SECTOR, DOFF, EXE_LBA, EXE_SIZE = 2352, 24, 23, 1996800
 LOAD, HDR = 0x80010000, 0x800
@@ -148,7 +149,7 @@ def export(disc, outdir):
         used = sum(1 for e in entries if not e.get("unused"))
         stats.append((name, count, used, longest, "+".join(sorted(encs))))
     path = os.path.join(outdir, "strings", "tables.json")
-    json.dump(doc, open(path, "w"), indent=1, ensure_ascii=False)
+    write_json(doc, path)
     return path, doc, stats
 
 
@@ -303,7 +304,7 @@ def export_dialogue(disc, outdir):
         doc = {"file": stem, "render": budget, "count": len(entries),
                "markup": {"#N": "inserts gStringTable entry N", "$X": "control code"},
                "entries": entries}
-        json.dump(doc, open(os.path.join(d, f"{stem}.json"), "w"), indent=1, ensure_ascii=False)
+        write_json(doc, os.path.join(d, f"{stem}.json"))
         tot_files += 1; tot_entries += len(entries)
     return tot_files, tot_entries, tot_lines, over, dead
 

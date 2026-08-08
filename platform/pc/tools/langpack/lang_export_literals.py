@@ -21,7 +21,8 @@ literal drawn at several sites takes the tightest one.
 
 Usage: ./lang_export_literals.py <path to vh/src> <workdir>
 """
-import glob, json, os, re, sys, unicodedata
+import glob, os, re, sys, unicodedata
+from lang_io import write_json
 
 DRAW = re.compile(r'\b(DrawText_Internal|DrawText|DrawSjisText|StringToGlyphs)\s*\(([^;]*?)\)\s*;', re.S)
 TEMPLATE = re.compile(r'(?:"(?:#\d+|\\n)*"\s*)+$')
@@ -354,7 +355,7 @@ def export(srcdir, workdir):
            "count": len(entries), "entries": entries}
     p = os.path.join(workdir, "strings", "literals.json")
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    json.dump(doc, open(p, "w"), indent=1, ensure_ascii=False)
+    write_json(doc, p)
 
     # Translator view: same content, split into what a person recognises, options presented as lists.
     # SCOPING RULE (committed 2026-08-06): the US retail disc is the universe -- no PAL/JP
@@ -390,7 +391,7 @@ def export(srcdir, workdir):
             "menus": view["menus"], "messages": view["messages"]}
     q = os.path.join(workdir, "translate", "literals.json")
     os.makedirs(os.path.dirname(q), exist_ok=True)
-    json.dump(tdoc, open(q, "w"), indent=1, ensure_ascii=False)
+    write_json(tdoc, q)
     return p, q, doc, view
 
 

@@ -31,7 +31,8 @@ Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en] [--packart <dir
        as nonsense) -- for testing only; a finished non-Latin pack must be complete.
        -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
 """
-import json, os, re, struct, sys, unicodedata
+import os, re, struct, sys, unicodedata
+from lang_io import load_json, write_json
 
 from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR, walk_dialogue
 
@@ -708,7 +709,7 @@ def count_untranslated(work):
     nonsense, because the charmap reassigns the letter codes -- so in script mode completeness is a
     correctness requirement, not a nicety. Filler/dead records have empty `en` and are not counted."""
     n = 0
-    tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    tables = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     for t in tables.values():
         for e in t["entries"]:
             if (e.get("en") or "").strip() and not (e.get("text") or "").strip():
@@ -716,13 +717,13 @@ def count_untranslated(work):
     for fn in ("literals.json", "tactical.json"):
         p = os.path.join(work, "strings", fn)
         if os.path.exists(p):
-            for e in json.load(open(p))["entries"]:
+            for e in load_json(p)["entries"]:
                 if (e.get("en") or "").strip() and not (e.get("text") or "").strip():
                     n += 1
     dd = os.path.join(work, "strings", "dialogue")
     if os.path.isdir(dd):
         for fn in os.listdir(dd):
-            for e in json.load(open(os.path.join(dd, fn)))["entries"]:
+            for e in load_json(os.path.join(dd, fn))["entries"]:
                 en, tx = e.get("en") or [], e.get("text") or []
                 for i, l in enumerate(en):
                     if l.strip() and not (i < len(tx) and (tx[i] or "").strip()):
@@ -734,7 +735,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     meta = meta or {}
     check_pack_name(lang)
     exe = read_exe(disc)
-    tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    tables = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     errors, sections, stats = [], [], []
     used_cps = set()
 
@@ -748,12 +749,12 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     dlg_dir_scan = os.path.join(work, "strings", "dialogue")
     if os.path.isdir(dlg_dir_scan):
         for fn in os.listdir(dlg_dir_scan):
-            for e in json.load(open(os.path.join(dlg_dir_scan, fn)))["entries"]:
+            for e in load_json(os.path.join(dlg_dir_scan, fn))["entries"]:
                 for l in e["en"]:
                     retail_chars.update(l)
     lit_path = os.path.join(work, "strings", "literals.json")
     if os.path.exists(lit_path):
-        for e in json.load(open(lit_path))["entries"]:
+        for e in load_json(lit_path)["entries"]:
             retail_chars.update(e.get("en") or "")
     art_small, art_big = ({}, {})
     if packart:
@@ -813,7 +814,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
         lba, size = files[nm]
         nsec = (size + 2047) // 2048
         raw = sec(lba, nsec)[:size]
-        patched, n = build_text(raw, json.load(open(jp)), stem, nsec * 2048, errors,
+        patched, n = build_text(raw, load_json(jp), stem, nsec * 2048, errors,
                                 used_cps, charmap if script else None)
         if patched:
             sections.append((K_TEXT, lba, struct.pack("<I", len(patched)) + patched))
@@ -828,7 +829,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     recs = []
     lit_path = os.path.join(work, "strings", "literals.json")
     if os.path.exists(lit_path):
-        for e in json.load(open(lit_path))["entries"]:
+        for e in load_json(lit_path)["entries"]:
             want = e.get("text") or ""
             if not want:
                 continue
@@ -865,7 +866,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     tac_path = os.path.join(work, "strings", "tactical.json")
     if os.path.exists(tac_path):
         seen = set()
-        for e in json.load(open(tac_path))["entries"]:
+        for e in load_json(tac_path)["entries"]:
             want = e.get("text") or ""
             en = e.get("en") or ""
             if not want or not en:
@@ -941,7 +942,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     # Manifest = the MACHINE TRUTH about the pack (the folder name is only a human convention).
     # The runtime refuses to load without a matching "game" and a readable "format".
     lang_tag = lang.split("-")[0]
-    json.dump({"game": "vandal-hearts-usa",
+    write_json({"game": "vandal-hearts-usa",
                "format": 1,
                "language": lang_tag,
                "name": meta.get("name") or lang,
@@ -950,8 +951,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
                "notes": meta.get("notes") or "",
                "contains": ["strings"],
                "tables_edited": dict(stats), "dialogue_files": nfiles, "dialogue_lines": nlines,
-               "font_glyphs": nglyphs},
-              open(os.path.join(d, "manifest.json"), "w"), indent=1, ensure_ascii=False)
+               "font_glyphs": nglyphs}, os.path.join(d, "manifest.json"))
     return d, stats, nfiles, nlines, len(sections), nglyphs
 
 

@@ -27,7 +27,8 @@ Usage: ./lang_validate.py <disc.bin> <workdir> [--strict] [--packart <dir>]
        --packart validates a NON-LATIN working set in script mode (pass the same sheets you build
        with); without it a Cyrillic/Greek set is checked as if it were Latin and mis-reports.
 """
-import glob, io, json, os, re, shutil, sys, tempfile
+import glob, io, os, re, shutil, sys, tempfile
+from lang_io import load_json
 from contextlib import redirect_stderr, redirect_stdout
 
 import lang_build
@@ -103,7 +104,7 @@ def validate(disc, work, strict=False, packart=None):
                 f"build refuses an incomplete pack (this is a warning so mid-work validation is usable)")
 
     # --- layer 2: render budgets ---------------------------------------------------------------
-    tables = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    tables = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     st_entries = tables["gStringTable"]["entries"]
 
     for name, width in FIXED_CHARS.items():
@@ -124,7 +125,7 @@ def validate(disc, work, strict=False, packart=None):
                                  f"(may draw outside the window)")
 
     for f in sorted(glob.glob(os.path.join(work, "strings", "dialogue", "*.json"))):
-        doc = json.load(open(f))
+        doc = load_json(f)
         stem = doc["file"]
         # Read the budget the EXPORTER recorded rather than restating the rule here -- it knows the
         # render path per file, and per ENTRY where they differ (the battle condition panel is drawn
@@ -149,7 +150,7 @@ def validate(disc, work, strict=False, packart=None):
     # menu slot sailed through unchecked -- e.g. the world menu and the option panels at 10 cols.
     lp = os.path.join(work, "strings", "literals.json")
     if os.path.exists(lp):
-        for e in json.load(open(lp))["entries"]:
+        for e in load_json(lp)["entries"]:
             t = e.get("text") or ""
             lim = e.get("limit")
             if not t or not lim:
@@ -166,7 +167,7 @@ def validate(disc, work, strict=False, packart=None):
     # was checked (only the builder's 20-char gSpellNames rule fired, via the dry-run).
     tp = os.path.join(work, "strings", "tactical.json")
     if os.path.exists(tp):
-        for e in json.load(open(tp))["entries"]:
+        for e in load_json(tp)["entries"]:
             t = e.get("text") or ""
             if not t:
                 continue

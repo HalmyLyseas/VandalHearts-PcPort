@@ -30,15 +30,16 @@ Mappings mirror lang_group.py exactly:
 
 Usage: ./lang_merge.py <workdir>
 """
-import json, os, sys
+import os, sys
+from lang_io import load_json, write_json
 
 
 def load(p):
-    return json.load(open(p))
+    return load_json(p)
 
 
 def save(p, d):
-    json.dump(d, open(p, "w"), indent=1, ensure_ascii=False)
+    write_json(d, p)
 
 
 FIELDS = {

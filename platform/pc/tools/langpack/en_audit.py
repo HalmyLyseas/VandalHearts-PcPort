@@ -14,11 +14,12 @@ Runs against the exported working set, so it re-runs for free after any re-expor
 
 Usage: ./en_audit.py <workdir>
 """
-import collections, json, os, re, sys
+import collections, os, re, sys
+from lang_io import load_json
 
 
 def audit(work):
-    T = json.load(open(os.path.join(work, "strings", "tables.json")))["tables"]
+    T = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     E = lambda t: T[t]["entries"]
     out = {}
 

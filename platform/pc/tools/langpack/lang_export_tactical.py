@@ -14,7 +14,8 @@ sites), so this cannot drift from what the game actually shows.
 
 Usage: ./lang_export_tactical.py <path to pc_balance.c> <outdir>
 """
-import json, os, re, sys
+import os, re, sys
+from lang_io import write_json
 
 # helper( id , "text" )  ->  which table(s) the id addresses
 PATTERNS = [
@@ -54,7 +55,7 @@ def export(balance_c, outdir):
            "entries": entries}
     os.makedirs(os.path.join(outdir, "strings"), exist_ok=True)
     path = os.path.join(outdir, "strings", "tactical.json")
-    json.dump(doc, open(path, "w"), indent=1, ensure_ascii=False)
+    write_json(doc, path)
     return path, doc
 
 if __name__ == "__main__":
