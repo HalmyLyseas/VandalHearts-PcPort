@@ -135,4 +135,5 @@ cmake --build build_win
 
 The result is a self-contained `build_win/` folder: `vandalhearts_pc.exe`, `vandalhearts.ini`, and the
 runtime DLLs (SDL2, OpenAL, and the MinGW runtime) copied in beside it — ready to zip and run on a
-stock Windows 10/11 machine. macOS is not currently built; see [cross-platform.md](cross-platform.md).
+stock Windows 10/11 machine. For the native Apple Silicon build, see
+[cross-platform.md](cross-platform.md#macos-apple-silicon--native-build).

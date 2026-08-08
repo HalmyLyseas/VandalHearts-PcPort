@@ -1,7 +1,7 @@
 # Cross-platform (Windows, Linux packaging & macOS)
 
-The port targets Linux, Windows, and — in principle — macOS. Linux and Windows are both built and
-validated; macOS is scaffolded but not pursued (see the end of this page). This is Stage 2.4 of the
+The port targets Linux, Windows, and macOS. Linux and Windows have full-playthrough validation;
+macOS has a native Apple Silicon build and title-screen smoke test (see the end of this page). This is Stage 2.4 of the
 roadmap.
 
 ## The portability model
@@ -260,24 +260,28 @@ Both stage under `platform/pc/dist/release/<tag>/` (gitignored) with `SHA256SUMS
 `RELEASE_NOTES.md`. Prereqs: `mingw-w64-gcc`, the `vh-deb12` container (see *Building a release* above),
 and `github-cli` authenticated (`gh auth login`).
 
-## macOS (Apple Silicon) — scaffolded, not pursued
+## macOS (Apple Silicon) — native build
 
-macOS is **deliberately deprioritized**. Unlike Windows, it can't be cleanly cross-compiled from Linux:
-it needs Apple's macOS SDK (licensed to Apple hardware), an `osxcross`-style toolchain built from an
-extracted Xcode SDK (legally gray and fiddly), and Apple-Silicon binaries additionally require
-code-signing to launch — none of which is clean off a Mac. Realistically it would be a *native* clang
-build on the Mac itself, not a cross-compile.
+The port now builds natively with AppleClang and has been smoke-tested through the title screen on
+Apple Silicon. It is still an early target: a complete playthrough, Intel validation, `.app`
+packaging, signing, and notarisation have not been done.
 
-The groundwork is nonetheless in place, at no cost to the other targets: the `__APPLE__` branches
-(`_NSGetExecutablePath`, the `mmap` reservations) and guarded platform includes already exist. What
-remains for anyone who wants to finish it on-device:
+```sh
+brew install cmake sdl2 openal-soft
 
-- Implement `PC_MakeRodataWritable` for macOS — a dyld segment walk (`_dyld_get_image_header` +
-  `getsegbyname` on `__DATA`/`__DATA_CONST`) + `mprotect`. This is the one real code gap; it's marked
-  as a stub in `pc_bootstrap.c`.
-- The fault-handler safety net is x86-specific (it reads the x86 page-fault write bit); on ARM it would
-  need its own port, but with the startup remap done it may not be needed.
-- `brew install sdl2 openal-soft`, a CMake toolchain/preset for `arm64-apple-darwin`, and the usual
-  per-OS validation of window/audio/paths.
+cd platform/pc
+cmake -S . -B build-macos \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix sdl2);$(brew --prefix openal-soft)" \
+  -DVH_WEBP=OFF -DVH_HDVIDEO=OFF \
+  -DVH_PSX_EXE=/absolute/path/to/SLUS_004.47 \
+  -DVH_KROM_SOURCE=/absolute/path/to/SCPH5500.BIN
+cmake --build build-macos -j
 
-Treat macOS as community/future work, not an active target.
+VH_DISC_IMAGE=/absolute/path/to/Vandal_Hearts_USA.bin \
+  ./build-macos/vandalhearts_pc
+```
+
+The build-time generators require a byte-exact US PS1 executable and either `KROMDAT.BIN` or a
+Japanese PS1 BIOS containing the kanji ROM; supply these from legally owned copies. Apple Silicon
+cannot use the Linux port's fixed low-address work buffers because arm64 Mach-O reserves the low
+4 GB. The native port therefore uses host storage for those buffers while preserving PS1 offsets.

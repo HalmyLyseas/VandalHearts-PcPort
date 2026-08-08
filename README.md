@@ -44,9 +44,10 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 - **64-bit** is the default build. The port is memory-safe — it runs unprivileged (no root, no
   `setcap`) and has passed both an AddressSanitizer out-of-bounds sweep and a UBSan pass across the
   game, which together fixed seven real out-of-bounds bugs latent in the retail game.
-- **Platforms: Windows and Linux**, from a single source tree. The Windows `.exe` is cross-compiled
-  from Linux with MinGW-w64; Linux ships as an AppImage. A CMake build sits alongside the Makefile.
-  macOS is scaffolded but not pursued — see [docs/cross-platform.md](docs/cross-platform.md).
+- **Platforms: Windows, Linux, and macOS**, from a single source tree. The Windows `.exe` is
+  cross-compiled from Linux with MinGW-w64; Linux ships as an AppImage. The native macOS CMake build
+  has been smoke-tested on Apple Silicon through the title screen; full-playthrough validation and
+  application packaging remain to be done. See [docs/cross-platform.md](docs/cross-platform.md).
 
 ## Where to start
 
@@ -66,6 +67,7 @@ Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derive
 |---|---|---|
 | **Windows** | `.zip` — `vandalhearts_pc.exe`, 8 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
 | **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 |
+| **macOS** | Build from source (packaging is not implemented yet) | Apple Silicon; Homebrew SDL2 and OpenAL Soft |
 
 Put your disc image in a `game/` folder next to the executable and launch — the disc is
 auto-detected and verified, settings live in the in-game overlay (**SELECT + START**) and
