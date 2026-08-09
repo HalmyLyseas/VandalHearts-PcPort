@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """lang_build.py -- compile an edited working set into a language pack the port can load.
 
-MVP scope (exchange/80, F1): prove the PLUMBING end to end with English as the baseline. Encoding is
+MVP scope (F1): prove the PLUMBING end to end with English as the baseline. Encoding is
 ASCII/Shift-JIS passthrough; the font + charmap work (the 128-slot code space) comes later and does
 not change any interface here.
 
@@ -36,7 +36,7 @@ Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en] [--packart <dir
        -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin[,backgrounds/]}
 """
 import os, re, struct, sys, unicodedata
-from lang_io import load_json, write_json
+from lang_io import fnv1a, load_json, write_json
 
 from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR, walk_dialogue
 
@@ -126,10 +126,7 @@ def pack_code_collisions(s, charmap):
 
 
 def fnv1a_str(text):
-    h = 14695981039346656037
-    for b in text.encode("utf-8"):
-        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return h
+    return fnv1a(text)          # the one shared implementation lives in lang_io (see its docstring)
 
 
 # --- UTF-8 + glyph synthesis (decision D1/D2, exchange/80) ------------------------------------
@@ -862,7 +859,11 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
                                   charmap if (name in CHARMAP_TABLES or i1b) else None,
                                   krom if (name == "gItemNamesSjis" and not i1b) else None,
                                   script=script, item1b=i1b)
-            if n:
+            if n or i1b:
+                # item1b re-encodes the WHOLE table (see build_fixed): the section must ship even
+                # with zero translated names yet, or the manifest declares format 2 while the
+                # runtime still holds the retail 2-byte SJIS table -- and the 1-byte draw path
+                # would render every item screen as mojibake.
                 sections.append((K_FIXED, tid, blob))
         else:
             blob, n = build_ptr(exe, vram, count, entries, name, errors, used_cps,

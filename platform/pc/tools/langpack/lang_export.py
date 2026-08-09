@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """lang_export.py -- build the translator working set from a retail disc (step 1: static tables).
 
-Implements section A of the committed contract in exchange/79: emit `strings/tables.json` where every
-entry carries a stable key, the English source, an empty translation slot, and ITS OWN LIMIT, so a
-translator never has to know about glyph indices, Shift-JIS, or the engine.
+THE WORKING-SET CONTRACT (this docstring and README.md are its home): emit `strings/tables.json`
+where every entry carries a stable key, the English source, an empty translation slot, and ITS OWN
+LIMIT, so a translator never has to know about glyph indices, Shift-JIS, or the engine.
 
 Two encodings appear in these tables and both are handled here:
   * plain 1-byte text (most tables) -- ASCII in the retail US build;
@@ -17,7 +17,7 @@ Markup is PRESERVED verbatim and counted, never "cleaned":
 Usage: ./lang_export.py <disc.bin> <outdir>
 """
 import os, re, struct, sys, unicodedata
-from lang_io import write_json
+from lang_io import fnv1a, write_json
 
 SECTOR, DOFF, EXE_LBA, EXE_SIZE = 2352, 24, 23, 1996800
 LOAD, HDR = 0x80010000, 0x800
@@ -190,10 +190,7 @@ def _budget(stem):
 # proof describes WHERE the line is (event/index), it does not quote it. Rebuild a hash for a new
 # entry with `fnv_hex("<the line>")`.
 def fnv_hex(s):
-    h = 14695981039346656037
-    for b in s.encode("utf-8"):
-        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return f"{h:016x}"
+    return f"{fnv1a(s):016x}"   # the one shared implementation lives in lang_io (see its docstring)
 
 
 NOT_MSGBOX = {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lang_export_literals.py -- export the text HARDCODED IN THE CODE (exchange/80, step 1.2).
+"""lang_export_literals.py -- export the text HARDCODED IN THE CODE (workflow step 1.2).
 
 The fifth text source, and the one a call-site sweep of tables misses entirely: strings passed as C
 literals straight to DrawText / DrawSjisText / StringToGlyphs. Small in count, large on screen -- the
@@ -22,7 +22,14 @@ literal drawn at several sites takes the tightest one.
 Usage: ./lang_export_literals.py <path to vh/src> <workdir>
 """
 import glob, os, re, sys, unicodedata
-from lang_io import write_json
+from lang_io import fnv1a, write_json
+from lang_export import decode as lex_decode
+
+
+def read_source_stripped(path):
+    """A src/*.c file with comments removed (so commented-out literals never export). latin1: the
+    source may carry raw SJIS bytes in literals, which must round-trip untouched."""
+    return re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
 
 DRAW = re.compile(r'\b(DrawText_Internal|DrawText|DrawSjisText|StringToGlyphs)\s*\(([^;]*?)\)\s*;', re.S)
 TEMPLATE = re.compile(r'(?:"(?:#\d+|\\n)*"\s*)+$')
@@ -92,7 +99,7 @@ def scan_wrapped(srcdir):
         path = os.path.join(srcdir, base)
         if not os.path.exists(path):
             continue
-        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
+        text = read_source_stripped(path)
         raws = [unescape(lit) for lit in PC_LANGSTR_RX.findall(text)]
         have = {f"{fnv1a(r):016x}" for r in raws}
         for h, desc in expected.items():
@@ -120,7 +127,7 @@ def scan_char_arrays(srcdir):
         path = os.path.join(srcdir, base)
         if not os.path.exists(path):
             continue
-        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
+        text = read_source_stripped(path)
         for name in names:
             m = re.search(r'\b(?:static\s+)?(?:const\s+)?(?:u8|s8|char)\s+' + re.escape(name) +
                           r'\s*\[\s*\]\s*=\s*("(?:[^"\\]|\\.)*")\s*;', text)
@@ -152,13 +159,6 @@ def unescape(c_literal):
     return bytes(out)
 
 
-def fnv1a(b):
-    h = 14695981039346656037
-    for x in b:
-        h = ((h ^ x) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return h
-
-
 def split_args(s):
     out, depth, cur, q, i = [], 0, "", False, 0
     while i < len(s):
@@ -178,12 +178,13 @@ def split_args(s):
 
 
 def decode(raw):
-    if any(0x81 <= b <= 0x9F or 0xE0 <= b <= 0xFC for b in raw):
-        try:
-            return unicodedata.normalize("NFKC", raw.decode("cp932")), "sjis"
-        except UnicodeDecodeError:
-            pass
-    return raw.decode("latin1"), "ascii"
+    """lang_export.decode + NFKC at THIS call layer. The shared decode deliberately does not
+    normalise (0x8140 full-width filler vs ASCII-space content is load-bearing for table records);
+    a code literal is always CONTENT, never record filler, so folding here is safe -- and wanted,
+    it is what turns a full-width literal into the ASCII the hash contract expects. Do not push the
+    NFKC down into lang_export.decode."""
+    text, enc = lex_decode(raw)
+    return unicodedata.normalize("NFKC", text), enc
 
 
 # Text held in ARRAYS rather than written at the draw call. The sweep above matches literals in the
@@ -224,7 +225,7 @@ def scan_arrays(srcdir):
         path = os.path.join(srcdir, base)
         if not os.path.exists(path):
             continue
-        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", open(path, encoding="latin1").read(), flags=re.S)
+        text = read_source_stripped(path)
         for m in ARRAY_RX.finditer(text):
             name, body = m.group(1), m.group(2)
             if not name.startswith(prefix) or name in ARRAY_DEAD:

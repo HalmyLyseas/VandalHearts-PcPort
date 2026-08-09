@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""en_audit.py -- mechanical defect scan of the RETAIL ENGLISH text (exchange/81).
+"""en_audit.py -- mechanical defect scan of the RETAIL ENGLISH text.
 
 Not a spell-checker: it looks for defects the game's own data can PROVE, so every hit can be argued
 from evidence rather than taste. Five checks:

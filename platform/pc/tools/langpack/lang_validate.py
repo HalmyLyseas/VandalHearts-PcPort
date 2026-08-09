@@ -44,8 +44,12 @@ MSGBOX_COLS = 26
 SHOP_T_COLS = 30
 
 
-def cols(s, string_table=None):
-    """Rendered column count: $X free, #N expands, each codepoint = 1 column."""
+def cols(s, string_table=None, _visiting=frozenset(), _cycles=None):
+    """Rendered column count: $X free, #N expands, each codepoint = 1 column.
+    A #N chain that revisits an index is a reference CYCLE (translator typo): expansion stops
+    there -- the back-reference measures 0 -- instead of recursing forever, and the index is
+    recorded in _cycles for validate() to report as an error. Nothing downstream guards a cycle
+    (the builder ships #N through untouched), so this is the one place it gets caught."""
     s = re.sub(r"\$.", "", s)
     out = 0
     i = 0
@@ -59,10 +63,13 @@ def cols(s, string_table=None):
             if m and string_table is not None:
                 idx = int(m.group(1))
                 ins = ""
-                if 0 <= idx < len(string_table):
+                if idx in _visiting:
+                    if _cycles is not None:
+                        _cycles.add(idx)
+                elif 0 <= idx < len(string_table):
                     e = string_table[idx]
                     ins = (e.get("text") or e.get("en") or "")
-                out += cols(ins, string_table)
+                out += cols(ins, string_table, _visiting | {idx}, _cycles)
                 i += len(m.group(0))
                 continue
         out += 1
@@ -167,7 +174,25 @@ def validate(disc, work, strict=False, packart=None, hdpack=None):
     tables = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     st_entries = tables["gStringTable"]["entries"]
 
-    for name, width in FIXED_CHARS.items():
+    # Per-table record widths, honoring the working set's declared encoding: bytes_per_char 1 on
+    # gItemNamesSjis is the format-2 opt-in (exchange/91) and widens the record from 8 SJIS chars
+    # to 16 1-byte chars. MIRRORS lang_build.build_fixed's rule -- validate and build must agree,
+    # or every format-2 pack with a >8-char name is "validate red, build green" forever.
+    fixed_chars = dict(FIXED_CHARS)
+    if tables.get("gItemNamesSjis", {}).get("limit", {}).get("bytes_per_char") == 1:
+        fixed_chars["gItemNamesSjis"] = 16
+
+    # #N reference cycles: every #N points into gStringTable, so any cycle is reachable from one
+    # of its own member entries -- one pass over that table finds them all, and later cols() calls
+    # (which expand with the same guard, silently) can no longer crash on one.
+    cyc = set()
+    for e in st_entries:
+        cols(e.get("text") or e.get("en") or "", st_entries, _cycles=cyc)
+    for idx in sorted(cyc):
+        errors.append(f"gStringTable[{idx}]: #N reference cycle -- the chain returns to this "
+                      f"entry; the engine cannot render it")
+
+    for name, width in fixed_chars.items():
         for e in tables[name]["entries"]:
             t = e.get("text") or ""
             if t and len(t) > width:
@@ -233,8 +258,8 @@ def validate(disc, work, strict=False, packart=None, hdpack=None):
                 continue
             key = e["key"]
             table = key.split("[")[0]
-            if table in FIXED_CHARS:              # gSpellNames: hard record width in characters
-                w = FIXED_CHARS[table]
+            if table in fixed_chars:              # gSpellNames: hard record width in characters
+                w = fixed_chars[table]
                 if len(t) > w:
                     errors.append(f"tactical {key}: {len(t)} chars > {w} -- record truncates")
             elif table in COLS:                   # descriptions: wrapping column budget
@@ -254,12 +279,31 @@ def validate(disc, work, strict=False, packart=None, hdpack=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
+    # Consume argv left-to-right, skipping each flag's value BY POSITION -- filtering positionals
+    # by value equality dropped any positional that merely equalled a flag value
+    # (`lang_validate.py disc.bin work --packart work` lost the workdir).
+    strict, packart, hdpack, pos = False, None, None, []
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--strict":
+            strict = True
+        elif a in ("--packart", "--hdpack"):
+            if i + 1 >= len(args):
+                raise SystemExit(f"{a} needs a value\n\n{__doc__}")
+            if a == "--packart":
+                packart = args[i + 1]
+            else:
+                hdpack = args[i + 1]
+            i += 1
+        elif a.startswith("-"):
+            raise SystemExit(f"unknown option {a}\n\n{__doc__}")
+        else:
+            pos.append(a)
+        i += 1
+    if len(pos) != 2:
         raise SystemExit(__doc__)
-    strict = "--strict" in sys.argv
-    packart = sys.argv[sys.argv.index("--packart") + 1] if "--packart" in sys.argv else None
-    hdpack = sys.argv[sys.argv.index("--hdpack") + 1] if "--hdpack" in sys.argv else None
-    pos = [a for a in sys.argv[1:] if not a.startswith("-") and a not in (packart, hdpack)]
     errors, warns = validate(pos[0], pos[1], strict, packart, hdpack)
     for w in warns:
         print(f"  warn : {w}")

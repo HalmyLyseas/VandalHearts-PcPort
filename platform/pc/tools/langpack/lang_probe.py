@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lang_probe.py -- build a LABELLED probe pack for step 1 of exchange/80 (text import, in-game).
+"""lang_probe.py -- build a LABELLED probe pack (text import, in-game verification).
 
 One probe per text source, each tagged L1..L8, so a play session answers two questions at once:
 

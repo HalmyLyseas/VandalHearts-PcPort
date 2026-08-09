@@ -11,6 +11,22 @@ and the next open() someone adds inherits it for free instead of re-introducing 
 import json
 
 
+def fnv1a(data):
+    """64-bit FNV-1a -- THE pack identity hash, in exactly one place.
+
+    This value is the contract between the exporter (literal keys), the builder (K_LITERAL
+    records), and the runtime (PC_LangStr in platform/pc/src/pc_lang.c hashes the literal's
+    bytes with the same constants): if any party computes it differently, translated literals
+    silently stop matching and drop out of packs. str input is hashed as its UTF-8 bytes --
+    identical to hashing the encoded bytes directly."""
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    h = 14695981039346656037
+    for b in data:
+        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return h
+
+
 def load_json(path):
     """Read a JSON file as UTF-8. A file saved in another encoding fails with a plain, actionable
     message (name the file, say 'save as UTF-8') instead of a codec traceback or silent mojibake."""
