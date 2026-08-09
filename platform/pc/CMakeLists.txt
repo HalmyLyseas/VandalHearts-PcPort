@@ -41,7 +41,7 @@ set(GEN_ASSET_DIR ${GEN_DIR}/generated_assets)
 set(GEN_DATA_DIR ${GEN_DIR}/generated_sources)
 
 set(VH_PSX_EXE "${PROJECT_ROOT}/SLUS_004.47" CACHE FILEPATH "Original US PS-X EXE used for generated data")
-set(VH_KROM_SOURCE "${PROJECT_ROOT}/../psy-q/3.6/PSYQ/BIN/KROMDAT.BIN" CACHE FILEPATH
+set(VH_KROM_SOURCE "${PROJECT_ROOT}/external/psy-q/3.6/PSYQ/BIN/KROMDAT.BIN" CACHE FILEPATH
     "PsyQ KROMDAT.BIN or a PS1 BIOS containing the same font data")
 
 # Windows: force-include the MinGW compat shim (BSD u_char/u_short/... the PsyQ headers use) ahead of

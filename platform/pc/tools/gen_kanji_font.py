@@ -42,7 +42,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PC_DIR = os.path.abspath(os.path.join(HERE, ".."))
 PROJECT_ROOT = os.path.abspath(os.path.join(PC_DIR, "..", ".."))
 KROMDAT = os.environ.get("VH_KROM_SOURCE",
-                         os.path.join(PROJECT_ROOT, "..", "psy-q", "3.6", "PSYQ", "BIN", "KROMDAT.BIN"))
+                         os.path.join(PROJECT_ROOT, "external", "psy-q", "3.6", "PSYQ", "BIN", "KROMDAT.BIN"))
 OUT = os.environ.get("VH_GENERATED_OUT", os.path.join(PC_DIR, "src", "pc_kanji_font.c"))
 
 GLYPH_BYTES = 30
