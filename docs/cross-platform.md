@@ -271,9 +271,11 @@ Both stage under `platform/pc/dist/release/<tag>/` (gitignored) with `SHA256SUMS
 `RELEASE_NOTES.md`. Prereqs: `mingw-w64-gcc`, the `vh-deb12` container (see *Building a release* above),
 and `github-cli` authenticated (`gh auth login`).
 
-## macOS — native and Universal 2 builds
+## macOS — native and Universal 2 builds (community-supported, experimental)
 
-The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
+macOS support is a community contribution and is validated by community members — the maintainer has
+no Apple hardware, so macOS-specific issues are triaged best-effort and fixes may need a contributor
+with a Mac. The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
 cutscenes, HD movies/backgrounds, world map, towns, shops, saves, Tactical Mode and 2× battle speed.
 The SDL2 presentation layer explicitly selects Metal and the binary has no OpenGL framework dependency.
 A dependency-minimal Universal 2 binary has passed the boot-to-title smoke test as both native arm64
