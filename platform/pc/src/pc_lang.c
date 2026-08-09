@@ -118,6 +118,24 @@ static int LangPackDir(char *out, size_t n) {
     return 1;
 }
 
+/* F2 (exchange/92): the active language pack's backgrounds/ directory -- localized HD backgrounds as
+ * <hash>.webp, the SAME convention as the HD pack. Returns NULL when no pack is selected or it ships
+ * none. pc_hdpack.c resolves this source BEFORE the HD pack, so a translated background overrides the
+ * HD (untranslated) one. Resolved once; the path is a process-lifetime static, safe to store. */
+const char *PC_LangBgDir(void) {
+    static char dir[600];
+    static int resolved;               /* 0 = not yet, 1 = present, -1 = none */
+    if (!resolved) {
+        char pack[512]; DIR *d;
+        resolved = -1;
+        if (LangPackDir(pack, sizeof pack)) {
+            snprintf(dir, sizeof dir, "%s/backgrounds", pack);
+            if ((d = opendir(dir)) != NULL) { closedir(d); resolved = 1; }
+        }
+    }
+    return resolved == 1 ? dir : NULL;
+}
+
 static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
     if (id == TID_TERRAIN) {                    /* no symbol to write: hold it for the hook */
         s_lang.terrain = (unsigned char *)malloc(len);

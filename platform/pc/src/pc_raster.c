@@ -414,7 +414,7 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
         int uMn = vu[0], uMx = vu[0], vMn = vv[0], vMx = vv[0], k;
         for (k = 1; k < 3; k++) { if (vu[k]<uMn)uMn=vu[k]; if (vu[k]>uMx)uMx=vu[k]; if (vv[k]<vMn)vMn=vv[k]; if (vv[k]>vMx)vMx=vv[k]; }
         if (HdDumpDir())                    HdMaybeDump(tpage, clut, uMn, uMx, vMn, vMx);
-        if (rc->target && HdReplaceCount() && HdActive()) hdReg = HdFindTriRegion(tpage, uMn, uMx, vMn, vMx);
+        if (rc->target && HdReplaceCount() && HdAnyActive()) hdReg = HdFindTriRegion(tpage, uMn, uMx, vMn, vMx);  /* F2: HD pack OR langpack bg */
         {   /* VH_HD_TRACE: log each UNIQUE (tpage,clut) that gets HD-replaced -> reveals which prims are
              * wrongly matched (battle overlays/effects) vs the real background, to pick a discriminator. */
             static int tr = -1; if (tr < 0) tr = getenv("VH_HD_TRACE") ? 1 : 0;

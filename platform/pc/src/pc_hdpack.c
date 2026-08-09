@@ -130,6 +130,15 @@ static const char *HdPackDir(void) {
     return (env && *env) ? env : s_hdPack.dir;
 }
 
+/* F2 (exchange/92): the active language pack's backgrounds/ dir, or NULL. Gated by the pack being
+ * SELECTED (independent of the HD PACK toggle) -- localized backgrounds are translation, not an
+ * enhancement. Resolved before the HD pack (see BgSourceDir), so a translated background wins. */
+extern const char *PC_LangBgDir(void);
+
+/* Any background-replacement source live right now (HD pack OR a langpack backgrounds/). Gates the
+ * per-triangle region resolve in the DDA (pc_raster.c) and the registration in HdPack_OnLoad. */
+int HdAnyActive(void) { return HdActive() || PC_LangBgDir() != NULL; }
+
 /* Public API for the options overlay (GRAD 2/3). The toggle itself is g_vhHdPack (bound directly). */
 int PC_HdPackAvailable(void)      { HdDetect(); return s_hdPack.valid; }
 int PC_HdPackEnabled(void)        { HdDetect(); return s_hdPack.valid && g_vhHdPack; }
@@ -244,11 +253,20 @@ static int HdFileExists(const char *dir, unsigned long long h) {
     snprintf(path, sizeof(path), "%s/%016llx.hdi", dir, h);
     return stat(path, &st) == 0;
 }
+/* F2: which source holds a replacement for this hash? Langpack backgrounds/ first (priority), then
+ * the HD pack. NULL if neither. Up to two stats -- called once per unique background at registration. */
+static const char *BgSourceDir(unsigned long long h) {
+    const char *ld = PC_LangBgDir();
+    if (ld && HdFileExists(ld, h)) return ld;
+    { const char *hd = HdPackDir(); if (hd && HdFileExists(hd, h)) return hd; }
+    return NULL;
+}
 static pthread_mutex_t s_hdLoadMtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  s_hdLoadCv  = PTHREAD_COND_INITIALIZER;
 static HdRegion *s_hdLoadQ[HD_MAX_REGIONS];
 static int s_hdLoadQn, s_hdLoaderUp;
-static char s_hdLoaderDir[HD_PATH + 32];        /* pack dir snapshot; never changes mid-run */
+/* F2: each region carries its own source dir (r->dir) -- langpack and HD backgrounds can both be live,
+ * so there is no longer a single pack-dir snapshot; the loader reads from the region's own source. */
 
 static void *HdLoaderMain(void *arg) {
     (void)arg;
@@ -258,24 +276,23 @@ static void *HdLoaderMain(void *arg) {
         while (s_hdLoadQn == 0) pthread_cond_wait(&s_hdLoadCv, &s_hdLoadMtx);
         r = s_hdLoadQ[--s_hdLoadQn];             /* LIFO: newest upload = current scene first */
         pthread_mutex_unlock(&s_hdLoadMtx);
-        rgba = HdLoadImage(s_hdLoaderDir, r->hash, &w, &hh);
+        rgba = HdLoadImage(r->dir, r->hash, &w, &hh);
         if (rgba) { px = HdPack16(rgba, (int)((size_t)w * hh)); free(rgba); }
         if (px) {
             r->w = w; r->h = hh;                 /* dims first, then the pointer gates visibility */
             __atomic_store_n(&r->px, px, __ATOMIC_RELEASE);
-            fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d (async)\n",
-                    r->hash, r->rx, r->ry, r->rw, r->rh, w, hh);
+            fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d src=%s (async)\n",
+                    r->hash, r->rx, r->ry, r->rw, r->rh, w, hh, r->dir);
         } else {
             fprintf(stderr, "[HD] async load FAILED %016llx (file vanished or bad?)\n", r->hash);
         }
     }
     return NULL;
 }
-static void HdLoaderQueue(const char *dir, HdRegion *r) {
+static void HdLoaderQueue(HdRegion *r) {         /* F2: source is r->dir, set at registration */
     pthread_mutex_lock(&s_hdLoadMtx);
     if (!s_hdLoaderUp) {
         pthread_t th; pthread_attr_t at;
-        snprintf(s_hdLoaderDir, sizeof(s_hdLoaderDir), "%s", dir);
         pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
         if (pthread_create(&th, &at, HdLoaderMain, NULL) == 0) s_hdLoaderUp = 1;
         pthread_attr_destroy(&at);
@@ -287,7 +304,7 @@ static void HdLoaderQueue(const char *dir, HdRegion *r) {
     } else {                                     /* thread refused to start: fall back to inline */
         int w = 0, hh = 0; unsigned int *rgba;
         pthread_mutex_unlock(&s_hdLoadMtx);
-        rgba = HdLoadImage(dir, r->hash, &w, &hh);
+        rgba = HdLoadImage(r->dir, r->hash, &w, &hh);
         if (rgba) { r->px = HdPack16(rgba, (int)((size_t)w * hh)); free(rgba);
                     if (r->px) { r->w = w; r->h = hh; } }
     }
@@ -297,14 +314,14 @@ static void HdLoaderQueue(const char *dir, HdRegion *r) {
  * SAME VRAM rect, so regions are found-by-hash but must be matched-by-rect at draw time -- we track which
  * region is LIVE (its content is what's in VRAM at that rect right now) and update it on every upload. */
 void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
-    const char *pk = HdPackDir(), *dp = HdDumpDir(); unsigned long long h; HdRegion *r = NULL; int i;
+    const char *dp = HdDumpDir(); unsigned long long h; HdRegion *r = NULL; int i;   /* F2: source resolved per-hash via BgSourceDir */
     if (rect->w <= 0 || rect->h <= 0) return;
     /* Hash + register/replace only when the pack (or dump) is active. But the LIVE-region invalidation at
      * the end runs on EVERY upload regardless of the toggle -- so a background uploaded while HD PACK is
      * OFF (pk==NULL) still evicts the stale live region it overwrites. Without this, toggling HD ON mid-
      * scene resampled the PREVIOUS scene's HD image (its region stayed live because its VRAM eviction was
      * skipped); now the current scene correctly shows native until its own background reloads. */
-    if (pk || dp) {
+    if (HdAnyActive() || dp) {                     /* F2: any bg source (HD pack OR langpack), or dumping */
         if (dp) { static int mk; if (!mk) { mk = 1; HD_MKDIR(dp); } }
         h = HdHash(src, rect->w * rect->h);
         r = HdFind(h);
@@ -313,24 +330,26 @@ void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
                 static int warned; if (!warned) { warned = 1; fprintf(stderr, "[HD] region cap %d hit -- raise HD_MAX_REGIONS\n", HD_MAX_REGIONS); }
             } else {
                 r = &s_hdReg[s_hdRegN];
-                r->hash = h; r->rx = rect->x; r->ry = rect->y; r->rw = rect->w; r->rh = rect->h; r->px = NULL; r->w = r->h = 0; r->dumped = 0; r->live = 0;
+                r->hash = h; r->rx = rect->x; r->ry = rect->y; r->rw = rect->w; r->rh = rect->h; r->px = NULL; r->w = r->h = 0; r->dumped = 0; r->live = 0; r->dir = NULL;
                 if (dp && getenv("VH_HD_RAW")) {   /* diagnostic: exact hashed source bytes, to reverse the on-disc->VRAM layout offline */
                     char rp[600]; FILE *rf; snprintf(rp, sizeof(rp), "%s/%016llx_%dx%d.raw", dp, h, rect->w, rect->h);
                     rf = fopen(rp, "wb"); if (rf) { fwrite(src, 2, (size_t)rect->w * rect->h, rf); fclose(rf); }
                 }
                 {
-                    int hasRepl = pk && HdFileExists(pk, h);   /* cheap stat on the render thread */
+                    const char *repl = BgSourceDir(h);   /* F2: langpack first, then HD pack (cheap stat) */
+                    int hasRepl = repl != NULL;
                     if (hasRepl) {
                         static int syncMode = -1;
                         if (syncMode < 0) { const char *e = getenv("VH_HD_SYNC"); syncMode = e && atoi(e) != 0; }
+                        r->dir = repl;             /* the loader (async or inline) reads from this source */
                         s_hdReplaceN++;            /* counts as replaced; draw path skips while px==NULL */
                         if (syncMode) {            /* old inline decode, for A/B + debugging */
-                            unsigned int *rgba = HdLoadImage(pk, h, &r->w, &r->h);
+                            unsigned int *rgba = HdLoadImage(repl, h, &r->w, &r->h);
                             if (rgba) { r->px = HdPack16(rgba, r->w * r->h); free(rgba); }
-                            if (r->px) fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d (sync)\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h);
-                            else { r->w = r->h = 0; hasRepl = 0; s_hdReplaceN--; }
+                            if (r->px) fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d src=%s (sync)\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h, repl);
+                            else { r->w = r->h = 0; hasRepl = 0; s_hdReplaceN--; r->dir = NULL; }
                         } else {
-                            HdLoaderQueue(pk, r);  /* decode + publish on the loader thread */
+                            HdLoaderQueue(r);      /* decode + publish on the loader thread (reads r->dir) */
                         }
                     }
                     if (hasRepl || dp) s_hdRegN++; else r = NULL;   /* track: has/awaits a replacement, or dumping */

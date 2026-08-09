@@ -64,11 +64,12 @@ extern volatile sig_atomic_t g_vhHiresDumpReq;   /* SIGUSR2 latch: dump the hire
 /* ---- provided by pc_hdpack.c (1.6 HD pack: background replacement) ---- */
 /* One replaced/dumped VRAM region. px is published by the async loader with a release store;
  * readers acquire-load it (NULL until the decode lands -> native texels draw). */
-typedef struct { unsigned long long hash; int rx, ry, rw, rh; unsigned short *px; int w, h; int dumped; int live; } HdRegion;
+typedef struct { unsigned long long hash; int rx, ry, rw, rh; unsigned short *px; int w, h; int dumped; int live; const char *dir; } HdRegion;
 void HdPack_OnLoad(const RECT *rect, const unsigned short *src);  /* LoadImage hook: hash/register/evict */
 void HdMaybeDump(int tpage, int clut, int uMin, int uMax, int vMin, int vMax);   /* VH_HD_DUMP */
 HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax);    /* per-triangle resolve */
-int  HdActive(void);           /* pack (or VH_HD_PACK override) live right now? */
+int  HdActive(void);           /* HD pack (or VH_HD_PACK override) live right now? */
+int  HdAnyActive(void);        /* HD pack OR a langpack backgrounds/ source live (F2, exchange/92) */
 const char *HdDumpDir(void);   /* VH_HD_DUMP dir, or NULL */
 int  HdRegionCount(void);      /* registered regions (gates the per-triangle work) */
 int  HdReplaceCount(void);     /* regions with a replacement (gates threading + resolve) */
