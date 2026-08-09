@@ -40,7 +40,7 @@ extern signed char gUnitTypeNames[86][11];
 extern signed char gItemNames[139][13];
 extern unsigned char gClassAdvancementNames[18][17];
 /* Pointer tables reconstructed by platform/pc/src/pc_*.c (see those files' own headers). */
-extern unsigned char *gStringTable[100];
+extern unsigned char *gStringTable[101];   /* [100] is the PC sentinel entry (see src/text.c) */
 extern char *gSpellDescriptions[72];
 extern char *gItemDescriptions[101];
 extern char *gItemDescriptions2[101];
