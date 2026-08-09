@@ -507,12 +507,19 @@ def enc_codes(s, charmap, errors, ctx):
 
 
 def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=None, krom=None,
-                script=False):
-    """Whole-table blob: original record bytes, with edited records re-encoded."""
+                script=False, item1b=False):
+    """Whole-table blob: original record bytes, with edited records re-encoded.
+
+    item1b (gItemNamesSjis only, exchange/91): 1-byte encoding instead of retail's 2-byte SJIS -- 16
+    chars in the 17-byte record instead of 8, drawn through the small font. The table stops being a
+    diff (the disc holds SJIS, so nothing is kept verbatim): all 101 names ship, untranslated ones
+    converted English->plain ASCII (lossless). Padding is NUL, like the other name tables."""
     base = foff(vram)
     blob = bytearray(exe[base:base + count * width])
     edited = 0
-    sjis = (name == "gItemNamesSjis")
+    sjis = (name == "gItemNamesSjis") and not item1b
+    if item1b:
+        pad = b"\x00"
     for i in range(count):
         e = entries[i]
         orig = bytes(blob[i * width:(i + 1) * width])
@@ -577,6 +584,11 @@ def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=Non
         rec[:len(raw)] = raw                         # leave the old text's tail behind
         rec[width - 1] = 0
         if not want:
+            if item1b:
+                # 1-byte mode ships the WHOLE table -- the disc's 2-byte SJIS is a different encoding,
+                # so there is nothing to keep verbatim; every name is re-encoded from its English.
+                blob[i * width:(i + 1) * width] = rec
+                continue
             # Self-check on REAL content only: re-encoding what the game shipped must reproduce it.
             # Empty slots are all-filler records (see the table note) and are exempt.
             if en and bytes(rec) != orig:
@@ -796,6 +808,11 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
               "own case in the drawn sheets.", file=sys.stderr)
         mixed_case = False
 
+    # Item-name width (exchange/91): the working set declares bytes_per_char on gItemNamesSjis; 1 means
+    # the translator chose 16 small letters over 8 large ones. It flips the encoding to 1-byte and the
+    # runtime to the small-font list path, so it bumps the pack format (older builds refuse it).
+    item1b = (tables.get("gItemNamesSjis", {}).get("limit", {}).get("bytes_per_char") == 1)
+
     # In script mode an untranslated string renders as nonsense (the charmap reassigns the letter
     # codes), so completeness is a correctness requirement -- refuse an incomplete non-Latin pack
     # unless the author is deliberately building a partial one for testing. A Latin pack degrades
@@ -817,9 +834,11 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     for tid, name, vram, kind, count, width, pad in TABLES:
         entries = tables[name]["entries"]
         if kind == "fixed":
+            i1b = item1b and name == "gItemNamesSjis"
             blob, n = build_fixed(exe, vram, count, width, pad, entries, name, errors,
-                                  charmap if name in CHARMAP_TABLES else None,
-                                  krom if name == "gItemNamesSjis" else None, script=script)
+                                  charmap if (name in CHARMAP_TABLES or i1b) else None,
+                                  krom if (name == "gItemNamesSjis" and not i1b) else None,
+                                  script=script, item1b=i1b)
             if n:
                 sections.append((K_FIXED, tid, blob))
         else:
@@ -974,7 +993,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     # The runtime refuses to load without a matching "game" and a readable "format".
     lang_tag = lang.split("-")[0]
     write_json({"game": "vandal-hearts-usa",
-               "format": 1,
+               "format": 2 if item1b else 1,      # 1-byte item names need the v2-aware runtime
                "language": lang_tag,
                "name": meta.get("name") or lang,
                "author": meta.get("author") or "",
@@ -982,6 +1001,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
                "notes": meta.get("notes") or "",
                "contains": ["strings"],
                "mixed_case": mixed_case,
+               "item_names_1byte": item1b,
                "tables_edited": dict(stats), "dialogue_files": nfiles, "dialogue_lines": nlines,
                "font_glyphs": nglyphs}, os.path.join(d, "manifest.json"))
     return d, stats, nfiles, nlines, len(sections), nglyphs

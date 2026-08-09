@@ -84,6 +84,7 @@ typedef struct { int lba; unsigned len; unsigned char *bytes; } LangText;
 static struct {
     int loaded;                       /* 0 = not tried, 1 = tried (with or without a pack) */
     int active;                       /* a pack was found and applied */
+    int item1b;                       /* format 2: item names are 1-byte/16-char (exchange/91) */
     LangText text[MAX_TEXT_FILES];
     int textN;
     unsigned char *terrain;           /* deferred blob for the function-static terrainText */
@@ -218,7 +219,7 @@ static int MiniJsonInt(const char *buf, const char *key, int *out) {
 }
 
 #define LANG_GAME_ID "vandal-hearts-usa"
-#define LANG_FORMAT  1
+#define LANG_FORMAT  2      /* v2 adds 1-byte/16-char item names (exchange/91); v1 packs still load */
 
 /* The manifest is LOAD-BEARING (packaging decision, 2026-08-07): the folder name is a human
  * convention, the manifest is the machine truth. A pack with a missing/foreign/newer manifest is
@@ -262,6 +263,13 @@ static char s_bootFolder[64];
 const char *PC_LangBootFolder(void) {
     if (!s_lang.loaded) LangLoad();
     return s_bootFolder;
+}
+
+/* exchange/91: the loaded pack encodes item names as 1-byte/16-char (format 2). supplies.c asks this
+ * to draw the shop/depot/inventory item lists through the small font instead of the wide SJIS one. */
+int PC_LangItemNames1Byte(void) {
+    if (!s_lang.loaded) LangLoad();
+    return s_lang.item1b;
 }
 
 /* Enumerate installed packs for the overlay picklist: every <deploy>/langpacks/<folder> whose
@@ -317,6 +325,16 @@ static void LangLoad(void) {
     s_lang.loaded = 1;
     if (!LangPackDir(dir, sizeof dir)) return;
     if (!LangManifestCheck(dir)) return;
+    {   /* format 2 (exchange/91) == 1-byte item names -> supplies.c draws the item lists through the
+         * small-font path instead of the wide SJIS one. The builder sets format 2 iff bytes_per_char=1. */
+        char mp[600], mb[1024]; FILE *mf; int fmt = 1;
+        snprintf(mp, sizeof mp, "%s/manifest.json", dir);
+        mf = fopen(mp, "r");
+        if (mf) {
+            size_t mn = fread(mb, 1, sizeof mb - 1, mf); mb[mn] = '\0'; fclose(mf);
+            if (MiniJsonInt(mb, "format", &fmt)) s_lang.item1b = (fmt >= 2);
+        }
+    }
     {   /* remember the boot selection BY FOLDER NAME (the overlay's restart marker compares to it);
          * a VH_LANGPACK dev override deliberately stays "" -- it is not a langpacks/ selection */
         const char *lang = getenv("VH_LANG");

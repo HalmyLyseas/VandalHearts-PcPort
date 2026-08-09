@@ -14,6 +14,9 @@
  * "god" spell menu -- the 5 guards below neutralise the `weapon == V_HEART_2` term so Ash falls to his
  * real gSpellLists kit. Normal mode keeps the retail god-path. pc_balance.c owns gTacticalMode. */
 extern int gTacticalMode;
+/* exchange/91: a format-2 language pack stores item names as 1-byte ASCII (16 chars) instead of
+ * 2-byte SJIS, so they must draw through the small font (DrawText) rather than DrawSjisText. */
+extern int PC_LangItemNames1Byte(void);
 #endif
 
 s32 WindowIsOffScreen(Object *);
@@ -2018,6 +2021,19 @@ void Objf421_UpperMsgBoxTail(Object *obj) {
 }
 
 #undef OBJF
+#ifdef PC_FEAT
+/* Draw a 1-byte item name in the small font, hard-truncated to `cap` chars so it never spills past
+ * the tight battle item box (which is sized for 8 SJIS chars). exchange/91, feedback-36. */
+static void DrawItemNameSmall1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap) {
+   u8 buf[17];
+   s32 i;
+   if (cap > 16) cap = 16;
+   for (i = 0; i < cap && name[i] != '\0'; i++) buf[i] = name[i];
+   buf[i] = '\0';
+   DrawText(x, y, cap + 1, 0, color, buf);
+}
+#endif
+
 #define OBJF 573
 void Objf573_BattleItemsList(Object *obj) {
    s32 i;
@@ -2039,6 +2055,11 @@ void Objf573_BattleItemsList(Object *obj) {
             tmp = 1; // Color to indicate item is unusable
          else
             tmp = 0;
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte())
+            DrawItemNameSmall1Byte(28, i * 18 + 60, tmp, gItemNamesSjis[unit->items[i]], 12);
+         else
+#endif
          DrawSjisText(28, i * 18 + 60, 20, 0, tmp, gItemNamesSjis[unit->items[i]]);
       }
 

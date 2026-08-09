@@ -519,6 +519,91 @@ void UpdateStatChangeText(u8 item, u8 partyIdx) {
    sStatChangeBuffer[13] = '\0';
 }
 
+#ifdef PC_FEAT
+/* --- ITEM-NAME WIDTH: 1-byte / 16-char item lists (exchange/91) ---------------------------------
+ * A format-2 pack (PC_LangItemNames1Byte()) stores item names as 16 one-byte chars instead of 8
+ * two-byte SJIS ones. They must draw through the small 8x9 font, not the wide SJIS one, and PER ROW
+ * at the choice pitch (the small font's own ~9 px advance desyncs from the 17 px choice rows). The
+ * name draws LEFT; the price is RIGHT-ALIGNED so a long name never pushes it off the widened window. */
+extern int PC_LangItemNames1Byte(void);
+#define ITEM1B_ROW_H  17
+#define ITEM1B_COLS   20     /* name (<=16) + right-aligned price. 20 cols keeps the price inside the
+                              * NARROWER Sell/Depot list boxes too (not just the widened Buy box), so it
+                              * never rides the border. A long name yields its right columns to the
+                              * price (exchange/91, feedback-35/36). */
+#define ITEM1B_NAME_TIGHT 11 /* char cap for the purchase/sell/transfer confirm box -- it is sized for
+                              * 8 SJIS chars AND carries an item icon on the left, so it fits ~11 small
+                              * chars before the name rides the border (feedback-36). */
+#define GOLD1B_X      233    /* gold box screen x (feedback-35: shifted 1 cell left of 241, box grown
+                              * the same 8 px so its right edge stays put) */
+#define GOLD1B_W      80     /* 10 cells @ 8 px: holds max gold "990000G" (7 small chars) with room. */
+/* Compose one FIXED-WIDTH list row -- 16-char name (space-padded) then, when priced, a right-aligned
+ * price in an 8-col field. Fixed width matters: a scroll redraw draws spaces over the previous row's
+ * cells, so a shorter new name leaves no leftover tail (ASCII space -> blank glyph, which clears).
+ * showPrice==0 or a 0 cost (an empty slot) leaves the price blank, matching the SJIS path. */
+static void ItemRow1Byte(u8 *row, const u8 *name, s16 cost, s32 showPrice) {
+   s32 i, done = 0, m = 0;
+   char tmp[8];
+   for (i = 0; i < 16; i++) { if (!done && name[i] == '\0') done = 1; row[i] = done ? ' ' : name[i]; }
+   for (i = 16; i < ITEM1B_COLS; i++) row[i] = ' ';
+   row[ITEM1B_COLS] = '\0';
+   if (showPrice && cost > 0) {
+      while (cost) { tmp[m++] = (char)('0' + cost % 10); cost /= 10; }         /* digits, reversed */
+      for (i = 0; i < m && i < 8; i++) row[ITEM1B_COLS - 1 - i] = (u8)tmp[i];  /* right-align */
+   }
+}
+/* Draw one list row at the choice pitch (28, 110 + row*17). Callers differ only in how they source
+ * the item id and cost: shop = full price, depot/sell = half price, view = no price. */
+static void DrawItemRow1Byte(s32 rowIdx, u8 item, s32 showPrice, s32 halfCost) {
+   u8 row[ITEM1B_COLS + 1];
+   s16 cost = (s16)(halfCost ? gItemCosts[item] / 2 : gItemCosts[item]);
+   ItemRow1Byte(row, gItemNamesSjis[item], cost, showPrice);
+   DrawText(28, (s16)(110 + rowIdx * ITEM1B_ROW_H), ITEM1B_COLS + 1, 0, 0, row);
+}
+static void DrawShopList1Byte(u8 shopId, u8 category, u8 top, u8 rows) {
+   s32 k;
+   for (k = 0; k < rows; k++)
+      DrawItemRow1Byte(k, gShopInventories[shopId][category][top + k], 1, 0);
+}
+static void DrawDepotList1Byte(s16 top, u8 rows, s32 showPrice) {  /* ids are s16 in gDepotInventoryPtr */
+   s32 k;
+   for (k = 0; k < rows; k++)
+      DrawItemRow1Byte(k, (u8)gDepotInventoryPtr[top + k], showPrice, 1);
+}
+static void DrawPartyItemList1Byte(s32 showPrice) {  /* the 5 equipped/carried slots */
+   s32 k;
+   for (k = 0; k < 5; k++)
+      DrawItemRow1Byte(k, gPartyMemberInventory[k], showPrice, 1);
+}
+/* One item name in the small font (confirm boxes) -- gItemNamesSjis holds plain ASCII in a 1-byte
+ * pack. Hard-truncate to maxChars (never wrap) so a long name clips at the box edge instead of
+ * spilling outside or dropping onto a second line. */
+static void DrawItemName1Byte(s16 x, s16 y, s32 color, u8 item, s32 maxChars) {
+   u8 buf[17];
+   const u8 *name = gItemNamesSjis[item];
+   s32 i;
+   if (maxChars > 16) maxChars = 16;
+   for (i = 0; i < maxChars && name[i] != '\0'; i++) buf[i] = name[i];
+   buf[i] = '\0';
+   DrawText(x, y, maxChars + 1, 0, color, buf);
+}
+/* The gold total in the small 8x9 font (ASCII), right-aligned inside the narrow box the widened list
+ * needs. Right-align so short totals sit against the same edge as "990000G" instead of drifting. */
+static void DrawGold1Byte(s32 gold) {
+   u8 buf[12];
+   char tmp[10];
+   s32 n = 0, m = 0, i;
+   if (gold <= 0) tmp[m++] = '0';
+   else { s32 g = gold; while (g) { tmp[m++] = (char)('0' + g % 10); g /= 10; } }
+   for (i = 0; i < m; i++) buf[n++] = (u8)tmp[m - 1 - i];
+   buf[n++] = 'G';
+   buf[n] = '\0';
+   /* right-align hard against the border (feedback-36: nudged the last few px right), backing off n
+    * glyphs (8 px each) -- keeps the amount against the right border instead of drifting left. */
+   DrawText((s16)(GOLD1B_X + GOLD1B_W + 2 - n * 8), 109, n + 1, 0, 0, buf);
+}
+#endif
+
 void ListShopInventory(u8 shopId, u8 category, u8 top, u8 rows, s32 unused) {
    u8 *pDst;
    u8 *pSrc;
@@ -844,9 +929,21 @@ void Objf406_ShopOrDepot(Object *obj) {
          gState.choices[2] = gMenuMem_ShopOrDepot[OBJ.category].ofs;
          gWindowChoiceHeight = 17;
          gWindowChoicesTopMargin = 10;
+#ifdef PC_FEAT
+         /* 1-byte item names span wider; give the list box one extra cell (208) so the right-aligned
+          * price hugs the border. Retail / non-langpack keeps the original 200. */
+         DrawWindow(0x3a, 0, 100, PC_LangItemNames1Byte() ? 208 : 200, 136, 84, 250, WBS_CROSSED,
+                    OBJ.shopRows);
+         if (PC_LangItemNames1Byte()) {
+            DrawShopList1Byte(OBJ.shopId, OBJ.category, OBJ.shopTop, OBJ.shopRows);
+         } else
+#else
          DrawWindow(0x3a, 0, 100, 200, 136, 84, 250, WBS_CROSSED, OBJ.shopRows);
-         ListShopInventory(OBJ.shopId, OBJ.category, OBJ.shopTop, OBJ.shopRows, 0);
-         DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
+#endif
+         {
+            ListShopInventory(OBJ.shopId, OBJ.category, OBJ.shopTop, OBJ.shopRows, 0);
+            DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
+         }
          DisplayCustomWindowWithSetChoice(0x3a, 5, 1, 50, 1, 0, gState.choices[2]);
          obj->state2++;
          break;
@@ -967,6 +1064,10 @@ void Objf406_ShopOrDepot(Object *obj) {
          OBJ.partyChoice = OBJ.partyTop + GetWindowChoice(0x3b);
          DrawSmallEquipmentWindow(gCurrentParty[OBJ.partyChoice - 1]);
          DrawWindow(0x3c, 256, 200, 128, 36, 108, 188, WBS_CROSSED, 0);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) DrawItemName1Byte(272, 210, 0, OBJ.itemToPurchase, ITEM1B_NAME_TIGHT);
+         else
+#endif
          DrawSjisText(272, 210, 19, 2, 0, gItemNamesSjis[OBJ.itemToPurchase]);
          DisplayCustomWindow(0x3c, 2, 1, 50, 1, 0);
          obj_v1 = Obj_GetUnused();
@@ -1471,6 +1572,10 @@ void Objf406_ShopOrDepot(Object *obj) {
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x3f, 0, 100, 200, 108, 10, 390, WBS_CROSSED, 5);
          ListPartyMemberInventory(OBJ.partyIdx1, 1);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) DrawPartyItemList1Byte(1);
+         else
+#endif
          DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
          gWindowActiveIdx = 0x3f;
          D_8012338C = 0x3f;
@@ -1558,6 +1663,10 @@ void Objf406_ShopOrDepot(Object *obj) {
                gPartyMembers[OBJ.partyIdx1].items[1] = ITEM_NULL;
             }
             ListPartyMemberInventory(OBJ.partyIdx1, 1);
+#ifdef PC_FEAT
+            if (PC_LangItemNames1Byte()) DrawPartyItemList1Byte(1);
+            else
+#endif
             DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
             DrawWindow(0x34, 0, 0, 312, 90, -400, -400, WBS_DRAGON, 0);
             DrawText(68, 20, 30, 2, 0, gTextPointers[35]);
@@ -1642,6 +1751,10 @@ void Objf406_ShopOrDepot(Object *obj) {
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x40, 0, 100, 200, 136, 90, 240, WBS_CROSSED, 7);
          ListDepotInventory(OBJ.depotCategory, OBJ.depotTop, 7, 0, 1);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) DrawDepotList1Byte(OBJ.depotTop, 7, 1);
+         else
+#endif
          DrawSjisText(28, 110, 30, 2, 0, sInventoryBuffer);
          DisplayCustomWindowWithSetChoice(0x40, 5, 1, 50, 1, 0, gState.choices[5]);
          gWindowActiveIdx = 0x40;
@@ -1723,6 +1836,10 @@ void Objf406_ShopOrDepot(Object *obj) {
             gState.depot[OBJ.itemToPurchase]--;
             DrawWindow(0x40, 0, 100, 200, 136, 84, 250, WBS_CROSSED, 7);
             ListDepotInventory(OBJ.depotCategory, OBJ.depotTop, 7, 0, 1);
+#ifdef PC_FEAT
+            if (PC_LangItemNames1Byte()) DrawDepotList1Byte(OBJ.depotTop, 7, 1);
+            else
+#endif
             DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
             DrawWindow(0x34, 0, 0, 312, 90, -400, -400, WBS_DRAGON, 0);
             DrawText(68, 20, 30, 2, 0, gTextPointers[43]);
@@ -1841,6 +1958,10 @@ void Objf406_ShopOrDepot(Object *obj) {
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x3f, 0, 100, 200, 108, 10, 390, WBS_CROSSED, 5);
          ListPartyMemberInventory(D_801F6D98, 0);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) DrawPartyItemList1Byte(0);
+         else
+#endif
          DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
          gWindowActiveIdx = 0x3f;
          D_8012338C = 0x3f;
@@ -1967,6 +2088,10 @@ void Objf406_ShopOrDepot(Object *obj) {
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x40, 0, 100, 200, 136, 10, 240, WBS_CROSSED, 7);
          ListDepotInventory(OBJ.depotCategory, OBJ.depotTop, 7, 0, 0);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) DrawDepotList1Byte(OBJ.depotTop, 7, 0);
+         else
+#endif
          DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
          DisplayCustomWindowWithSetChoice(0x40, 5, 1, 50, 1, 0,
                                           gMenuMem_ShopOrDepot[OBJ.depotCategory].ofs);
@@ -2037,6 +2162,10 @@ void Objf406_ShopOrDepot(Object *obj) {
          OBJ.partyChoice = OBJ.partyTop + GetWindowChoice(0x3b);
          DrawSmallEquipmentWindow(gCurrentParty[OBJ.partyChoice - 1]);
          DrawWindow(0x3c, 256, 200, 128, 36, 108, 188, WBS_CROSSED, 0);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) DrawItemName1Byte(272, 210, 0, D_801F6D94, ITEM1B_NAME_TIGHT);
+         else
+#endif
          DrawSjisText(272, 210, 19, 2, 0, gItemNamesSjis[D_801F6D94]);
          DisplayCustomWindow(0x3c, 2, 1, 50, 1, 0);
          obj_v1 = Obj_GetUnused();
@@ -2578,12 +2707,23 @@ void Objf406_ShopOrDepot(Object *obj) {
       OBJ.depotNeedsRedraw = 0;
       i = (obj->state < 51) ? 1 : 0;
       ListDepotInventory(OBJ.depotCategory, OBJ.depotTop, 7, 1, i);
+#ifdef PC_FEAT
+      if (PC_LangItemNames1Byte()) DrawDepotList1Byte(OBJ.depotTop, 7, i);
+      else
+#endif
       DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
    }
    if (OBJ.shopNeedsRedraw) {
       OBJ.shopNeedsRedraw = 0;
-      ListShopInventory(OBJ.shopId, OBJ.category, OBJ.shopTop, OBJ.shopRows, 1);
-      DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
+#ifdef PC_FEAT
+      if (PC_LangItemNames1Byte()) {
+         DrawShopList1Byte(OBJ.shopId, OBJ.category, OBJ.shopTop, OBJ.shopRows);
+      } else
+#endif
+      {
+         ListShopInventory(OBJ.shopId, OBJ.category, OBJ.shopTop, OBJ.shopRows, 1);
+         DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
+      }
    }
    if (OBJ.partyNeedsRedraw) {
       OBJ.partyNeedsRedraw = 0;
@@ -2601,11 +2741,25 @@ void Objf406_ShopOrDepot(Object *obj) {
    case 1:
       if (--OBJ.goldTimer == 0) {
          D_801F6D40 = gState.gold;
-         DrawWindow(0x36, 256, 98, 104, 36, 408, 90, WBS_CROSSED, 0);
-         EmbedIntAsSjis(D_801F6D40, sGoldBuffer, 6);
-         DrawSjisText(256, 109, 10, 2, 0, sGoldBuffer);
+#ifdef PC_FEAT
+         /* exchange/91: the 1-byte item list needs the right area, so shrink the gold box (104->72),
+          * draw the amount in the small font, and slide it right (208->241) to sit clear of the list. */
+         if (PC_LangItemNames1Byte()) {
+            DrawWindow(0x36, 256, 98, GOLD1B_W, 36, 408, 90, WBS_CROSSED, 0);
+            DrawGold1Byte(D_801F6D40);
+         } else
+#endif
+         {
+            DrawWindow(0x36, 256, 98, 104, 36, 408, 90, WBS_CROSSED, 0);
+            EmbedIntAsSjis(D_801F6D40, sGoldBuffer, 6);
+            DrawSjisText(256, 109, 10, 2, 0, sGoldBuffer);
+         }
          DisplayCustomWindow(0x36, 0, 1, 49, 0, 0);
+#ifdef PC_FEAT
+         SlideWindowTo(0x36, PC_LangItemNames1Byte() ? GOLD1B_X : 208, 90);
+#else
          SlideWindowTo(0x36, 208, 90);
+#endif
          OBJ.goldState++;
       }
       break;
@@ -2613,8 +2767,15 @@ void Objf406_ShopOrDepot(Object *obj) {
    case 2:
       if (D_801F6D40 != gState.gold) {
          D_801F6D40 = gState.gold;
-         EmbedIntAsSjis(gState.gold, sGoldBuffer, 6);
-         DrawSjisText(256, 109, 10, 2, 0, sGoldBuffer);
+#ifdef PC_FEAT
+         if (PC_LangItemNames1Byte()) {
+            DrawGold1Byte(gState.gold);
+         } else
+#endif
+         {
+            EmbedIntAsSjis(gState.gold, sGoldBuffer, 6);
+            DrawSjisText(256, 109, 10, 2, 0, sGoldBuffer);
+         }
       }
       break;
    }
