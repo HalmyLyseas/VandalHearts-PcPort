@@ -312,6 +312,10 @@ endforeach()
 # see 0 undefined symbols and produce an empty data segment. OpenGL: -lGL (Linux) / -lopengl32
 # (Win32 ICD loader). OpenAL: -lopenal (Linux) / -lOpenAL32 (MinGW import lib libOpenAL32.dll.a).
 if(WIN32)
+    set(_GEN_MINGW_SEARCH "")
+    if(VH_MINGW_PREFIX)
+        set(_GEN_MINGW_SEARCH "-L${VH_MINGW_PREFIX}/lib")
+    endif()
     set(_GEN_GL_LIB "-lopengl32")
     set(_GEN_AL_LIB "-lOpenAL32")
     set(_GEN_SDL_LIB "-lSDL2")
@@ -372,7 +376,7 @@ set(GEN_ENV
     "VH_CC=${CMAKE_C_COMPILER}"
     "VH_OBJ_FILES=$<JOIN:$<TARGET_OBJECTS:vh_objs>, >"
     "VH_PSX_EXE=${VH_PSX_EXE}"
-    "VH_LINK_LIBS=${_GEN_SDL_LIB} ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
+    "VH_LINK_LIBS=${_GEN_MINGW_SEARCH} ${_GEN_SDL_LIB} ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
 if(APPLE AND CMAKE_OSX_ARCHITECTURES)
     # CMake adds -arch to its own compile/link commands, but the data generator invokes clang
     # directly. Keep its undefined-symbol link and executable sizeof probe on the same slice(s).
@@ -451,7 +455,7 @@ if(WIN32)
     # which hides the game's stderr bootstrap/diagnostic prints (disc mount, window open, errors).
     # A console launch shows them; the SDL game window still opens either way. Switch back to GUI
     # (drop this / use -mwindows) for the clean end-user release once the Windows run is validated.
-    target_link_options(vandalhearts_pc PRIVATE -mconsole)
+    target_link_options(vandalhearts_pc PRIVATE -mconsole -Wl,--no-insert-timestamp)
 
     # Bundle the runtime DLLs next to the .exe so it runs on a stock Windows box (no MSYS on PATH).
     # SDL2/OpenAL are genuine third-party deps; the rest are the MinGW GCC runtime that they (and our
@@ -461,12 +465,28 @@ if(WIN32)
     #   libstdc++-6      C++ runtime (OpenAL-soft is C++)
     #   libssp-0         stack-protector runtime (-fstack-protector)
     # The UCRT (api-ms-win-crt-*) and OPENGL32/KERNEL32 are OS components on Win10+ and need no bundling.
-    set(_MINGW_BIN /usr/${MINGW_TARGET}/bin)
+    set(_MINGW_RUNTIME_DIRS /usr/${MINGW_TARGET}/bin
+        ${VH_MINGW_ROOT}/${MINGW_TARGET}/bin ${VH_MINGW_ROOT}/${MINGW_TARGET}/lib
+        ${VH_MINGW_ROOT}/mingw/bin ${VH_MINGW_ROOT}/mingw/lib)
+    if(VH_MINGW_PREFIX)
+        list(PREPEND _MINGW_RUNTIME_DIRS ${VH_MINGW_PREFIX}/bin ${VH_MINGW_PREFIX}/lib)
+    endif()
+    foreach(_runtime_probe libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll libssp-0.dll)
+        execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=${_runtime_probe}
+            OUTPUT_VARIABLE _runtime_path OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(IS_ABSOLUTE "${_runtime_path}" AND EXISTS "${_runtime_path}")
+            get_filename_component(_runtime_dir "${_runtime_path}" DIRECTORY)
+            list(APPEND _MINGW_RUNTIME_DIRS "${_runtime_dir}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES _MINGW_RUNTIME_DIRS)
     foreach(_dll SDL2.dll OpenAL32.dll libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll libssp-0.dll)
-        if(EXISTS ${_MINGW_BIN}/${_dll})
+        unset(_MINGW_DLL CACHE)
+        find_file(_MINGW_DLL NAMES ${_dll} PATHS ${_MINGW_RUNTIME_DIRS} NO_DEFAULT_PATH)
+        if(_MINGW_DLL)
             add_custom_command(TARGET vandalhearts_pc POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        ${_MINGW_BIN}/${_dll} $<TARGET_FILE_DIR:vandalhearts_pc>
+                        ${_MINGW_DLL} $<TARGET_FILE_DIR:vandalhearts_pc>
                 COMMENT "Bundling ${_dll} next to the .exe")
         endif()
     endforeach()
@@ -474,8 +494,13 @@ if(WIN32)
     # webpdecoder/demux/mux siblings), and the SONAME digit varies by distro (Arch: libwebp.dll; Debian:
     # libwebp-7.dll) -- so match "libwebp.dll" and "libwebp-<n>.dll" but not "libwebpdecoder.dll" etc.
     if(VH_WEBP)
-        file(GLOB _WEBP_DLLS ${_MINGW_BIN}/libwebp.dll ${_MINGW_BIN}/libwebp-*.dll
-                             ${_MINGW_BIN}/libsharpyuv.dll ${_MINGW_BIN}/libsharpyuv-*.dll)
+        set(_WEBP_DLLS)
+        foreach(_runtime_dir ${_MINGW_RUNTIME_DIRS})
+            file(GLOB _found_webp ${_runtime_dir}/libwebp.dll ${_runtime_dir}/libwebp-*.dll
+                                  ${_runtime_dir}/libsharpyuv.dll ${_runtime_dir}/libsharpyuv-*.dll)
+            list(APPEND _WEBP_DLLS ${_found_webp})
+        endforeach()
+        list(REMOVE_DUPLICATES _WEBP_DLLS)
         foreach(_wd ${_WEBP_DLLS})
             add_custom_command(TARGET vandalhearts_pc POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_wd} $<TARGET_FILE_DIR:vandalhearts_pc>
@@ -488,10 +513,16 @@ if(WIN32)
     # copy what the MinGW package ships. NOTE: verify the full runtime DLL set once mingw-w64-ffmpeg is
     # installed and a Windows release is built (a missing transitive dep shows as a load error at launch).
     if(VH_HDVIDEO)
-        file(GLOB _AV_DLLS ${_MINGW_BIN}/avformat*.dll ${_MINGW_BIN}/avcodec*.dll ${_MINGW_BIN}/avutil*.dll
-                           ${_MINGW_BIN}/swscale*.dll ${_MINGW_BIN}/swresample*.dll
-                           ${_MINGW_BIN}/libavformat*.dll ${_MINGW_BIN}/libavcodec*.dll
-                           ${_MINGW_BIN}/libavutil*.dll ${_MINGW_BIN}/libswscale*.dll)
+        set(_AV_DLLS)
+        foreach(_runtime_dir ${_MINGW_RUNTIME_DIRS})
+            file(GLOB _found_av ${_runtime_dir}/avformat*.dll ${_runtime_dir}/avcodec*.dll
+                                ${_runtime_dir}/avutil*.dll ${_runtime_dir}/swscale*.dll
+                                ${_runtime_dir}/swresample*.dll ${_runtime_dir}/libavformat*.dll
+                                ${_runtime_dir}/libavcodec*.dll ${_runtime_dir}/libavutil*.dll
+                                ${_runtime_dir}/libswscale*.dll)
+            list(APPEND _AV_DLLS ${_found_av})
+        endforeach()
+        list(REMOVE_DUPLICATES _AV_DLLS)
         foreach(_ad ${_AV_DLLS})
             add_custom_command(TARGET vandalhearts_pc POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_ad} $<TARGET_FILE_DIR:vandalhearts_pc>

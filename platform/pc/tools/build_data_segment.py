@@ -235,8 +235,10 @@ def find_undefined_symbols():
         libs = (sh(['pkg-config', '--libs', 'sdl2'], env=PKG_CONFIG_32_ENV).stdout.split()
                 + sh(['pkg-config', '--libs', 'openal'], env=PKG_CONFIG_32_ENV).stdout.split()
                 + ['-lGL', '-lm'])
-    # Only the undefined-symbol NAMES matter here (they don't depend on the link succeeding), so a
-    # missing lib just leaves more names undefined -- harmless for discovery.
+    # Only the undefined-symbol NAMES matter here, and a normal probe intentionally fails with those
+    # names. A failure that yields no names is different: a missing library, bad output path, or
+    # incompatible object can stop ld before symbol discovery. Continuing would emit an empty data
+    # segment and defer the real error to a huge, misleading final-link failure.
     r = sh([*CC_CMD, *M32, *SAN, *objs, *libs,
             '-o', f'{WORK_DIR}/symprobe'])   # scratch target -- never the real binary
     link_output = r.stderr + '\n' + r.stdout
@@ -248,8 +250,8 @@ def find_undefined_symbols():
     for m in re.finditer(r'^\s+"_([A-Za-z_]\w*)", referenced from:', link_output, re.MULTILINE):
         names.add(m.group(1))
     if r.returncode != 0 and not names:
-        print("probe link failed before yielding undefined symbols:\n" +
-              "\n".join(link_output.splitlines()[:20]), file=sys.stderr)
+        raise SystemExit("probe link failed before yielding undefined symbols:\n" +
+                         "\n".join(link_output.splitlines()[:20]))
     return sorted(names), r.returncode == 0
 
 

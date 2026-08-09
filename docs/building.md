@@ -128,8 +128,9 @@ PSX-RAM arena the port reserves. UBSan has no shadow, so it works at 64-bit.
 
 ## Cross-compiling for Windows
 
-A 64-bit Windows `.exe` is cross-compiled **from Linux** with the MinGW-w64 toolchain — no Windows
-machine is needed to build (only to run). Full detail in [cross-platform.md](cross-platform.md).
+A 64-bit Windows `.exe` is cross-compiled from Linux or macOS with the MinGW-w64 toolchain — no
+Windows machine is needed to build (only to run). Full detail in
+[cross-platform.md](cross-platform.md).
 
 ```sh
 # toolchain: mingw-w64-gcc (pulls binutils/crt/headers/winpthreads)
@@ -138,6 +139,10 @@ cd platform/pc
 cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake
 cmake --build build_win
 ```
+
+On macOS, install Homebrew `mingw-w64`, cross-build SDL2/OpenAL into an external target prefix, and
+pass that prefix as `-DVH_MINGW_PREFIX=/path/to/prefix`. The toolchain obtains Homebrew's versioned
+compiler sysroot from `x86_64-w64-mingw32-gcc -print-sysroot`; no Homebrew path is committed.
 
 The result is a self-contained `build_win/` folder: `vandalhearts_pc.exe`, `vandalhearts.ini`, and the
 runtime DLLs (SDL2, OpenAL, and the MinGW runtime) copied in beside it — ready to zip and run on a

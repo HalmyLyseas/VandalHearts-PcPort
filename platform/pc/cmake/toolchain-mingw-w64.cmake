@@ -14,13 +14,26 @@
 set(CMAKE_SYSTEM_NAME Windows)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
-set(MINGW_TARGET x86_64-w64-mingw32)
+set(MINGW_TARGET x86_64-w64-mingw32 CACHE STRING "MinGW-w64 target triple")
 set(CMAKE_C_COMPILER   ${MINGW_TARGET}-gcc)
 set(CMAKE_CXX_COMPILER ${MINGW_TARGET}-g++)
 set(CMAKE_RC_COMPILER  ${MINGW_TARGET}-windres)
 
-# The toolchain's sysroot: where mingw headers/import-libs (and the AUR SDL2/OpenAL) live.
-set(CMAKE_FIND_ROOT_PATH /usr/${MINGW_TARGET})
+# The target sysroot. Linux distributions conventionally install it under /usr; Homebrew keeps it
+# inside its versioned keg, so ask the compiler when the Linux location is absent. VH_MINGW_PREFIX
+# may point at an additional target prefix containing cross-built SDL2/OpenAL/etc.
+set(_VH_DEFAULT_MINGW_ROOT /usr/${MINGW_TARGET})
+if(NOT EXISTS "${_VH_DEFAULT_MINGW_ROOT}")
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -print-sysroot
+        OUTPUT_VARIABLE _VH_DEFAULT_MINGW_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY)
+endif()
+set(VH_MINGW_ROOT "${_VH_DEFAULT_MINGW_ROOT}" CACHE PATH "MinGW compiler target sysroot")
+set(VH_MINGW_PREFIX "" CACHE PATH "Additional MinGW target dependency prefix")
+set(CMAKE_FIND_ROOT_PATH "${VH_MINGW_ROOT}")
+if(VH_MINGW_PREFIX)
+    list(APPEND CMAKE_FIND_ROOT_PATH "${VH_MINGW_PREFIX}")
+endif()
 
 # 1.6: an extra prefix for a locally-built STATIC libav (the HD-video decoder) can be searched too.
 # With MODE ONLY below, find_library/find_path only look under CMAKE_FIND_ROOT_PATH, so a host

@@ -32,8 +32,8 @@ well as macOS. The matching PS1 branches remain separate and byte-identical.
 
 ## Windows (MinGW-w64)
 
-The Windows `.exe` is **cross-compiled from Linux** — no Windows machine is needed to build, only to
-run. MinGW-w64 was chosen over MSVC precisely for this: it keeps a GCC frontend (so the existing
+The Windows `.exe` is **cross-compiled from Linux or macOS** — no Windows machine is needed to build,
+only to run. MinGW-w64 was chosen over MSVC precisely for this: it keeps a GCC frontend (so the existing
 `-fsanitize`, `__attribute__`, and GCC-isms carry over) and can produce native Windows PE binaries
 from Linux. Crucially it is **not** Cygwin — the output is an ordinary Win32 binary with no POSIX
 emulation DLL; its only real dependencies are our own (SDL2, OpenAL) plus the MinGW runtime.
@@ -57,7 +57,9 @@ cmake --build build_win
 ```
 
 The toolchain file (`cmake/toolchain-mingw-w64.cmake`) points CMake at the `x86_64-w64-mingw32`
-compilers and the sysroot. Win64 is LLP64 (`long` is 32-bit), which is harmless here because the
+compilers and their sysroot. Its Linux default remains `/usr/x86_64-w64-mingw32`; on Homebrew it asks
+the compiler for the versioned sysroot and accepts an external dependency prefix through
+`-DVH_MINGW_PREFIX=/path/to/prefix`. Win64 is LLP64 (`long` is 32-bit), which is harmless here because the
 64-bit port already mapped PSX `long`→`int` (see [memory-safety.md](memory-safety.md)).
 
 ### What the port needed for Windows
