@@ -1,12 +1,13 @@
-/* SDL2+OpenGL windowing glue for the GPU backend -- kept separate from
+/* SDL2 windowing/presentation glue for the GPU backend -- kept separate from
  * libgpu.c (the actual VRAM/rasterizer/OT hardware model) the same way
  * libspu.c is kept separate from libsnd.c: one file understands PSX
  * semantics, the other understands the host windowing API. Deliberately
- * minimal (glDrawPixels, no shaders/VBOs) -- this only needs to prove the
- * SDL2+OpenGL presentation path works, matching the project's Pad/VSync POC
- * precedent of proving the mechanism before building it out further. */
+ * The PS1 rasterizer remains software-only. SDL presents its completed RGB
+ * framebuffer through Metal on macOS and OpenGL on the other desktop targets. */
 #include <SDL2/SDL.h>
+#if !defined(__APPLE__)
 #include <SDL2/SDL_opengl.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,7 +15,13 @@
 #include "pc_overlay.h"
 
 static SDL_Window *s_window;
+#if defined(__APPLE__)
+static SDL_Renderer *s_renderer;
+static SDL_Texture *s_presentTexture;
+static int s_textureW, s_textureH;
+#else
 static SDL_GLContext s_glCtx;
+#endif
 static int s_winW, s_winH;               /* actual (scaled) window size */
 
 /* Overlay-facing video settings (Stage-3 1.2a). g_vhScale is the VH_SCALE integer factor (1..8);
@@ -31,7 +38,7 @@ static int s_scratchCap;
 /* --- Debug camera OSD (feedback-11 follow-up) ------------------------------
  * A tiny self-contained 5x7 bitmap font (subset: 0-9, '-', ' ', ':', ',', '(',
  * ')', and the letters used in the label) blitted straight into s_rgbaScratch
- * before glDrawPixels, so no GL text stack is needed. Enabled via VH_CAM_OSD. */
+ * before host presentation, so no platform text stack is needed. Enabled via VH_CAM_OSD. */
 char g_camOsdText[96] = "";
 
 /* Each glyph: 7 rows, low 5 bits = columns (bit4 = leftmost). */
@@ -275,6 +282,7 @@ static void drawSaves(int w, int h) {
     static const char *EMPTY = "(NO BACKUPS YET)";
     const int MAXVIS = 6;
     const char *title = PC_OverlayTitle();
+    const char *status = PC_OverlaySaveStatus();
     int count = PC_OverlaySaveCount(), sel = PC_OverlaySaveSelected();
     int scale, i, base, visN, scrollOff = 0, showPos, bodyLines;
     int padX, padY, lineH, titleGap, panelW, panelH, px, py, ty;
@@ -285,6 +293,7 @@ static void drawSaves(int w, int h) {
     if (ovlTextPx(L2, 1) > base) base = ovlTextPx(L2, 1);
     if (ovlTextPx(L3, 1) > base) base = ovlTextPx(L3, 1);
     if (count == 0 && ovlTextPx(EMPTY, 1) > base) base = ovlTextPx(EMPTY, 1);
+    if (status && status[0] && ovlTextPx(status, 1) > base) base = ovlTextPx(status, 1);
     for (i = 0; i < count; i++) { int lw = ovlTextPx(PC_OverlaySaveLabel(i), 1); if (lw > base) base = lw; }
 
     visN = (count < MAXVIS) ? count : MAXVIS;
@@ -295,7 +304,7 @@ static void drawSaves(int w, int h) {
         if (scrollOff > count - MAXVIS) scrollOff = count - MAXVIS;
     }
     showPos = (count > MAXVIS) ? 1 : 0;
-    bodyLines = visN + showPos + 1 /*separator*/ + 3 /*legend*/;
+    bodyLines = visN + showPos + ((status && status[0]) ? 1 : 0) + 1 /*separator*/ + 3 /*legend*/;
 
     scale = ovlSharedScale(w);   /* all screens use the main list's scale (consistent) */
     padX = OVL_PADX1 * scale; padY = OVL_PADY1 * scale; lineH = OVL_LINE1 * scale; titleGap = OVL_TGAP1 * scale;
@@ -325,6 +334,12 @@ static void drawSaves(int w, int h) {
     if (showPos) {
         snprintf(posbuf, sizeof(posbuf), "( %d / %d )", sel + 1, count);
         ovlText(w, h, px + (panelW - ovlTextPx(posbuf, scale)) / 2, ty, scale, posbuf, 130, 134, 142);
+        ty += lineH;
+    }
+    if (status && status[0]) {
+        int bad = strstr(status, "FAILED") != NULL || strstr(status, "INVALID") != NULL;
+        ovlText(w, h, px + (panelW - ovlTextPx(status, scale)) / 2, ty, scale, status,
+                bad ? 235 : 150, bad ? 112 : 210, bad ? 112 : 160);
         ty += lineH;
     }
     ovlFillRect(w, h, px + padX, ty + OVL_GLY1 * scale / 2, panelW - 2 * padX, 1, 92, 108, 134, 200);
@@ -436,7 +451,7 @@ int PC_GpuInit(int width, int height, const char *title) {
          * SDL2's native Wayland backend crashed during EGL setup ("Proxy and queue point to
          * different wl_displays") -- but ONLY while pc_bootstrap.c mapped page 0
          * (PSX_NULL_MIRROR_BASE) to absorb transient NULL reads. Stage 2.2/2.3 removed that mapping
-         * (NULL reads are handled by per-site PC_PORT guards + the fault handler, no page-0 mapping),
+         * (known NULL reads have per-site PC_PORT guards; Linux i386 also has a fault-handler net),
          * so the trigger is gone: verified by running native Wayland with the current build, full
          * speed, no crash. */
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return 0;
@@ -464,11 +479,37 @@ int PC_GpuInit(int width, int height, const char *title) {
         PC_GpuSetInternalScale(isc ? atoi(isc) : 1);   /* resolve g_vhInternalScale (1 = off) */
     }
     s_window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                 width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                                 width, height,
+#if defined(__APPLE__)
+                                 SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+#else
+                                 SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+#endif
     if (!s_window) return 0;
     s_winW = width; s_winH = height;   /* the real (scaled) window size, for PC_GpuGetWindowSize */
     if (g_vhFullscreen)                /* apply the persisted fullscreen preference at startup */
         SDL_SetWindowFullscreen(s_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+#if defined(__APPLE__)
+    {
+        SDL_RendererInfo info;
+        int i, metalDriver = -1;
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+        for (i = 0; i < SDL_GetNumRenderDrivers(); i++) {
+            if (SDL_GetRenderDriverInfo(i, &info) == 0 && info.name && strcmp(info.name, "metal") == 0) {
+                metalDriver = i;
+                break;
+            }
+        }
+        if (metalDriver >= 0)
+            s_renderer = SDL_CreateRenderer(s_window, metalDriver, SDL_RENDERER_ACCELERATED);
+        if (!s_renderer) {
+            fprintf(stderr, "PC_Gpu: Metal renderer unavailable: %s\n", SDL_GetError());
+            SDL_DestroyWindow(s_window); s_window = NULL; return 0;
+        }
+        SDL_GetRendererInfo(s_renderer, &info);
+        fprintf(stderr, "PC_Gpu: presentation renderer=%s\n", info.name ? info.name : "unknown");
+    }
+#else
     s_glCtx = SDL_GL_CreateContext(s_window);
     if (!s_glCtx) { SDL_DestroyWindow(s_window); s_window = NULL; return 0; }
     /* Explicitly OFF, not on. The game's own VSync() (src/libetc.c) already
@@ -486,6 +527,7 @@ int PC_GpuInit(int width, int height, const char *title) {
      * under a compositor. */
     SDL_GL_SetSwapInterval(0);
     glViewport(0, 0, width, height);
+#endif
     return 1;
 }
 
@@ -549,7 +591,7 @@ void PC_GpuSetMovieOverlayRGB(const unsigned char *rgb, int w, int h) {
     s_movieOverlayRGB = rgb; s_movieOverlay = NULL; s_movieOvW = w; s_movieOvH = h;
 }
 
-/* VH_PRESENT_TIME=1: phase timing for the present path (convert / OSD / GL submit+swap), mean over
+/* VH_PRESENT_TIME=1: phase timing for the present path (convert / OSD / host submit+present), mean over
  * 120-frame windows -- the raster has VH_RASTER_TIME, this is its display-side counterpart. */
 static double presentNowMs(void) {
     return (double)SDL_GetPerformanceCounter() * 1000.0 / (double)SDL_GetPerformanceFrequency();
@@ -558,11 +600,15 @@ static double presentNowMs(void) {
 void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
                     int x, int y, int w, int h) {
     int px, py;
-    static int s_ptTime = -1; static double s_ptConv, s_ptOsd, s_ptGl; static unsigned s_ptN;
+    static int s_ptTime = -1; static double s_ptConv, s_ptOsd, s_ptPresent; static unsigned s_ptN;
     double pt0 = 0, pt1 = 0, pt2 = 0, pt3 = 0;
     (void)vramH;
 
+#if defined(__APPLE__)
+    if (!s_window || !s_renderer) return; /* headless: no-op */
+#else
     if (!s_window || !s_glCtx) return; /* headless: no-op */
+#endif
     if (s_ptTime < 0) s_ptTime = getenv("VH_PRESENT_TIME") ? 1 : 0;
     if (s_ptTime) pt0 = presentNowMs();
 
@@ -652,7 +698,12 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     {
         int winW = w, winH = h, vpW, vpH, vpX, vpY;
         float srcAspect = (float)w / (float)h;
+#if defined(__APPLE__)
+        SDL_Rect dst;
+        SDL_GetRendererOutputSize(s_renderer, &winW, &winH);
+#else
         SDL_GL_GetDrawableSize(s_window, &winW, &winH);
+#endif
         if (winW < 1) winW = 1;
         if (winH < 1) winH = 1;
         vpW = winW;
@@ -661,23 +712,47 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         vpX = (winW - vpW) / 2;
         vpY = (winH - vpH) / 2;
 
+#if defined(__APPLE__)
+        if (!s_presentTexture || s_textureW != w || s_textureH != h) {
+            if (s_presentTexture) SDL_DestroyTexture(s_presentTexture);
+            s_presentTexture = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_RGB24,
+                                                  SDL_TEXTUREACCESS_STREAMING, w, h);
+            s_textureW = w; s_textureH = h;
+            if (!s_presentTexture) {
+                fprintf(stderr, "PC_Gpu: could not create Metal presentation texture: %s\n", SDL_GetError());
+                return;
+            }
+            SDL_SetTextureScaleMode(s_presentTexture, SDL_ScaleModeNearest);
+        }
+        SDL_UpdateTexture(s_presentTexture, NULL, s_rgbaScratch, w * 3);
+        SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+        SDL_RenderClear(s_renderer);
+        dst.x = vpX; dst.y = vpY; dst.w = vpW; dst.h = vpH;
+        /* s_rgbaScratch is bottom-up to preserve the original GL path and overlay addressing. */
+        SDL_RenderCopyEx(s_renderer, s_presentTexture, NULL, &dst, 0.0, NULL, SDL_FLIP_VERTICAL);
+#else
         glViewport(0, 0, winW, winH);
         glClear(GL_COLOR_BUFFER_BIT);          /* black letterbox bars */
         glViewport(vpX, vpY, vpW, vpH);
         glPixelZoom((float)vpW / (float)w, (float)vpH / (float)h);
         glRasterPos2f(-1.0f, -1.0f);           /* bottom-left of the viewport */
         glDrawPixels(w, h, GL_RGB, GL_UNSIGNED_BYTE, s_rgbaScratch);
+#endif
     }
     if (s_ptTime) pt2 = presentNowMs();
+#if defined(__APPLE__)
+    SDL_RenderPresent(s_renderer);
+#else
     SDL_GL_SwapWindow(s_window);
+#endif
     if (s_ptTime) {
         pt3 = presentNowMs();
-        s_ptConv += pt1 - pt0; s_ptOsd += pt2 - pt1; s_ptGl += pt3 - pt2;
+        s_ptConv += pt1 - pt0; s_ptOsd += pt2 - pt1; s_ptPresent += pt3 - pt2;
         if (++s_ptN >= 120) {
-            fprintf(stderr, "[present] convert=%.2f osd+ovl=%.2f gl+swap=%.2f total=%.2f ms/frame (%u frames)\n",
-                    s_ptConv / s_ptN, s_ptOsd / s_ptN, s_ptGl / s_ptN,
-                    (s_ptConv + s_ptOsd + s_ptGl) / s_ptN, s_ptN);
-            s_ptConv = s_ptOsd = s_ptGl = 0; s_ptN = 0;
+            fprintf(stderr, "[present] convert=%.2f osd+ovl=%.2f submit+present=%.2f total=%.2f ms/frame (%u frames)\n",
+                    s_ptConv / s_ptN, s_ptOsd / s_ptN, s_ptPresent / s_ptN,
+                    (s_ptConv + s_ptOsd + s_ptPresent) / s_ptN, s_ptN);
+            s_ptConv = s_ptOsd = s_ptPresent = 0; s_ptN = 0;
         }
     }
 }

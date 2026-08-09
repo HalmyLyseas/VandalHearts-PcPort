@@ -36,7 +36,7 @@ long long PC_CdImageBytes(void);  /* mounted image size (-1 if none) -- the trun
  * hang the game silently instead). */
 void PC_FatalDiscError(const char *title, const char *body, const char *path);
 
-/* Opens an SDL2+OpenGL window for the GPU backend to present into. Optional:
+/* Opens an SDL2 host window for the GPU backend to present into (Metal on macOS, OpenGL elsewhere). Optional:
  * if never called, PC_GpuPresent() below just no-ops the windowing part,
  * so libgpu.c's VRAM/rasterizer/OT logic is fully testable headlessly.
  * Returns nonzero on success. */

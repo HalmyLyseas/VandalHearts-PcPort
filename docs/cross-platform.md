@@ -1,31 +1,39 @@
 # Cross-platform (Windows, Linux packaging & macOS)
 
-The port targets Linux, Windows, and — in principle — macOS. Linux and Windows are both built and
-validated; macOS is scaffolded but not pursued (see the end of this page). This is Stage 2.4 of the
-roadmap.
+The port targets Linux, Windows, and macOS. Linux and Windows have full-playthrough validation. The
+native Apple Silicon build has been validated through the first battle and surrounding game systems
+(see the end of this page). This is Stage 2.4 of the roadmap.
 
 ## The portability model
 
-The backends are ordinary portable C over SDL2 / OpenAL / OpenGL, so most of the code is
+The backends are ordinary portable C over SDL2 / OpenAL and a thin host presentation layer, so most of the code is
 platform-neutral. The OS-specific surface is small and concentrated in `platform/pc/src/pc_bootstrap.c`
-plus a couple of build shims. The three things that genuinely differ per OS:
+plus a couple of build shims. The few things that genuinely differ per OS:
 
 | Concern | Linux | Windows | macOS |
 |---|---|---|---|
 | Executable's own path (`PC_GetExePath`) | `/proc/self/exe` | `GetModuleFileNameA` | `_NSGetExecutablePath` |
-| Reserve the fixed PSX RAM ranges | `mmap(MAP_FIXED)` | `VirtualAlloc` | `mmap` (untested) |
-| Make read-only data writable at startup | `dl_iterate_phdr` + `mprotect` | PE section walk + `VirtualProtect` | dyld walk — **stub** |
-| Fault handler (safety net) | POSIX `sigaction` | not needed (see below) | not implemented (ARM) |
+| Reserve the fixed PSX RAM ranges | `mmap(MAP_FIXED)` | `VirtualAlloc` | not used; host-backed work buffers |
+| Make read-only data writable at startup | `dl_iterate_phdr` + `mprotect` | PE section walk + `VirtualProtect` | dyld section walk + `mprotect` |
+| Fault handler (safety net) | POSIX diagnostics; low-read fixup on i386 only | not implemented; source guards + startup remap | not implemented; crashes on an unguarded low read |
+| Present the software framebuffer | SDL2 + OpenGL | SDL2 + OpenGL | SDL2 Metal renderer |
 
-The fault handler is a *net*, not the primary mechanism: the 64-bit build absorbs transient NULL reads
-with source-level `PC_PORT` guards, and the startup remap handles read-only-data writes. So Windows
-needs no signal machinery at all to run — the POSIX handler is simply compiled out there. See
-[memory-safety.md](memory-safety.md).
+The Linux i386 fault handler is a load-bearing safety net for retail behavior that still performs
+low/NULL reads; source-level `PC_PORT` guards cover known high-traffic sites, and the startup remap
+separately handles read-only-data writes. Windows and macOS do not implement the low-read instruction
+fixup. The PC string-table constructor therefore normalizes the 12 retail NULL slots and the added
+entry-100 sentinel to a stable empty string on every host. That removes the known table-specific
+crash, but any other unguarded low-pointer path will still crash on macOS. See
+[memory-safety.md](memory-safety.md) and [known_issues.md](known_issues.md).
+
+The host-backed sound work RAM, scratchpad, movie ring, and string-table changes are gated by
+`PC_PORT`, not by `__APPLE__`: they therefore change native runtime behavior on Linux and Windows as
+well as macOS. The matching PS1 branches remain separate and byte-identical.
 
 ## Windows (MinGW-w64)
 
-The Windows `.exe` is **cross-compiled from Linux** — no Windows machine is needed to build, only to
-run. MinGW-w64 was chosen over MSVC precisely for this: it keeps a GCC frontend (so the existing
+The Windows `.exe` is **cross-compiled from Linux or macOS** — no Windows machine is needed to build,
+only to run. MinGW-w64 was chosen over MSVC precisely for this: it keeps a GCC frontend (so the existing
 `-fsanitize`, `__attribute__`, and GCC-isms carry over) and can produce native Windows PE binaries
 from Linux. Crucially it is **not** Cygwin — the output is an ordinary Win32 binary with no POSIX
 emulation DLL; its only real dependencies are our own (SDL2, OpenAL) plus the MinGW runtime.
@@ -49,7 +57,9 @@ cmake --build build_win
 ```
 
 The toolchain file (`cmake/toolchain-mingw-w64.cmake`) points CMake at the `x86_64-w64-mingw32`
-compilers and the sysroot. Win64 is LLP64 (`long` is 32-bit), which is harmless here because the
+compilers and their sysroot. Its Linux default remains `/usr/x86_64-w64-mingw32`; on Homebrew it asks
+the compiler for the versioned sysroot and accepts an external dependency prefix through
+`-DVH_MINGW_PREFIX=/path/to/prefix`. Win64 is LLP64 (`long` is 32-bit), which is harmless here because the
 64-bit port already mapped PSX `long`→`int` (see [memory-safety.md](memory-safety.md)).
 
 ### What the port needed for Windows
@@ -58,7 +68,8 @@ Six things, all guarded so the Linux build is untouched:
 
 1. **`pc_bootstrap.c`** — Win32 branches: `VirtualAlloc` for the fixed PSX RAM ranges, a
    `VirtualProtect` PE-section walk for the read-only-data remap, and all the POSIX
-   signal/backtrace/ucontext code compiled out (the 64-bit build needs no fault handler).
+   signal/backtrace/ucontext code compiled out. Windows has no low-read emulation; known paths require
+   source guards or normalized host data.
 2. **`include/pc_win_compat.h`** — MinGW's `<sys/types.h>` lacks the BSD `u_char`/`u_short`/… aliases
    the clean-room PsyQ headers use (glibc supplies them); this shim defines them, force-included on
    Windows only.
@@ -260,24 +271,39 @@ Both stage under `platform/pc/dist/release/<tag>/` (gitignored) with `SHA256SUMS
 `RELEASE_NOTES.md`. Prereqs: `mingw-w64-gcc`, the `vh-deb12` container (see *Building a release* above),
 and `github-cli` authenticated (`gh auth login`).
 
-## macOS (Apple Silicon) — scaffolded, not pursued
+## macOS — native and Universal 2 builds
 
-macOS is **deliberately deprioritized**. Unlike Windows, it can't be cleanly cross-compiled from Linux:
-it needs Apple's macOS SDK (licensed to Apple hardware), an `osxcross`-style toolchain built from an
-extracted Xcode SDK (legally gray and fiddly), and Apple-Silicon binaries additionally require
-code-signing to launch — none of which is clean off a Mac. Realistically it would be a *native* clang
-build on the Mac itself, not a cross-compile.
+The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
+cutscenes, HD movies/backgrounds, world map, towns, shops, saves, Tactical Mode and 2× battle speed.
+The SDL2 presentation layer explicitly selects Metal and the binary has no OpenGL framework dependency.
+A dependency-minimal Universal 2 binary has passed the boot-to-title smoke test as both native arm64
+and forced x86_64 under Rosetta on Apple Silicon. A source-only local `.app` recipe is implemented and
+ad-hoc signing is validated for both slices. A complete Intel-hardware/full-game playthrough and Apple
+notarisation have not been done.
 
-The groundwork is nonetheless in place, at no cost to the other targets: the `__APPLE__` branches
-(`_NSGetExecutablePath`, the `mmap` reservations) and guarded platform includes already exist. What
-remains for anyone who wants to finish it on-device:
+```sh
+brew install cmake sdl2 openal-soft webp ffmpeg
 
-- Implement `PC_MakeRodataWritable` for macOS — a dyld segment walk (`_dyld_get_image_header` +
-  `getsegbyname` on `__DATA`/`__DATA_CONST`) + `mprotect`. This is the one real code gap; it's marked
-  as a stub in `pc_bootstrap.c`.
-- The fault-handler safety net is x86-specific (it reads the x86 page-fault write bit); on ARM it would
-  need its own port, but with the startup remap done it may not be needed.
-- `brew install sdl2 openal-soft`, a CMake toolchain/preset for `arm64-apple-darwin`, and the usual
-  per-OS validation of window/audio/paths.
+cd platform/pc
+cmake -S . -B build-macos \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix sdl2);$(brew --prefix openal-soft);$(brew --prefix webp);$(brew --prefix ffmpeg)" \
+  -DVH_PSX_EXE=/absolute/path/to/SLUS_004.47 \
+  -DVH_KROM_SOURCE=/absolute/path/to/SCPH5500.BIN
+cmake --build build-macos -j
 
-Treat macOS as community/future work, not an active target.
+VH_DISC_IMAGE=/absolute/path/to/Vandal_Hearts_USA.bin \
+  ./build-macos/vandalhearts_pc
+```
+
+The build-time generators require a byte-exact US PS1 executable and either `KROMDAT.BIN` or a
+Japanese PS1 BIOS containing the kanji ROM; supply these from legally owned copies. Apple Silicon
+cannot use the Linux port's fixed low-address work buffers because arm64 Mach-O reserves the low
+4 GB. The native port therefore uses host storage for those buffers while preserving PS1 offsets.
+WebP backgrounds and FFmpeg HD video are enabled by default. They can be omitted from a minimal build
+with `-DVH_WEBP=OFF -DVH_HDVIDEO=OFF`.
+
+For the reproducible Universal 2 command, official SDL framework hash, external game-data layout, and
+local signing recipe, see [`platform/pc/packaging/macos/README.md`](../platform/pc/packaging/macos/README.md).
+The generated executable embeds data reconstructed from the user's game/BIOS inputs, so generated apps
+remain local and gitignored; the recipe never uploads an app or places a disc, BIOS, HD pack, or save
+inside the signed bundle.

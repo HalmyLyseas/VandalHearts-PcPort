@@ -17,6 +17,7 @@
 #include "pc_saves.h"      /* archive list + backup/restore/delete */
 #include "pc_balance.h"    /* gTacticalMode, PC_SyncBalance, PC_AtTitleMenu (no game headers) */
 #include <stddef.h>
+#include <stdlib.h>        /* free */
 #include <stdio.h>         /* snprintf */
 #include <string.h>        /* strncpy */
 
@@ -210,16 +211,16 @@ static Item s_items[] = {
 
 /* ---- state ------------------------------------------------------------------------------------- */
 
-#define MAX_ARCHIVES 64
 enum { CONF_RESTORE, CONF_DELETE, CONF_RETURN_TITLE };
 
 static int s_open   = 0;
 static int s_screen = OVL_SCREEN_MAIN;
 static int s_sel    = 0;                    /* MAIN cursor */
 
-static PC_SaveArchive s_arch[MAX_ARCHIVES];
+static PC_SaveArchive *s_arch = NULL;
 static int s_archCount = 0;
 static int s_saveSel   = 0;                 /* SAVES cursor */
+static char s_saveStatus[32];               /* last backup/restore/delete result */
 
 static int  s_confKind = CONF_DELETE;       /* CONFIRM: which action */
 static char s_confFile[64];                 /* CONFIRM: target archive filename */
@@ -230,7 +231,16 @@ static PC_SaveCard s_detail;                /* DETAIL: the inspected archive's 3
 static char s_detailLabel[24];              /* DETAIL: the inspected archive's label */
 
 static void loadArchives(void) {
-    s_archCount = PC_SaveArchiveList(s_arch, MAX_ARCHIVES);
+    PC_SaveArchive *fresh = NULL;
+    int count = PC_SaveArchiveListAlloc(&fresh);
+    if (count < 0) {
+        strncpy(s_saveStatus, "BACKUP LIST FAILED", sizeof(s_saveStatus) - 1);
+        s_saveStatus[sizeof(s_saveStatus) - 1] = '\0';
+        return;
+    }
+    PC_SaveArchiveListFree(s_arch);
+    s_arch = fresh;
+    s_archCount = count;
     if (s_saveSel >= s_archCount) s_saveSel = (s_archCount > 0) ? s_archCount - 1 : 0;
 }
 
@@ -311,7 +321,12 @@ static void mainActivate(void) {
     else if (it->action) it->action();
 }
 
-static void act_enterSaves(void) { s_screen = OVL_SCREEN_SAVES; s_saveSel = 0; loadArchives(); }
+static void act_enterSaves(void) {
+    s_screen = OVL_SCREEN_SAVES;
+    s_saveSel = 0;
+    s_saveStatus[0] = '\0';
+    loadArchives();
+}
 
 /* ---- SAVES screen logic ------------------------------------------------------------------------ */
 
@@ -334,7 +349,11 @@ static void act_returnToTitle(void) {
 
 static void openDetail(void) {
     if (s_archCount <= 0) return;
-    PC_SaveReadCard(s_arch[s_saveSel].file, &s_detail);
+    if (!PC_SaveReadCard(s_arch[s_saveSel].file, &s_detail)) {
+        strncpy(s_saveStatus, "INVALID BACKUP", sizeof(s_saveStatus) - 1);
+        s_saveStatus[sizeof(s_saveStatus) - 1] = '\0';
+        return;
+    }
     strncpy(s_detailLabel, s_arch[s_saveSel].label, sizeof(s_detailLabel) - 1);
     s_detailLabel[sizeof(s_detailLabel) - 1] = '\0';
     s_screen = OVL_SCREEN_DETAIL;
@@ -344,7 +363,11 @@ static void savesInput(int b) {
     switch (b) {
     case OVL_BTN_UP:       if (s_saveSel > 0) s_saveSel--; break;
     case OVL_BTN_DOWN:     if (s_saveSel < s_archCount - 1) s_saveSel++; break;
-    case OVL_BTN_SQUARE:   PC_SaveBackupCurrent(); s_saveSel = 0; loadArchives(); break; /* new one lands on top */
+    case OVL_BTN_SQUARE:
+        if (PC_SaveBackupCurrent()) strncpy(s_saveStatus, "BACKUP CREATED", sizeof(s_saveStatus) - 1);
+        else                        strncpy(s_saveStatus, "BACKUP FAILED", sizeof(s_saveStatus) - 1);
+        s_saveStatus[sizeof(s_saveStatus) - 1] = '\0';
+        s_saveSel = 0; loadArchives(); break; /* new one lands on top */
     case OVL_BTN_CIRCLE:   if (s_archCount > 0) startConfirm(CONF_RESTORE); break;
     case OVL_BTN_TRIANGLE: if (s_archCount > 0) startConfirm(CONF_DELETE);  break;
     case OVL_BTN_START:    openDetail(); break;    /* inspect the selected archive's slots */
@@ -364,13 +387,25 @@ static void execConfirm(void) {
         return;
     }
     if (s_confKind == CONF_RESTORE) {
-        if (s_confSel == 0)      { PC_SaveBackupCurrent(); PC_SaveRestore(s_confFile); }  /* back up first */
-        else if (s_confSel == 1) { PC_SaveRestore(s_confFile); }                          /* restore only */
+        int restored = 0;
+        int attempted = 0;
+        if (s_confSel == 0) {
+            if (PC_SaveBackupCurrent()) { attempted = 1; restored = PC_SaveRestore(s_confFile); }
+            else strncpy(s_saveStatus, "BACKUP FAILED", sizeof(s_saveStatus) - 1);
+        } else if (s_confSel == 1) {
+            attempted = 1;
+            restored = PC_SaveRestore(s_confFile);
+        }
+        if (attempted)
+            strncpy(s_saveStatus, restored ? "RESTORE COMPLETE" : "RESTORE FAILED", sizeof(s_saveStatus) - 1);
         /* s_confSel == 2: cancel */
     } else { /* CONF_DELETE */
-        if (s_confSel == 0)      { PC_SaveDeleteArchive(s_confFile); }                     /* delete */
+        if (s_confSel == 0)
+            strncpy(s_saveStatus, PC_SaveDeleteArchive(s_confFile) ? "BACKUP DELETED" : "DELETE FAILED",
+                    sizeof(s_saveStatus) - 1);
         /* s_confSel == 1: cancel */
     }
+    s_saveStatus[sizeof(s_saveStatus) - 1] = '\0';
     loadArchives();                          /* backup-first / delete may have changed the list */
     s_screen = OVL_SCREEN_SAVES;
 }
@@ -484,6 +519,7 @@ int PC_OverlayItemDisabled(int i) {
 int  PC_OverlaySaveCount(void)     { return s_archCount; }
 int  PC_OverlaySaveSelected(void)  { return s_saveSel; }
 int  PC_OverlaySaveHasActive(void) { return PC_SaveHasActive(); }
+const char *PC_OverlaySaveStatus(void) { return s_saveStatus; }
 const char *PC_OverlaySaveLabel(int i) {
     if (i < 0 || i >= s_archCount) return NULL;
     return s_arch[i].label;

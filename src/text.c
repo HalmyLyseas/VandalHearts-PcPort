@@ -127,20 +127,25 @@ void Objf798_ResetInputState(Object *);
  *
  * On hardware that reads `whiteShades` (0x801011bc, immediately after gStringTable's 400 bytes)
  * reinterpreted as a string pointer -- garbage, but the game evidently never displays string 32
- * on that frame. In this build the same read lands on zero padding, so it yields NULL and
- * pc_bootstrap.c's handler turns it into an empty string: benign, but only BY LUCK, and it would
- * become a wild pointer the moment the linker placed something non-zero there.
+ * on that frame. The PC port's generated string-table constructor normalizes this sentinel and all
+ * retail NULL entries to a stable empty string, without relying on a platform fault handler.
  *
  * The extra entry is implicitly NULL, so behaviour is unchanged -- this only makes the existing
  * outcome deterministic instead of dependent on linker padding. The initializer list keeps
  * supplying exactly the 100 real entries, so nothing about the matching build shifts. */
-#ifdef PERMUTER
+#ifdef PC_PORT
+/* The native port reconstructs these PSX-address pointers from the user's executable in
+ * gen_string_table.py, then installs host pointers from a constructor. */
+u8 *gStringTable[101] = {0};
+#elif defined(PERMUTER)
 u8 *gStringTable[101] = {
-#else
-u8 *gStringTable[100] = {
-#endif
 #include "assets/8010102c.inc"
 };
+#else
+u8 *gStringTable[100] = {
+#include "assets/8010102c.inc"
+};
+#endif
 
 u8 **s_stringTable_80123348;
 

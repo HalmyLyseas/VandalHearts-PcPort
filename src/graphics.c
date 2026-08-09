@@ -62,7 +62,11 @@ void Objf050_UnitSpritesDecoder(Object *obj) {
    // s32 cacheIdx;
    s16 state;
 
+#ifdef PC_PORT
+   { static u8 sPcScratchpad[0x400]; pCache = sPcScratchpad; }
+#else
    pCache = (u8 *)0x1f800000;
+#endif
    state = GetState();
 
    switch (state) {

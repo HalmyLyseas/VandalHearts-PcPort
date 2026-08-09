@@ -40,7 +40,11 @@ s32 UnpackMapFileData(u8 *input, u8 *output, s32 len) {
 
    // pInputData = input;
    pOutputStart = output;
+#ifdef PC_PORT
+   { static u8 sPcScratchpad[0x400]; pCache = sPcScratchpad; }
+#else
    pCache = (u8 *)0x1f800000;
+#endif
 
    for (cacheIdx = 0; cacheIdx < 990; cacheIdx++) {
       pCache[cacheIdx] = 0;

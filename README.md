@@ -13,7 +13,7 @@ The project has three stages, **all completed**:
    This is the foundation the port is built on, and it is still enforced on every change.
 2. **De-consolization → native PC port.** Each PlayStation hardware interface — GPU packet
    submission, GTE matrix math, CD-ROM / XA audio, SPU, MDEC video, pad input — is replaced with a
-   portable equivalent (SDL2 + OpenGL + OpenAL), so the game boots and runs on a modern desktop from
+   portable equivalent (SDL2 + Metal/OpenGL + OpenAL), so the game boots and runs on a modern desktop from
    its own data.
 3. **New features.** A PC-only layer of additions on top of the faithful port: reworked controls with
    an at-a-glance enemy threat overlay, an in-game options and save-management overlay, an opt-in
@@ -44,9 +44,13 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 - **64-bit** is the default build. The port is memory-safe — it runs unprivileged (no root, no
   `setcap`) and has passed both an AddressSanitizer out-of-bounds sweep and a UBSan pass across the
   game, which together fixed seven real out-of-bounds bugs latent in the retail game.
-- **Platforms: Windows and Linux**, from a single source tree. The Windows `.exe` is cross-compiled
-  from Linux with MinGW-w64; Linux ships as an AppImage. A CMake build sits alongside the Makefile.
-  macOS is scaffolded but not pursued — see [docs/cross-platform.md](docs/cross-platform.md).
+- **Platforms: Windows, Linux, and macOS**, from a single source tree. The Windows `.exe` is
+  cross-compiled from Linux with MinGW-w64; Linux ships as an AppImage. The native macOS CMake build
+  has been tested on Apple Silicon through the first battle and its surrounding cutscenes, world map,
+  towns, shops, saves, Tactical Mode, fast-forward and HD pack. A dependency-minimal Universal 2 build
+  has also passed boot-to-title tests in both native arm64 and x86_64/Rosetta modes. Source-only local
+  `.app` packaging is available; full-playthrough and notarisation validation remain to be done. See
+  [docs/cross-platform.md](docs/cross-platform.md).
 
 ## Where to start
 
@@ -67,6 +71,7 @@ Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derive
 |---|---|---|
 | **Windows** | `.zip` — `vandalhearts_pc.exe`, 8 runtime DLLs, `vandalhearts.ini` | Windows 10/11 |
 | **Linux** | `VandalHearts-x86_64.AppImage` + `vandalhearts.ini` | glibc ≥ 2.34 (Debian 12+, Ubuntu 22.04+, Fedora 35+, RHEL 9, Arch); FUSE2 |
+| **macOS** | Build from source; local `.app` recipe | macOS 11+; Universal 2 base build or Apple Silicon HD build |
 
 Put your disc image in a `game/` folder next to the executable and launch — the disc is
 auto-detected and verified, settings live in the in-game overlay (**SELECT + START**) and
