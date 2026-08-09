@@ -28,12 +28,15 @@ TAG="${1:-}"
 shift || true
 DO_WIN=1 DO_LINUX=1 PUBLISH=1 CONTAINER="vh-deb12"
 HDPACK_SRC="${VH_HDPACK_DIR:-}"      # optional assembled hdpacks/ folder -> extra release asset
+HDPACK_NOTE=""
 for a in "$@"; do case "$a" in
   --windows-only) DO_LINUX=0 ;;
   --linux-only)   DO_WIN=0 ;;
   --no-publish)   PUBLISH=0 ;;
   --container=*)  CONTAINER="${a#*=}" ;;
   --hdpack=*)     HDPACK_SRC="${a#*=}" ;;
+  --hdpack-note=*) HDPACK_NOTE="${a#*=}" ;;   # release-specific suffix for the Downloads-table row
+                                              # (e.g. "Unchanged since v1.6.1 — keep yours.")
   *) echo "unknown flag: $a" >&2; exit 2 ;;
 esac; done
 
@@ -202,6 +205,13 @@ cat >> "$NOTES" <<NOTE
 | Windows 10/11 | \`VandalHearts-$TAG-windows-x64.zip\` | Unzip; put your disc in a \`game\\\` folder next to \`vandalhearts_pc.exe\`; run it. |
 | Linux (glibc ≥ 2.34) | \`VandalHearts-$TAG-linux-x86_64.AppImage\` + \`vandalhearts.ini\` | Put both together; put your disc in a \`game/\` folder beside the \`.AppImage\`; \`chmod +x\` and run. Needs FUSE2. |
 | Any | \`VandalHearts-$TAG-Manual.pdf\` | The Player Manual: setup, controls, features, troubleshooting. |
+NOTE
+if [ "${HDPACK_DONE:-0}" = 1 ]; then
+cat >> "$NOTES" <<NOTE
+| Optional | \`VandalHearts-$TAG-hdpack.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable.${HDPACK_NOTE:+ $HDPACK_NOTE} |
+NOTE
+fi
+cat >> "$NOTES" <<NOTE
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).
 
