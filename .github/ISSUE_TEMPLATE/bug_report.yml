@@ -59,7 +59,7 @@ body:
         description below, and say whether the bug remains after setting LANGUAGE to OFF and
         restarting.
       options:
-        - None
+        - No language pack
         - Pack selected, bug happens with it
         - Pack selected, bug happens without it too
         - Pack selected, not sure
