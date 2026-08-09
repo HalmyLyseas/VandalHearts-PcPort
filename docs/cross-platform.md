@@ -275,7 +275,9 @@ and `github-cli` authenticated (`gh auth login`).
 
 macOS support is a community contribution and is validated by community members — the maintainer has
 no Apple hardware, so macOS-specific issues are triaged best-effort and fixes may need a contributor
-with a Mac. The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
+with a Mac. This repository's release assets cover Windows and Linux only; macOS builds might be
+provided by community members on their own forks, outside this project's scope and not verified
+here. The port now builds natively with AppleClang. Testing on Apple Silicon covers the first battle,
 cutscenes, HD movies/backgrounds, world map, towns, shops, saves, Tactical Mode and 2× battle speed.
 The SDL2 presentation layer explicitly selects Metal and the binary has no OpenGL framework dependency.
 A dependency-minimal Universal 2 binary has passed the boot-to-title smoke test as both native arm64
