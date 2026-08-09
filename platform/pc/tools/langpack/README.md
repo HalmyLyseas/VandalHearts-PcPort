@@ -147,6 +147,31 @@ font's own lowercase glyphs — no new art. It is the translator's decision, bak
 there is no player-facing toggle. Non-Latin packs set their own case in their drawn sheets and do
 not use this flag.
 
+## Item names: 16 characters (format 2)
+
+Shop/field item names are the tightest budget in the game: the retail table stores them as
+**8 two-byte characters**, drawn in the large font. A pack can opt into **1-byte names, 16
+characters long**, drawn through the small font instead — the difference between `MEGAHERB` and a
+real translation.
+
+Opt in from the working set: in `<work>/strings/tables.json`, the `gItemNamesSjis` table's `limit`
+block, change `"bytes_per_char": 2` to `1` (the export writes `2`, the retail encoding). From then
+on its entries hold up to 16 characters; `lang_validate` and `lang_build` both enforce the new
+width. The names render through the small font across the shop, depot, sell, party and battle item
+lists (with a right-aligned price and the retail `#` markers kept); the tightest boxes truncate at
+11–12 characters — the validator does not flag that, check those screens in game.
+
+What it changes structurally:
+- The pack's manifest declares **`"format": 2`**, and the whole re-encoded name table always ships
+  with it. An older port build refuses a format-2 pack loudly and keeps English; a current build
+  falls back to English names if the table is ever missing or damaged — never garbled text.
+- In a **non-Latin** pack (`--packart`), 1-byte item names render from the **small** sheet like all
+  other text — the large sheet then only matters for the few remaining large-font screens (the TURN
+  counter, YES/NO prompts). The staging tip below still applies either way.
+- Untranslated entries keep their original English name, re-encoded — a partial table is fine.
+
+It is the translator's decision, baked into the pack, exactly like `--mixed-case`.
+
 ## What a pack does not cover
 
 The port's own in-game options overlay (SELECT+START) stays English in every language. It is drawn
@@ -168,6 +193,10 @@ before the other.
 | **drawing it** | very tight — plan on capitals only | roomier, easier per letter |
 
 **You don't draw digits, punctuation or spaces** — those exist at both sizes and keep working.
+
+(A **format-2** pack moves shop/field item names into the *small* font — see
+[Item names: 16 characters](#item-names-16-characters-format-2). The table above describes the
+retail, format-1 layout.)
 
 **44 is the real ceiling, and it only applies to the small sheet.** It fits a full Russian alphabet
 (33) or Greek (~24) in capitals. It does *not* fit capitals *and* lowercase of a non-Latin script
@@ -290,12 +319,15 @@ replace one with a translated version, using the **same content-hash swap as the
 is a 1280×960 WebP named `<hash>.webp`, exactly the HD-pack convention. Priority is
 **langpack > HD pack > retail**, so a translated background overrides the HD (untranslated) one.
 
-**Two requirements to know up front:**
-- **You need the HD pack.** It is where the hashes and reference images come from — download it, and
-  its `backgrounds/<hash>.webp` filenames *are* the hashes, matched to the visuals you can look at.
-- **They render only at internal scale ≥ 2** (the hi-res pass), like all background replacement. At
-  scale 1× the player sees the original background. Translated backgrounds reach the hi-res crowd; a
-  player who wants them keeps supersampling on.
+**Two things to know up front:**
+- **You — the pack author — need the HD pack.** It is where the hashes and reference images come
+  from — download it, and its `backgrounds/<hash>.webp` filenames *are* the hashes, matched to the
+  visuals you can look at. **Players need nothing extra**: the finished background ships inside your
+  pack and shows even with the HD pack absent or toggled off.
+- **They render at every internal scale.** At scale ≥ 2 the full 1280×960 art shows in the hi-res
+  pass; at 1× the engine keeps a native-size shadow pass alive just for the pack, and the art is
+  downscaled to native resolution — translated text stays readable, but keep it large enough that a
+  4→1 downscale doesn't eat thin strokes. (HD-pack backgrounds without a langpack still need ≥ 2×.)
 
 **Workflow:**
 

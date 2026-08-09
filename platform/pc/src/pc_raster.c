@@ -16,6 +16,7 @@
 #include "PsyQ/libgpu.h"
 #include "pc_platform.h"
 #include "pc_gpu_internal.h"
+#include "pc_lang.h"     /* PC_LangBgDir: localized backgrounds keep the shadow pass on at scale 1 */
 
 #define VRAM_W 1024
 #define VRAM_H 512
@@ -45,10 +46,23 @@ static int InternalScale(void) {
     return g_vhInternalScale;
 }
 
+/* Does this run want the hi-res shadow pass at all? Scale > 1 always; scale 1 ONLY when the
+ * selected language pack ships localized backgrounds (F2) -- they are sampled exclusively in this
+ * pass, and a translated title card must not silently depend on a graphics setting. Both inputs
+ * are process-lifetime (env/ini + the pack dir resolved once), so the answer never changes
+ * mid-run. At S==1 every hires-only sampling tweak is already gated `S > 1` (re-centre, crust
+ * bias, U==256 clamp), so the shadow pass produces pixel-identical output to the native pass
+ * except inside a replaced region -- 1x without a pack stays native-faithful by construction.
+ * The HD pack deliberately does NOT arm this: its backgrounds remain a >= 2x feature (see the
+ * matching scale-1 guard in pc_hdpack.c's HdFindTriRegion). */
+static int HiresWanted(void) {
+    return InternalScale() > 1 || PC_LangBgDir() != NULL;
+}
+
 void HiresEnsure(void) {
     /* Allocate at the MAX scale once, so the overlay can raise/lower the scale live without reallocating
      * (each frame uses the current scale's stride within this buffer). */
-    if (!s_hires && InternalScale() > 1)
+    if (!s_hires && HiresWanted())
         s_hires = (unsigned short *)calloc((size_t)VRAM_W * HIRES_MAXSCALE * VRAM_H * HIRES_MAXSCALE,
                                            sizeof(unsigned short));
 }
@@ -60,7 +74,9 @@ void PC_GpuSetInternalScale(int s) {
     if (s > HIRES_MAXSCALE) s = HIRES_MAXSCALE;
     if (s == g_vhInternalScale) return;
     g_vhInternalScale = s;
-    if (s > 1) {
+    if (HiresWanted()) {       /* also s==1 when a langpack keeps the shadow pass on: the stride
+                                * changes, so the buffer must be cleared exactly like any other
+                                * live scale switch or it briefly shows the old stride as garbage */
         HiresEnsure();
         if (s_hires)
             memset(s_hires, 0, (size_t)VRAM_W * HIRES_MAXSCALE * VRAM_H * HIRES_MAXSCALE * sizeof(unsigned short));
@@ -82,7 +98,7 @@ int PC_GpuGetInternalScale(void) { return InternalScale(); }
 /* Mirror a native VRAM rect into s_hires as SxS nearest blocks (bulk writes bypass the rasterizer). */
 void HiresMirrorRect(int x0, int y0, int w, int h) {
     int S, x, y, sx, sy, W;
-    if (InternalScale() <= 1) return;
+    if (!HiresWanted()) return;
     HiresEnsure();
     if (!s_hires) return;
     S = g_vhInternalScale; W = VRAM_W * S;
@@ -838,7 +854,7 @@ static void PC_MaybeDumpHires(int x, int y, int w, int h) {
 
 /* ---- walker-facing wrappers (pc_gpu_internal.h) ------------------------------------------------ */
 
-int HiresActive(void) { return InternalScale() > 1 && s_hires != NULL; }
+int HiresActive(void) { return HiresWanted() && s_hires != NULL; }
 void HiresFrameReset(void) { s_hprimCount = 0; }   /* P1: reset the per-frame hi-res display list */
 
 /* Present the supersampled display region (was DrawOTag's hires-present branch; native units). */

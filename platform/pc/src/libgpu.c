@@ -447,7 +447,8 @@ void DrawOTag(unsigned int *p) {
     TrcInit();
     s_drawFrame++;
     if (s_tileLogReq) { s_tileLogFrame = s_drawFrame; s_tileLogReq = 0; }
-    if (hiScale > 1) HiresEnsure();
+    HiresEnsure();                           /* self-gated: allocates when scale > 1 OR a langpack
+                                              * ships localized backgrounds (shadow pass at 1x) */
     HiresFrameReset();                       /* P1: reset the per-frame hi-res display list */
     if (s_rtTime < 0) s_rtTime = getenv("VH_RASTER_TIME") ? 1 : 0;
     if (s_rtTime) s_rtStart = clock();

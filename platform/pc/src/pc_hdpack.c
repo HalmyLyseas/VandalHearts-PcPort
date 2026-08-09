@@ -443,6 +443,11 @@ HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax) {
          * enhancement, and ride the language selection instead. Toggling back ON re-samples the
          * still-live region, mirroring the toggle-ON semantics the eviction comment above documents. */
         if (!HdActive() && r->dir != PC_LangBgDir()) continue;
+        /* At internal scale 1 the shadow pass exists ONLY for the langpack (pc_raster.c
+         * HiresWanted): localized backgrounds are translation and must not depend on a graphics
+         * setting, but HD-pack backgrounds remain a >= 2x enhancement -- sampling them here at 1x
+         * would silently change what "HD PACK requires internal res" means in the manual. */
+        if (PC_GpuGetInternalScale() == 1 && r->dir != PC_LangBgDir()) continue;
         if (wx1 < r->rx || wx0 >= r->rx + r->rw || wy1 < r->ry || wy0 >= r->ry + r->rh) continue;
         return r;
     }

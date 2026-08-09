@@ -25,7 +25,7 @@ Two layers, deliberately distinct:
 
 Usage: ./lang_validate.py <disc.bin> <workdir> [--strict] [--packart <dir>] [--hdpack <pack>]
        --hdpack checks work/backgrounds/<hash>.webp (F2): valid WebP, exactly 1280x960, a 16-hex hash
-       that is a real background in that HD pack. (Backgrounds render only at internal scale >= 2.)
+       that is a real background in that HD pack.
        --packart validates a NON-LATIN working set in script mode (pass the same sheets you build
        with); without it a Cyrillic/Greek set is checked as if it were Latin and mis-reports.
 """
@@ -101,7 +101,8 @@ def load_hdpack_hashes(hdpack, errors):
 def check_backgrounds(work, hdpack, errors, warns):
     """F2 (exchange/92): validate work/backgrounds/<hash>.webp -- a valid WebP, exactly 1280x960, a
     16-hex hash name, and (with --hdpack) a hash that is a real background in that pack. Localized
-    backgrounds render ONLY at internal scale >= 2 (the hi-res pass), so warn about that."""
+    localized backgrounds render at EVERY internal scale (at 1x the engine keeps a native-size
+    shadow pass alive for exactly this), so note the 1x look rather than a scale requirement."""
     files = sorted(glob.glob(os.path.join(work, "backgrounds", "*.webp")))
     if not files:
         return
@@ -130,8 +131,8 @@ def check_backgrounds(work, hdpack, errors, warns):
         if allowed is not None and stem not in allowed:
             errors.append(f"backgrounds/{name}: hash not in the HD pack -- not a real game background "
                           f"(typo?), or the wrong --hdpack")
-    warns.append(f"{len(files)} localized background(s): these render only at internal scale >= 2 "
-                 f"(the hi-res pass); at scale 1x the player sees the original background"
+    warns.append(f"{len(files)} localized background(s): render at every internal scale; at 1x the "
+                 f"art is downscaled to native resolution -- check any small text stays readable"
                  + ("" if hdpack else " -- pass --hdpack <pack> to check the hashes are real"))
 
 
@@ -272,8 +273,8 @@ def validate(disc, work, strict=False, packart=None, hdpack=None):
 
     if strict:
         errors, warns = errors + warns, []
-    # F2: after the strict flip, so a real background defect is always an error while the "needs
-    # scale >= 2" note stays a warning even under --strict (it is guidance, not a defect).
+    # F2: after the strict flip, so a real background defect is always an error while the 1x-look
+    # note stays a warning even under --strict (it is guidance, not a defect).
     check_backgrounds(work, hdpack, errors, warns)
     return errors, warns
 

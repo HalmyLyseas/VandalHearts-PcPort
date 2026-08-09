@@ -81,10 +81,12 @@ translate more text, in case new letters appear.
 ## 5 · Backgrounds (optional)
 
 A background with **baked-in text** (the title card, signposts, map labels) can be localized too, via
-the same content-hash swap as the HD pack. You need the **HD pack**: its `backgrounds/<hash>.webp`
-filenames *are* the hashes, matched to images you can actually look at. Two constraints — the file
-must be **1280×960**, and backgrounds render **only at internal scale ≥ 2** (at 1× the player sees the
-original).
+the same content-hash swap as the HD pack. As the **author** you need the HD pack — its
+`backgrounds/<hash>.webp` filenames *are* the hashes, matched to images you can actually look at.
+(Players need nothing extra: the finished background ships inside your pack and shows even with the
+HD pack absent or off.) One hard constraint — the file must be **1280×960**. Localized backgrounds
+render at **every internal scale** — at 1× the art is downscaled to native resolution, so keep any
+drawn-in text chunky enough to survive that.
 
 Copy the one you want to adapt out of the HD pack as a starting canvas — here the title screen,
 `0c5035b9b009cde7.webp`:
@@ -113,7 +115,7 @@ a real HD-pack hash):
 ![Validation](images-quickstart/quickstart-06-validation.png)
 
 `0 error(s)` is the goal. Both warnings here are harmless: most strings are still untranslated (fine
-for this demo — see *Notes*), and a reminder that the background only shows at internal scale ≥ 2.
+for this demo — see *Notes*), and a note about how the background looks at 1× internal scale.
 
 ## 7 · Build
 
@@ -158,7 +160,8 @@ label; untranslated entries stay in English:
   actually translated. A **Latin** pack degrades gracefully — untranslated entries just stay English.
 - **Punctuation the game can't draw** (`;` and a few others) is drawn exactly like a letter — the
   template lists it, `gen_packart` rasterises it, the builder installs it. Details in `README.md`.
-- **Localized backgrounds** need the HD pack (source of the hash + reference image), must be
-  **1280×960**, and render **only at internal scale ≥ 2** — at 1× the player sees the original.
+- **Localized backgrounds**: the *author* needs the HD pack (source of the hash + reference image);
+  the file must be **1280×960**; renders at every internal scale — at 1× downscaled to native
+  resolution — and needs nothing from the player.
 - **Full reference:** [`README.md`](README.md) — the Latin workflow, the sheet format, the supported
   character set, pack naming, and the two-font model.
