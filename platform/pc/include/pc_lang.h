@@ -30,15 +30,26 @@
  * call with an inline `extern` inside their own #ifdef -- the house style (see src/ai.c,
  * src/graphics.c, src/main_menu.c), and deliberate: `src/` must not include port headers, so this
  * file is NOT staged into the game-source include path. When a signature here changes, the matching
- * inline declaration in `src/` must change with it. Current gated callers:
+ * inline declaration in `src/` must change with it. platform/pc/ TUs have NO such excuse: they
+ * #include this header (libcd.c, libetc.c, libgpu.c, libkernel.c, pc_balance.c, pc_hdpack.c,
+ * pc_overlay.c do), and a new port-side caller must too -- an inline extern there just trades a
+ * compile-time signature check for a runtime surprise. Current gated src/ callers:
  *
  *   src/battle_0201b8.c  PC_LangApplyTerrainText()
  *   src/text.c           PC_LangUtf8Glyph(), PC_LangUtf8SeqLen()   (DrawText_Internal + msgbox)
  *   src/text.c           PC_LangApplyCharmap()       (GetGlyphIdxForAsciiChar's hand-off)
  *   7 game files         PC_LangStr()                (via each file's PC_LANGSTR macro block)
+ *   src/supplies.c       PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (format-2 item lists)
+ *   src/window.c         PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (battle item list)
+ *   src/battle_0201b8.c  PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (unit item panel)
  */
 
 #include <stddef.h>
+
+/* Glyph-slot capacity of the small font. MUST equal src/text.c's PERMUTER-widened
+ * sFontGlyphBitmaps row count ([156][9]) and lang_build.py's slot pool bound -- raise all
+ * together (text.c cannot include this header, so its copy is tracked by comment there). */
+#define PC_LANG_GLYPH_SLOTS 156
 
 /* Load the pack (once) and apply everything addressable by symbol: the fixed and pointer text
  * tables. Called from the first VSync, after the data-segment constructors have run. No-op without
@@ -95,6 +106,18 @@ const unsigned char *PC_LangCharmapBlob(unsigned *len);
 /* Literal replacement (the PC_LANGSTR macro in game files): content-hash lookup; returns the
  * pack's string or the input literal untouched. */
 unsigned char *PC_LangStr(const char *lit);
+
+/* Format-2 packs (exchange/91): item names are 1-byte/16-char. The accessor answers 1 only when a
+ * pack's item-name table actually APPLIED (see pc_lang.c) -- the gated item-list draw sites in
+ * src/ switch on it. The draw helper hard-truncates to the caller's per-box cap and draws through
+ * the small font; one implementation for all three gated sites. */
+int PC_LangItemNames1Byte(void);
+void PC_LangDrawItemName1Byte(int x, int y, int color, const unsigned char *name, int cap);
+
+/* F2 (exchange/92): the accepted pack's backgrounds/ dir (localized HD backgrounds), or NULL --
+ * gated on manifest acceptance, so a refused pack cannot smuggle visuals in. pc_hdpack.c resolves
+ * this source before the HD pack. */
+const char *PC_LangBgDir(void);
 
 
 /* Overlay picklist support: enumerate installed packs (same game/format gate as loading, applied

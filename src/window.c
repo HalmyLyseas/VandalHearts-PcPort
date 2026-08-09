@@ -2022,16 +2022,10 @@ void Objf421_UpperMsgBoxTail(Object *obj) {
 
 #undef OBJF
 #ifdef PC_FEAT
-/* Draw a 1-byte item name in the small font, hard-truncated to `cap` chars so it never spills past
- * the tight battle item box (which is sized for 8 SJIS chars). exchange/91, feedback-36. */
-static void DrawItemNameSmall1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap) {
-   u8 buf[17];
-   s32 i;
-   if (cap > 16) cap = 16;
-   for (i = 0; i < cap && name[i] != '\0'; i++) buf[i] = name[i];
-   buf[i] = '\0';
-   DrawText(x, y, cap + 1, 0, color, buf);
-}
+/* Draw a 1-byte item name in the small font, hard-truncated to a per-box cap (this battle item box
+ * is sized for 8 SJIS chars -> 12 small chars). One shared implementation lives in
+ * platform/pc/src/pc_lang_font.c; inline extern per the src/ house style. exchange/91, feedback-36. */
+extern void PC_LangDrawItemName1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap);
 #endif
 
 #define OBJF 573
@@ -2057,7 +2051,7 @@ void Objf573_BattleItemsList(Object *obj) {
             tmp = 0;
 #ifdef PC_FEAT
          if (PC_LangItemNames1Byte())
-            DrawItemNameSmall1Byte(28, i * 18 + 60, tmp, gItemNamesSjis[unit->items[i]], 12);
+            PC_LangDrawItemName1Byte(28, i * 18 + 60, tmp, gItemNamesSjis[unit->items[i]], 12);
          else
 #endif
          DrawSjisText(28, i * 18 + 60, 20, 0, tmp, gItemNamesSjis[unit->items[i]]);

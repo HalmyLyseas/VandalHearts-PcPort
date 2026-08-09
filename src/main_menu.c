@@ -53,7 +53,10 @@ static u8 *TranslateCaption(u8 *stored) {
          for (j = 20; stored[j] != '\0' && i < 39; j++) {       /* time: "  H:MM", as-is */
             s_capBuf[i++] = stored[j];
          }
-         s_capBuf[i] = '\0';
+         /* Worst case i == 40 here (30-cap label + fixed stores + 2-digit level + the two spaces
+          * above are unguarded), which put the NUL one past the buffer; every DATA store stays
+          * <= 39 by the loop caps, so clamping the terminator alone restores the bound. */
+         s_capBuf[i > 39 ? 39 : i] = '\0';
          return s_capBuf;
       }
       return stored;                                           /* labels not translated */

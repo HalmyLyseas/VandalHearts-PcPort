@@ -76,6 +76,7 @@ static const struct { void *fixed; size_t bytes; void **ptr; int count; const ch
      * time. Its blob is held until that file's PC_FEAT hook hands us the table (see below). */
     { NULL, 0, NULL, 0, "terrainText" },
 };
+#define TID_ITEMNAMES 1
 #define TID_TERRAIN 10
 #define NTABLES ((int)(sizeof kTables / sizeof kTables[0]))
 
@@ -84,7 +85,14 @@ typedef struct { int lba; unsigned len; unsigned char *bytes; } LangText;
 static struct {
     int loaded;                       /* 0 = not tried, 1 = tried (with or without a pack) */
     int active;                       /* a pack was found and applied */
-    int item1b;                       /* format 2: item names are 1-byte/16-char (exchange/91) */
+    int mfOk;                         /* manifest passed the game/format gate (set before apply) */
+    int item1b;                       /* format 2: item names are 1-byte/16-char (exchange/91).
+                                       * Latched ONLY at load-success AND only if the pack's
+                                       * gItemNamesSjis table actually applied -- every earlier
+                                       * bail-out must leave the retail SJIS draw path in force,
+                                       * or a broken pack turns item names into mojibake instead
+                                       * of falling back to English. */
+    int itemNamesApplied;             /* the gItemNamesSjis K_FIXED section landed (see item1b) */
     LangText text[MAX_TEXT_FILES];
     int textN;
     unsigned char *terrain;           /* deferred blob for the function-static terrainText */
@@ -121,14 +129,20 @@ static int LangPackDir(char *out, size_t n) {
 /* F2 (exchange/92): the active language pack's backgrounds/ directory -- localized HD backgrounds as
  * <hash>.webp, the SAME convention as the HD pack. Returns NULL when no pack is selected or it ships
  * none. pc_hdpack.c resolves this source BEFORE the HD pack, so a translated background overrides the
- * HD (untranslated) one. Resolved once; the path is a process-lifetime static, safe to store. */
+ * HD (untranslated) one. Resolved once; the path is a process-lifetime static, safe to store.
+ *
+ * Gated on MANIFEST ACCEPTANCE (s_lang.mfOk): a pack the loader refuses -- foreign game id, newer
+ * format, no manifest -- must not smuggle its backgrounds in either; the refusal contract is "the
+ * game continues in English", visuals included. LangLoad() is idempotent and documented safe after
+ * main() starts, which is earlier than any LoadImage upload can reach us. */
 const char *PC_LangBgDir(void) {
     static char dir[600];
     static int resolved;               /* 0 = not yet, 1 = present, -1 = none */
     if (!resolved) {
         char pack[512]; DIR *d;
+        if (!s_lang.loaded) LangLoad();          /* decides mfOk */
         resolved = -1;
-        if (LangPackDir(pack, sizeof pack)) {
+        if (s_lang.mfOk && LangPackDir(pack, sizeof pack)) {
             snprintf(dir, sizeof dir, "%s/backgrounds", pack);
             if ((d = opendir(dir)) != NULL) { closedir(d); resolved = 1; }
         }
@@ -156,6 +170,7 @@ static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
     }
     memcpy(kTables[id].fixed, p, len);
     s_lang.tablesApplied++;
+    if (id == TID_ITEMNAMES) s_lang.itemNamesApplied = 1;   /* format-2 gate: see item1b */
     fprintf(stderr, "[lang] %-18s %5u B replaced\n", kTables[id].name, len);
 }
 
@@ -242,35 +257,50 @@ static int MiniJsonInt(const char *buf, const char *key, int *out) {
 /* The manifest is LOAD-BEARING (packaging decision, 2026-08-07): the folder name is a human
  * convention, the manifest is the machine truth. A pack with a missing/foreign/newer manifest is
  * refused LOUDLY and the game continues in English -- a renamed folder must never smuggle a pack
- * past identification. Returns 1 if the pack may load. */
-static int LangManifestCheck(const char *dir) {
-    char path[600], buf[2048], game[64], name[96], version[32];
+ * past identification. Returns 1 if the pack may load.
+ *
+ * THE ONE MANIFEST READER. Every consumer of the accept rule (the loader, the overlay picklist)
+ * goes through here, so the rule cannot drift between them, and `format` is parsed exactly once
+ * (formatOut). `quiet` suppresses the stderr chatter for the picklist -- listing is not loading.
+ * nameOut (may be NULL) gets the display name, "" when the manifest carries none. */
+static int LangManifestCheck(const char *dir, int *formatOut, char *nameOut, size_t nameN,
+                             int quiet) {
+    char path[640], buf[2048], game[64], name[96], version[32];
     FILE *f;
     size_t n;
     int format = 0;
     snprintf(path, sizeof path, "%s/manifest.json", dir);
     f = fopen(path, "r");
     if (!f) {
-        fprintf(stderr, "[lang] %s: no manifest.json -- not a language pack (or built by a "
-                        "pre-manifest tool; rebuild it)\n", dir);
+        if (!quiet)
+            fprintf(stderr, "[lang] %s: no manifest.json -- not a language pack (or built by a "
+                            "pre-manifest tool; rebuild it)\n", dir);
         return 0;
     }
     n = fread(buf, 1, sizeof buf - 1, f);
     buf[n] = '\0';
     fclose(f);
     if (!MiniJsonStr(buf, "game", game, sizeof game) || strcmp(game, LANG_GAME_ID) != 0) {
-        fprintf(stderr, "[lang] %s: pack is for game \"%s\", this build is \"%s\" -- refused\n",
-                dir, MiniJsonStr(buf, "game", game, sizeof game) ? game : "?", LANG_GAME_ID);
+        if (!quiet)
+            fprintf(stderr, "[lang] %s: pack is for game \"%s\", this build is \"%s\" -- refused\n",
+                    dir, MiniJsonStr(buf, "game", game, sizeof game) ? game : "?", LANG_GAME_ID);
         return 0;
     }
     if (!MiniJsonInt(buf, "format", &format) || format > LANG_FORMAT) {
-        fprintf(stderr, "[lang] %s: pack format v%d, this build reads v%d -- refused (update the "
-                        "port, or rebuild the pack)\n", dir, format, LANG_FORMAT);
+        if (!quiet)
+            fprintf(stderr, "[lang] %s: pack format v%d, this build reads v%d -- refused (update "
+                            "the port, or rebuild the pack)\n", dir, format, LANG_FORMAT);
         return 0;
     }
-    if (!MiniJsonStr(buf, "name", name, sizeof name)) snprintf(name, sizeof name, "(unnamed)");
-    if (!MiniJsonStr(buf, "version", version, sizeof version)) version[0] = '\0';
-    fprintf(stderr, "[lang] pack \"%s\"%s%s\n", name, version[0] ? " v" : "", version);
+    if (formatOut) *formatOut = format;
+    if (nameOut && nameN) {
+        if (!MiniJsonStr(buf, "name", nameOut, nameN)) nameOut[0] = '\0';
+    }
+    if (!quiet) {
+        if (!MiniJsonStr(buf, "name", name, sizeof name)) snprintf(name, sizeof name, "(unnamed)");
+        if (!MiniJsonStr(buf, "version", version, sizeof version)) version[0] = '\0';
+        fprintf(stderr, "[lang] pack \"%s\"%s%s\n", name, version[0] ? " v" : "", version);
+    }
     return 1;
 }
 
@@ -290,11 +320,12 @@ int PC_LangItemNames1Byte(void) {
     return s_lang.item1b;
 }
 
-/* Enumerate installed packs for the overlay picklist: every <deploy>/langpacks/<folder> whose
- * manifest passes the same game/format gate the loader applies (quietly -- listing is not loading).
+/* Enumerate installed packs for the overlay picklist: every <deploy>/langpacks/<folder> that
+ * LangManifestCheck accepts -- the SAME gate the loader applies, called quietly (listing is not
+ * loading), so the picklist can never offer a pack the loader would then refuse at boot.
  * Returns the count; folders and display names are parallel arrays. */
 int PC_LangListPacks(char folders[][64], char names[][64], int max) {
-    char deploy[512], root[560], mpath[700], buf[2048], game[64];
+    char deploy[512], root[560], pdir[640];
     DIR *d;
     struct dirent *e;
     int n = 0;
@@ -303,26 +334,14 @@ int PC_LangListPacks(char folders[][64], char names[][64], int max) {
     d = opendir(root);
     if (!d) return 0;
     while ((e = readdir(d)) != NULL && n < max) {
-        FILE *f;
-        size_t r;
-        int format = 0;
         if (e->d_name[0] == '.') continue;
         /* a folder name too long for the picklist buffers can't be a valid pack -- skip it
          * (also proves to -Wformat-truncation that truncation is handled, not ignored) */
         if (strlen(e->d_name) >= 64) continue;
-        if (snprintf(mpath, sizeof mpath, "%s/%s/manifest.json", root, e->d_name)
-            >= (int)sizeof mpath) continue;
-        f = fopen(mpath, "r");
-        if (!f) continue;
-        r = fread(buf, 1, sizeof buf - 1, f);
-        buf[r] = '\0';
-        fclose(f);
-        if (!MiniJsonStr(buf, "game", game, sizeof game) || strcmp(game, LANG_GAME_ID) != 0)
-            continue;
-        if (!MiniJsonInt(buf, "format", &format) || format > LANG_FORMAT)
-            continue;
+        if (snprintf(pdir, sizeof pdir, "%s/%s", root, e->d_name) >= (int)sizeof pdir) continue;
+        if (!LangManifestCheck(pdir, NULL, names[n], 64, 1)) continue;
         memcpy(folders[n], e->d_name, strlen(e->d_name) + 1);   /* length-checked above */
-        if (!MiniJsonStr(buf, "name", names[n], 64))
+        if (!names[n][0])                                        /* unnamed: show the folder */
             memcpy(names[n], e->d_name, strlen(e->d_name) + 1);
         n++;
     }
@@ -338,21 +357,13 @@ static void LangLoad(void) {
     long size;
     unsigned char *buf;
     unsigned nsec, i, off;
+    int fmt = 0;
 
     if (s_lang.loaded) return;
     s_lang.loaded = 1;
     if (!LangPackDir(dir, sizeof dir)) return;
-    if (!LangManifestCheck(dir)) return;
-    {   /* format 2 (exchange/91) == 1-byte item names -> supplies.c draws the item lists through the
-         * small-font path instead of the wide SJIS one. The builder sets format 2 iff bytes_per_char=1. */
-        char mp[600], mb[1024]; FILE *mf; int fmt = 1;
-        snprintf(mp, sizeof mp, "%s/manifest.json", dir);
-        mf = fopen(mp, "r");
-        if (mf) {
-            size_t mn = fread(mb, 1, sizeof mb - 1, mf); mb[mn] = '\0'; fclose(mf);
-            if (MiniJsonInt(mb, "format", &fmt)) s_lang.item1b = (fmt >= 2);
-        }
-    }
+    if (!LangManifestCheck(dir, &fmt, NULL, 0, 0)) return;
+    s_lang.mfOk = 1;                  /* manifest accepted: PC_LangBgDir may activate backgrounds */
     {   /* remember the boot selection BY FOLDER NAME (the overlay's restart marker compares to it);
          * a VH_LANGPACK dev override deliberately stays "" -- it is not a langpacks/ selection */
         const char *lang = getenv("VH_LANG");
@@ -416,6 +427,18 @@ static void LangLoad(void) {
         off += len;
     }
     s_lang.active = 1;
+    /* format 2 (exchange/91) == 1-byte item names -> supplies.c/window.c/battle_0201b8.c draw the
+     * item lists through the small-font path instead of the wide SJIS one. Latched HERE, at load
+     * success, and only if the pack's gItemNamesSjis table actually landed: on any earlier bail-out
+     * (or a format-2 pack missing the table) gItemNamesSjis still holds retail 2-byte SJIS, and
+     * routing THAT through the 1-byte path renders every item screen as garbage glyphs -- the
+     * fallback must be English, never mojibake. */
+    if (fmt >= 2) {
+        s_lang.item1b = s_lang.itemNamesApplied;
+        if (!s_lang.itemNamesApplied)
+            fprintf(stderr, "[lang] format-2 pack has no item-name table -- item names stay retail "
+                            "(rebuild the pack)\n");
+    }
     if (s_lang.textN)
         fprintf(stderr, "[lang] %d dialogue file(s) will be substituted as they load\n", s_lang.textN);
     free(buf);                                  /* sections were copied out where they are kept */
@@ -506,7 +529,12 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
         const unsigned char *r = p + 4 + i * 11;
         unsigned code = r[0], slot = r[1];
         int z, blank = 1;
-        if (code >= 128 || (int)slot >= glyphCount) {
+        /* Slots 1 and 128 are inside glyphCount but FORBIDDEN, exactly as lang_build.py excludes
+         * them: 1 is GLYPH_BG -- in the F_WD sheet it is the window-background tile, and stamping
+         * it tiles every window in the game with a letter (witnessed regression); 128 is where the
+         * retail map sends NUL and space and must stay blank. The builder never emits them, but a
+         * pack is a third-party download: every number in it is hostile until checked. */
+        if (code >= 128 || (int)slot >= glyphCount || slot == 1 || slot == 128) {
             fprintf(stderr, "[lang] charmap: bad record code=%u slot=%u -- skipped\n", code, slot);
             continue;
         }
@@ -557,10 +585,8 @@ void PC_LangPatchRead(int lba, int sectors, unsigned char *out) {
     }
 }
 
-/* Called once, lazily, from the first VSync -- after the data-segment constructors have run. */
+/* Called once, lazily, from the first VSync -- after the data-segment constructors have run.
+ * LangLoad carries its own idempotence latch (s_lang.loaded); no second flag here. */
 void PC_LangBoot(void) {
-    static int done = 0;
-    if (done) return;
-    done = 1;
     LangLoad();
 }

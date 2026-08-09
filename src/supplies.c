@@ -537,15 +537,20 @@ extern int PC_LangItemNames1Byte(void);
 #define GOLD1B_X      233    /* gold box screen x (feedback-35: shifted 1 cell left of 241, box grown
                               * the same 8 px so its right edge stays put) */
 #define GOLD1B_W      80     /* 10 cells @ 8 px: holds max gold "990000G" (7 small chars) with room. */
-/* Compose one FIXED-WIDTH list row -- 16-char name (space-padded) then, when priced, a right-aligned
- * price in an 8-col field. Fixed width matters: a scroll redraw draws spaces over the previous row's
- * cells, so a shorter new name leaves no leftover tail (ASCII space -> blank glyph, which clears).
- * showPrice==0 or a 0 cost (an empty slot) leaves the price blank, matching the SJIS path. */
-static void ItemRow1Byte(u8 *row, const u8 *name, s16 cost, s32 showPrice) {
-   s32 i, done = 0, m = 0;
+/* Compose one FIXED-WIDTH list row -- an optional 1-col prefix, the 16-char name (space-padded),
+ * then, when priced, a right-aligned price in an 8-col field. Fixed width matters: a scroll redraw
+ * draws spaces over the previous row's cells, so a shorter new name leaves no leftover tail (ASCII
+ * space -> blank glyph, which clears). The prefix restores the retail party-list column labels
+ * (SJIS '#' on the three equipped rows, a space on the carried rows -- see
+ * ListPartyMemberInventory) that the 1-byte path otherwise drops; 0 = no prefix column (shop/depot
+ * lists, matching their SJIS layout). showPrice==0 or a 0 cost (an empty slot) leaves the price
+ * blank, matching the SJIS path. */
+static void ItemRow1Byte(u8 *row, const u8 *name, s16 cost, s32 showPrice, u8 prefix) {
+   s32 i, done = 0, m = 0, o = 0;
    char tmp[8];
-   for (i = 0; i < 16; i++) { if (!done && name[i] == '\0') done = 1; row[i] = done ? ' ' : name[i]; }
-   for (i = 16; i < ITEM1B_COLS; i++) row[i] = ' ';
+   if (prefix) row[o++] = prefix;
+   for (i = 0; i < 16; i++) { if (!done && name[i] == '\0') done = 1; row[o + i] = done ? ' ' : name[i]; }
+   for (i = o + 16; i < ITEM1B_COLS; i++) row[i] = ' ';
    row[ITEM1B_COLS] = '\0';
    if (showPrice && cost > 0) {
       while (cost) { tmp[m++] = (char)('0' + cost % 10); cost /= 10; }         /* digits, reversed */
@@ -554,38 +559,34 @@ static void ItemRow1Byte(u8 *row, const u8 *name, s16 cost, s32 showPrice) {
 }
 /* Draw one list row at the choice pitch (28, 110 + row*17). Callers differ only in how they source
  * the item id and cost: shop = full price, depot/sell = half price, view = no price. */
-static void DrawItemRow1Byte(s32 rowIdx, u8 item, s32 showPrice, s32 halfCost) {
+static void DrawItemRow1Byte(s32 rowIdx, u8 item, s32 showPrice, s32 halfCost, u8 prefix) {
    u8 row[ITEM1B_COLS + 1];
    s16 cost = (s16)(halfCost ? gItemCosts[item] / 2 : gItemCosts[item]);
-   ItemRow1Byte(row, gItemNamesSjis[item], cost, showPrice);
+   ItemRow1Byte(row, gItemNamesSjis[item], cost, showPrice, prefix);
    DrawText(28, (s16)(110 + rowIdx * ITEM1B_ROW_H), ITEM1B_COLS + 1, 0, 0, row);
 }
 static void DrawShopList1Byte(u8 shopId, u8 category, u8 top, u8 rows) {
    s32 k;
    for (k = 0; k < rows; k++)
-      DrawItemRow1Byte(k, gShopInventories[shopId][category][top + k], 1, 0);
+      DrawItemRow1Byte(k, gShopInventories[shopId][category][top + k], 1, 0, 0);
 }
 static void DrawDepotList1Byte(s16 top, u8 rows, s32 showPrice) {  /* ids are s16 in gDepotInventoryPtr */
    s32 k;
    for (k = 0; k < rows; k++)
-      DrawItemRow1Byte(k, (u8)gDepotInventoryPtr[top + k], showPrice, 1);
+      DrawItemRow1Byte(k, (u8)gDepotInventoryPtr[top + k], showPrice, 1, 0);
 }
 static void DrawPartyItemList1Byte(s32 showPrice) {  /* the 5 equipped/carried slots */
    s32 k;
+   /* rows 0-2 = weapon/helmet/armor: the retail SJIS list labels them '#' (and pads rows 3-4 with
+    * an SJIS space); mirror that so equipped rows keep their visual cue under a format-2 pack. */
    for (k = 0; k < 5; k++)
-      DrawItemRow1Byte(k, gPartyMemberInventory[k], showPrice, 1);
+      DrawItemRow1Byte(k, gPartyMemberInventory[k], showPrice, 1, (u8)(k < 3 ? '#' : ' '));
 }
-/* One item name in the small font (confirm boxes) -- gItemNamesSjis holds plain ASCII in a 1-byte
- * pack. Hard-truncate to maxChars (never wrap) so a long name clips at the box edge instead of
- * spilling outside or dropping onto a second line. */
+/* One item name in the small font (confirm boxes): the shared truncate-and-draw helper, sourced by
+ * item id here. Per-box caps stay at the call sites (feedback-35/36). */
+extern void PC_LangDrawItemName1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap);
 static void DrawItemName1Byte(s16 x, s16 y, s32 color, u8 item, s32 maxChars) {
-   u8 buf[17];
-   const u8 *name = gItemNamesSjis[item];
-   s32 i;
-   if (maxChars > 16) maxChars = 16;
-   for (i = 0; i < maxChars && name[i] != '\0'; i++) buf[i] = name[i];
-   buf[i] = '\0';
-   DrawText(x, y, maxChars + 1, 0, color, buf);
+   PC_LangDrawItemName1Byte(x, y, color, gItemNamesSjis[item], maxChars);
 }
 /* The gold total in the small 8x9 font (ASCII), right-aligned inside the narrow box the widened list
  * needs. Right-align so short totals sit against the same edge as "990000G" instead of drifting. */

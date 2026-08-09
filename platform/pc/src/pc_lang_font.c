@@ -148,8 +148,6 @@ static void DrawGlyphBitmap(const unsigned char *rows, int x, int y, int color) 
 #define FWD_CELL_W 2              /* halfwords: 8 px at 4bpp */
 #define FWD_CELL_H 9
 
-extern const unsigned char *PC_LangCharmapBlob(unsigned *len);   /* pc_lang.c */
-
 static unsigned SheetInkNibble(const unsigned short *pix, int w, int h) {
     int counts[16] = {0}, r, hw, n, best = 4, bestCt = 0;
     int row0 = (68 / FWD_CELLS_PER_ROW) * FWD_CELL_H, col = (68 % FWD_CELLS_PER_ROW) * FWD_CELL_W;
@@ -177,27 +175,42 @@ void PC_LangPatchFwdUpload(int px, int py, int pw, int ph, unsigned short *pix) 
         ((unsigned)blob[3] << 24);
     if (n > (len - 4) / 11) return;          /* divide form: the addition wraps for hostile n */
     ink = SheetInkNibble(pix, pw, ph);
-    for (i = 0; i < n; i++) {
-        const unsigned char *rec = blob + 4 + i * 11;
-        int slot = rec[1], r;
-        int row0 = (slot / FWD_CELLS_PER_ROW) * FWD_CELL_H;
-        int col = (slot % FWD_CELLS_PER_ROW) * FWD_CELL_W;
-        if (row0 + FWD_CELL_H > ph) continue;              /* outside this upload slice */
-        for (r = 0; r < FWD_CELL_H; r++) {
-            unsigned char bits = rec[2 + r];
-            unsigned short hw0 = 0, hw1 = 0;
-            int p2;
-            for (p2 = 0; p2 < 4; p2++) {
-                if (bits & (0x80 >> p2))       hw0 |= (unsigned short)(ink << (4 * p2));
-                if (bits & (0x80 >> (p2 + 4))) hw1 |= (unsigned short)(ink << (4 * p2));
+    {
+        unsigned stamped = 0;
+        for (i = 0; i < n; i++) {
+            const unsigned char *rec = blob + 4 + i * 11;
+            int slot = rec[1], r, blank = 1;
+            int row0 = (slot / FWD_CELLS_PER_ROW) * FWD_CELL_H;
+            int col = (slot % FWD_CELLS_PER_ROW) * FWD_CELL_W;
+            /* Same reject rule as PC_LangApplyCharmap (pc_lang.c) -- this is the SECOND consumer
+             * of the same hostile blob and must not be laxer: slot 1 is the window-background tile
+             * in THIS sheet (stamping it tiles every window with a letter -- the witnessed
+             * regression), slot 128 is NUL/space and must stay blank. And a blank record means
+             * "map only" there, so it must not ERASE the sheet cell here (the target of a map-only
+             * remap already holds the right art, e.g. the lowercase a-z cells). */
+            if (slot == 1 || slot == 128 || slot >= PC_LANG_GLYPH_SLOTS) continue;
+            for (r = 0; r < FWD_CELL_H; r++)
+                if (rec[2 + r]) { blank = 0; break; }
+            if (blank) continue;
+            if (row0 + FWD_CELL_H > ph) continue;          /* outside this upload slice */
+            for (r = 0; r < FWD_CELL_H; r++) {
+                unsigned char bits = rec[2 + r];
+                unsigned short hw0 = 0, hw1 = 0;
+                int p2;
+                for (p2 = 0; p2 < 4; p2++) {
+                    if (bits & (0x80 >> p2))       hw0 |= (unsigned short)(ink << (4 * p2));
+                    if (bits & (0x80 >> (p2 + 4))) hw1 |= (unsigned short)(ink << (4 * p2));
+                }
+                pix[(row0 + r) * pw + col] = hw0;
+                pix[(row0 + r) * pw + col + 1] = hw1;
             }
-            pix[(row0 + r) * pw + col] = hw0;
-            pix[(row0 + r) * pw + col + 1] = hw1;
+            stamped++;
         }
-    }
-    if (!logged) {
-        logged = 1;
-        fprintf(stderr, "[lang] F_WD sheet: %u charmap cell(s) stamped (ink nibble %u)\n", n, ink);
+        if (!logged) {
+            logged = 1;
+            fprintf(stderr, "[lang] F_WD sheet: %u charmap cell(s) stamped (ink nibble %u)\n",
+                    stamped, ink);
+        }
     }
 }
 
@@ -247,6 +260,23 @@ int PC_LangUtf8SeqLen(const unsigned char *p) {
     unsigned cp;
     if (!s_glyphN || p[0] < 0xC2) return 0;
     return Utf8Decode(p, &cp);
+}
+
+/* One item name in the small font (format-2 packs: gItemNamesSjis holds plain 1-byte ASCII).
+ * Hard-truncate to cap chars and never wrap, so a long name clips at its box edge instead of
+ * spilling outside or dropping onto a second line. THE one implementation behind the three gated
+ * draw sites (supplies.c confirm boxes, window.c battle item list, battle_0201b8.c unit panel) --
+ * the per-box caps are the callers' knowledge (feedback-35/36 pixel tuning), the truncate-and-draw
+ * behaviour is this function's, so a future tuning pass lands once. */
+extern void DrawText(int x, int y, int maxCharsPerLine, int lineSpacing, int color,
+                     unsigned char *text);                                        /* src/text.c */
+void PC_LangDrawItemName1Byte(int x, int y, int color, const unsigned char *name, int cap) {
+    unsigned char buf[17];
+    int i;
+    if (cap > 16) cap = 16;
+    for (i = 0; i < cap && name[i] != '\0'; i++) buf[i] = name[i];
+    buf[i] = '\0';
+    DrawText(x, y, cap + 1, 0, color, buf);
 }
 
 int PC_LangUtf8Glyph(unsigned char **pp, int x, int y, int color) {

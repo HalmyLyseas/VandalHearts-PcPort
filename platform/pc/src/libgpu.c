@@ -31,6 +31,7 @@
 #include <time.h>
 
 #include "PsyQ/libgpu.h"
+#include "pc_lang.h"       /* PC_LangPatchFwdUpload: pack glyphs stamped into the F_WD sheet upload */
 #include "pc_platform.h"
 #include "pc_gpu_internal.h"   /* seams with the extracted subsystem TUs (pc_gpu_trace.c, ...) */
 
@@ -188,8 +189,7 @@ int LoadImage(RECT *rect, unsigned int *p) {
      * glyphs are stamped into their sheet cells IN THE SOURCE BUFFER, before anything consumes it --
      * so VRAM, the hires mirror, the trace and the HD hash all see one consistent image, and every
      * re-upload (LoadFWD runs per scene) re-applies for free. No-op without a pack. */
-    { extern void PC_LangPatchFwdUpload(int px, int py, int pw, int ph, unsigned short *pix);
-      PC_LangPatchFwdUpload(rect->x, rect->y, rect->w, rect->h, src); }
+    PC_LangPatchFwdUpload(rect->x, rect->y, rect->w, rect->h, src);
     if (rect->w > 0 && rect->h > 0) TrcWrite('L', rect, 8, src, (u32)(rect->w * rect->h * 2));
     for (y = 0; y < rect->h; y++)
         for (x = 0; x < rect->w; x++)

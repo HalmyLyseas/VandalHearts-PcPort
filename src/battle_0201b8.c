@@ -1653,15 +1653,9 @@ void DisplaySpellStatusWindow(UnitStatus *unit, u8 windowId) {
 #ifdef PC_FEAT
 extern int PC_LangItemNames1Byte(void);
 /* A format-2 language pack stores item names as 1-byte ASCII; draw them in the small font, hard-
- * truncated so a 16-char name doesn't spill past this narrow unit-item panel. exchange/91, feedback-36. */
-static void DrawItemNameSmall1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap) {
-   u8 buf[17];
-   s32 i;
-   if (cap > 16) cap = 16;
-   for (i = 0; i < cap && name[i] != '\0'; i++) buf[i] = name[i];
-   buf[i] = '\0';
-   DrawText(x, y, cap + 1, 0, color, buf);
-}
+ * truncated to this narrow unit-item panel's cap (12). One shared implementation lives in
+ * platform/pc/src/pc_lang_font.c; inline extern per the src/ house style. exchange/91, feedback-36. */
+extern void PC_LangDrawItemName1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap);
 #endif
 
 void DisplayItemsStatusWindow(UnitStatus *unit, u8 windowId) {
@@ -1684,7 +1678,7 @@ void DisplayItemsStatusWindow(UnitStatus *unit, u8 windowId) {
    if (unit->items[0] != ITEM_NULL) {
 #ifdef PC_FEAT
       if (PC_LangItemNames1Byte())
-         DrawItemNameSmall1Byte(28, y * 18 + 60, 0, gItemNamesSjis[unit->items[0]], 12);
+         PC_LangDrawItemName1Byte(28, y * 18 + 60, 0, gItemNamesSjis[unit->items[0]], 12);
       else
 #endif
       DrawSjisText(28, y * 18 + 60, 20, 0, 0, gItemNamesSjis[unit->items[0]]);
@@ -1693,7 +1687,7 @@ void DisplayItemsStatusWindow(UnitStatus *unit, u8 windowId) {
    if (unit->items[1] != ITEM_NULL) {
 #ifdef PC_FEAT
       if (PC_LangItemNames1Byte())
-         DrawItemNameSmall1Byte(28, y * 18 + 60, 0, gItemNamesSjis[unit->items[1]], 12);
+         PC_LangDrawItemName1Byte(28, y * 18 + 60, 0, gItemNamesSjis[unit->items[1]], 12);
       else
 #endif
       DrawSjisText(28, y * 18 + 60, 20, 0, 0, gItemNamesSjis[unit->items[1]]);

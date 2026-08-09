@@ -28,6 +28,7 @@
 #include "PsyQ/libgpu.h"
 #include "pc_platform.h"
 #include "pc_gpu_internal.h"
+#include "pc_lang.h"      /* PC_LangBgDir: localized backgrounds ride the language selection */
 
 #define HD_MAX_REGIONS 512
 static HdRegion s_hdReg[HD_MAX_REGIONS];
@@ -130,10 +131,10 @@ static const char *HdPackDir(void) {
     return (env && *env) ? env : s_hdPack.dir;
 }
 
-/* F2 (exchange/92): the active language pack's backgrounds/ dir, or NULL. Gated by the pack being
- * SELECTED (independent of the HD PACK toggle) -- localized backgrounds are translation, not an
- * enhancement. Resolved before the HD pack (see BgSourceDir), so a translated background wins. */
-extern const char *PC_LangBgDir(void);
+/* F2 (exchange/92): PC_LangBgDir (pc_lang.h) is the langpack backgrounds/ source -- gated on
+ * MANIFEST ACCEPTANCE, independent of the HD PACK toggle (localized backgrounds are translation,
+ * not an enhancement). Resolved before the HD pack (see BgSourceDir), so a translated background
+ * wins. */
 
 /* Any background-replacement source live right now (HD pack OR a langpack backgrounds/). Gates the
  * per-triangle region resolve in the DDA (pc_raster.c) and the registration in HdPack_OnLoad. */
@@ -434,6 +435,14 @@ HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax) {
         /* acquire pairs with the loader thread's release publish of px: once non-NULL, w/h and the
          * pixel data are visible too. Until then the region is skipped -> native texels draw. */
         if (!__atomic_load_n(&r->px, __ATOMIC_ACQUIRE) || !r->live) continue;
+        /* The HD PACK toggle must gate HD-PACK-sourced regions PER SAMPLE, not just at registration:
+         * a region registered while the toggle was ON stays live (and re-uploads re-mark it live),
+         * so without this check toggling OFF mid-scene keeps drawing it for the rest of the run.
+         * Langpack-sourced regions (r->dir is PC_LangBgDir()'s one static buffer -- pointer identity
+         * is exact) are deliberately NOT gated: localized backgrounds are translation, not an
+         * enhancement, and ride the language selection instead. Toggling back ON re-samples the
+         * still-live region, mirroring the toggle-ON semantics the eviction comment above documents. */
+        if (!HdActive() && r->dir != PC_LangBgDir()) continue;
         if (wx1 < r->rx || wx0 >= r->rx + r->rw || wy1 < r->ry || wy0 >= r->ry + r->rh) continue;
         return r;
     }

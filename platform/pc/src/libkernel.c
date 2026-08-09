@@ -33,6 +33,7 @@
 #include "PsyQ/sys/file.h"
 #include "pc_platform.h"     /* PC_GetDeployDir -- resolve the saves folder next to the exe/AppImage */
 #include "pc_balance.h"      /* gTacticalMode -- Tactical saves live in a separate folder (GAP 4) */
+#include "pc_lang.h"         /* PC_LangKromGlyph -- pack glyphs for the SJIS path */
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -684,8 +685,7 @@ void *Krom2RawAdd(s32 sjisCode) {
     /* Language pack (pc_lang_font.c): pack-assigned 2-byte codes (0x8440+, a range the retail map
      * never answers) resolve to pack-supplied 16x15 glyphs -- accented item names ride the existing
      * DrawSjisGlyph path, anti-aliasing included. NULL without a pack; retail lookup unchanged. */
-    { extern const void *PC_LangKromGlyph(unsigned sjis);
-      const void *g = PC_LangKromGlyph((unsigned)sjisCode & 0xffff);
+    { const void *g = PC_LangKromGlyph((unsigned)sjisCode & 0xffff);
       if (g) return (void *)g; }
     idx = sjis_to_krom_glyph((u32)sjisCode & 0xffff);
     if (idx < 0) {
