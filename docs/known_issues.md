@@ -53,6 +53,11 @@ unless noted otherwise.
 - **HD PACK toggle timing (v1.6).** Turning HD **on** mid-scene takes effect from the next
   screen/background load (each background is identified as the game uploads it); turning it **off** is
   immediate. See [hd-pack.md](hd-pack.md).
+- **Language changes need a restart (v1.7).** Selecting a language pack (the overlay's LANGUAGE
+  row) marks the change with `*` and applies it **at the next launch** — there is no live language
+  switch, by design: a pack rewrites structures the game builds once at boot. If the game still
+  shows English after selecting a pack, restart it. See
+  [language-packs.md](language-packs.md#installing-and-selecting-a-pack).
 - **macOS.** Only **Windows** and **Linux** are supported. macOS is scaffolded in the build but not
   built or tested — see [cross-platform.md](cross-platform.md).
 

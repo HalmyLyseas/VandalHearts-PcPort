@@ -4,6 +4,56 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.0] — Language packs: play in your language
+
+The port can now display the game in another language, loaded from an optional **language pack**
+beside the executable. The base build still ships no game text and behaves identically without a
+pack; normal mode remains byte-for-byte the retail game. Packs are a community effort — this
+release ships the engine and the complete authoring toolchain, not translations.
+
+### Added
+
+- **Language packs.** Install a pack under `langpacks/<name>/` and pick it with the new
+  **LANGUAGE** option (SELECT+START overlay, System) — the one overlay setting that is not live:
+  the choice is marked `*` and **applies at the next launch**. A pack covers everything the game
+  draws: story dialogue, menus, battle messages, item/spell names and descriptions, character,
+  class and terrain names, the text hardcoded in the game's code, Tactical Mode's text, and the
+  save-slot captions (translated at display time, so save files stay language-neutral and
+  portable). A pack is a *diff* — untranslated entries simply stay English. Player guide:
+  [language-packs.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/language-packs.md).
+- **Non-Latin scripts.** Accented Latin (French, Italian, Portuguese, German, Spanish…) renders
+  with no extra art — letterforms are composed from the game's own font. Scripts the game has
+  never drawn ship their own glyph sheets, rasterised from GNU Unifont by the tooling and
+  hand-tweakable: **Cyrillic and Greek are proven in game**. Packs can also opt into true
+  **mixed-case** rendering (`--mixed-case`) instead of the retail ALL-CAPS folding.
+- **Longer item names (pack format 2).** A pack can store item names as 16 characters instead of
+  the retail 8, rendered through the small font across the shop, depot and battle screens — the
+  difference between `MEGAHERB` and a real translation. A build that doesn't understand a pack's
+  format refuses it loudly and keeps English — never garbled text.
+- **Localized backgrounds.** A pack can replace backgrounds with text baked into the art (the
+  title card, signposts) with translated versions — same content-hash mechanism as the HD pack,
+  and a translated background takes priority over the HD one. They render at **every INTERNAL RES
+  setting** (at 1× the art is downscaled to native resolution) and need nothing from the player —
+  no HD pack required.
+- **The authoring toolchain**
+  ([hands-on quickstart](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/tools/langpack/quickstart.md) ·
+  [reference](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/tools/langpack/README.md)):
+  export the game's complete text from your own disc into a translator working set (every entry
+  carries its English source and its display limit), translate, merge, validate against the
+  engine's real limits (hard rules + on-screen fit lint), and build. Non-Latin packs derive and
+  rasterise exactly the glyphs a translation needs. Game text is never committed to the
+  repository — everything regenerates from the disc.
+
+### Changed
+
+- **The console is quiet by default.** Recurring per-event lines (per-table pack loads, per-scene
+  HD replacements, per-movie decoder open/close) are now behind `VH_VERBOSE=1` (env or ini). The
+  boot summary and **every warning** still always print — a refused or damaged pack says so loudly.
+- The issue template asks about language packs, and the documentation covers them throughout (the
+  Player Manual, configuration reference, feature guide, and a
+  [translator entry point](https://github.com/HalmyLyseas/VandalHearts-PcPort#where-to-start) in
+  the README).
+
 ## [1.6.2] — Corrupted disc images are detected instead of hanging
 
 A small maintenance release, prompted by the first user bug report after release. No gameplay

@@ -47,7 +47,8 @@ launch and turns the **HD PACK** option on. Without the pack, nothing changes.
 
 Community-made translations install the same way: place the pack folder under `langpacks/` next
 to the executable (e.g. `langpacks/fr-fantrad/`), then pick it with the **LANGUAGE** option
-in-game and restart. Without a pack the game is its original English.
+in-game — **the pack applies at the next launch, so restart the game after choosing it**. Without
+a pack the game is its original English.
 
 ## Settings
 
@@ -123,7 +124,7 @@ smoothed.
 
 With a pack selected, the game's text — dialogue, menus, items, battle messages — displays in
 that language, at any graphics setting. Some packs also translate backgrounds with baked-in text
-(such as the title card). Changing the language takes effect at the next launch; the port's own
+(such as the title card). **Changing the language takes effect at the next launch**; the port's own
 SELECT+START menu deliberately stays English. Packs are made by the community with the tools in
 the repository — this project distributes no game text.
 
