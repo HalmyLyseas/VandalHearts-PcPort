@@ -30,7 +30,7 @@ DEFAULT_FONT = os.path.join(HERE, "unifont-subset.bdf")
 # Preset alphabets (uppercase -- the game draws most text in capitals). Extend as new scripts land.
 SCRIPTS = {
     "ru": [0x0401] + list(range(0x0410, 0x0430)),                      # Russian: Ё + А..Я (33)
-    "el": [c for c in range(0x0391, 0x03AA) if c != 0x03A2],           # Greek caps Α..Ω (24)
+    "el": [c for c in range(0x0391, 0x03AA) if c != 0x03A2] + [0x003B],  # Greek caps Α..Ω (24) + ; question mark
 }
 
 

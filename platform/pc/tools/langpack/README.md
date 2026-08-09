@@ -104,7 +104,7 @@ An untouched working set should validate clean and build to an *empty* pack:
 
 ```
 lang_validate.py <disc> <work>                   ->  0 error(s), 0 warning(s)
-lang_build.py    <disc> <work> <out> --lang test ->  (0 sections)
+lang_build.py    <disc> <work> <out> --lang en-test ->  (0 sections)
 ```
 
 Zero sections is the point, not a failure: a pack only carries what you changed, so "nothing
@@ -210,7 +210,16 @@ right. The **16×15 sheet is production quality**; the **8×9 sheet is legible**
 team may hand-tweak a few of the densest letters, but nobody starts from a blank grid. KROMDAT / the
 PlayStation BIOS is not involved. (Unifont is OFL/GPL; see `NOTICE-unifont.txt`.)
 
-### Sheet format, if you draw or edit by hand
+### Punctuation the base game can't draw
+
+The game draws the common marks (`? ! , . - : ' " + / < = %`) but has **no glyph for these ASCII
+characters**: `& ( ) * ; > @ [ \ ] ^ _ \` { | } ~` — notably `;`, which Greek uses as its question
+mark. If your translation
+uses one of these, treat it exactly like a letter: **draw it**. `lang_template` reports it alongside
+the alphabet (`U+003B ; SEMICOLON`), `gen_packart` rasterises it from Unifont, and the builder
+installs it at its own byte so it renders as itself. `gen_packart --script el` includes `;`
+automatically. Without a supplied glyph, using one of these characters is a build error (it would
+otherwise be silently reassigned to an alphabet letter).
 
 `<dir>` holds up to two sheets, each a **PNG image + a `.txt` manifest**:
 

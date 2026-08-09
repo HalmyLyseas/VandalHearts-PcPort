@@ -25,8 +25,15 @@ Usage: ./lang_template.py <workdir>              report only (+ the gen_packart 
 """
 import os, sys, unicodedata
 
-from lang_build import MARKS, KROM_MARKS, drawn_chars, count_untranslated
+from lang_build import MARKS, KROM_MARKS, RETAIL_MAP, drawn_chars, count_untranslated
 from lang_io import load_json
+
+
+def glyphless_ascii(cp):
+    """A printable ASCII byte the base game draws no glyph for (RETAIL_MAP==0), excluding the two
+    control-code bytes '#' '$'. A pack that USES such a character -- Greek's ';' question mark, say --
+    must supply a glyph for it, exactly like a non-ASCII letter, so the template must report it."""
+    return 0x21 <= cp <= 0x7E and cp not in (0x23, 0x24) and RETAIL_MAP[cp] == 0
 
 # The two glyph surfaces, and which text sources land on each. Item names (and the SJIS literals --
 # the TURN banner, the dojo YES/NO) draw through the 16x15 "krom" font; everything else through the
@@ -66,7 +73,7 @@ def collect(work):
     def add(text, surface):
         for ch in drawn_chars(text or ""):
             cp = ord(ch)
-            if cp > 0x7F:
+            if cp > 0x7F or glyphless_ascii(cp):
                 used.setdefault(cp, set()).add(surface)
 
     tables = load_json(os.path.join(sdir, "tables.json"))["tables"]

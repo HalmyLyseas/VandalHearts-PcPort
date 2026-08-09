@@ -400,7 +400,6 @@ class CharmapAssign:
         # The bytes this pack can hand to a glyph slot -- captured before any get popped, so the
         # collision guard (pack_code_collisions) can tell whether a DRAWN ASCII byte would be
         # reassigned. Script mode adds A-Z here; a Latin pack never reassigns letters.
-        self.pack_code_bytes = set(self.codes)
         # Free glyph slots, 44 of them. Two exclusions inside this span, both learned the hard
         # way and both invisible until something renders:
         #   slot 1   = GLYPH_BG, the window background tile in the F_WD sheet (assigning it
@@ -409,6 +408,20 @@ class CharmapAssign:
         # The upper bound tracks src/text.c's PC-side sFontGlyphBitmaps[156] and DrawFontGlyph's
         # matching index guard -- raise both together or glyphs simply do not draw.
         self.slots = list(range(111, 128)) + list(range(129, 156))
+        # PUNCTUATION GLYPHS. The base game draws no glyph for some printable ASCII (RETAIL_MAP==0 --
+        # ';' '(' ')' '_' '&' ...), which is exactly why those bytes are free to reassign to alphabet
+        # letters. But a pack may instead want the character ITSELF -- a Greek pack needs ';' for its
+        # question mark. So if the pack's sheet supplies a glyph for such a byte, install it at that
+        # OWN byte (identity code -> slot -> glyph) and drop the byte from the reassignable pool, so a
+        # letter never claims it. Control-code bytes (# $) are never eligible. pack_code_bytes is
+        # therefore frozen only AFTER this, so the collision guard treats a drawn punctuation byte as a
+        # literal rather than a reassigned code.
+        for cp in sorted(self.art):
+            if 0x21 <= cp <= 0x7E and cp not in (0x23, 0x24) and RETAIL_MAP[cp] == 0 and self.slots:
+                if cp in self.codes:
+                    self.codes.remove(cp)
+                self.assigned[cp] = (cp, self.slots.pop(0), self.art[cp])
+        self.pack_code_bytes = set(self.codes)
 
     def reserve_literal(self, ch):
         """The translator used this ASCII char literally: it must never become a pack code."""
@@ -488,9 +501,17 @@ def enc_codes(s, charmap, errors, ctx):
     # them -- which is why the proven Russian pack, full of $W/$T6, still builds.)
     bad = pack_code_collisions(s, charmap)
     if bad:
+        letters = [c for c in bad if c.isalpha()]
+        punct = [c for c in bad if not c.isalpha()]
+        hint = []
+        if letters:
+            hint.append(f"Latin letters ({', '.join(map(repr, letters))}) are the alphabet's byte "
+                        f"slots -- translate or remove them")
+        if punct:
+            hint.append(f"punctuation ({', '.join(map(repr, punct))}) has no built-in glyph -- add "
+                        f"its codepoint to the --packart sheet to draw it, or remove it")
         errors.append(f"{ctx}: {', '.join(repr(c) for c in bad)} would draw as a pack glyph, not "
-                      f"itself -- Latin left in a non-Latin pack renders as nonsense; translate or "
-                      f"remove it")
+                      f"itself. " + "; ".join(hint) + ".")
         return None
     out = bytearray()
     for ch in s:
