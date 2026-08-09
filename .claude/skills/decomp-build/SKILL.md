@@ -188,6 +188,17 @@ before copying blindly, especially the `toolchain/bin` path. `make extract` itse
 fails because it unconditionally runs the still-missing `sortSymbols.py` first — invoke
 `splat` directly instead, as above, until that script is sourced or the Makefile is changed.)
 
+### ⚠ `make clean` DELETES the hand-made `.inc` files (bit us 2026-08-09)
+
+Top-level `clean` is `rm -rf asm assets build` — and `assets/` holds the 4 hand-generated
+`.inc` files described below, which `splat` does NOT regenerate. After a `make clean`, a
+rebuild fails at `map_effects_08f524.c` on the missing `assets/801009bc.inc`. Recovery: re-run
+`splat` (for `asm/`), then regenerate the 4 `.inc` files from the verified `SLUS_004.47` with
+the recipe below (field-ordered flat initializers: MapTileModel = 88+18 s16 then 92 u8 per
+struct ×4 at 0x801009bc / ×1 at 0x80100e9c; 100 `(u8 *)0x...` pointers at 0x8010102c;
+128×9 raw u8 at 0x801012e4). Verified 2026-08-09: the regenerated set reproduces the
+byte-exact match from clean.
+
 ### The `assets/*.inc` gap (found and fixed 2026-07-10)
 
 4 files (`map_effects_08f524.c`, `map_effects_092320.c`, `text.c` ×2) do

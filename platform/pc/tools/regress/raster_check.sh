@@ -23,7 +23,11 @@ mkdir -p "$RD"
 replay_hash() {
     # Pin the raster environment: the ini->env loader runs before replay, so a user's
     # VH_INTERNAL_SCALE/VH_RASTER_THREADS in vandalhearts.ini would otherwise leak in.
+    # VH_LANG/VH_LANGPACK too (empty = no pack): a persisted language pack legitimately patches
+    # the F_WD glyph-sheet uploads at LoadImage, which changes the replayed VRAM signature --
+    # exactly the false FAIL this pinning exists to prevent (bit us 2026-08-09 with ru-gen).
     env VH_GPU_REPLAY="$TRACE" VH_INTERNAL_SCALE=1 VH_RASTER_THREADS=1 \
+        VH_LANG= VH_LANGPACK= VH_HDPACK=0 \
         SDL_VIDEODRIVER=dummy ALSOFT_DRIVERS=null "$EXE" 2>/dev/null \
         | grep -E "^REPLAY " || { echo "raster: replay produced no signature" >&2; exit 2; }
 }
@@ -32,6 +36,7 @@ if [ ! -f "$TRACE" ]; then
     echo "raster: no trace yet -- recording the boot sequence (headless, ~10s)..."
     env VH_SMOKE=1 VH_SMOKE_LINGER=600 VH_GPU_RECORD="$TRACE" VH_GPU_RECORD_FRAMES=400 \
         SDL_VIDEODRIVER=dummy ALSOFT_DRIVERS=null VH_FULLSCREEN=0 VH_HDPACK=0 \
+        VH_LANG= VH_LANGPACK= \
         "$EXE" > "$RD/record.log" 2>&1 || { echo "raster: recording boot FAILED:" >&2; tail -5 "$RD/record.log" >&2; exit 2; }
     [ -s "$TRACE" ] || { echo "raster: no trace was written (see $RD/record.log)" >&2; exit 2; }
     replay_hash > "$REF"
