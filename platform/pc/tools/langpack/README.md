@@ -283,6 +283,38 @@ Uppercase accents outside item names: use the accepted convention of unaccented 
 so a Latin word left in a Cyrillic pack would render as Cyrillic — the builder refuses it. You cannot
 mix, say, Cyrillic and Greek in one pack; pick one script.
 
+## Localized backgrounds
+
+Some backgrounds have **text baked into the image** (title cards, signposts, map labels). A pack can
+replace one with a translated version, using the **same content-hash swap as the HD pack** — the file
+is a 1280×960 WebP named `<hash>.webp`, exactly the HD-pack convention. Priority is
+**langpack > HD pack > retail**, so a translated background overrides the HD (untranslated) one.
+
+**Two requirements to know up front:**
+- **You need the HD pack.** It is where the hashes and reference images come from — download it, and
+  its `backgrounds/<hash>.webp` filenames *are* the hashes, matched to the visuals you can look at.
+- **They render only at internal scale ≥ 2** (the hi-res pass), like all background replacement. At
+  scale 1× the player sees the original background. Translated backgrounds reach the hi-res crowd; a
+  player who wants them keeps supersampling on.
+
+**Workflow:**
+
+```
+# 1 — browse the HD pack's backgrounds/<hash>.webp; find the one whose baked-in text you want to
+#     translate, and note its <hash> (the filename).
+# 2 — redraw that image at 1280x960 with the text translated (your own upscaler, or the workflow in
+#     platform/pc/tools/hdpack/vh_bg_restore.py), and save it as:
+#         <work>/backgrounds/<hash>.webp
+# 3 — validate (cross-checks the hash against the HD pack you point at):
+lang_validate.py <disc> <work> --hdpack <hdpack-dir>
+# 4 — build: the backgrounds are copied into the pack and listed in its manifest.
+lang_build.py <disc> <work> <out> --lang <name>
+```
+
+The pack gains a `backgrounds/` folder beside `strings.bin`; the runtime resolves it before the HD
+pack. `lang_validate --hdpack` checks each file is a valid WebP, exactly **1280×960**, with a 16-hex
+hash filename that is a real background in that HD pack (a typo'd hash is otherwise a silent no-op).
+
 ## How validation works
 
 Two layers:

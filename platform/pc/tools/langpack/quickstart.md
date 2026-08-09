@@ -8,8 +8,10 @@ flag**; see [`README.md`](README.md) for the reference and the exact Latin vs no
 Every command is run from `platform/pc/tools/langpack/`. `<disc>` is your own disc image; the scripts
 are executable (`./lang_export.py …`). Non-Latin art needs Pillow (`pip install pillow`).
 
-The end result — Greek dialogue (note the `;`, the Greek question mark) and a translated shop item
+The end result — Custom title background, Greek dialogue (note the `;`, the Greek question mark) and a translated shop item
 with a Greek stat label:
+
+![Custom Greek title background](images-quickstart/quickstart-10-backgrounds.png)
 
 ![In-game Greek dialogue](images-quickstart/quickstart-08-dialog.png)
 
@@ -76,20 +78,44 @@ Note `U+003B ; SEMICOLON` in the list: the game has no `;` glyph, so a Greek pac
 letter — it renders as itself and the demo's question mark works. Re-run this tool whenever you
 translate more text, in case new letters appear.
 
-## 5 · Validate
+## 5 · Backgrounds (optional)
 
-Lint the pack against the engine's real limits — **pass `--packart` for a non-Latin pack**:
+A background with **baked-in text** (the title card, signposts, map labels) can be localized too, via
+the same content-hash swap as the HD pack. You need the **HD pack**: its `backgrounds/<hash>.webp`
+filenames *are* the hashes, matched to images you can actually look at. Two constraints — the file
+must be **1280×960**, and backgrounds render **only at internal scale ≥ 2** (at 1× the player sees the
+original).
+
+Copy the one you want to adapt out of the HD pack as a starting canvas — here the title screen,
+`0c5035b9b009cde7.webp`:
 
 ```
-./lang_validate.py <disc> work_el-demo --packart art_el-demo
+mkdir -p work_el-demo/backgrounds
+cp <hd pack folder>/backgrounds/0c5035b9b009cde7.webp work_el-demo/backgrounds/0c5035b9b009cde7.webp
+```
+
+![Copy the HD background](images-quickstart/quickstart-05.5-copy-backgrounds.png)
+
+Then **edit that 1280×960 image** in your graphics tool — replace the baked-in text with your
+translation, keeping the same dimensions and filename. The custom title at the top of this page is
+that edited background.
+
+## 6 · Validate
+
+Lint the pack against the engine's real limits — **`--packart`** for a non-Latin pack, and
+**`--hdpack <hd pack folder>/backgrounds`** to check any localized background (valid WebP, 1280×960,
+a real HD-pack hash):
+
+```
+./lang_validate.py <disc> work_el-demo --packart art_el-demo --hdpack <hd pack folder>/backgrounds
 ```
 
 ![Validation](images-quickstart/quickstart-06-validation.png)
 
-`0 error(s)` is the goal. The lone warning here is that most strings are still untranslated — fine
-for this demo (see *Notes* on partial non-Latin packs).
+`0 error(s)` is the goal. Both warnings here are harmless: most strings are still untranslated (fine
+for this demo — see *Notes*), and a reminder that the background only shows at internal scale ≥ 2.
 
-## 6 · Build
+## 7 · Build
 
 ```
 ./lang_build.py <disc> work_el-demo el_demo --lang el --packart art_el-demo \
@@ -97,11 +123,12 @@ for this demo (see *Notes* on partial non-Latin packs).
 ```
 
 `--allow-incomplete` lets a *partial* pack build for testing. The output is a `manifest.json` (the
-pack's identity — the game checks its `game`/`format` before loading) and `strings.bin`:
+pack's identity — the game checks its `game`/`format` before loading), `strings.bin`, and — because we
+added a background — a `backgrounds/` folder, all recorded in the manifest:
 
 ![Build](images-quickstart/quickstart-07-build.png)
 
-## 7 · Install and run
+## 8 · Install and run
 
 Copy the pack folder next to the executable and select it:
 
@@ -131,5 +158,7 @@ label; untranslated entries stay in English:
   actually translated. A **Latin** pack degrades gracefully — untranslated entries just stay English.
 - **Punctuation the game can't draw** (`;` and a few others) is drawn exactly like a letter — the
   template lists it, `gen_packart` rasterises it, the builder installs it. Details in `README.md`.
+- **Localized backgrounds** need the HD pack (source of the hash + reference image), must be
+  **1280×960**, and render **only at internal scale ≥ 2** — at 1× the player sees the original.
 - **Full reference:** [`README.md`](README.md) — the Latin workflow, the sheet format, the supported
   character set, pack naming, and the two-font model.
