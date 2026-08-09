@@ -49,11 +49,24 @@ experience message), the Tactical Mode flavour text, and the save/load slot capt
 **diff** — an entry it does not translate keeps the original text, so a partial Latin translation is
 still a working translation.
 
+A pack may also opt into **longer item names** — 16 characters instead of the original 8 — which
+then render in the smaller font on the shop, depot and battle item screens. It is the translator's
+choice, baked into the pack (`format: 2` in its manifest); an older port build refuses such a pack
+loudly rather than showing broken text.
+
 The save-slot caption (`Chap. 1 Sct. 1  L5   0:15`) is translated at **display time**: the caption
 stored in the save file stays language-neutral English, and its labels are swapped for the pack's
 when the load/save menu draws it. So the save file stays portable (it still round-trips to emulators
 and console, and reads correctly under any pack or none), and even saves made before a pack was
 installed show the translated caption.
+
+## Localized backgrounds
+
+A pack can also replace backgrounds that have **text baked into the image** — the title card,
+signposts, map labels — with translated versions, using the same mechanism as the HD pack's
+backgrounds (and a translated background wins over the HD one). Nothing extra is needed on the
+player's side: they show at **every INTERNAL RES setting**, with or without the HD pack installed
+or enabled. At 1× the art is displayed at native resolution.
 
 ## What a pack does not cover
 

@@ -123,6 +123,14 @@ quality-of-life, graphics fidelity, and the optional HD pack — have shipped ac
 the project is in **maintenance**: minor adjustments and fixes for reported issues rather than new feature
 tracks. Known problems and small follow-ups are tracked in [known_issues.md](known_issues.md).
 
+**v1.7.0** is the one addition since — not a gameplay track but an *enabling* one: **language
+packs**. The port can display the game's text in another language, loaded from an optional
+community-built pack ([language-packs.md](language-packs.md)); the authoring toolchain
+([`platform/pc/tools/langpack/`](../platform/pc/tools/langpack/)) exports the text from a player's
+own disc, validates a translation against the engine's real limits, and builds the pack — including
+non-Latin scripts (Cyrillic and Greek proven in game) and localized backgrounds. The base build
+still ships no game text and behaves identically without a pack.
+
 **v1.6.2** (released 2026-08-05) came from the first user bug report: a damaged disc image used to
 hang the game silently and now stops with a clear error naming the broken sector (see
 [troubleshooting.md](troubleshooting.md#the-game-wont-start)).

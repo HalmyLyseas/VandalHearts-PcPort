@@ -43,6 +43,12 @@ Download `VandalHearts-*-hdpack.zip` from the release page and unzip it so the `
 sits next to the executable (next to the AppImage on Linux). The game detects it at the next
 launch and turns the **HD PACK** option on. Without the pack, nothing changes.
 
+## Language packs (optional)
+
+Community-made translations install the same way: place the pack folder under `langpacks/` next
+to the executable (e.g. `langpacks/fr-fantrad/`), then pick it with the **LANGUAGE** option
+in-game and restart. Without a pack the game is its original English.
+
 ## Settings
 
 Almost everything is set in-game: press **SELECT + START** for the options overlay. Choices
@@ -112,6 +118,14 @@ Hand-drawn pixel art — portraits, sprites, menus — deliberately stays origin
 smoothed.
 
 ![](../images/HDPack-On.png)
+
+## Language packs {.page-break}
+
+With a pack selected, the game's text — dialogue, menus, items, battle messages — displays in
+that language, at any graphics setting. Some packs also translate backgrounds with baked-in text
+(such as the title card). Changing the language takes effect at the next launch; the port's own
+SELECT+START menu deliberately stays English. Packs are made by the community with the tools in
+the repository — this project distributes no game text.
 
 ## Tactical Mode *(opt-in, changes gameplay)* {.page-break}
 

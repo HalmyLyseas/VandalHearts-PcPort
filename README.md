@@ -54,6 +54,7 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 |---|---|
 | **Play the game** | Grab the [latest release](https://github.com/HalmyLyseas/VandalHearts-PcPort/releases/latest) — the **Player Manual** (PDF) ships with it and covers setup, controls, and every feature ([source](docs/manual/manual.md)). Quick start below. |
 | **Something's wrong** | [Troubleshooting](docs/troubleshooting.md) · [Known issues](docs/known_issues.md) · then open an issue. |
+| **Translate the game** | [Language packs](docs/language-packs.md) — what they cover and how they install — then the authoring toolchain: [hands-on quickstart](platform/pc/tools/langpack/quickstart.md) · [full reference](platform/pc/tools/langpack/README.md). |
 | **Contribute / fix a bug** | [Architecture](docs/architecture.md) first — the two-layer design and the one unbreakable rule — then [CONTRIBUTING.md](CONTRIBUTING.md). |
 | **Understand how it works** | The [documentation index](docs/README.md): internals, subsystem deep-dives, decoded game mechanics. |
 

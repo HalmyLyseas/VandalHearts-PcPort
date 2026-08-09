@@ -6,6 +6,10 @@ and the game behaves identically without a pack. A pack is either **built from y
 or **downloaded as an optional asset on the 1.6 release** — the prebuilt pack is upscaled derivative art,
 provided for convenience (see [NOTICE](../NOTICE)).
 
+(A **language pack** can carry translated backgrounds through the same mechanism — those take
+priority over the HD pack's and work at every internal resolution; see
+[language-packs.md](language-packs.md).)
+
 Backgrounds and movies are replaced because both are **continuous-tone** content that upscales cleanly.
 The game's other 2D art — dialogue portraits, sprites, UI, fonts — is hand-drawn pixel art and is left at
 its native resolution (the engine's integer-scaled nearest-neighbour), which keeps it consistent with the

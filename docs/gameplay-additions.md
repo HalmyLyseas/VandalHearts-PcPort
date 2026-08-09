@@ -38,7 +38,7 @@ The full scheme — every binding, pad and keyboard — is in [controls.md](cont
 Press **SELECT + START** during play to open the overlay. Every setting applies live and persists
 to `vandalhearts.ini`:
 
-![The options overlay: Tactical Mode, HD pack, resolution, camera, labels, saves](images/OverlayMenu-Main.png)
+![The options overlay: Tactical Mode, HD pack, resolution, camera, labels, language, saves](images/OverlayMenu-Main.png)
 
 - **TACTICAL MODE** — the opt-in rebalance (see below). Changeable only at the title screen: a
   run's mode is fixed.
@@ -46,6 +46,8 @@ to `vandalhearts.ini`:
   this row says why (`NO PACK` / `OUTDATED PACK` / `WRONG GAME`).
 - **INTERNAL RES / WINDOW SCALE / FULLSCREEN** — display settings (see *Graphics*).
 - **CAMERA X/Y-AXIS, BUTTON LABELS** — controls settings (above).
+- **LANGUAGE** — pick an installed language pack (see below). The one overlay setting that is not
+  live: a pending change is marked `*` and applies at the next launch.
 - **SAVE MANAGEMENT / RETURN TO TITLE** — below.
 
 ### Save management
@@ -182,6 +184,33 @@ swapped:
 ![The same intro frame from the HD re-encode](images/features-1.6-Videos-02.png)
 
 Installing, building, and every option: [hd-pack.md](hd-pack.md).
+
+## Language packs
+
+**Intent: a community-driven effort — let more people enjoy the game, in their own language.**
+
+An optional pack displays the game's text in another language: dialogue, menus, item and spell
+names and descriptions, battle messages, save captions — even backgrounds with text baked into the
+art, such as the title card. The base build ships no translated text; packs are built by the
+community with the repository's authoring toolchain, from a player's own disc. Non-Latin scripts
+work with drawn glyph sheets (Cyrillic and Greek are proven in game), and everything renders at
+every graphics setting.
+
+Select an installed pack with the overlay's `LANGUAGE` row — it applies at the next launch. A pack
+is a *diff*: entries a Latin-script pack has not translated yet simply stay English, so a
+work-in-progress translation is already playable.
+
+*Greek demo — translated dialogue (note the `;`, the Greek question mark):*
+
+![In-game Greek dialogue](../platform/pc/tools/langpack/images-quickstart/quickstart-08-dialog.png)
+
+*A localized title background:*
+
+![A localized Greek title background](../platform/pc/tools/langpack/images-quickstart/quickstart-10-backgrounds.png)
+
+Installing and what a pack covers: [language-packs.md](language-packs.md). Making one: the
+[hands-on quickstart](../platform/pc/tools/langpack/quickstart.md) and the
+[toolchain reference](../platform/pc/tools/langpack/README.md).
 
 ---
 

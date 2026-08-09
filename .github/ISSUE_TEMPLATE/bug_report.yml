@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: Port version
-      description: Release tag (e.g. v1.6.2), or the commit hash for a self-built binary
-      placeholder: v1.6.2
+      description: Release tag (e.g. v1.7.0), or the commit hash for a self-built binary
+      placeholder: v1.7.0
     validations:
       required: true
   - type: dropdown
@@ -48,6 +48,21 @@ body:
         - Installed, bug happens with HD PACK ON
         - Installed, bug happens with HD PACK OFF too
         - Installed, not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: langpack
+    attributes:
+      label: Language pack
+      description: >
+        Is a language pack selected (LANGUAGE option / VH_LANG)? If yes, name the pack in the
+        description below, and say whether the bug remains after setting LANGUAGE to OFF and
+        restarting.
+      options:
+        - None
+        - Pack selected, bug happens with it
+        - Pack selected, bug happens without it too
+        - Pack selected, not sure
     validations:
       required: true
   - type: input
