@@ -15,3 +15,19 @@ __pycache__/
 **/strings/
 **/translate/
 **/langpacks/
+
+# The HD pack (F2 localized backgrounds): translators copy it in to source background hashes and to
+# validate. It is disc-derived upscaled art -- game-derived, must NEVER be committed. Catch it
+# wherever it lands under this directory.
+/hdpacks/
+**/hdpacks/
+
+# Glyph-art sheets emitted by `lang_template --out` / `gen_packart` (font8x9/16x15 + proofs).
+# Generated working artifacts, regenerable from the bundled Unifont -- keep them out by structure,
+# whatever the output folder is named.
+**/font8x9.png
+**/font8x9.txt
+**/font16x15.png
+**/font16x15.txt
+**/proof_8x9.png
+**/proof_16x15.png

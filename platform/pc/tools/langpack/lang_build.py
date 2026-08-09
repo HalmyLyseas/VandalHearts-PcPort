@@ -31,7 +31,9 @@ Usage: ./lang_build.py <disc.bin> <workdir> <outdir> [--lang en] [--packart <dir
        as nonsense) -- for testing only; a finished non-Latin pack must be complete.
        --mixed-case (D4, Latin packs) renders text in the case it is written instead of the retail
        ALL-CAPS folding -- reuses the font's own lowercase a-z, no new art. The translator's choice.
-       -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin}
+       Localized backgrounds (F2): drop <workdir>/backgrounds/<hash>.webp (1280x960, same <hash>.webp
+       convention as the HD pack) and they are copied into the pack + listed in the manifest.
+       -> <outdir>/langpacks/<lang>/{manifest.json,strings.bin[,backgrounds/]}
 """
 import os, re, struct, sys, unicodedata
 from lang_io import load_json, write_json
@@ -1010,6 +1012,30 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
         fo.write(MAGIC + struct.pack("<I", len(sections)))
         for kind, sid, payload in sections:
             fo.write(struct.pack("<III", kind, sid, len(payload)) + payload)
+    # F2 (exchange/92): localized backgrounds -- copy work/backgrounds/<hash>.webp into the pack,
+    # SAME <hash>.webp convention as the HD pack (the hash keys the 320x240 native upload; the file is
+    # the 1280x960 translated image). The runtime resolves this source BEFORE the HD pack. They render
+    # only at internal scale >= 2 (the hi-res pass), like all background replacement -- lang_validate
+    # checks resolution/hash and warns about that. Bad names are skipped with a note (a stray hash is a
+    # harmless runtime no-op); the real gate is the validator.
+    bg_hashes = []
+    bg_src = os.path.join(work, "backgrounds")
+    if os.path.isdir(bg_src):
+        import shutil
+        bg_dst = os.path.join(d, "backgrounds")
+        os.makedirs(bg_dst, exist_ok=True)
+        for fn in sorted(os.listdir(bg_src)):
+            if not fn.lower().endswith(".webp"):
+                continue
+            stem = os.path.splitext(fn)[0]
+            if not re.fullmatch(r"[0-9a-f]{16}", stem):
+                print(f"[lang] skipping backgrounds/{fn}: name must be a 16-hex <hash>.webp",
+                      file=sys.stderr)
+                continue
+            shutil.copyfile(os.path.join(bg_src, fn), os.path.join(bg_dst, fn))
+            bg_hashes.append(stem)
+        if bg_hashes:
+            print(f"[lang] {'backgrounds':<25} {len(bg_hashes)} localized")
     # Manifest = the MACHINE TRUTH about the pack (the folder name is only a human convention).
     # The runtime refuses to load without a matching "game" and a readable "format".
     lang_tag = lang.split("-")[0]
@@ -1020,9 +1046,10 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
                "author": meta.get("author") or "",
                "version": meta.get("version") or "",
                "notes": meta.get("notes") or "",
-               "contains": ["strings"],
+               "contains": ["strings"] + (["backgrounds"] if bg_hashes else []),
                "mixed_case": mixed_case,
                "item_names_1byte": item1b,
+               "backgrounds": bg_hashes,      # F2: <hash> list; the runtime skips the source if empty
                "tables_edited": dict(stats), "dialogue_files": nfiles, "dialogue_lines": nlines,
                "font_glyphs": nglyphs}, os.path.join(d, "manifest.json"))
     return d, stats, nfiles, nlines, len(sections), nglyphs

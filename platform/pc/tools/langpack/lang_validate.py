@@ -23,7 +23,9 @@ Two layers, deliberately distinct:
     ONE column, a 2-byte SJIS pair is ONE column. #N insertions are counted at the referenced
     string's own width.
 
-Usage: ./lang_validate.py <disc.bin> <workdir> [--strict] [--packart <dir>]
+Usage: ./lang_validate.py <disc.bin> <workdir> [--strict] [--packart <dir>] [--hdpack <pack>]
+       --hdpack checks work/backgrounds/<hash>.webp (F2): valid WebP, exactly 1280x960, a 16-hex hash
+       that is a real background in that HD pack. (Backgrounds render only at internal scale >= 2.)
        --packart validates a NON-LATIN working set in script mode (pass the same sheets you build
        with); without it a Cyrillic/Greek set is checked as if it were Latin and mis-reports.
 """
@@ -68,7 +70,65 @@ def cols(s, string_table=None):
     return out
 
 
-def validate(disc, work, strict=False, packart=None):
+def load_hdpack_hashes(hdpack, errors):
+    """The set of valid background hashes from an HD pack, for the membership check. Prefers the
+    manifest.json "hashes" list; falls back to the <hash>.webp filenames under backgrounds/. Accepts
+    --hdpack pointing at the pack root (hdpacks/) OR straight at a backgrounds/ folder."""
+    for mp in (os.path.join(hdpack, "manifest.json"),
+               os.path.join(os.path.dirname(hdpack.rstrip("/\\")), "manifest.json")):
+        if os.path.exists(mp):
+            try:
+                m = load_json(mp)
+                if isinstance(m.get("hashes"), list):
+                    return set(m["hashes"])
+            except SystemExit:
+                pass
+    hs = {os.path.splitext(os.path.basename(f))[0]
+          for d in (os.path.join(hdpack, "backgrounds"), hdpack)
+          for f in glob.glob(os.path.join(d, "*.webp"))}
+    if not hs:
+        errors.append(f"--hdpack {hdpack}: no manifest \"hashes\" and no <hash>.webp files found")
+    return hs
+
+
+def check_backgrounds(work, hdpack, errors, warns):
+    """F2 (exchange/92): validate work/backgrounds/<hash>.webp -- a valid WebP, exactly 1280x960, a
+    16-hex hash name, and (with --hdpack) a hash that is a real background in that pack. Localized
+    backgrounds render ONLY at internal scale >= 2 (the hi-res pass), so warn about that."""
+    files = sorted(glob.glob(os.path.join(work, "backgrounds", "*.webp")))
+    if not files:
+        return
+    try:
+        from PIL import Image
+    except ImportError:
+        errors.append("backgrounds need Pillow to validate (pip install pillow)")
+        return
+    allowed = load_hdpack_hashes(hdpack, errors) if hdpack else None
+    for f in files:
+        name = os.path.basename(f); stem = os.path.splitext(name)[0]
+        if not re.fullmatch(r"[0-9a-f]{16}", stem):
+            errors.append(f"backgrounds/{name}: name must be a 16-hex <hash>.webp (from the HD pack)")
+            continue
+        try:
+            im = Image.open(f); im.load()
+        except Exception as ex:
+            errors.append(f"backgrounds/{name}: not a valid image ({ex})")
+            continue
+        if im.format != "WEBP":
+            errors.append(f"backgrounds/{name}: is a {im.format} file with a .webp name -- must be "
+                          f"real WebP (the runtime decodes WebP; a renamed PNG/JPEG will not load)")
+            continue
+        if im.size != (1280, 960):
+            errors.append(f"backgrounds/{name}: is {im.size[0]}x{im.size[1]}, must be 1280x960")
+        if allowed is not None and stem not in allowed:
+            errors.append(f"backgrounds/{name}: hash not in the HD pack -- not a real game background "
+                          f"(typo?), or the wrong --hdpack")
+    warns.append(f"{len(files)} localized background(s): these render only at internal scale >= 2 "
+                 f"(the hi-res pass); at scale 1x the player sees the original background"
+                 + ("" if hdpack else " -- pass --hdpack <pack> to check the hashes are real"))
+
+
+def validate(disc, work, strict=False, packart=None, hdpack=None):
     errors, warns = [], []
 
     # --- layer 1: dry-run build ----------------------------------------------------------------
@@ -187,6 +247,9 @@ def validate(disc, work, strict=False, packart=None):
 
     if strict:
         errors, warns = errors + warns, []
+    # F2: after the strict flip, so a real background defect is always an error while the "needs
+    # scale >= 2" note stays a warning even under --strict (it is guidance, not a defect).
+    check_backgrounds(work, hdpack, errors, warns)
     return errors, warns
 
 
@@ -195,8 +258,9 @@ if __name__ == "__main__":
         raise SystemExit(__doc__)
     strict = "--strict" in sys.argv
     packart = sys.argv[sys.argv.index("--packart") + 1] if "--packart" in sys.argv else None
-    pos = [a for a in sys.argv[1:] if not a.startswith("-") and a != packart]
-    errors, warns = validate(pos[0], pos[1], strict, packart)
+    hdpack = sys.argv[sys.argv.index("--hdpack") + 1] if "--hdpack" in sys.argv else None
+    pos = [a for a in sys.argv[1:] if not a.startswith("-") and a not in (packart, hdpack)]
+    errors, warns = validate(pos[0], pos[1], strict, packart, hdpack)
     for w in warns:
         print(f"  warn : {w}")
     for e in errors:
