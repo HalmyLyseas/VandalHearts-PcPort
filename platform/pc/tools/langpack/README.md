@@ -1,7 +1,7 @@
 # Language-pack tooling
 
 The pipeline that builds optional **language packs** for the PC port. A pack lives in
-`langpacks/<name>/` beside the executable and is selected explicitly with `VH_LANG=<name>` in
+`langpacks/<name>/` beside the executable and is selected with `VH_LANG=<name>` in
 `vandalhearts.ini` — no pack, or no selection, means the untouched original text. The base build
 ships no language content.
 
@@ -9,214 +9,239 @@ Like everything else in this project, the pipeline works from **your own disc im
 never committed to this repository, and neither are built packs or working sets — the tools
 regenerate everything from the disc.
 
-## The pipeline
+`<disc>` is your own disc image, `<src>` is the repository's `src/` directory, `<bal>` is
+`platform/pc/src/pc_balance.c`, `<work>` is your working folder and `<out>` is the build output
+folder.
+
+---
+
+# 1. Workflows
+
+Pick the one that matches your language. **Latin** covers ASCII plus accented Latin the game can
+compose on its own (see [Supported characters](#supported-characters)). **Non-Latin** is any script
+the game has never drawn — Cyrillic, Greek, Nordic, Polish — which must ship its own glyph art.
+
+## Latin pack
 
 ```
-                         your disc image
-                               |
-  lang_export.py <disc> <work>            executable tables + on-disc dialogue -> <work>/strings/
-  lang_export_literals.py <src> <work>    text hardcoded in the game code      -> strings/literals.json
-  lang_export_tactical.py <bal> <work>    Tactical Mode text                   -> strings/tactical.json
-  lang_group.py <work>                    entity-grouped translator views      -> <work>/translate/
-                               |
-                    (translate: edit translate/*.json and strings/dialogue/*.json --
-                     every entry carries its English source and its display limit)
-                               |
-  lang_merge.py <work>                    fold translate/ edits back into strings/
-                                          (--revert-cleared: a field you emptied reverts to English)
-  lang_validate.py <disc> <work>          hard rules + on-screen budget lint
-  lang_build.py <disc> <work> <out> --lang <name> [--name --author --version --notes]
-                                          [--packart <dir>]        non-Latin script: your glyph sheets
-                                          [--allow-incomplete]     script mode: build with gaps (testing)
-                                          [--mixed-case]           render text in the case you wrote it
-                               |
-                    <out>/langpacks/<name>/{manifest.json, strings.bin}
+# 1 — export (run all four into the SAME <work>)
+lang_export.py           <disc> <work>     # executable tables + on-disc dialogue -> <work>/strings/
+lang_export_literals.py  <src>  <work>     # text hardcoded in game code          -> strings/literals.json
+lang_export_tactical.py  <bal>  <work>     # Tactical Mode text                   -> strings/tactical.json
+lang_group.py            <work>            # entity-grouped translator views      -> <work>/translate/
+
+# 2 — translate: edit <work>/translate/*.json and <work>/strings/dialogue/*.json
+#     (every entry carries its English source and its display limit)
+
+# 3 — merge your translate/ edits back into strings/
+lang_merge.py            <work>            # --revert-cleared: a field you emptied reverts to English
+
+# 4 — validate (hard rules + on-screen fit lint)
+lang_validate.py         <disc> <work>
+
+# 5 — build
+lang_build.py            <disc> <work> <out> --lang <name>
+                         # optional: --name --author --version --notes  --mixed-case
 ```
 
-`<disc>` is your own disc image, `<src>` is the repository's `src/` directory and `<bal>` is
-`platform/pc/src/pc_balance.c`. Run the four export steps in order into the same `<work>` folder;
-together they produce a complete working set (roughly 1,000 strings plus 2,273 dialogue entries).
+Result: `<out>/langpacks/<name>/{manifest.json, strings.bin}`.
 
-**Where to put `<work>` and `<out>`.** They hold text extracted from your disc, so they must never
-be committed. Use `platform/pc/tools/langpack/work/` and `.../out/` (both already git-ignored), or
-any location outside the repository. The `.gitignore` here also ignores any `strings/`,
-`translate/` or `langpacks/` folder created under this directory, whatever you name it — but a path
-outside the repo is the surest choice.
+## Non-Latin pack (Cyrillic, Greek, …)
 
-**Save your edited JSON as UTF-8.** The whole chain is UTF-8, and the tools read and write it as
-UTF-8 on every platform (not the system default — that matters on Windows, where the default is a
-legacy code page). Any editor's plain "UTF-8" save is correct; if a file is saved in another encoding
-the tools stop with a message naming the file and the offending byte rather than silently corrupting
-the text.
+Same as above, **plus a glyph-art step between merge and validate**, and `--packart` on both
+validate and build. Two things are different in kind:
 
-**Check the export worked** before starting to translate — an untouched working set should
-validate clean and build to an *empty* pack:
+- **The small font is capitals-only** — write your translation in CAPITALS. (The game already
+  prints most text in capitals; the small sheet holds ~44 glyphs, which fits one alphabet's
+  capitals but not capitals *and* lowercase. See [The two fonts](#the-two-fonts).)
+- **A script pack must be complete** — in script mode any untranslated string would render as
+  nonsense, so the builder refuses a partial pack (`--allow-incomplete` exists for mid-work testing
+  only).
 
 ```
-lang_validate.py <disc> <work>          ->  0 error(s), 0 warning(s)
-lang_build.py <disc> <work> <out> --lang test   ->  (0 sections)
+# 1 — export        (same four commands as above)
+# 2 — translate      IN CAPITALS
+# 3 — merge
+lang_merge.py            <work>
+
+# 4 — draw the script's glyph sheets FROM the finished (merged) translation
+lang_template.py         <work> --out <artdir>   # derive the exact letters + rasterise a sheet
+                         # or draw a whole alphabet directly: gen_packart.py <artdir> --script ru
+
+# 5 — validate WITH the sheets
+lang_validate.py         <disc> <work> --packart <artdir>
+
+# 6 — build WITH the sheets
+lang_build.py            <disc> <work> <out> --lang <name> --packart <artdir>
+```
+
+Step 4 must come **after** merge: `lang_template` reads the merged `strings/`, so drawing before
+merge would miss every letter used only in your `translate/` menu and item edits.
+
+---
+
+# 2. Topics
+
+Short reference sections — read the ones relevant to what you're doing.
+
+## Working folders
+
+`<work>` and `<out>` hold text extracted from your disc, so they must **never be committed**. Use
+`platform/pc/tools/langpack/work/` and `.../out/` (both git-ignored), or any location outside the
+repository. The `.gitignore` here also ignores any `strings/`, `translate/` or `langpacks/` folder
+created under this directory — but a path outside the repo is the surest choice.
+
+## Save your JSON as UTF-8
+
+The whole chain is UTF-8, and the tools read and write it as UTF-8 on every platform — **not** the
+system default, which matters on Windows (a legacy code page). Any editor's plain "UTF-8" save is
+correct. A file saved in another encoding stops the tools with a message naming the file and the
+offending byte, rather than silently corrupting the text.
+
+## Verify the export before translating
+
+An untouched working set should validate clean and build to an *empty* pack:
+
+```
+lang_validate.py <disc> <work>                   ->  0 error(s), 0 warning(s)
+lang_build.py    <disc> <work> <out> --lang test ->  (0 sections)
 ```
 
 Zero sections is the point, not a failure: a pack only carries what you changed, so "nothing
 translated yet" must produce nothing. If either step reports otherwise, the export is incomplete —
-fix that before translating, rather than after.
-
-`lang_probe.py` builds a labelled test pack (one marker per text source) for engine verification;
-`en_audit.py` scans the exported English for defects provable from the game's own data;
-`lang_template.py` reads a finished non-Latin translation and works out which letters it needs drawn
-(see *Drawing a non-Latin script* below).
+fix that before translating.
 
 ## Pack naming
 
-`<languageTag>-<freeDescription>` — an ISO 639-1 language code (optionally with a region subtag),
-then lowercase `a-z 0-9 . _ -` only: `en-fix`, `fr-fantrad`, `pt-br-fantrad`. Enforced by
-`lang_build.py`; the constraint keeps pack names URL-safe, shell-safe, and immune to
-case-sensitivity differences between platforms.
+`<languageTag>-<freeDescription>` — an ISO 639-1 code (optionally with a region subtag), then
+lowercase `a-z 0-9 . _ -` only: `en-fix`, `fr-fantrad`, `pt-br-fantrad`. Enforced by `lang_build.py`;
+the constraint keeps names URL-safe, shell-safe, and immune to case-sensitivity differences between
+platforms.
 
-`manifest.json` is the pack's real identity — the runtime checks its `game` id and `format`
-version before loading anything, and displays its `name`/`version`. Everything else in a pack
-folder (a README, credits, notes in any language) belongs to the pack's authors; the loader reads
-only `manifest.json` and `strings.bin`.
+`manifest.json` is the pack's real identity — the runtime checks its `game` id and `format` version
+before loading anything, and displays its `name`/`version`. Everything else in a pack folder (a
+README, credits, notes in any language) belongs to the pack's authors; the loader reads only
+`manifest.json` and `strings.bin`.
 
-## When a pack applies
+## When a pack applies — restart required
 
-**A pack applies at game start. Changing the selection requires a restart** — the in-game
-LANGUAGE setting marks a pending change with `*` and takes effect on the next launch. This is
-deliberate, not a limitation to be worked around: a pack rewrites structures the game builds once
-at boot (name tables, repointed string tables, the glyph sheet in video memory, Tactical Mode's
-patch set), and text already loaded for the current scene lives in buffers the game only refills
-on a scene change. A live switch would leave the game half in each language; the restart is the
-one point where everything is guaranteed coherent.
-
-For pack authors this sets the iteration loop: edit → `lang_build.py` → restart the game. There is
+**A pack applies at game start; changing the selection requires a restart.** The in-game LANGUAGE
+setting marks a pending change with `*` and it takes effect on the next launch. This is deliberate:
+a pack rewrites structures the game builds once at boot (name tables, repointed string tables, the
+glyph sheet in video memory, Tactical Mode's patch set), and text already loaded for the current
+scene lives in buffers the game only refills on a scene change. A live switch would leave the game
+half in each language. For authors the iteration loop is: edit → `lang_build.py` → restart. There is
 no in-game reload.
 
-## What the engine supports
+## A pack is a diff
 
-- **Fixed-width name tables keep their character budgets** — an accented letter costs one
-  character, exactly like its plain form. One codepoint is one screen column everywhere.
-- **A pack is a diff**: untranslated entries show the original text, so a partial translation is a
-  working translation.
-- **Mixed case is a choice (`--mixed-case`).** By default the game renders almost all text in
-  ALL-CAPS — it folds `a`–`z` onto its uppercase letterforms (only shop/field item names escape).
-  Pass `--mixed-case` at build time and the pack renders text in the case you actually wrote it
-  (`Café déjà reçu`, not `CAFÉ DÉJÀ REÇU`), reusing the font's own lowercase glyphs — no new art.
-  It is the translator's decision, baked into the pack; there is no player-facing toggle. Latin
-  packs only (a non-Latin pack sets its own case in its drawn sheets).
-- **A pack covers the game's content, not the port's own UI.** The in-game options overlay
-  (SELECT+START) stays English in every language. It is drawn by the port with its own small
-  font, and keeping it out means every pack behaves the same way regardless of script.
+Untranslated entries show the original text, so a **partial Latin translation is a working
+translation**. (Non-Latin packs are the exception — they must be complete; see the workflow above.)
 
-## How the game draws text — and what each sheet you draw will cover
+## Mixed case (`--mixed-case`, Latin only)
 
-The game uses **two different fonts** and picks one per screen. A script the game has never seen
-(Cyrillic, Greek, Polish, Nordic) therefore needs its alphabet drawn **twice**, once at each size.
-They are independent files, so you can ship one before the other.
+By default the game renders almost all text in ALL-CAPS — it folds `a`–`z` onto its uppercase
+letterforms (only shop/field item names escape). Pass `--mixed-case` at build time and a Latin pack
+renders text in the case you actually wrote (`Café déjà reçu`, not `CAFÉ DÉJÀ REÇU`), reusing the
+font's own lowercase glyphs — no new art. It is the translator's decision, baked into the pack;
+there is no player-facing toggle. Non-Latin packs set their own case in their drawn sheets and do
+not use this flag.
+
+## What a pack does not cover
+
+The port's own in-game options overlay (SELECT+START) stays English in every language. It is drawn
+by the port with its own small font; keeping it out means every pack behaves the same regardless of
+script.
+
+## The two fonts
+
+The game uses **two fonts** and picks one per screen. A script it has never seen therefore needs its
+alphabet drawn **twice**, once at each size. The sheets are independent files — you can ship one
+before the other.
 
 | | **small sheet — 8×9 px** | **large sheet — 16×15 px** |
 |---|---|---|
-| **where your letters show up** | story dialogue, every menu, item and spell descriptions, spell names, character names, class names, terrain names, battle messages | item names in the shop, field and inventory; the TURN counter; YES/NO prompts |
+| **where your letters show up** | story dialogue, every menu, item/spell descriptions, spell names, character names, class names, terrain names, battle messages | item names in shop/field/inventory; the TURN counter; YES/NO prompts |
 | **how much of the game** | almost all of it | a handful of screens |
 | **letters you can add** | **44** | no practical limit |
-| **if you don't supply it** | nothing readable renders — the pack is unusable | those screens stay English; everything else still works |
-| **drawing it** | very tight — plan on capitals only | roomier, and easier per letter |
+| **if you don't supply it** | nothing readable renders — pack unusable | those screens stay English; the rest works |
+| **drawing it** | very tight — plan on capitals only | roomier, easier per letter |
 
-**You don't draw digits, punctuation or spaces.** Those already exist at both sizes and keep
-working untouched.
+**You don't draw digits, punctuation or spaces** — those exist at both sizes and keep working.
 
-**44 is the real ceiling, and it only applies to the small sheet.** It fits a full Russian
-alphabet (33) or Greek (~24) in capitals. It does *not* fit capitals and lowercase of a non-Latin
-script — that would need about 66. This is a hard limit of how the game stores its own font, not a
-setting. The game already prints most text in capitals in English, so capitals-only is not the
-regression it sounds like.
+**44 is the real ceiling, and it only applies to the small sheet.** It fits a full Russian alphabet
+(33) or Greek (~24) in capitals. It does *not* fit capitals *and* lowercase of a non-Latin script
+(~66) — this is a hard limit of how the game stores its font. Since the game already prints most
+text in capitals, capitals-only is not the regression it sounds like.
 
-**A practical way to stage the work:** translate everything *except* item names first and ship with
-only the small sheet. Untranslated item names keep their original text and render normally, so you
-get a playable, almost-complete pack while the large sheet is still being drawn.
+**Staging tip:** translate everything *except* item names first and ship with only the small sheet.
+Untranslated item names keep their original text and render normally, so you get a playable,
+almost-complete pack while the large sheet is still being drawn.
 
 ## Drawing a non-Latin script
 
-A script the game has never drawn (Cyrillic, Greek, Nordic, Polish) needs its letters drawn as glyph
-art and passed to the builder with `--packart <dir>`. Supplying art also switches the whole pack to
-**script mode** (1-byte codes throughout — UTF-8 cannot carry these letters through the game's
-dialogue path), which is why a script pack must translate **everything**: any untranslated string
-would render as nonsense, so the builder refuses an incomplete one (translate it all;
-`--allow-incomplete` exists only for mid-work testing).
+`--packart <dir>` supplies the sheets and switches the whole pack to **script mode** (1-byte codes
+throughout — UTF-8 cannot carry these letters through the game's dialogue path).
 
-### The quick way: derive the letters, then generate a starting sheet
-
-You do **not** have to work out which letters you need, nor draw them from scratch.
-
-**1. Which letters does my translation need?** `lang_template.py` reads the translation you've already
-written (the working set's `strings/`) and lists every letter the game cannot draw on its own — the
-exact set a `--packart` sheet must supply:
+**1. Which letters does my translation need?** `lang_template.py` reads the merged `strings/` and
+lists every letter the game cannot draw on its own — exactly what a `--packart` sheet must supply:
 
 ```
 lang_template.py <work>              # report: the letters, split by sheet, + the command to run
 lang_template.py <work> --out <dir>  # …and rasterise a starting sheet for exactly those letters
 ```
 
-It skips ASCII (the game has it) and accented Latin the builder synthesises for free, so what remains
-is precisely what needs drawing. If nothing does, it says so — the translation builds as a Latin pack.
-The `--out` form hands the derived letters straight to `gen_packart.py` (below), so one command turns a
-finished translation into a drawable sheet.
+It skips ASCII and the accented Latin the builder synthesises for free, so what remains is precisely
+what needs drawing. If nothing does, it says so — the translation builds as a Latin pack.
 
 **2. Draw them from a bitmap font.** `gen_packart.py` rasterises GNU Unifont (bundled as
 `unifont-subset.bdf`) straight into both sheets — call it directly for a whole alphabet, or let
 `lang_template --out` call it for exactly your translation's letters:
 
 ```
-gen_packart.py <dir> --script ru          # a preset alphabet (ru = Russian, el = Greek)
+gen_packart.py <dir> --script ru          # a preset alphabet in CAPITALS (ru = Russian, el = Greek)
 gen_packart.py <dir> --script el
 gen_packart.py <dir> --cps U+0410-U+042F  # or explicit codepoints
 ```
 
-Either way it writes `font8x9.*` + `font16x15.*` ready for `--packart <dir>`, plus `proof_8x9.png` /
+It writes `font8x9.*` + `font16x15.*` ready for `--packart <dir>`, plus `proof_8x9.png` /
 `proof_16x15.png` — each cell magnified with its codepoint, so you can confirm every letter came out
 right. The **16×15 sheet is production quality**; the **8×9 sheet is legible** and a good base — a
-team may want to hand-tweak a few of the densest letters, but nobody has to start from a blank grid.
-KROMDAT / the PlayStation BIOS is not involved. (Unifont is OFL/GPL; see `NOTICE-unifont.txt`.)
+team may hand-tweak a few of the densest letters, but nobody starts from a blank grid. KROMDAT / the
+PlayStation BIOS is not involved. (Unifont is OFL/GPL; see `NOTICE-unifont.txt`.)
 
-### The format, if you draw or edit sheets by hand
+### Sheet format, if you draw or edit by hand
 
-The `<dir>` holds up to two sheets, each a **PNG image + a `.txt` manifest**:
+`<dir>` holds up to two sheets, each a **PNG image + a `.txt` manifest**:
 
 | files | cell size | covers | required? |
 |---|---|---|---|
-| `font8x9.png` + `font8x9.txt` | 8×9 px | the small font — almost everything | **yes** |
-| `font16x15.png` + `font16x15.txt` | 16×15 px | the large font — item names, TURN, YES/NO | optional (those screens stay in the original text without it) |
+| `font8x9.png` + `font8x9.txt` | 8×9 px | small font — almost everything | **yes** |
+| `font16x15.png` + `font16x15.txt` | 16×15 px | large font — item names, TURN, YES/NO | optional |
 
-**The PNG** is a 1-bit image of the letters packed into a grid of cells, filled **left to right, then
-top to bottom** (reading order). A cell is exactly the cell size above; the image width fixes how many
-cells per row (`width ÷ cell width`). **A black pixel is ink** (part of the letter); white is
-background. An **all-white cell means "not supplied"** and is skipped — handy for leaving a gap.
+- **PNG** — a 1-bit image of the letters packed into a grid, filled **left to right, then top to
+  bottom** (reading order). A cell is exactly the cell size; image width fixes cells-per-row
+  (`width ÷ cell width`). **A black pixel is ink**; white is background. An all-white cell means
+  "not supplied" and is skipped.
+- **`.txt`** — one `U+XXXX` per line, in the **same reading order** as the cells. Lines starting
+  with `#` are comments; blank lines are ignored.
 
-**The `.txt`** lists which codepoint each cell holds, one per line, in the **same reading order** as
-the cells, as `U+XXXX` (hex). Lines starting with `#` are comments; blank lines are ignored. So cell 0
-(top-left) is the first `U+XXXX` line, cell 1 the next, and so on.
-
-You draw **only the letters your alphabet adds** — 33 for Russian, ~24 for Greek. Digits,
-punctuation and spaces already exist and must not be redrawn. Rendering the sheet back out is the
-best check: every letter should land in the cell its codepoint predicts.
+Draw **only the letters your alphabet adds** (33 Russian, ~24 Greek). Rendering the sheet back out
+(the proof PNG) is the best check: every letter should land in the cell its codepoint predicts.
 
 ## Supported characters
 
-**Encoding and repertoire are two different things.** Pack text files are written in **UTF-8** —
-that is the encoding, not a capability claim. What can *render* is defined by glyph supply, and there
-are two sources:
+**Encoding and repertoire are two different things.** Pack files are UTF-8 — that is the encoding,
+not a capability claim. What can *render* is defined by glyph supply, from two sources:
 
 - **the synthesiser (no art needed):** ASCII, plus any Latin letter that decomposes into a base
-  letter (a–z) and one of six marks. Accented glyphs are composed automatically from the game's own
-  letterforms — no drawing required inside this repertoire.
+  letter (`a`–`z`) and one of six marks — composed automatically from the game's own letterforms.
 - **pack-supplied glyph art (`--packart`):** everything else — Nordic (`å ø æ ð þ`), Polish
-  (`ł ż ą ę`), and every non-Latin script (Cyrillic and Greek are drawn and proven in game). You
-  draw the letters once; see *Drawing a non-Latin script* below.
+  (`ł ż ą ę`), and every non-Latin script (Cyrillic and Greek are drawn and proven in game).
 
 A codepoint with neither a synthesised nor a supplied glyph is **refused at build time** — never
-silently dropped.
-
-Generated by `lang_build.py --repertoire` (regenerate after any mark change — this table cannot
-drift from what the builder enforces):
+silently dropped. Generated by `lang_build.py --repertoire` (this table cannot drift from what the
+builder enforces):
 
 ```
 Marks: grave, acute, circumflex, tilde, diaeresis, cedilla
@@ -233,10 +258,10 @@ Not synthesised from the US font -- supply drawn glyph art with --packart:
   å ø æ ß ð þ œ ¡ ¿ · -- and every non-Latin script (Cyrillic, Greek: proven in game)
 ```
 
-Uppercase accents outside item names: use the accepted convention of unaccented capitals
-(`Etat`, `A bientot`).
+Uppercase accents outside item names: use the accepted convention of unaccented capitals (`Etat`,
+`A bientot`).
 
-### Language coverage, honestly
+## Language coverage, honestly
 
 | status | languages |
 |---|---|
@@ -245,7 +270,22 @@ Uppercase accents outside item names: use the accepted convention of unaccented 
 | **needs pack art (`--packart`)** | Swedish / Danish / Norwegian / Icelandic (`å ø æ ð þ`), Polish (`ł ż ą ę`); every non-Latin script — **Cyrillic and Greek work today** once you draw their sheets, proven in game |
 | **not possible** | CJK — thousands of characters against ~44 glyph slots, and 8×9 px is too small for a legible kanji |
 
-Validation is two-layered: `lang_build` enforces the hard rules (record widths, encoding safety,
-glyph capacity) and refuses to build a broken pack; `lang_validate` additionally lints what fits
-on screen, counting rendered glyphs — control codes are free, insertions are measured at their
-translated width.
+**One script per pack.** Non-Latin packs reassign the letter byte-slots to a single drawn alphabet,
+so a Latin word left in a Cyrillic pack would render as Cyrillic — the builder refuses it. You cannot
+mix, say, Cyrillic and Greek in one pack; pick one script.
+
+## How validation works
+
+Two layers:
+
+- **`lang_build`** enforces the hard rules — record widths, encoding/byte safety, glyph capacity —
+  and refuses to build a broken pack. `lang_validate` runs the same rules as a dry-run so you catch
+  them before building.
+- **`lang_validate`** additionally lints **what fits on screen**, counting rendered glyphs — control
+  codes are free, `#N` insertions are measured at their referenced string's width. Over-budget lines
+  are warnings by default, errors with `--strict`.
+
+## Other tools
+
+- `lang_probe.py` — builds a labelled test pack (one marker per text source) for engine verification.
+- `en_audit.py` — scans the exported English for defects provable from the game's own data.
