@@ -852,3 +852,10 @@ void PC_DebugUiLog(const char *tag, int a, int b, int c, int d, int e, int f, in
     fprintf(fp, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n", tag, a, b, c, d, e, f, g, h);
     if ((++lines % 64) == 0) fflush(fp);
 }
+
+/* See pc_platform.h: quiet console by default, VH_VERBOSE=1 turns the per-event chatter back on. */
+int PC_Verbose(void) {
+    static int v = -1;
+    if (v < 0) { const char *e = getenv("VH_VERBOSE"); v = (e && atoi(e) != 0) ? 1 : 0; }
+    return v;
+}

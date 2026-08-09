@@ -133,7 +133,7 @@ static void MovieHdTryOpen(int baseLBA) {
     snprintf(path, sizeof(path), "%s/%x.mp4", dir, baseLBA);
     s_movieHd = PC_HdVideoOpen(path);
     s_movieHdLBA = s_movieHd ? baseLBA : -1;
-    fprintf(stderr, "[HDvideo] movie baseLBA=0x%x -> %s\n", baseLBA, s_movieHd ? "HD" : "native MDEC");
+    if (PC_Verbose()) fprintf(stderr, "[HDvideo] movie baseLBA=0x%x -> %s\n", baseLBA, s_movieHd ? "HD" : "native MDEC");
 }
 static unsigned short s_movieFb[320 * 240];
 static unsigned char  s_movieBs[32 * 1024];   /* one frame's BS (<= 9 sectors * 0x7E0 ~= 18KB) */

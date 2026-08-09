@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "pc_platform.h"   /* PC_Verbose: per-movie open/close lines are chatter */
 
 #ifdef VH_HD_VIDEO
 #include <libavformat/avformat.h>
@@ -75,7 +76,7 @@ int PC_HdVideoOpen(const char *path) {
                            SWS_BILINEAR, NULL, NULL, NULL);
     if (!V.frame || !V.pkt || !V.rgb || !V.sws)             { hdv_free_all(); return 0; }
     V.cur = -1; V.eof = 0; V.open = 1;
-    fprintf(stderr, "[HDvideo] open %s (%dx%d)\n", path, V.w, V.h);
+    if (PC_Verbose()) fprintf(stderr, "[HDvideo] open %s (%dx%d)\n", path, V.w, V.h);
     return 1;
 }
 
@@ -114,7 +115,7 @@ const unsigned char *PC_HdVideoFrame(int want, int *w, int *h) {
     return V.rgb;
 }
 
-void PC_HdVideoClose(void) { if (V.open) { fprintf(stderr, "[HDvideo] close\n"); hdv_free_decoder(); } }
+void PC_HdVideoClose(void) { if (V.open) { if (PC_Verbose()) fprintf(stderr, "[HDvideo] close\n"); hdv_free_decoder(); } }
 int  PC_HdVideoActive(void) { return V.open; }
 
 #else  /* built without libav: stubs so callers link + degrade to native MDEC */

@@ -26,8 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "pc_lang.h"
-
-extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe dir, or AppImage dir) */
+#include "pc_platform.h"   /* PC_GetDeployDir; PC_Verbose -- progress lines are chatter, warnings are not */
 
 /* Fixed-size tables the game indexes directly (declared in include/units.h, defined by the
  * data-segment generator from OUR US executable -- that is exactly what we are overriding). */
@@ -156,7 +155,7 @@ static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
         if (!s_lang.terrain) return;
         memcpy(s_lang.terrain, p, len);
         s_lang.terrainLen = len;
-        fprintf(stderr, "[lang] %-18s %5u B held for the battle hook\n", kTables[id].name, len);
+        if (PC_Verbose()) fprintf(stderr, "[lang] %-18s %5u B held for the battle hook\n", kTables[id].name, len);
         return;
     }
     /* id is a pack-supplied u32 cast to int: >= 0x80000000 arrives NEGATIVE and would sail past a
@@ -171,7 +170,7 @@ static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
     memcpy(kTables[id].fixed, p, len);
     s_lang.tablesApplied++;
     if (id == TID_ITEMNAMES) s_lang.itemNamesApplied = 1;   /* format-2 gate: see item1b */
-    fprintf(stderr, "[lang] %-18s %5u B replaced\n", kTables[id].name, len);
+    if (PC_Verbose()) fprintf(stderr, "[lang] %-18s %5u B replaced\n", kTables[id].name, len);
 }
 
 static void ApplyPtr(int id, const unsigned char *p, unsigned len) {
@@ -195,7 +194,7 @@ static void ApplyPtr(int id, const unsigned char *p, unsigned len) {
         s_lang.ptrsApplied++;
         off += sl;
     }
-    fprintf(stderr, "[lang] %-18s %5u entries re-pointed\n", kTables[id].name, n);
+    if (PC_Verbose()) fprintf(stderr, "[lang] %-18s %5u entries re-pointed\n", kTables[id].name, n);
 }
 
 static void AddText(int lba, const unsigned char *p, unsigned len) {
@@ -397,7 +396,7 @@ static void LangLoad(void) {
         free(buf); return;
     }
     nsec = RdU32(buf + 8);
-    fprintf(stderr, "[lang] pack %s (%u section(s))\n", dir, nsec);
+    if (PC_Verbose()) fprintf(stderr, "[lang] pack %s (%u section(s))\n", dir, nsec);
     off = 12;
     for (i = 0; i < nsec; i++) {
         unsigned kind, id, len;
@@ -420,8 +419,9 @@ static void LangLoad(void) {
             if (s_lang.charmap) {
                 memcpy(s_lang.charmap, buf + off, len);
                 s_lang.charmapLen = len;
-                fprintf(stderr, "[lang] charmap: %u record(s) held for the text hook\n",
-                        len >= 4 ? RdU32(buf + off) : 0);
+                if (PC_Verbose())
+                    fprintf(stderr, "[lang] charmap: %u record(s) held for the text hook\n",
+                            len >= 4 ? RdU32(buf + off) : 0);
             }
         }
         off += len;
@@ -439,7 +439,7 @@ static void LangLoad(void) {
             fprintf(stderr, "[lang] format-2 pack has no item-name table -- item names stay retail "
                             "(rebuild the pack)\n");
     }
-    if (s_lang.textN)
+    if (s_lang.textN && PC_Verbose())
         fprintf(stderr, "[lang] %d dialogue file(s) will be substituted as they load\n", s_lang.textN);
     free(buf);                                  /* sections were copied out where they are kept */
 }
@@ -478,7 +478,7 @@ static void LitLoad(const unsigned char *p, unsigned len) {
         off2 += sl;
         s_lang.litsN = (int)i + 1;
     }
-    fprintf(stderr, "[lang] %d code literal(s) replaced\n", s_lang.litsN);
+    if (PC_Verbose()) fprintf(stderr, "[lang] %d code literal(s) replaced\n", s_lang.litsN);
 }
 
 /* Called (via the PC_LANGSTR macro, PC_FEAT builds only) wherever game code passes a string
@@ -547,7 +547,7 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
         map128[code] = (unsigned char)slot;
         mapped++;
     }
-    fprintf(stderr, "[lang] charmap: %d code(s) mapped, %d glyph slot(s) written\n", mapped, drawn);
+    if (PC_Verbose()) fprintf(stderr, "[lang] charmap: %d code(s) mapped, %d glyph slot(s) written\n", mapped, drawn);
 }
 
 /* Called once from src/battle_0201b8.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
@@ -563,7 +563,7 @@ void PC_LangApplyTerrainText(void *table, int bytes) {
     }
     memcpy(table, s_lang.terrain, (size_t)bytes);
     s_lang.tablesApplied++;
-    fprintf(stderr, "[lang] terrainText        %5d B replaced\n", bytes);
+    if (PC_Verbose()) fprintf(stderr, "[lang] terrainText        %5d B replaced\n", bytes);
 }
 
 /* Called from CdRead (platform/pc/src/libcd.c) right after a read completes. `lba` is the read's
@@ -579,7 +579,7 @@ void PC_LangPatchRead(int lba, int sectors, unsigned char *out) {
             unsigned n = s_lang.text[i].len < cap ? s_lang.text[i].len : cap;
             memcpy(out, s_lang.text[i].bytes, n);
             s_lang.textPatched++;
-            fprintf(stderr, "[lang] dialogue lba=%d: %u B substituted\n", lba, n);
+            if (PC_Verbose()) fprintf(stderr, "[lang] dialogue lba=%d: %u B substituted\n", lba, n);
         }
         return;
     }

@@ -14,6 +14,12 @@
  * and the saves folder, so they all resolve to one predictable place. Returns 1 on success. */
 int PC_GetDeployDir(char *out, size_t outSize);
 
+/* VH_VERBOSE=1 (env or ini): per-event backend chatter -- [lang]/[HD]/[HDvideo] progress lines,
+ * per-asset replacements, per-read substitutions. Default OFF: the console shows the one-time boot
+ * summary (config echo, pack identities) and every warning/refusal, nothing recurring. Resolved
+ * once (pc_bootstrap.c). */
+int PC_Verbose(void);
+
 /* The resolved saves directory the game reads/writes its memory-card file in (defined in libkernel.c,
  * resolved once via PC_GetDeployDir). The save-management backend (pc_saves.c) uses it to keep
  * archives beside the active card. */

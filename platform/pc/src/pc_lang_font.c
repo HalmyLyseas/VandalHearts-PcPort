@@ -30,6 +30,7 @@
 #include <string.h>
 #include "PsyQ/libgpu.h"
 #include "pc_lang.h"
+#include "pc_platform.h"   /* PC_Verbose: progress lines are chatter, warnings are not */
 
 typedef struct {
     unsigned cp;
@@ -58,7 +59,7 @@ void PC_LangFontLoad(const unsigned char *p, unsigned len) {
         memcpy(s_glyphs[i].rows, r + 4, 9);
     }
     s_glyphN = (int)n;
-    fprintf(stderr, "[lang] font: %d glyph(s) loaded\n", s_glyphN);
+    if (PC_Verbose()) fprintf(stderr, "[lang] font: %d glyph(s) loaded\n", s_glyphN);
 }
 
 /* Records are sorted by codepoint (the builder guarantees it). */
@@ -208,8 +209,9 @@ void PC_LangPatchFwdUpload(int px, int py, int pw, int ph, unsigned short *pix) 
         }
         if (!logged) {
             logged = 1;
-            fprintf(stderr, "[lang] F_WD sheet: %u charmap cell(s) stamped (ink nibble %u)\n",
-                    stamped, ink);
+            if (PC_Verbose())
+                fprintf(stderr, "[lang] F_WD sheet: %u charmap cell(s) stamped (ink nibble %u)\n",
+                        stamped, ink);
         }
     }
 }
@@ -239,7 +241,7 @@ void PC_LangKromLoad(const unsigned char *p, unsigned len) {
         memcpy(s_krom[i].rows, r + 2, 30);
     }
     s_kromN = (int)n;
-    fprintf(stderr, "[lang] krom: %d wide glyph(s) loaded\n", s_kromN);
+    if (PC_Verbose()) fprintf(stderr, "[lang] krom: %d wide glyph(s) loaded\n", s_kromN);
 }
 
 const void *PC_LangKromGlyph(unsigned sjis) {

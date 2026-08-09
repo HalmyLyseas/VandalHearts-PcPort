@@ -282,8 +282,9 @@ static void *HdLoaderMain(void *arg) {
         if (px) {
             r->w = w; r->h = hh;                 /* dims first, then the pointer gates visibility */
             __atomic_store_n(&r->px, px, __ATOMIC_RELEASE);
-            fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d src=%s (async)\n",
-                    r->hash, r->rx, r->ry, r->rw, r->rh, w, hh, r->dir);
+            if (PC_Verbose())
+                fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d src=%s (async)\n",
+                        r->hash, r->rx, r->ry, r->rw, r->rh, w, hh, r->dir);
         } else {
             fprintf(stderr, "[HD] async load FAILED %016llx (file vanished or bad?)\n", r->hash);
         }
@@ -347,7 +348,7 @@ void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
                         if (syncMode) {            /* old inline decode, for A/B + debugging */
                             unsigned int *rgba = HdLoadImage(repl, h, &r->w, &r->h);
                             if (rgba) { r->px = HdPack16(rgba, r->w * r->h); free(rgba); }
-                            if (r->px) fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d src=%s (sync)\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h, repl);
+                            if (r->px) { if (PC_Verbose()) fprintf(stderr, "[HD] REPLACED %016llx rect=(%d,%d) %dx%dw hd=%dx%d src=%s (sync)\n", h, rect->x, rect->y, rect->w, rect->h, r->w, r->h, repl); }
                             else { r->w = r->h = 0; hasRepl = 0; s_hdReplaceN--; r->dir = NULL; }
                         } else {
                             HdLoaderQueue(r);      /* decode + publish on the loader thread (reads r->dir) */
