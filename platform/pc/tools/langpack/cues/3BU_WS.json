@@ -1,0 +1,400 @@
+{
+ "video": "3BU_WS",
+ "baseLBA": "2919f",
+ "bandTop": 195,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 10,
+   "endFrame": 41,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 19,
+   "en": "After the disappearance",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 42,
+   "endFrame": 97,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 45,
+   "en": "of Ash and the others, it is announced that",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 98,
+   "endFrame": 148,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 102,
+   "en": "General Magnus has been assassinated by",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 149,
+   "endFrame": 227,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 149,
+   "en": "an extremist faction within the Security Forces.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 261,
+   "endFrame": 306,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 296,
+   "en": "News that a national hero has fallen at the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 307,
+   "endFrame": 354,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 307,
+   "en": "hands of terrorists sends shockwaves",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 355,
+   "endFrame": 384,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 355,
+   "en": "through the country and most blame the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 385,
+   "endFrame": 428,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 407,
+   "en": "Domestic Security Agency which controls",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 429,
+   "endFrame": 453,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 430,
+   "en": "the Security Forces.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 454,
+   "endFrame": 495,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 455,
+   "en": "This results in the ouster of Renaldo",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 496,
+   "endFrame": 562,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 497,
+   "en": "Castille, Hel Spites' political arch rival.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 590,
+   "endFrame": 669,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 600,
+   "en": "Defense Minister Hel Spites, highly praised",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 670,
+   "endFrame": 730,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 671,
+   "en": "for his quick handling of the terrorist threat,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 731,
+   "endFrame": 804,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 733,
+   "en": "is elected Prime Minister the following month.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 902,
+   "endFrame": 990,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 916,
+   "en": "In the name of national security, Hel requests",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 991,
+   "endFrame": 1032,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 992,
+   "en": "emergency powers from the Council,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1033,
+   "endFrame": 1100,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1041,
+   "en": "but as soon as he is granted those powers,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1101,
+   "endFrame": 1158,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1101,
+   "en": "his tyrannical nature emerges.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1203,
+   "endFrame": 1262,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1217,
+   "en": "He abolishes the Council, creates a",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1263,
+   "endFrame": 1336,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1263,
+   "en": "secret police and establishes a privileged class..",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1337,
+   "endFrame": 1399,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1352,
+   "en": "Finally, he revives imperialism and claims",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1400,
+   "endFrame": 1444,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1401,
+   "en": "that he will place himself on the sacred",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1445,
+   "endFrame": 1522,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1448,
+   "en": "and inviolable Ishtarian imperial throne.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1535,
+   "endFrame": 1604,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1544,
+   "en": "Realizing the danger, some citizens join",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1605,
+   "endFrame": 1662,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1617,
+   "en": "anti-imperial movements, but these are",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1663,
+   "endFrame": 1728,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1664,
+   "en": "easily crushed by the Crimson Guard.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1753,
+   "endFrame": 1802,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1765,
+   "en": "It was the second coming of the Dark",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1803,
+   "endFrame": 1871,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1804,
+   "en": "Ages and terror reigned over all...",
+   "text": ""
+  }
+ ]
+}

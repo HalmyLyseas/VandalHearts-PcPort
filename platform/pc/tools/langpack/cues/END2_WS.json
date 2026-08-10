@@ -1,0 +1,148 @@
+{
+ "video": "END2_WS",
+ "baseLBA": "3a68c",
+ "bandTop": 150,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 2,
+   "endFrame": 228,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 16,
+   "en": "Dolan became a\nstatesman and helped\nto rebuild Ishtaria.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 422,
+   "endFrame": 646,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 436,
+   "en": "Kira took off by\nherself on a journey\nof self-discovery.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 917,
+   "endFrame": 1143,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 942,
+   "en": "While Clint, new head\nof the SDF, waited\nfor her return.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1144,
+   "endFrame": 1373,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 1156,
+   "en": "Recently there have\nbeen rumors that the\ntwo will marry.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1642,
+   "endFrame": 1866,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 1656,
+   "en": "Diego returned to\nKerachi to continue\nthe family business.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 2136,
+   "endFrame": 2361,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 2151,
+   "en": "Amon become Darius'\napprentice machine\nmaker.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 2632,
+   "endFrame": 2856,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 2780,
+   "en": "Sara got a job in a\nnearby bakery to be\nclose to Amon.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 3128,
+   "endFrame": 3240,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 3142,
+   "en": "Grog and Zohar\nsailed all over the\nworld together.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 3241,
+   "endFrame": 3352,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 3254,
+   "en": "I still sometimes\nget letters from far\naway lands.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 3625,
+   "endFrame": 3849,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 3639,
+   "en": "Huxley is always at\nhome working on his\nstamp collection.",
+   "text": ""
+  }
+ ]
+}

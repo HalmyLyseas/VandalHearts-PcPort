@@ -1,0 +1,456 @@
+{
+ "video": "1BU_WS",
+ "baseLBA": "21618",
+ "bandTop": 195,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 80,
+   "endFrame": 121,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 94,
+   "en": "Sostegaria...",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 122,
+   "endFrame": 171,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 152,
+   "en": "For over a millennium the fertile lands in the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 172,
+   "endFrame": 223,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 190,
+   "en": "heart of this vast continent were ruled",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 224,
+   "endFrame": 262,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 224,
+   "en": "by the Holy Ashah Dynasty,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 263,
+   "endFrame": 319,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 268,
+   "en": "descendants of Toroah the Messiah.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 363,
+   "endFrame": 425,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 398,
+   "en": "However, it is man's doom to forget...",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 426,
+   "endFrame": 481,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 461,
+   "en": "Amidst all the wealth and exotic pleasures,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 482,
+   "endFrame": 530,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 502,
+   "en": "the nobility lost their way and sank",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 531,
+   "endFrame": 573,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 538,
+   "en": "into corruption and depravity...",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 571,
+   "endFrame": 643,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 575,
+   "en": "forgetting even the holy teaching of Toroah.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 681,
+   "endFrame": 743,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 694,
+   "en": "It was in these days of unrest that the citizens,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 744,
+   "endFrame": 789,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 745,
+   "en": "struggling under an oppressive regime,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 790,
+   "endFrame": 822,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 790,
+   "en": "rose up and, under the leadership of",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 823,
+   "endFrame": 848,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 823,
+   "en": "Arris the Sage,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 849,
+   "endFrame": 883,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 850,
+   "en": "took up arms against the Kingdom.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 884,
+   "endFrame": 924,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 888,
+   "en": "That was the first outbreak of violence",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 925,
+   "endFrame": 962,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 925,
+   "en": "in what would later be known simply as",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 963,
+   "endFrame": 993,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 964,
+   "en": "'the Revolution'.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 996,
+   "endFrame": 1045,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1025,
+   "en": "The Royal Army's counterattack was",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1046,
+   "endFrame": 1097,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1046,
+   "en": "swift and fierce, but time and time",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1098,
+   "endFrame": 1135,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1098,
+   "en": "again they were put to flight by the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1136,
+   "endFrame": 1190,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1136,
+   "en": "cunning strategies of Arris and the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1191,
+   "endFrame": 1236,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1191,
+   "en": "indomitable will of the advancing",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1237,
+   "endFrame": 1303,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1237,
+   "en": "Liberation Army.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1338,
+   "endFrame": 1389,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1358,
+   "en": "Victory in hand, the rebels set up a",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1390,
+   "endFrame": 1431,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1393,
+   "en": "Council and worked to establish the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1432,
+   "endFrame": 1469,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1433,
+   "en": "continent's first democracy.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1470,
+   "endFrame": 1540,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1471,
+   "en": "And so, the republic of \"Ishtaria\" was born.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1557,
+   "endFrame": 1636,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1580,
+   "en": "However, Arris the Sage, whom all hoped",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1637,
+   "endFrame": 1697,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1637,
+   "en": "would lead the country, mysteriously vanished...",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1698,
+   "endFrame": 1777,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 1699,
+   "en": "and has not been seen again to this day.",
+   "text": ""
+  },
+  {
+   "kind": "card",
+   "startFrame": 1836,
+   "endFrame": 2027,
+   "rect": [
+    93,
+    86,
+    130,
+    66
+   ],
+   "refDumpFrame": 1850,
+   "en": "Now, 15 years later,\nthe shadow of war\nonce again threatens\nIshtaria...",
+   "text": ""
+  }
+ ]
+}

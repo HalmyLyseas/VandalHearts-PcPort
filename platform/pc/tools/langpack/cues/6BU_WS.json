@@ -1,0 +1,148 @@
+{
+ "video": "6BU_WS",
+ "baseLBA": "32773",
+ "bandTop": 195,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 8,
+   "endFrame": 51,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 37,
+   "en": "Having acquired the great sword,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 52,
+   "endFrame": 108,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 52,
+   "en": "Vandal Heart, the only power which can resist",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 109,
+   "endFrame": 177,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 109,
+   "en": "the Flames of Judgment, Ash and his friends",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 178,
+   "endFrame": 242,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 211,
+   "en": "set off for the city of Shumeria to take their part",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 243,
+   "endFrame": 299,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 243,
+   "en": "in the Liberation Army's final assault.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 320,
+   "endFrame": 388,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 333,
+   "en": "At the same time, Dolf, who had been",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 389,
+   "endFrame": 432,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 390,
+   "en": "secretly hiding his true ambition for",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 433,
+   "endFrame": 501,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 435,
+   "en": "years, saw the chaos after the death of",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 502,
+   "endFrame": 574,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 502,
+   "en": "Emperor Hel as his great chance to grasp",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 575,
+   "endFrame": 622,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 581,
+   "en": "the reigns of power.",
+   "text": ""
+  }
+ ]
+}

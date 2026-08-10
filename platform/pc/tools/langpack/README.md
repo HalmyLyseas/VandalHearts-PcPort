@@ -24,14 +24,17 @@ the game has never drawn — Cyrillic, Greek, Nordic, Polish — which must ship
 ## Latin pack
 
 ```
-# 1 — export (run all four into the SAME <work>)
+# 1 — export (run all five into the SAME <work>)
 lang_export.py           <disc> <work>     # executable tables + on-disc dialogue -> <work>/strings/
 lang_export_literals.py  <src>  <work>     # text hardcoded in game code          -> strings/literals.json
 lang_export_tactical.py  <bal>  <work>     # Tactical Mode text                   -> strings/tactical.json
+lang_export_cues.py      <work>            # movie-subtitle templates             -> strings/cues/
 lang_group.py            <work>            # entity-grouped translator views      -> <work>/translate/
 
 # 2 — translate: edit <work>/translate/*.json and <work>/strings/dialogue/*.json
 #     (every entry carries its English source and its display limit)
+#     movie subtitles: edit <work>/strings/cues/*.json in place -- fill "text" next to each
+#     "en" reference (empty text = that line keeps its burned-in English)
 
 # 3 — merge your translate/ edits back into strings/
 lang_merge.py            <work>            # --revert-cleared: a field you emptied reverts to English
@@ -59,8 +62,9 @@ validate and build. Two things are different in kind:
   only).
 
 ```
-# 1 — export        (same four commands as above)
-# 2 — translate      IN CAPITALS
+# 1 — export        (same five commands as above)
+# 2 — translate      IN CAPITALS (movie subtitles may be written in natural mixed case --
+#                    the builder folds them to your sheet's capitals automatically)
 # 3 — merge
 lang_merge.py            <work>
 
@@ -136,7 +140,31 @@ no in-game reload.
 ## A pack is a diff
 
 Untranslated entries show the original text, so a **partial Latin translation is a working
-translation**. (Non-Latin packs are the exception — they must be complete; see the workflow above.)
+translation**. (Non-Latin packs are the exception — they must be complete; see the workflow above.
+Movie subtitles are per-line diffs even there: an untranslated cue shows its burned-in English,
+which stays readable — so subtitle completeness is never enforced.)
+
+## Movie subtitles
+
+The story videos (six chapter intros + the two endings) carry burned-in English narration. A pack
+can subtitle them: the renderer paints an opaque black cover over the burned text region and draws
+your translation on top, in the same small font as the rest of the game — identically with and
+without the HD pack.
+
+- `lang_export_cues.py <work>` installs the 8 templates into `<work>/strings/cues/`. Each cue is
+  one narration line with its **`en` reference** and validated frame timing; you fill **`text`**
+  and touch nothing else.
+- **Empty `text` = that line keeps its burned-in English.** This is a per-line diff: translate the
+  first video only and the rest stay English; leave the END2 credit slides alone (they are names
+  and universally-understood roles — the shipped templates deliberately leave them out).
+- Write subtitles in **natural mixed case** in any pack. On a capitals-only script sheet the
+  builder folds them to capitals for you (real Unicode rules, so ß→SS and friends are right).
+- The build gate guarantees coverage: a subtitle letter that appears nowhere else in your
+  translation is added to the pack's font by codepoint (costing NO glyph slots), synthesised where
+  possible, and a letter that cannot be drawn is a build error naming the file, cue, and
+  character. `lang_template.py` counts cue letters too, so the art report is complete up front.
+- Timings and cover rects are maintainer-validated per frame against the retail videos —
+  translators normally never edit them.
 
 ## Mixed case (`--mixed-case`, Latin only)
 
@@ -176,7 +204,7 @@ It is the translator's decision, baked into the pack, exactly like `--mixed-case
 
 The port's own in-game options overlay (SELECT+START) stays English in every language. It is drawn
 by the port with its own small font; keeping it out means every pack behaves the same regardless of
-script.
+script. The END2 credit roll also stays English by design (see [Movie subtitles](#movie-subtitles)).
 
 ## The two fonts
 

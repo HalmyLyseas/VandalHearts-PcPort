@@ -1,0 +1,204 @@
+{
+ "video": "4BU_WS",
+ "baseLBA": "2e115",
+ "bandTop": 195,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 11,
+   "endFrame": 64,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 18,
+   "en": "News of the fall of the supposedly",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 65,
+   "endFrame": 109,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 68,
+   "en": "impregnable prison spreads quickly",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 110,
+   "endFrame": 151,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 112,
+   "en": "throughout all of Ishtaria and is",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 152,
+   "endFrame": 187,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 154,
+   "en": "a tremendous shock to the imperial",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 188,
+   "endFrame": 214,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 189,
+   "en": "government who believed",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 215,
+   "endFrame": 265,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 229,
+   "en": "themselves unassailable.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 303,
+   "endFrame": 371,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 347,
+   "en": "Upon hearing this news, the Resistance",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 372,
+   "endFrame": 421,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 401,
+   "en": "movement is revitalized.  They",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 422,
+   "endFrame": 468,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 423,
+   "en": "begin staging large revolts throughout",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 469,
+   "endFrame": 514,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 504,
+   "en": "the land and succeed in liberating the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 515,
+   "endFrame": 554,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 518,
+   "en": "southern region.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 642,
+   "endFrame": 725,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 696,
+   "en": "In the meantime, Ash and his companions",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 726,
+   "endFrame": 781,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 753,
+   "en": "hold a meeting with Clive Beckett who",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 782,
+   "endFrame": 849,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 806,
+   "en": "is acting as a pipeline to the Resistance.",
+   "text": ""
+  }
+ ]
+}

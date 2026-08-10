@@ -38,6 +38,12 @@ GPL-2.0. No ownership is claimed over it. See DISCLAIMER.
     pc_sprite_box_quads.c, pc_event_anim_data.c (unit stats, animation/sprite
     pointer tables). Game-derived data, © Konami.
 
+  * The English reference lines in the movie-subtitle templates
+    (platform/pc/tools/langpack/cues/*.json) — short transcriptions of the
+    narration burned into the game's story videos, © Konami, included solely
+    as a translation reference for language packs. The timings and layout
+    data in the same files are original work of this project.
+
   * The decomp toolchain under tools/ originates from the broader PSX-decomp
     community (splat, maspsx, and related scripts); see CREDITS.
 

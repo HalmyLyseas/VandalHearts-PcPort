@@ -1,0 +1,134 @@
+{
+ "video": "2BU_WS",
+ "baseLBA": "27a08",
+ "bandTop": 195,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 10,
+   "endFrame": 69,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 20,
+   "en": "Gillbaris Island.... Over the centuries,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 70,
+   "endFrame": 118,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 75,
+   "en": "this tiny island in the Gadar Sea has",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 119,
+   "endFrame": 149,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 143,
+   "en": "given rise to numerous myths",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 150,
+   "endFrame": 192,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 180,
+   "en": "and legends.  It is called the Island",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 193,
+   "endFrame": 231,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 208,
+   "en": "of Ancient Mysteries and has been",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 232,
+   "endFrame": 305,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 233,
+   "en": "the subject of much speculation over the years..",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 342,
+   "endFrame": 390,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 349,
+   "en": "It is the island of General Magnus'",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 391,
+   "endFrame": 439,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 392,
+   "en": "disappearance and it is here that Ash",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 440,
+   "endFrame": 518,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 441,
+   "en": "and his companions now venture.",
+   "text": ""
+  }
+ ]
+}

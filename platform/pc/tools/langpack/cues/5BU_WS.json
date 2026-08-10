@@ -1,0 +1,204 @@
+{
+ "video": "5BU_WS",
+ "baseLBA": "30604",
+ "bandTop": 195,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 12,
+   "endFrame": 67,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 18,
+   "en": "The Torog mountain range, located on",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 68,
+   "endFrame": 122,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 111,
+   "en": "the far northern border of Ishtaria.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 123,
+   "endFrame": 176,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 150,
+   "en": "From ancient times, it has been called",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 177,
+   "endFrame": 239,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 178,
+   "en": "the home of the gods and as of yet no man",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 240,
+   "endFrame": 289,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 241,
+   "en": "has been able to dwell for long upon",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 290,
+   "endFrame": 332,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 316,
+   "en": "its cruel facade.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 338,
+   "endFrame": 390,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 351,
+   "en": "Placing their last hopes for the overthrow",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 391,
+   "endFrame": 429,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 391,
+   "en": "of the Empire upon the ancient",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 430,
+   "endFrame": 497,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 439,
+   "en": "script engraved upon the Royal Ring, Ash",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 498,
+   "endFrame": 548,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 507,
+   "en": "and his companions travel north by sea",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 549,
+   "endFrame": 584,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 550,
+   "en": "to this harsh land.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 594,
+   "endFrame": 653,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 602,
+   "en": "Meanwhile, after finally obtaining the",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 654,
+   "endFrame": 714,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 684,
+   "en": "Flame of Judgment, powerful forces were",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 715,
+   "endFrame": 774,
+   "rect": [
+    0,
+    195,
+    320,
+    45
+   ],
+   "refDumpFrame": 718,
+   "en": "at work within the Empire...",
+   "text": ""
+  }
+ ]
+}

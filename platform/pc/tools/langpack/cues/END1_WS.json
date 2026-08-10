@@ -1,0 +1,190 @@
+{
+ "video": "END1_WS",
+ "baseLBA": "36c20",
+ "bandTop": 150,
+ "frameNumbering": "runtime frameNo (dump index + 1)",
+ "cues": [
+  {
+   "kind": "band",
+   "startFrame": 9,
+   "endFrame": 131,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 76,
+   "en": "Ash, gone from this world, was never to be seen again...",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 132,
+   "endFrame": 235,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 138,
+   "en": "With Hel and Dolf gone, the Empire quickly crumbled",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 236,
+   "endFrame": 346,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 333,
+   "en": "Ishtaria was once more set back on the path of democracy.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 347,
+   "endFrame": 443,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 414,
+   "en": "However, the wounds left by the empire were deep indeed.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 444,
+   "endFrame": 544,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 452,
+   "en": "As a result of the purges which left many dead,",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 545,
+   "endFrame": 635,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 585,
+   "en": "the new government faced a difficult task indeed.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 636,
+   "endFrame": 734,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 647,
+   "en": "In the countryside, thieves still make their own laws",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 735,
+   "endFrame": 837,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 757,
+   "en": "and only the strong can survive.",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 838,
+   "endFrame": 943,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 847,
+   "en": "Ultimately not much changed since before the war started...",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 968,
+   "endFrame": 1096,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 1046,
+   "en": "People still must make their way by force of their will",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1097,
+   "endFrame": 1205,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 1105,
+   "en": "It is only when the people lose this will that evil is",
+   "text": ""
+  },
+  {
+   "kind": "band",
+   "startFrame": 1206,
+   "endFrame": 1347,
+   "rect": [
+    0,
+    150,
+    320,
+    90
+   ],
+   "refDumpFrame": 1205,
+   "en": "able to flourish and take power.",
+   "text": ""
+  },
+  {
+   "kind": "card",
+   "startFrame": 1360,
+   "endFrame": 1490,
+   "rect": [
+    91,
+    89,
+    132,
+    64
+   ],
+   "refDumpFrame": 1385,
+   "en": "During this time, Ash's friends began to drift away...",
+   "text": ""
+  }
+ ]
+}

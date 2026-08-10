@@ -23,6 +23,11 @@ void PC_MovieSubsOpen(int baseLBA);              /* movie stream started (before
 void PC_MovieSubsClose(void);                    /* movie ended / skipped / aborted */
 void PC_MovieSubsFrame(int frameNo);             /* this frame is becoming current */
 
+/* Language pack K_CUES section (pc_lang.c hands the raw blob over at pack load). Parsed into
+ * per-movie cue sets that live for the process; PC_MovieSubsOpen consults them when the
+ * VH_MOVIE_SUBS dev override is not set. Bounds-checked -- a pack is a third-party download. */
+void PC_MovieSubsLoadPack(const unsigned char *p, unsigned len);
+
 /* Cues active on the current frame (band + card can overlap on the same frame).
  * Fills up to cap pointers, returns the count. Pointers are valid until the next
  * PC_MovieSubsOpen/Close. */

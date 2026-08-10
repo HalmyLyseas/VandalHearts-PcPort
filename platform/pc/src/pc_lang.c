@@ -57,6 +57,7 @@ extern char *gItemDescriptions2[101];
 #define K_CHARMAP 5
 #define K_KROM  6
 #define K_LITERAL 7
+#define K_CUES  8   /* F3 movie subtitles -- handed to pc_movie_subs.c */
 #define MAX_TEXT_FILES 200
 
 /* Section ids for tables, matching lang_build.py's TABLES list. */
@@ -414,6 +415,10 @@ static void LangLoad(void) {
         else if (kind == K_FONT)  PC_LangFontLoad(buf + off, len);   /* pc_lang_font.c */
         else if (kind == K_KROM)  PC_LangKromLoad(buf + off, len);   /* pc_lang_font.c */
         else if (kind == K_LITERAL) LitLoad(buf + off, len);   /* consumed by PC_LangStr */
+        else if (kind == K_CUES) {                   /* F3 movie subtitles (pc_movie_subs.c) */
+            extern void PC_MovieSubsLoadPack(const unsigned char *p, unsigned len);
+            PC_MovieSubsLoadPack(buf + off, len);
+        }
         else if (kind == K_CHARMAP) {                /* held until text.c's hand-off (like terrain) */
             s_lang.charmap = (unsigned char *)malloc(len);
             if (s_lang.charmap) {

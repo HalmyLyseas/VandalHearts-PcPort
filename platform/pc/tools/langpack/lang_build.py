@@ -41,7 +41,7 @@ from lang_io import fnv1a, load_json, write_json
 from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR, walk_dialogue
 
 MAGIC = b"VHLANG\x01\x00"
-K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL = 1, 2, 3, 4, 5, 6, 7
+K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL, K_CUES = 1, 2, 3, 4, 5, 6, 7, 8
 GTEXT_BYTES = 10928   # symbol_addrs.txt: gText size 0x2ab0 -- LoadText unpacks a whole file here
 FONT_VRAM = 0x801012e4   # sFontGlyphBitmaps[128][9] -- base letterforms for glyph synthesis
 
@@ -757,6 +757,109 @@ def check_pack_name(lang):
                          f"lowercase [a-z0-9._-] only (e.g. en-fix, fr-fantrad, pt-br-fantrad)")
 
 
+# F3 movie subtitles: mirror platform/pc/src/pc_movie_subs.h -- the engine's hard limits.
+CUE_MAX_LINES, CUE_MAX_TEXT = 4, 160
+
+
+def build_cues(work, exe, errors, art_small, charmap, cue_font):
+    """Ingest <work>/strings/cues/*.json -> the K_CUES blob (None if the folder is absent/empty).
+
+    A cue set is a DIFF like every other section: empty `text` = cue not emitted, so that line
+    keeps its burned-in English (this is also how END2's credits stay English by policy).
+
+    Case: script packs are structurally caps-only (44 glyph slots cannot hold two cases of a
+    33-letter alphabet), so a non-ASCII character with no glyph of its own is NORMALIZED to its
+    Unicode uppercase (str.upper -- handles one-to-many folds like eszett) and retried; still no
+    glyph is a hard error naming the file, cue, and character. ASCII needs nothing: the game's
+    own map folds it.
+
+    Coverage: every glyph a cue needs is registered into `cue_font` and merged into K_FONT BY
+    CODEPOINT -- cues never consume charmap codes or glyph slots (the subtitle renderer is
+    codepoint-keyed, unlike the byte-encoded dialogue path).
+
+    Blob: u32 movieCount, then per movie u32 lba + u32 cueCount, then per cue
+    u32 start, u32 end, u16 x/y/w/h, u8 lineCount, per line u8 len + UTF-8 bytes."""
+    cdir = os.path.join(work, "strings", "cues")
+    if not os.path.isdir(cdir):
+        return None, 0, 0
+
+    def rows_for(cp):
+        if cp in cue_font:
+            return cue_font[cp]
+        rows = art_small.get(cp)
+        if rows is None and cp in charmap.assigned:
+            rows = charmap.assigned[cp][2]
+        if rows is None:
+            rows = synth_one(exe, cp)
+        if rows is not None:
+            cue_font[cp] = rows
+        return rows
+
+    movies, total = [], 0
+    for fn in sorted(os.listdir(cdir)):
+        if not fn.endswith(".json"):
+            continue
+        doc = load_json(os.path.join(cdir, fn))
+        try:
+            lba = int(str(doc["baseLBA"]), 16)
+        except (KeyError, ValueError):
+            errors.append(f"cues/{fn}: missing or non-hex baseLBA")
+            continue
+        recs = []
+        for i, c in enumerate(doc.get("cues", [])):
+            text = c.get("text") or ""
+            if not text:
+                continue
+            ctx = f"cues/{fn} cue {i}"
+            out = []
+            for ch in text:
+                if ord(ch) < 0x80 or rows_for(ord(ch)) is not None:
+                    out.append(ch)
+                    continue
+                folded = ch.upper()
+                if folded != ch and all(ord(u) < 0x80 or rows_for(ord(u)) is not None
+                                        for u in folded):
+                    out.extend(folded)
+                else:
+                    errors.append(f"{ctx}: {ch!r} has no glyph -- not synthesisable from the US "
+                                  f"font and absent from the pack's font8x9 sheet")
+                    out = None
+                    break
+            if out is None:
+                continue
+            lines = "".join(out).split("\n")
+            if len(lines) > CUE_MAX_LINES:
+                errors.append(f"{ctx}: {len(lines)} lines, the engine holds {CUE_MAX_LINES}")
+                continue
+            enc = [l.encode("utf-8") for l in lines]
+            if any(len(b) >= CUE_MAX_TEXT for b in enc):
+                errors.append(f"{ctx}: a line exceeds {CUE_MAX_TEXT - 1} UTF-8 bytes")
+                continue
+            try:
+                s, e = int(c["startFrame"]), int(c["endFrame"])
+                x, y, w, h = (int(v) for v in c["rect"])
+            except (KeyError, ValueError, TypeError):
+                errors.append(f"{ctx}: missing/invalid startFrame/endFrame/rect")
+                continue
+            if not (1 <= s <= e) or not (0 <= x and 0 <= y and 0 < w and 0 < h
+                                         and x + w <= 320 and y + h <= 240):
+                errors.append(f"{ctx}: frame range or rect out of bounds")
+                continue
+            rec = struct.pack("<IIHHHHB", s, e, x, y, w, h, len(enc))
+            for b in enc:
+                rec += struct.pack("<B", len(b)) + b
+            recs.append(rec)
+        if recs:
+            movies.append((lba, recs))
+            total += len(recs)
+    if not movies:
+        return None, 0, 0
+    blob = struct.pack("<I", len(movies))
+    for lba, recs in movies:
+        blob += struct.pack("<II", lba, len(recs)) + b"".join(recs)
+    return blob, len(movies), total
+
+
 def count_untranslated(work):
     """Entries with English to translate but an empty translation. A Latin pack renders these as the
     original English (a partial translation is still playable); a non-Latin pack renders EVERY one as
@@ -982,6 +1085,17 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
         sections.append((K_LITERAL, 0, blob))
         nlits = len(recs)
 
+    # F3 movie subtitles: cue ingestion runs BEFORE the font section so cue glyphs join K_FONT
+    # (by codepoint -- zero charmap code/slot cost). Deliberately NOT counted by
+    # count_untranslated: a cue set is a per-line diff, and leaving cues untranslated (END2's
+    # credits, by policy) is a valid final state, not incompleteness.
+    cue_font = {}
+    cue_blob, cue_movies, cue_count = build_cues(work, exe, errors, art_small, charmap, cue_font)
+    if cue_blob:
+        sections.append((K_CUES, 0, cue_blob))
+        print(f"[lang] {'movie subtitles':<18} {cue_count} cue(s) across {cue_movies} video(s)",
+              file=sys.stderr)
+
     # The font section is built LAST so it covers codepoints from every source (ptr tables AND
     # dialogue). Sorted by codepoint: the runtime binary-searches.
     nglyphs = 0
@@ -990,6 +1104,9 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
         glyphs = synth_glyphs(exe, used_cps, errors)
         if glyphs:
             font_glyphs.update(dict(glyphs))
+    for cp, rows in cue_font.items():
+        if cp >= 0x80:
+            font_glyphs.setdefault(cp, rows)
     # F3 movie subtitles: the runtime resolves UTF-8 cue text by CODEPOINT (PC_LangSubtitleGlyph).
     # Script packs carry their letters only as charmap byte codes -- the Unicode identity never
     # reaches the runtime -- so also emit every charmap-assigned letter's bitmap under its

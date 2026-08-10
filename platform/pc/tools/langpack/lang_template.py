@@ -98,6 +98,25 @@ def collect(work):
             for e in load_json(os.path.join(dd, fn))["entries"]:
                 for line in (e.get("text") or []):
                     add(line, "small")
+
+    # F3 movie subtitles render in the small font (codepoint-keyed via K_FONT) -- a cue letter
+    # that appears nowhere else in the game still needs its art, so cues join the scan.
+    # MIRRORS the builder's rule: a synthesizable character (accented Latin) is counted as
+    # itself; anything else is counted as its Unicode UPPERCASE, because the builder folds a
+    # glyphless letter before erroring and script sheets are caps-only -- so the report names
+    # exactly the art the build gate will demand.
+    cdir = os.path.join(sdir, "cues")
+    if os.path.isdir(cdir):
+        for fn in os.listdir(cdir):
+            if fn.endswith(".json"):
+                for c in load_json(os.path.join(cdir, fn)).get("cues", []):
+                    for ch in (c.get("text") or ""):
+                        if ord(ch) <= 0x7F:
+                            add(ch, "small")
+                        elif synth_small(ord(ch)):
+                            add(ch, "small")
+                        else:
+                            add(ch.upper(), "small")
     return used
 
 
