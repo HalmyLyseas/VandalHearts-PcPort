@@ -213,7 +213,9 @@ typedef struct { const unsigned char *rows; int x0, iw, adv; } SubCp;   /* rows 
 static const struct { int cols, rowsN, bpr, gap, spaceAdv, tofuW, lineH, cellH, scaleDiv; }
     SUBS_FONT[2] = {
     { 8, 9, 1, 1, 3, 6, 11, 9, 240 },       /* small 8x9  (1 byte/row, MSB left)  */
-    { 16, 15, 2, 2, 6, 10, 18, 15, 480 },   /* wide 16x15 (u16 BE/row, MSB left) */
+    { 16, 15, 2, 2, 6, 10, 18, 15, 320 },   /* wide 16x15 (u16 BE/row, MSB left); scaleDiv 320 ->
+                                             * scale 3 on the 960-tall movie scratch = 45px caps
+                                             * = the retail burned font's measured proportion */
 };
 
 static unsigned subsRowBits(const unsigned char *rows, int bpr, int r) {
@@ -772,12 +774,13 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     if (s_ptTime) pt0 = presentNowMs();
 
     /* A movie is playing -> present its decoded frame as a fullscreen overlay (native BGR555, or
-     * HD RGB24). The native MDEC frame is presented at 2x (nearest-neighbour -- movie pixels look
-     * identical) so the wide subtitle font has real pixels to land on; the HD frame is already big. */
+     * HD RGB24). The native MDEC frame is presented at 4x (nearest-neighbour -- movie pixels look
+     * identical) so the wide subtitle font has real pixels to land on AND the native scratch
+     * matches the HD one (1280x960): subtitle metrics are identical on both paths by construction. */
     if ((s_movieOverlay || s_movieOverlayRGB) && s_movieOvW > 0 && s_movieOvH > 0) {
         vram = (unsigned short *)s_movieOverlay;   /* NULL on the RGB path (used only by the BGR555 convert) */
         vramW = s_movieOvW; x = 0; y = 0;
-        if (s_movieOverlay) { w = s_movieOvW * 2; h = s_movieOvH * 2; }
+        if (s_movieOverlay) { w = s_movieOvW * 4; h = s_movieOvH * 4; }
         else                { w = s_movieOvW;     h = s_movieOvH;     }
     }
 
@@ -813,12 +816,12 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         for (py = 0; py < h; py++)
             memcpy(&s_rgbaScratch[(h - 1 - py) * w * 3], &s_movieOverlayRGB[py * w * 3], (size_t)w * 3);
     } else {
-    /* m2x: the native-movie overlay presents at 2x (w/h were doubled above), so the source
-     * sample halves back -- nearest-neighbour, pixels unchanged. 0 for the normal VRAM present. */
-    int m2x = (s_movieOverlay != NULL) ? 1 : 0;
+    /* mshift: the native-movie overlay presents at 4x (w/h were scaled above), so the source
+     * sample shifts back -- nearest-neighbour, pixels unchanged. 0 for the normal VRAM present. */
+    int mshift = (s_movieOverlay != NULL) ? 2 : 0;
     for (py = 0; py < h; py++) {
         for (px = 0; px < w; px++) {
-            unsigned short c = vram[(y + (py >> m2x)) * vramW + (x + (px >> m2x))];
+            unsigned short c = vram[(y + (py >> mshift)) * vramW + (x + (px >> mshift))];
             unsigned char *out = &s_rgbaScratch[((h - 1 - py) * w + px) * 3];
             /* Display expansion 5-bit -> 8-bit by BIT-REPLICATION ((v<<3)|(v>>2)), matching real
              * hardware / DuckStation's output: a full 5-bit channel (31) maps to 255, not 248, so
