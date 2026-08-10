@@ -58,6 +58,7 @@ extern char *gItemDescriptions2[101];
 #define K_KROM  6
 #define K_LITERAL 7
 #define K_CUES  8   /* F3 movie subtitles -- handed to pc_movie_subs.c */
+#define K_FONT16 9  /* codepoint-keyed 16x15 glyphs for the subtitle renderer (pc_lang_font.c) */
 #define MAX_TEXT_FILES 200
 
 /* Section ids for tables, matching lang_build.py's TABLES list. */
@@ -419,6 +420,7 @@ static void LangLoad(void) {
             extern void PC_MovieSubsLoadPack(const unsigned char *p, unsigned len);
             PC_MovieSubsLoadPack(buf + off, len);
         }
+        else if (kind == K_FONT16) PC_LangFont16Load(buf + off, len);   /* pc_lang_font.c */
         else if (kind == K_CHARMAP) {                /* held until text.c's hand-off (like terrain) */
             s_lang.charmap = (unsigned char *)malloc(len);
             if (s_lang.charmap) {
@@ -578,6 +580,47 @@ const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
     if (cp < 128 && s_subsMap && s_subsGlyphs) {
         unsigned slot = s_subsMap[cp];
         if ((int)slot < s_subsGlyphN) return s_subsGlyphs[slot];
+    }
+    return NULL;
+}
+
+/* Wide (16x15) subtitle glyph: the pack's codepoint-keyed K_FONT16 first, then the built-in BIOS
+ * charset for ASCII via the Krom2RawAdd path (which itself consults pack krom glyphs first).
+ * NO case logic here -- pack cue text arrives pre-folded from the builder; a dev VH_MOVIE_SUBS
+ * file must match the pack's alphabet. Returns 30 bytes (15 rows x u16, MSB left) or NULL. */
+static unsigned AsciiToWideSjis(unsigned cp) {
+    if (cp == ' ') return 0x8140;
+    if (cp >= '0' && cp <= '9') return 0x824F + (cp - '0');
+    if (cp >= 'A' && cp <= 'Z') return 0x8260 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x8281 + (cp - 'a');
+    switch (cp) {                     /* kuten row 1 -- linear from 0x8140 (see libkernel.c) */
+    case ',':  return 0x8143;
+    case '.':  return 0x8144;
+    case ':':  return 0x8146;
+    case ';':  return 0x8147;
+    case '?':  return 0x8148;
+    case '!':  return 0x8149;
+    case '\'': return 0x8166;         /* typographic right single quote */
+    case '"':  return 0x8168;         /* typographic right double quote */
+    case '(':  return 0x8169;
+    case ')':  return 0x816A;
+    case '+':  return 0x817B;
+    case '-':  return 0x817C;
+    case '/':  return 0x815E;
+    }
+    return 0;
+}
+
+const unsigned char *PC_LangSubtitleGlyph16(unsigned cp) {
+    const unsigned char *g = PC_LangFont16Glyph(cp);
+    if (g) return g;
+    if (cp < 0x80) {
+        unsigned sjis = AsciiToWideSjis(cp);
+        if (sjis) {
+            extern void *Krom2RawAdd(int sjisCode);
+            void *p = Krom2RawAdd((int)sjis);
+            if (p && p != (void *)-1) return (const unsigned char *)p;
+        }
     }
     return NULL;
 }

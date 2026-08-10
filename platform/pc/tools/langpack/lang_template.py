@@ -99,9 +99,9 @@ def collect(work):
                 for line in (e.get("text") or []):
                     add(line, "small")
 
-    # F3 movie subtitles render in the small font (codepoint-keyed via K_FONT) -- a cue letter
-    # that appears nowhere else in the game still needs its art, so cues join the scan.
-    # MIRRORS the builder's rule: a synthesizable character (accented Latin) is counted as
+    # F3 movie subtitles render in the LARGE (16x15) font -- a cue letter that appears nowhere
+    # else in the game still needs its art, so cues join the scan on the large surface.
+    # MIRRORS the builder's rule: a krom-synthesizable character (accented Latin) is counted as
     # itself; anything else is counted as its Unicode UPPERCASE, because the builder folds a
     # glyphless letter before erroring and script sheets are caps-only -- so the report names
     # exactly the art the build gate will demand.
@@ -112,11 +112,11 @@ def collect(work):
                 for c in load_json(os.path.join(cdir, fn)).get("cues", []):
                     for ch in (c.get("text") or ""):
                         if ord(ch) <= 0x7F:
-                            add(ch, "small")
-                        elif synth_small(ord(ch)):
-                            add(ch, "small")
+                            add(ch, "large")
+                        elif synth_large(ord(ch)):
+                            add(ch, "large")
                         else:
-                            add(ch.upper(), "small")
+                            add(ch.upper(), "large")
     return used
 
 

@@ -261,6 +261,44 @@ const unsigned char *PC_LangFontGlyph(unsigned cp) {
     return s_glyphN ? FindGlyph(cp) : NULL;
 }
 
+/* K_FONT16: codepoint-keyed 16x15 glyphs (u32 cp + 30 bytes/record, sorted) -- the subtitle
+ * renderer's PRIMARY font. Same shape as K_FONT one size up; ASCII never appears here (the
+ * built-in BIOS charset serves it). */
+typedef struct { unsigned cp; unsigned char rows[30]; } LangGlyph16;
+static LangGlyph16 *s_glyphs16;
+static int s_glyph16N;
+
+void PC_LangFont16Load(const unsigned char *p, unsigned len) {
+    unsigned n, i;
+    if (len < 4) return;
+    n = (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
+    if (n > (len - 4) / 34) {
+        fprintf(stderr, "[lang] font16 section truncated (%u glyphs, %u bytes)\n", n, len);
+        return;
+    }
+    s_glyphs16 = (LangGlyph16 *)malloc(n * sizeof(LangGlyph16));
+    if (!s_glyphs16) return;
+    for (i = 0; i < n; i++) {
+        const unsigned char *r = p + 4 + i * 34;
+        s_glyphs16[i].cp = (unsigned)r[0] | ((unsigned)r[1] << 8) | ((unsigned)r[2] << 16) |
+                           ((unsigned)r[3] << 24);
+        memcpy(s_glyphs16[i].rows, r + 4, 30);
+    }
+    s_glyph16N = (int)n;
+    if (PC_Verbose()) fprintf(stderr, "[lang] font16: %d glyph(s) loaded\n", s_glyph16N);
+}
+
+const unsigned char *PC_LangFont16Glyph(unsigned cp) {
+    int lo = 0, hi = s_glyph16N - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (s_glyphs16[mid].cp == cp) return s_glyphs16[mid].rows;
+        if (s_glyphs16[mid].cp < cp) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return NULL;
+}
+
 /* Public strict UTF-8 decode for the subtitle renderer -- same rules as the game text path
  * (ASCII/continuation/overlong leads return 0; the caller treats the byte as one codepoint). */
 int PC_LangUtf8Decode(const unsigned char *p, unsigned *cp) {

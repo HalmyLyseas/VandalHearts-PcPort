@@ -97,6 +97,12 @@ const unsigned char *PC_LangSubtitleGlyph(unsigned cp);
 const unsigned char *PC_LangFontGlyph(unsigned cp);
 int PC_LangUtf8Decode(const unsigned char *p, unsigned *cp);
 
+/* Wide (16x15) subtitle font -- the renderer's PRIMARY tier (the 8x9 path above is the
+ * fallback). Glyph16 returns 30 bytes: 15 rows x u16 big-endian, MSB = leftmost pixel. */
+void PC_LangFont16Load(const unsigned char *p, unsigned len);
+const unsigned char *PC_LangFont16Glyph(unsigned cp);
+const unsigned char *PC_LangSubtitleGlyph16(unsigned cp);
+
 /* Called from libgpu.c's LoadImage on EVERY upload: when the rect is the F_WD glyph sheet at
  * (640,256), the pack's charmap glyphs are stamped into their sheet cells in the SOURCE buffer, so
  * the strip path (DrawGlyphStrip blits) shows them too. No-op for any other rect / no pack. */

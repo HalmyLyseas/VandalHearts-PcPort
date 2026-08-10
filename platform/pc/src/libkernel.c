@@ -658,10 +658,11 @@ extern const unsigned char pc_kanji_charset2[6270];
  * Vandal Hearts actually draws (space, period, 0-9, A-Z, a-z); anything else
  * returns -1 (blank), same as the game's own out-of-range guard. */
 static s32 sjis_to_krom_glyph(u32 sjis) {
-    if (sjis == 0x8140) return 0;                                 /* space  */
-    if (sjis == 0x8144) return 4;                                 /* period */
-    if (sjis == 0x817b) return 59;                                /* + (full-width plus, kuten 1-60)  */
-    if (sjis == 0x817c) return 60;                                /* - (full-width minus, kuten 1-61) */
+    /* Kuten row 1 (0x8140-0x817C) is packed LINEARLY in charset 2: the empirically recovered
+     * anchors (space=0, period=4, plus=59, minus=60) all satisfy index == sjis - 0x8140, which
+     * proves no undefined-code skips inside that span. Serving the whole span gives the
+     * subtitle renderer its punctuation (comma, quotes, ?, !) from the built-in font. */
+    if (sjis >= 0x8140 && sjis <= 0x817c) return (s32)(sjis - 0x8140);
     if (sjis == 0x8194) return 65;                                /* #      */
     if (sjis >= 0x824f && sjis <= 0x8258) return 147 + (sjis - 0x824f); /* 0-9 */
     if (sjis >= 0x8260 && sjis <= 0x8279) return 157 + (sjis - 0x8260); /* A-Z */

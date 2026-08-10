@@ -159,6 +159,9 @@ without the HD pack.
   and universally-understood roles — the shipped templates deliberately leave them out).
 - Write subtitles in **natural mixed case** in any pack. On a capitals-only script sheet the
   builder folds them to capitals for you (real Unicode rules, so ß→SS and friends are right).
+- Subtitles render in the **large 16×15 font** (movies present with the pixels to carry it), so a
+  non-Latin pack that subtitles videos needs its `font16x15` sheet — `gen_packart` and the
+  template tool produce it as a matter of course, and the build error names it if it's missing.
 - The build gate guarantees coverage: a subtitle letter that appears nowhere else in your
   translation is added to the pack's font by codepoint (costing NO glyph slots), synthesised where
   possible, and a letter that cannot be drawn is a build error naming the file, cue, and
@@ -214,7 +217,7 @@ before the other.
 
 | | **small sheet — 8×9 px** | **large sheet — 16×15 px** |
 |---|---|---|
-| **where your letters show up** | story dialogue, every menu, item/spell descriptions, spell names, character names, class names, terrain names, battle messages | item names in shop/field/inventory; the TURN counter; YES/NO prompts |
+| **where your letters show up** | story dialogue, every menu, item/spell descriptions, spell names, character names, class names, terrain names, battle messages | item names in shop/field/inventory; the TURN counter; YES/NO prompts; **movie subtitles** |
 | **how much of the game** | almost all of it | a handful of screens |
 | **letters you can add** | **44** | no practical limit |
 | **if you don't supply it** | nothing readable renders — pack unusable | those screens stay English; the rest works |

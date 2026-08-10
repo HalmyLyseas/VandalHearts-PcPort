@@ -41,7 +41,8 @@ from lang_io import fnv1a, load_json, write_json
 from lang_export import read_exe, foff, _iso, TEXT_RX, SECTOR, walk_dialogue
 
 MAGIC = b"VHLANG\x01\x00"
-K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL, K_CUES = 1, 2, 3, 4, 5, 6, 7, 8
+K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL, K_CUES, K_FONT16 = \
+    1, 2, 3, 4, 5, 6, 7, 8, 9
 GTEXT_BYTES = 10928   # symbol_addrs.txt: gText size 0x2ab0 -- LoadText unpacks a whole file here
 FONT_VRAM = 0x801012e4   # sFontGlyphBitmaps[128][9] -- base letterforms for glyph synthesis
 
@@ -761,7 +762,7 @@ def check_pack_name(lang):
 CUE_MAX_LINES, CUE_MAX_TEXT = 4, 160
 
 
-def build_cues(work, exe, errors, art_small, charmap, cue_font):
+def build_cues(work, exe, errors, art_small, charmap, cue_font, art_big, krom, cue_font16):
     """Ingest <work>/strings/cues/*.json -> the K_CUES blob (None if the folder is absent/empty).
 
     A cue set is a DIFF like every other section: empty `text` = cue not emitted, so that line
@@ -784,6 +785,7 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font):
         return None, 0, 0
 
     def rows_for(cp):
+        """Small-font (8x9) resolution -- kept as the renderer's fallback tier."""
         if cp in cue_font:
             return cue_font[cp]
         rows = art_small.get(cp)
@@ -793,6 +795,27 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font):
             rows = synth_one(exe, cp)
         if rows is not None:
             cue_font[cp] = rows
+        return rows
+
+    krom_base = [None]                                   # lazy: only loaded if a cue needs synth
+
+    def rows16_for(cp):
+        """LARGE-font (16x15) resolution -- the subtitle renderer's PRIMARY tier, so this is the
+        one the coverage gate enforces. Sources: the pack's krom assignments (item names), the
+        pack's drawn 16x15 sheet, then krom_synth (accented Latin from the BIOS letterforms)."""
+        if cp in cue_font16:
+            return cue_font16[cp]
+        rows = None
+        if cp in krom.assigned:
+            rows = krom.assigned[cp][1]
+        elif cp in art_big:
+            rows = b"".join(struct.pack(">H", r) for r in art_big[cp])
+        else:
+            if krom_base[0] is None:
+                krom_base[0] = load_krom_base()
+            rows = krom_synth(krom_base[0], cp)
+        if rows is not None:
+            cue_font16[cp] = rows
         return rows
 
     movies, total = [], 0
@@ -813,16 +836,23 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font):
             ctx = f"cues/{fn} cue {i}"
             out = []
             for ch in text:
-                if ord(ch) < 0x80 or rows_for(ord(ch)) is not None:
+                cp = ord(ch)
+                if cp < 0x80 or rows16_for(cp) is not None:
+                    if cp >= 0x80:
+                        rows_for(cp)                     # register the 8x9 fallback too, if any
                     out.append(ch)
                     continue
                 folded = ch.upper()
-                if folded != ch and all(ord(u) < 0x80 or rows_for(ord(u)) is not None
+                if folded != ch and all(ord(u) < 0x80 or rows16_for(ord(u)) is not None
                                         for u in folded):
+                    for u in folded:
+                        if ord(u) >= 0x80:
+                            rows_for(ord(u))
                     out.extend(folded)
                 else:
-                    errors.append(f"{ctx}: {ch!r} has no glyph -- not synthesisable from the US "
-                                  f"font and absent from the pack's font8x9 sheet")
+                    errors.append(f"{ctx}: {ch!r} has no 16x15 glyph -- not synthesisable and "
+                                  f"absent from the pack's font16x15 sheet (subtitles draw the "
+                                  f"large font; a subtitled script pack needs that sheet)")
                     out = None
                     break
             if out is None:
@@ -1090,11 +1120,21 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     # count_untranslated: a cue set is a per-line diff, and leaving cues untranslated (END2's
     # credits, by policy) is a valid final state, not incompleteness.
     cue_font = {}
-    cue_blob, cue_movies, cue_count = build_cues(work, exe, errors, art_small, charmap, cue_font)
+    cue_font16 = {}
+    cue_blob, cue_movies, cue_count = build_cues(work, exe, errors, art_small, charmap, cue_font,
+                                                 art_big, krom, cue_font16)
     if cue_blob:
         sections.append((K_CUES, 0, cue_blob))
-        print(f"[lang] {'movie subtitles':<18} {cue_count} cue(s) across {cue_movies} video(s)",
-              file=sys.stderr)
+        # K_FONT16: codepoint-keyed 16x15 glyphs for the subtitle renderer (u32 cp + 30 bytes).
+        # ASCII is excluded -- the built-in BIOS charset serves it at runtime.
+        wide = {cp: rows for cp, rows in cue_font16.items() if cp >= 0x80}
+        if wide:
+            blob16 = struct.pack("<I", len(wide))
+            for cp, rows in sorted(wide.items()):
+                blob16 += struct.pack("<I", cp) + rows
+            sections.append((K_FONT16, 0, blob16))
+        print(f"[lang] {'movie subtitles':<18} {cue_count} cue(s) across {cue_movies} video(s)"
+              + (f", {len(wide)} wide glyph(s)" if wide else ""), file=sys.stderr)
 
     # The font section is built LAST so it covers codepoints from every source (ptr tables AND
     # dialogue). Sorted by codepoint: the runtime binary-searches.
