@@ -985,14 +985,25 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     # The font section is built LAST so it covers codepoints from every source (ptr tables AND
     # dialogue). Sorted by codepoint: the runtime binary-searches.
     nglyphs = 0
+    font_glyphs = {}
     if used_cps:
         glyphs = synth_glyphs(exe, used_cps, errors)
         if glyphs:
-            blob = struct.pack("<I", len(glyphs))
-            for cp, rows in glyphs:
-                blob += struct.pack("<I", cp) + rows
-            sections.append((K_FONT, 0, blob))
-            nglyphs = len(glyphs)
+            font_glyphs.update(dict(glyphs))
+    # F3 movie subtitles: the runtime resolves UTF-8 cue text by CODEPOINT (PC_LangSubtitleGlyph).
+    # Script packs carry their letters only as charmap byte codes -- the Unicode identity never
+    # reaches the runtime -- so also emit every charmap-assigned letter's bitmap under its
+    # codepoint (~13 B each). ASCII cps are excluded: the game's own store serves those, and a
+    # K_FONT record would shadow it.
+    for cp, (_code, _slot, rows) in charmap.assigned.items():
+        if cp >= 0x80:
+            font_glyphs.setdefault(cp, rows)
+    if font_glyphs:
+        blob = struct.pack("<I", len(font_glyphs))
+        for cp, rows in sorted(font_glyphs.items()):
+            blob += struct.pack("<I", cp) + rows
+        sections.append((K_FONT, 0, blob))
+        nglyphs = len(font_glyphs)
 
     cm = charmap.section()
     if cm:
