@@ -89,6 +89,14 @@ int PC_LangUtf8Glyph(unsigned char **pp, int x, int y, int color);
  * consumed whole): sequence length 2..4, or 0 when not a pack-drawable sequence start. */
 int PC_LangUtf8SeqLen(const unsigned char *p);
 
+/* Langpack F3 movie subtitles (pc_gpu_window.c's cue renderer). SubtitleGlyph resolves a Unicode
+ * codepoint to 9 bitmap rows (8x1bpp, MSB left): pack K_FONT first, then the game's live ASCII
+ * map+bitmap store captured at the charmap hand-off. NULL = no glyph (renderer draws a tofu box).
+ * Utf8Decode is the strict decoder shared with the game text path (0 for ASCII/invalid leads). */
+const unsigned char *PC_LangSubtitleGlyph(unsigned cp);
+const unsigned char *PC_LangFontGlyph(unsigned cp);
+int PC_LangUtf8Decode(const unsigned char *p, unsigned *cp);
+
 /* Called from libgpu.c's LoadImage on EVERY upload: when the rect is the F_WD glyph sheet at
  * (640,256), the pack's charmap glyphs are stamped into their sheet cells in the SOURCE buffer, so
  * the strip path (DrawGlyphStrip blits) shows them too. No-op for any other rect / no pack. */

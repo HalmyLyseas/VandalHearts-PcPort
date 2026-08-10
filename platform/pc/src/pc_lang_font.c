@@ -255,6 +255,18 @@ const void *PC_LangKromGlyph(unsigned sjis) {
     return NULL;
 }
 
+/* Langpack F3 movie subtitles: the codepoint-keyed pack glyph table, exposed for the subtitle
+ * renderer (pc_lang.c's PC_LangSubtitleGlyph tries this before the game's ASCII store). */
+const unsigned char *PC_LangFontGlyph(unsigned cp) {
+    return s_glyphN ? FindGlyph(cp) : NULL;
+}
+
+/* Public strict UTF-8 decode for the subtitle renderer -- same rules as the game text path
+ * (ASCII/continuation/overlong leads return 0; the caller treats the byte as one codepoint). */
+int PC_LangUtf8Decode(const unsigned char *p, unsigned *cp) {
+    return Utf8Decode(p, cp);
+}
+
 /* Length-only twin of PC_LangUtf8Glyph, for callers that must CONSUME a sequence they cannot draw
  * (the message box's hard-clip region past maxCharsPerLine): 2..4 if *p starts a valid sequence and
  * a pack font is loaded, else 0. */

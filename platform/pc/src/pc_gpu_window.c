@@ -14,6 +14,7 @@
 #include "pc_platform.h"
 #include "pc_overlay.h"
 #include "pc_movie_subs.h"
+#include "pc_lang.h"       /* PC_LangSubtitleGlyph / PC_LangUtf8Decode (F3 subtitle renderer) */
 
 static SDL_Window *s_window;
 #if defined(__APPLE__)
@@ -193,6 +194,128 @@ static void ovlText(int w, int h, int sx, int sy, int scale, const char *text, i
 static int ovlTextPx(const char *s, int scale) {   /* rendered width; last cell has no trailing gap */
     int n = (int)strlen(s);
     return n > 0 ? (n * 6 - 1) * scale : 0;
+}
+
+/* --- Langpack F3 movie subtitles: proportional rendering in the game's own 8x9 small font ------
+ * Glyphs via PC_LangSubtitleGlyph: the pack's codepoint-keyed K_FONT first (non-Latin scripts,
+ * synthesized accents), then the game's live ASCII map+bitmap store -- so subtitles always match
+ * what the game itself draws, pack patches included. Advance is proportional (ink width + 1),
+ * which lands near the retail burned font's ~5.5 px/char average; a line that still overflows its
+ * cover rect auto-wraps at word boundaries. A codepoint with no glyph draws a tofu box (visible,
+ * never a silent skip -- the langpack build gate is meant to make that unreachable). */
+#define SUBS_MAX_CPS   192
+#define SUBS_MAX_ROWS  8
+#define SUBS_SPACE_ADV 3
+#define SUBS_TOFU_W    6
+
+typedef struct { const unsigned char *rows; int x0, iw, adv; } SubCp;   /* rows NULL = space/tofu */
+
+static void subsInk(const unsigned char rows[9], int *x0, int *iw) {
+    unsigned m = 0;
+    int i, first = -1, last = -1;
+    for (i = 0; i < 9; i++) m |= rows[i];
+    for (i = 0; i < 8; i++)
+        if (m & (0x80u >> i)) { if (first < 0) first = i; last = i; }
+    if (first < 0) { *x0 = 0; *iw = 0; }
+    else { *x0 = first; *iw = last - first + 1; }
+}
+
+static int subsDecodeLine(const char *text, SubCp *out, int cap, int *isSpace) {
+    const unsigned char *p = (const unsigned char *)text;
+    int n = 0;
+    while (*p && n < cap) {
+        unsigned cp;
+        int len = 1;
+        if (*p >= 0xC2) { len = PC_LangUtf8Decode(p, &cp); if (len == 0) { cp = *p; len = 1; } }
+        else cp = *p;
+        out[n].rows = NULL; out[n].x0 = 0; out[n].iw = 0;
+        isSpace[n] = (cp == ' ');
+        if (cp == ' ') out[n].adv = SUBS_SPACE_ADV;
+        else {
+            const unsigned char *g = PC_LangSubtitleGlyph(cp);
+            if (g) {
+                subsInk(g, &out[n].x0, &out[n].iw);
+                out[n].rows = g;
+                out[n].adv = (out[n].iw ? out[n].iw : 2) + 1;
+            } else {
+                out[n].adv = SUBS_TOFU_W + 1;     /* rows stays NULL + !isSpace = tofu */
+            }
+        }
+        n++;
+        p += len;
+    }
+    return n;
+}
+
+static void subsBlitCp(int w, int h, int X, int Y, int scale, const SubCp *g) {
+    int r, c, dy, dx;
+    if (!g->rows) {                                /* tofu box: outline, glyph-sized */
+        ovlFillRect(w, h, X, Y, SUBS_TOFU_W * scale, 9 * scale, 235, 235, 235, 255);
+        ovlFillRect(w, h, X + scale, Y + scale, (SUBS_TOFU_W - 2) * scale, 7 * scale, 0, 0, 0, 255);
+        return;
+    }
+    for (r = 0; r < 9; r++)
+        for (c = 0; c < g->iw; c++) {
+            if (!(g->rows[r] & (0x80u >> (g->x0 + c)))) continue;
+            for (dy = 0; dy < scale; dy++)
+                for (dx = 0; dx < scale; dx++)
+                    ovlBlend(w, h, X + c * scale + dx, Y + r * scale + dy, 235, 235, 235, 255);
+        }
+}
+
+/* Draw one cue's text block centered in its (already covered) scaled rect. */
+static void subsDrawCueText(int w, int h, int sx, int sy, int sw, int sh, int scale,
+                            int lineCount, const char lines[][PC_SUBS_MAX_TEXT]) {
+    static SubCp cps[SUBS_MAX_CPS];
+    static int isSpace[SUBS_MAX_CPS];
+    struct { int line, s, e, width; } rows[SUBS_MAX_ROWS];
+    int nRows = 0, li, ri, lineH = 11 * scale, maxW = sw - 6 * scale, blockH, ty;
+    int counts[PC_SUBS_MAX_LINES], starts[PC_SUBS_MAX_LINES];
+    int used = 0;
+
+    /* Decode every line into one shared array, then wrap each into display rows. */
+    for (li = 0; li < lineCount && li < PC_SUBS_MAX_LINES; li++) {
+        starts[li] = used;
+        counts[li] = subsDecodeLine(lines[li], cps + used, SUBS_MAX_CPS - used, isSpace + used);
+        used += counts[li];
+    }
+    for (li = 0; li < lineCount && li < PC_SUBS_MAX_LINES; li++) {
+        int s = starts[li], end = starts[li] + counts[li];
+        while (s < end && nRows < SUBS_MAX_ROWS) {
+            int i = s, wsum = 0, lastSpace = -1, e;
+            while (i < end) {
+                if (isSpace[i]) lastSpace = i;
+                if (wsum + cps[i].adv * scale > maxW && i > s) break;
+                wsum += cps[i].adv * scale;
+                i++;
+            }
+            if (i < end && lastSpace > s) { e = lastSpace; i = lastSpace + 1; }  /* break at space */
+            else e = i;
+            while (e > s && isSpace[e - 1]) e--;                                 /* trim trailing */
+            if (e > s) {
+                int wsum2 = 0, k;
+                for (k = s; k < e; k++) wsum2 += cps[k].adv * scale;
+                rows[nRows].line = li; rows[nRows].s = s; rows[nRows].e = e;
+                rows[nRows].width = wsum2 - 1 * scale;                           /* no trailing gap */
+                nRows++;
+            }
+            s = i;
+            while (s < end && isSpace[s]) s++;
+        }
+    }
+    if (nRows == 0) return;
+    blockH = nRows * lineH - 2 * scale;
+    ty = sy + (sh - blockH) / 2;
+    if (ty < sy) ty = sy;
+    for (ri = 0; ri < nRows; ri++) {
+        int X = sx + (sw - rows[ri].width) / 2, k;
+        if (X < sx) X = sx;
+        for (k = rows[ri].s; k < rows[ri].e; k++) {
+            if (!isSpace[k]) subsBlitCp(w, h, X, ty, scale, &cps[k]);
+            X += cps[k].adv * scale;
+        }
+        ty += lineH;
+    }
 }
 
 /* Shared overlay layout constants (scale-1 base units) + panel box. */
@@ -683,17 +806,10 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
             const PC_MovieCue *c = cues[ci];
             int sx = c->x * w / 320, sy = c->y * h / 240;
             int sw = c->w * w / 320, sh = c->h * h / 240;
-            int scale = h / 240, li, lineH, blockH, ty;
+            int scale = h / 240;
             if (scale < 1) scale = 1;
-            lineH = 9 * scale;                       /* 7px glyphs + 2px leading */
-            blockH = c->lineCount * lineH - 2 * scale;
-            ty = sy + (sh - blockH) / 2;
-            if (ty < sy) ty = sy;
             ovlFillRect(w, h, sx, sy, sw, sh, 0, 0, 0, 255);
-            for (li = 0; li < c->lineCount; li++) {
-                int tw = ovlTextPx(c->lines[li], scale);
-                ovlText(w, h, sx + (sw - tw) / 2, ty + li * lineH, scale, c->lines[li], 235, 235, 235);
-            }
+            subsDrawCueText(w, h, sx, sy, sw, sh, scale, c->lineCount, c->lines);
         }
     }
 

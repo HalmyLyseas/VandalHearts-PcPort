@@ -512,10 +512,18 @@ const unsigned char *PC_LangCharmapBlob(unsigned *len) {
  * per 11-byte record (code, slot, rows[9]): map[code] = slot, and a non-blank bitmap is written
  * into that glyph slot. All-zero rows mean "map only" -- the mixed-case option remaps a-z onto the
  * lowercase art already present at slots 13-38 without shipping any art. */
+/* Langpack F3 movie subtitles: the hand-off below is also the ONLY route to the game's live
+ * code->glyph map and bitmap store, so capture the pointers for the subtitle renderer -- it then
+ * draws from the exact store the game draws from, pack patches (charmap, mixed-case) included. */
+static unsigned char *s_subsMap = NULL;
+static unsigned char (*s_subsGlyphs)[9] = NULL;
+static int s_subsGlyphN = 0;
+
 void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int glyphCount) {
     unsigned n, i;
     const unsigned char *p;
     int mapped = 0, drawn = 0;
+    s_subsMap = map128; s_subsGlyphs = glyphs; s_subsGlyphN = glyphCount;   /* before any return */
     if (!s_lang.loaded) LangLoad();
     if (!s_lang.charmap || s_lang.charmapLen < 4) return;
     p = s_lang.charmap;
@@ -548,6 +556,25 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
         mapped++;
     }
     if (PC_Verbose()) fprintf(stderr, "[lang] charmap: %d code(s) mapped, %d glyph slot(s) written\n", mapped, drawn);
+}
+
+/* Movie-subtitle glyph resolution (langpack F3): pack codepoint glyphs first (non-Latin +
+ * synthesized accents from K_FONT), then the game's own ASCII path through the captured live
+ * map+bitmaps. Movies can play before the game's first text draw (the hand-off is lazy), so
+ * force it once if needed. Returns 9 bitmap rows (8x1bpp, MSB left) or NULL (renderer draws
+ * a tofu box -- visible, never a silent skip). */
+const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
+    const unsigned char *g = PC_LangFontGlyph(cp);
+    if (g) return g;
+    if (!s_subsMap) {
+        extern unsigned char GetGlyphIdxForAsciiChar(unsigned char);
+        (void)GetGlyphIdxForAsciiChar(' ');
+    }
+    if (cp < 128 && s_subsMap && s_subsGlyphs) {
+        unsigned slot = s_subsMap[cp];
+        if ((int)slot < s_subsGlyphN) return s_subsGlyphs[slot];
+    }
+    return NULL;
 }
 
 /* Called once from src/battle_0201b8.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
