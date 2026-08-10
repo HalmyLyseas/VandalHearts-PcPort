@@ -8,12 +8,13 @@ flag**; see [`README.md`](README.md) for the reference and the exact Latin vs no
 Every command is run from `platform/pc/tools/langpack/`. `<disc>` is your own disc image; the scripts
 are executable (`./lang_export.py …`). Non-Latin art needs Pillow (`pip install pillow`).
 
-The end result — Custom title background, Greek dialogue (note the `;`, the Greek question mark) and a translated shop item
-with a Greek stat label:
+The end result — Custom title background, Greek dialogue (note the `;`, the Greek question mark) and a translated shop item with a Greek stat label, story videos with subtitles.
 
 ![Custom Greek title background](images-quickstart/quickstart-12-backgrounds.png)
 
 ![In-game Greek dialogue](images-quickstart/quickstart-10-dialog.png)
+
+![Greek movie subtitles over the opening video](images-quickstart/quickstart-13-videos.png)
 
 ---
 

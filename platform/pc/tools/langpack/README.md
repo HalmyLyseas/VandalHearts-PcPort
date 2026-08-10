@@ -148,8 +148,9 @@ which stays readable — so subtitle completeness is never enforced.)
 
 The story videos (six chapter intros + the two endings) carry burned-in English narration. A pack
 can subtitle them: the renderer paints an opaque black cover over the burned text region and draws
-your translation on top, in the same small font as the rest of the game — identically with and
-without the HD pack.
+your translation on top, in the **large 16×15 font** at the original narration's own on-screen
+size — identically with and without the HD pack. A line too long for the frame wraps to a second
+row inside the band.
 
 - `lang_export_cues.py <work>` installs the 8 templates into `<work>/strings/cues/`. Each cue is
   one narration line with its **`en` reference** and validated frame timing; you fill **`text`**
@@ -159,9 +160,9 @@ without the HD pack.
   and universally-understood roles — the shipped templates deliberately leave them out).
 - Write subtitles in **natural mixed case** in any pack. On a capitals-only script sheet the
   builder folds them to capitals for you (real Unicode rules, so ß→SS and friends are right).
-- Subtitles render in the **large 16×15 font** (movies present with the pixels to carry it), so a
-  non-Latin pack that subtitles videos needs its `font16x15` sheet — `gen_packart` and the
-  template tool produce it as a matter of course, and the build error names it if it's missing.
+- Because subtitles draw the large font, a non-Latin pack that subtitles videos needs its
+  `font16x15` sheet — `gen_packart` and the template tool produce it as a matter of course, and
+  the build error names it if it's missing.
 - The build gate guarantees coverage: a subtitle letter that appears nowhere else in your
   translation is added to the pack's font by codepoint (costing NO glyph slots), synthesised where
   possible, and a letter that cannot be drawn is a build error naming the file, cue, and
