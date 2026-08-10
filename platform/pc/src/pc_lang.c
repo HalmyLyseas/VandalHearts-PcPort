@@ -563,26 +563,9 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
  * map+bitmaps. Movies can play before the game's first text draw (the hand-off is lazy), so
  * force it once if needed. Returns 9 bitmap rows (8x1bpp, MSB left) or NULL (renderer draws
  * a tofu box -- visible, never a silent skip). */
-/* Uppercase fold for the subtitle fallback: script packs are structurally caps-only (44 glyph
- * slots cannot hold two cases of a 33-letter alphabet), just as retail folds ASCII a-z. So a
- * lowercase cue letter with no glyph of its own retries as its uppercase -- mixed-case cue text
- * then renders in the pack's caps, exactly like the game's own dialogue. */
-static unsigned SubsFoldUpper(unsigned cp) {
-    if (cp >= 0x0430 && cp <= 0x044F) return cp - 0x20;                 /* Cyrillic а-я */
-    if (cp >= 0x0450 && cp <= 0x045F) return cp - 0x50;                 /* Cyrillic ё ђ ... */
-    if (cp == 0x03C2) return 0x03A3;                                    /* Greek final sigma */
-    if (cp >= 0x03B1 && cp <= 0x03C9) return cp - 0x20;                 /* Greek α-ω */
-    if (cp >= 0x00E0 && cp <= 0x00FE && cp != 0x00F7) return cp - 0x20; /* Latin-1 accented */
-    return cp;
-}
-
 const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
     const unsigned char *g = PC_LangFontGlyph(cp);
     if (g) return g;
-    if (cp >= 0x80) {
-        unsigned up = SubsFoldUpper(cp);
-        if (up != cp && (g = PC_LangFontGlyph(up)) != NULL) return g;
-    }
     if (!s_subsMap) {
         extern unsigned char GetGlyphIdxForAsciiChar(unsigned char);
         (void)GetGlyphIdxForAsciiChar(' ');
