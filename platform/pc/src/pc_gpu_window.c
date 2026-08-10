@@ -13,6 +13,7 @@
 
 #include "pc_platform.h"
 #include "pc_overlay.h"
+#include "pc_movie_subs.h"
 
 static SDL_Window *s_window;
 #if defined(__APPLE__)
@@ -60,6 +61,9 @@ static void glyphRows(char c, unsigned char out[7]) {
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
         {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
         {'?', {0x0E, 0x11, 0x01, 0x06, 0x04, 0, 0x04}},
+        /* Langpack F3 movie subtitles (pilot): the transcripts carry these three. */
+        {'\'', {0x04, 0x04, 0x08, 0, 0, 0, 0}}, {'"', {0x0A, 0x0A, 0x14, 0, 0, 0, 0}},
+        {'!', {0x04, 0x04, 0x04, 0x04, 0x04, 0, 0x04}},
         /* 1.4 F2: PlayStation face-button glyphs (sentinel ASCII -> icon), used by the overlay footers:
          * '$'=Square, '@'=Circle, '^'=Triangle, '~'=Cross. Monochrome outlines (the font is 1-colour). */
         {'$', {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F}},   /* square */
@@ -99,6 +103,9 @@ static void glyphRows(char c, unsigned char out[7]) {
         return;
     }
     if (c == ' ') { for (i = 0; i < 7; i++) out[i] = 0; return; }
+    if (c >= 'a' && c <= 'z') c -= 32;   /* F3 pilot: fold to the uppercase glyphs (the font has no
+                                          * lowercase; real subtitle typography arrives with the
+                                          * langpack glyph-sheet renderer) */
     for (i = 0; i < (int)(sizeof(LETTERS) / sizeof(LETTERS[0])); i++) {
         if (LETTERS[i].c == c) { int j; for (j = 0; j < 7; j++) out[j] = LETTERS[i].r[j]; return; }
     }
@@ -662,6 +669,31 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
             out[0] = (unsigned char)((r5 << 3) | (r5 >> 2));
             out[1] = (unsigned char)((g5 << 3) | (g5 >> 2));
             out[2] = (unsigned char)((b5 << 3) | (b5 >> 2));
+        }
+    }
+
+    /* Langpack F3 movie subtitles: paint each active cue's opaque cover over the burned-in text
+     * region, then the translated text centered inside it. Coordinates in the cue are native
+     * 320x240; the scratch is at the movie's own resolution (native or HD), so scale rects and
+     * pick an integer font scale from the frame height. Inert unless cues are loaded. */
+    if (s_movieOverlay || s_movieOverlayRGB) {
+        const PC_MovieCue *cues[2];
+        int nc = PC_MovieSubsActive(cues, 2), ci;
+        for (ci = 0; ci < nc; ci++) {
+            const PC_MovieCue *c = cues[ci];
+            int sx = c->x * w / 320, sy = c->y * h / 240;
+            int sw = c->w * w / 320, sh = c->h * h / 240;
+            int scale = h / 240, li, lineH, blockH, ty;
+            if (scale < 1) scale = 1;
+            lineH = 9 * scale;                       /* 7px glyphs + 2px leading */
+            blockH = c->lineCount * lineH - 2 * scale;
+            ty = sy + (sh - blockH) / 2;
+            if (ty < sy) ty = sy;
+            ovlFillRect(w, h, sx, sy, sw, sh, 0, 0, 0, 255);
+            for (li = 0; li < c->lineCount; li++) {
+                int tw = ovlTextPx(c->lines[li], scale);
+                ovlText(w, h, sx + (sw - tw) / 2, ty + li * lineH, scale, c->lines[li], 235, 235, 235);
+            }
         }
     }
 

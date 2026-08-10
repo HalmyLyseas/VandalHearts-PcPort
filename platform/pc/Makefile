@@ -21,7 +21,7 @@ STAGE_DIR      := $(BUILD_DIR)/include_stage
 C_FILES        := $(wildcard $(SRC_DIR)/*.c)
 GAME_O_FILES   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/src/%.o,$(C_FILES))
 
-BACKEND_SRCS   := libetc.c pc_lang.c pc_lang_font.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_balance.c pc_hdvideo.c
+BACKEND_SRCS   := libetc.c pc_lang.c pc_lang_font.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_movie_subs.c pc_balance.c pc_hdvideo.c
 BACKEND_OBJS   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BACKEND_SRCS))
 
 # TARGET WIDTH. Default is now 64-bit (Stage 2.3 complete, 2026-07-21).
@@ -459,6 +459,10 @@ $(BUILD_DIR)/pc_overlay.o: src/pc_overlay.c
 
 # Stage-3 (1.2b) save-management file ops -- pure C, no SDL/game headers.
 $(BUILD_DIR)/pc_saves.o: src/pc_saves.c
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+
+# Langpack F3 movie subtitle cues -- pure C, no SDL/game headers.
+$(BUILD_DIR)/pc_movie_subs.o: src/pc_movie_subs.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
 # Stage-3 (1.3) Tactical-mode balance package -- patches mutable game tables (gUnitInfo, etc.), so it

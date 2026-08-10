@@ -63,6 +63,7 @@
 #include "PsyQ/libcd.h"
 #include "pc_lang.h"
 #include "pc_platform.h"
+#include "pc_movie_subs.h"
 #include "pc_xa.h"
 
 #define SECTOR_RAW_SIZE 2352
@@ -331,6 +332,8 @@ int CdControl(u_char com, u_char *param, u_char *result) {
                 s_xaBaseLBA = -1;
                 s_movieActive = 0;
                 MovieHdClose();
+                /* Subtitle cues deliberately NOT closed here: the held final frame keeps its
+                 * cover until ClearScreen drops the overlay (else burned-in text pops back). */
             }
             return 1;
         case CdlReset:
@@ -340,7 +343,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             s_xaStreaming = 0;
             s_xaBaseLBA = -1;
             PC_XaReset();
-            if (s_movieActive) { s_movieActive = 0; PC_GpuSetMovieOverlay(NULL, 0, 0); MovieHdClose(); }
+            if (s_movieActive) { s_movieActive = 0; PC_GpuSetMovieOverlay(NULL, 0, 0); MovieHdClose(); PC_MovieSubsClose(); }
             return 1;
         case CdlSetfilter:
             /* Which interleaved XA file/channel to play (audio.c AudioJob_PrepareXa/PlayXa). */
@@ -628,6 +631,7 @@ int CdRead2(int mode) {
         s_xaFile = -1;
         s_xaChan = -1;
         MovieHdTryOpen(s_movieBaseLBA);   /* 1.6: use an HD replacement for this movie if one is installed */
+        PC_MovieSubsOpen(s_movieBaseLBA); /* langpack F3: subtitle cues for this movie, if provided */
         MovieRenderFrame(1);
     }
     return 0;
@@ -752,6 +756,7 @@ static unsigned int s_fakeMovieSectorData[2];
  * with CdRead2). */
 static void MovieRenderFrame(int frameNo) {
     if (!s_disc || !s_movieActive || frameNo < 1) return;
+    PC_MovieSubsFrame(frameNo);   /* langpack F3: this frame is becoming current (native or HD) */
     if (s_movieHd) {                             /* 1.6 HD FMV: present the HD frame, skip MDEC */
         int w = 0, h = 0;
         const unsigned char *rgb = PC_HdVideoFrame(frameNo - 1, &w, &h);   /* game frame 1 -> mp4 frame 0 */
