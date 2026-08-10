@@ -11,22 +11,23 @@ are executable (`./lang_export.py …`). Non-Latin art needs Pillow (`pip instal
 The end result — Custom title background, Greek dialogue (note the `;`, the Greek question mark) and a translated shop item
 with a Greek stat label:
 
-![Custom Greek title background](images-quickstart/quickstart-10-backgrounds.png)
+![Custom Greek title background](images-quickstart/quickstart-12-backgrounds.png)
 
-![In-game Greek dialogue](images-quickstart/quickstart-08-dialog.png)
+![In-game Greek dialogue](images-quickstart/quickstart-10-dialog.png)
 
 ---
 
 ## 1 · Extract the game's text
 
-Four export steps, all into the **same** working folder. Together they produce the complete working
-set (~1,000 strings + 2,273 dialogue entries):
+Five export steps, all into the **same** working folder. Together they produce the complete working
+set (~1,000 strings + 2,273 dialogue entries + the movie-subtitle templates):
 
 ```
 ./lang_export.py          <disc>            work_el-demo   # tables + on-disc dialogue -> strings/
 ./lang_export_literals.py ../../../../src   work_el-demo   # text hardcoded in game code
 ./lang_export_tactical.py ../../src/pc_balance.c work_el-demo   # Tactical Mode text
 ./lang_group.py           work_el-demo                     # entity-grouped views -> translate/
+./lang_export_cues.py     work_el-demo                     # movie-subtitle templates -> strings/cues/
 ```
 
 ![Extraction](images-quickstart/quickstart-01-extraction.png)
@@ -36,10 +37,11 @@ Each tool prints what it found. Before translating, sanity-check the export: an 
 
 ## 2 · Translate
 
-You edit two kinds of file, both carrying the English source and each entry's display limit:
+You edit three kinds of file, all carrying the English source next to your field:
 
 - **`translate/*.json`** — the grouped views (items, spells, characters, menus, classes, terrain).
 - **`strings/dialogue/*.json`** — the story dialogue.
+- **`strings/cues/*.json`** — the movie subtitles (one file per story video).
 
 Below, item 15 (`Greatsword`) becomes `ΜΕΓΑΛΟ ΣΠΑΘΙ`, and its description's `AT+18` (attack)
 becomes `ΕΠ+18` — `ΕΠ` for *Επίθεση*. **Write in CAPITALS**: the small font is capitals-only for a
@@ -52,6 +54,16 @@ Greek question mark:
 
 ![Translate — dialogue](images-quickstart/quickstart-03-translate.png)
 
+Movie subtitles work the same way, edited **in place** in `strings/cues/` — each cue is one line of
+the video's burned-in narration, with its `en` reference and validated frame timing; you fill
+`"text"` and touch nothing else. Here two lines of the opening video (`1BU_WS.json`) become Greek.
+An **empty `text` keeps that line's burned-in English** — translate as much or as little as you
+want, per line (the shipped END2 templates deliberately leave the credit slides out). Subtitles are
+also the one place mixed case is fine in a non-Latin pack: the builder folds them to your sheet's
+capitals automatically.
+
+![Translate — movie subtitles](images-quickstart/quickstart-04-translate.png)
+
 ## 3 · Merge
 
 Fold your `translate/` edits back into `strings/` (the builder's input):
@@ -60,7 +72,7 @@ Fold your `translate/` edits back into `strings/` (the builder's input):
 ./lang_merge.py work_el-demo
 ```
 
-![Merge](images-quickstart/quickstart-04-merge.png)
+![Merge](images-quickstart/quickstart-05-merge.png)
 
 ## 4 · Draw the glyph art  *(non-Latin only)*
 
@@ -72,7 +84,7 @@ sheet for those glyphs from GNU Unifont:
 ./lang_template.py work_el-demo --out art_el-demo
 ```
 
-![Pack-art generation](images-quickstart/quickstart-05-packArtGeneration.png)
+![Pack-art generation](images-quickstart/quickstart-07-packArtGeneration.png)
 
 Note `U+003B ; SEMICOLON` in the list: the game has no `;` glyph, so a Greek pack draws it like any
 letter — it renders as itself and the demo's question mark works. Re-run this tool whenever you
@@ -96,7 +108,7 @@ mkdir -p work_el-demo/backgrounds
 cp <hd pack folder>/backgrounds/0c5035b9b009cde7.webp work_el-demo/backgrounds/0c5035b9b009cde7.webp
 ```
 
-![Copy the HD background](images-quickstart/quickstart-05.5-copy-backgrounds.png)
+![Copy the HD background](images-quickstart/quickstart-06-copy-backgrounds.png)
 
 Then **edit that 1280×960 image** in your graphics tool — replace the baked-in text with your
 translation, keeping the same dimensions and filename. The custom title at the top of this page is
@@ -112,7 +124,7 @@ a real HD-pack hash):
 ./lang_validate.py <disc> work_el-demo --packart art_el-demo --hdpack <hd pack folder>/backgrounds
 ```
 
-![Validation](images-quickstart/quickstart-06-validation.png)
+![Validation](images-quickstart/quickstart-08-validation.png)
 
 `0 error(s)` is the goal. Both warnings here are harmless: most strings are still untranslated (fine
 for this demo — see *Notes*), and a note about how the background looks at 1× internal scale.
@@ -124,11 +136,13 @@ for this demo — see *Notes*), and a note about how the background looks at 1×
     --allow-incomplete --name "el_demo" --author "Your Name" --version 1 --notes "non latin demo"
 ```
 
-`--allow-incomplete` lets a *partial* pack build for testing. The output is a `manifest.json` (the
-pack's identity — the game checks its `game`/`format` before loading), `strings.bin`, and — because we
-added a background — a `backgrounds/` folder, all recorded in the manifest:
+`--allow-incomplete` lets a *partial* pack build for testing. Note the `movie subtitles` line in the
+output — the two Greek cues from step 2, folded to capitals and packed alongside everything else.
+The output is a `manifest.json` (the pack's identity — the game checks its `game`/`format` before
+loading), `strings.bin`, and — because we added a background — a `backgrounds/` folder, all recorded
+in the manifest:
 
-![Build](images-quickstart/quickstart-07-build.png)
+![Build](images-quickstart/quickstart-09-build.png)
 
 ## 8 · Install and run
 
@@ -141,9 +155,11 @@ cp -r el_demo/langpacks/el   <game dir>/langpacks/el
 
 A pack applies **at game start** — there is no live reload; the iteration loop is
 edit → `lang_build.py` → restart. The shop now shows the translated item name and the `ΕΠ+18` stat
-label; untranslated entries stay in English:
+label; untranslated entries stay in English. Start a New Game and the opening video shows your two
+Greek subtitle lines over the covered narration band — the untranslated lines keep their burned-in
+English:
 
-![In-game shop item](images-quickstart/quickstart-09-shopItemName.png)
+![In-game shop item](images-quickstart/quickstart-11-shopItemName.png)
 
 ---
 
@@ -160,6 +176,9 @@ label; untranslated entries stay in English:
   actually translated. A **Latin** pack degrades gracefully — untranslated entries just stay English.
 - **Punctuation the game can't draw** (`;` and a few others) is drawn exactly like a letter — the
   template lists it, `gen_packart` rasterises it, the builder installs it. Details in `README.md`.
+- **Movie subtitles are a per-line diff** even in a non-Latin pack: an untranslated cue keeps its
+  burned-in English, which stays readable — subtitle completeness is never enforced. Timings and
+  cover layout are maintainer-validated against the retail videos; translators only fill `"text"`.
 - **Localized backgrounds**: the *author* needs the HD pack (source of the hash + reference image);
   the file must be **1280×960**; renders at every internal scale — at 1× downscaled to native
   resolution — and needs nothing from the player.
