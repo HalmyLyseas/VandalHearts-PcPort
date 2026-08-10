@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 static PC_MovieCue *s_cues = NULL;
 static int s_cueCount = 0;
@@ -71,10 +72,22 @@ static void subsLoad(const char *path, int baseLBA) {
 
 void PC_MovieSubsOpen(int baseLBA) {
     const char *path;
+    struct stat st;
     if (s_loadedLBA == baseLBA) { s_curFrame = 0; return; }   /* stream-start block re-runs */
     subsFree();
     path = getenv("VH_MOVIE_SUBS");
-    if (path && *path) subsLoad(path, baseLBA);
+    if (!path || !*path) return;
+    if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
+        /* Directory form: one <baseLBA hex>.txt per movie -- one setting covers every video,
+         * and it mirrors the langpack layout (cues keyed like hdpacks/videos/<lba>.mp4). */
+        char full[1024];
+        struct stat fs;
+        snprintf(full, sizeof(full), "%s/%x.txt", path, (unsigned)baseLBA);
+        if (stat(full, &fs) != 0) return;        /* no cues for this movie (logo/title/...) -- silent */
+        subsLoad(full, baseLBA);
+    } else {
+        subsLoad(path, baseLBA);
+    }
 }
 
 void PC_MovieSubsClose(void) { subsFree(); }
