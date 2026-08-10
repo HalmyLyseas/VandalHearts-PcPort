@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: Port version
-      description: Release tag (e.g. v1.7.0), or the commit hash for a self-built binary
-      placeholder: v1.7.0
+      description: Release tag (e.g. v1.7.1), or the commit hash for a self-built binary
+      placeholder: v1.7.1
     validations:
       required: true
   - type: dropdown

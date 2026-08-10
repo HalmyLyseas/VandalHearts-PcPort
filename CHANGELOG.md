@@ -4,6 +4,39 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.1] — Language packs: the story videos, subtitled
+
+The translation framework's one remaining gap is closed: the burned-in English narration of the
+**story videos** (the six chapter intros and both endings) can now be subtitled by a language pack.
+As always, the base build is unchanged without a pack — English players keep the original videos
+exactly as they were.
+
+### Added
+
+- **Movie subtitles.** A pack can translate the narration of all eight story videos: the renderer
+  covers the burned-in text and draws the translation in the game's large font, at the original
+  narration's own on-screen size — identically with and without the HD pack, at every INTERNAL RES
+  setting. Cue timings were validated frame-by-frame against the retail videos, so a translator
+  only writes text. Subtitles are a **per-line diff**: an untranslated line keeps its burned-in
+  English, so a partially subtitled pack is still a working pack. The ending's credit roll stays
+  English by design (names and universally understood roles). Player guide:
+  [language-packs.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/language-packs.md#subtitled-story-videos).
+- **Toolchain: a fifth export.** `lang_export_cues.py` installs the per-video subtitle templates
+  into the working set; each cue carries the English reference next to the translator's field.
+  Subtitles may be written in **natural mixed case** even in a capitals-only script pack — the
+  builder folds them correctly. The template tool counts subtitle letters in its art report, and
+  the build verifies every subtitle character has a glyph before a pack ships.
+  [Quickstart](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/tools/langpack/quickstart.md)
+  and
+  [reference](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/tools/langpack/README.md)
+  updated, with new captures.
+
+### Compatibility
+
+- Packs built before 1.7.1 keep working (they simply have no subtitles); packs built with the
+  1.7.1 toolchain load on older builds too — the subtitle data is skipped there. To *gain*
+  subtitles, rebuild the pack with the current toolchain and fill the new `strings/cues/` files.
+
 ## [1.7.0] — Language packs: play in your language
 
 The port can now display the game in another language, loaded from an optional **language pack**

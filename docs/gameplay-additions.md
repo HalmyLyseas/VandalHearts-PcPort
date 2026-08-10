@@ -190,11 +190,11 @@ Installing, building, and every option: [hd-pack.md](hd-pack.md).
 **Intent: a community-driven effort — let more people enjoy the game, in their own language.**
 
 An optional pack displays the game's text in another language: dialogue, menus, item and spell
-names and descriptions, battle messages, save captions — even backgrounds with text baked into the
-art, such as the title card. The base build ships no translated text; packs are built by the
-community with the repository's authoring toolchain, from a player's own disc. Non-Latin scripts
-work with drawn glyph sheets (Cyrillic and Greek are proven in game), and everything renders at
-every graphics setting.
+names and descriptions, battle messages, save captions, **subtitles for the story videos**
+*(1.7.1)* — even backgrounds with text baked into the art, such as the title card. The base build
+ships no translated text; packs are built by the community with the repository's authoring
+toolchain, from a player's own disc. Non-Latin scripts work with drawn glyph sheets (Cyrillic and
+Greek are proven in game), and everything renders at every graphics setting.
 
 Select an installed pack with the overlay's `LANGUAGE` row — it applies at the next launch. A pack
 is a *diff*: entries a Latin-script pack has not translated yet simply stay English, so a
@@ -202,11 +202,15 @@ work-in-progress translation is already playable.
 
 *Greek demo — translated dialogue (note the `;`, the Greek question mark):*
 
-![In-game Greek dialogue](../platform/pc/tools/langpack/images-quickstart/quickstart-08-dialog.png)
+![In-game Greek dialogue](../platform/pc/tools/langpack/images-quickstart/quickstart-10-dialog.png)
 
 *A localized title background:*
 
-![A localized Greek title background](../platform/pc/tools/langpack/images-quickstart/quickstart-10-backgrounds.png)
+![A localized Greek title background](../platform/pc/tools/langpack/images-quickstart/quickstart-12-backgrounds.png)
+
+*Subtitled story video:*
+
+![Greek movie subtitles over the opening video](../platform/pc/tools/langpack/images-quickstart/quickstart-13-videos.png)
 
 Installing and what a pack covers: [language-packs.md](language-packs.md). Making one: the
 [hands-on quickstart](../platform/pc/tools/langpack/quickstart.md) and the

@@ -122,11 +122,11 @@ smoothed.
 
 ## Language packs {.page-break}
 
-With a pack selected, the game's text — dialogue, menus, items, battle messages — displays in
-that language, at any graphics setting. Some packs also translate backgrounds with baked-in text
-(such as the title card). **Changing the language takes effect at the next launch**; the port's own
-SELECT+START menu deliberately stays English. Packs are made by the community with the tools in
-the repository — this project distributes no game text.
+With a pack selected, the game's text — dialogue, menus, items, battle messages, subtitles for
+the story videos — displays in that language, at any graphics setting. Some packs also translate
+backgrounds with baked-in text (such as the title card). **Changing the language takes effect at
+the next launch**; the port's own SELECT+START menu deliberately stays English. Packs are made by
+the community with the tools in the repository — this project distributes no game text.
 
 ## Tactical Mode *(opt-in, changes gameplay)* {.page-break}
 

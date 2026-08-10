@@ -115,28 +115,38 @@ higher-resolution art, plus the tools to build a pack. Scoped to the pre-rendere
 
 See [hd-pack.md](hd-pack.md).
 
-## Beyond 1.6 — maintenance
+### 1.6.1 + 1.6.2 — polish and robustness ✅ (released 2026-08-04/05)
 
-The planned feature arc is complete. The game is a faithful, cross-platform native port (Stages 1–2, both
-byte-exact and playable end-to-end), and the Stage-3 releases — controls, save management, Tactical Mode,
-quality-of-life, graphics fidelity, and the optional HD pack — have shipped across **v1.1–v1.6**. From here
-the project is in **maintenance**: minor adjustments and fixes for reported issues rather than new feature
-tracks. Known problems and small follow-ups are tracked in [known_issues.md](known_issues.md).
+- **1.6.1**: a frame-pacing fix so battle fast-forward holds the full 2× at every graphics setting,
+  background-threaded HD scene loads, an HD-pack **manifest v2** that verifies the pack and explains
+  itself when one can't be used, a **Player Manual (PDF)** shipped with each release, and reorganized
+  player documentation (per-feature guide, [troubleshooting](troubleshooting.md),
+  [performance](performance.md)).
+- **1.6.2**: born from the first user bug report — a damaged disc image used to hang the game
+  silently and now stops with a clear error naming the broken sector (see
+  [troubleshooting.md](troubleshooting.md#the-game-wont-start)).
 
-**v1.7.0** is the one addition since — not a gameplay track but an *enabling* one: **language
-packs**. The port can display the game's text in another language, loaded from an optional
-community-built pack ([language-packs.md](language-packs.md)); the authoring toolchain
-([`platform/pc/tools/langpack/`](../platform/pc/tools/langpack/)) exports the text from a player's
-own disc, validates a translation against the engine's real limits, and builds the pack — including
-non-Latin scripts (Cyrillic and Greek proven in game) and localized backgrounds. The base build
-still ships no game text and behaves identically without a pack.
+### 1.7 — Language packs ✅ (released 2026-08-09)
 
-**v1.6.2** (released 2026-08-05) came from the first user bug report: a damaged disc image used to
-hang the game silently and now stops with a clear error naming the broken sector (see
-[troubleshooting.md](troubleshooting.md#the-game-wont-start)).
+An *enabling* track rather than a gameplay one: the port can display the game's text in another
+language, loaded from an optional community-built pack ([language-packs.md](language-packs.md)).
+The authoring toolchain ([`platform/pc/tools/langpack/`](../platform/pc/tools/langpack/)) exports
+the text from a player's own disc, validates a translation against the engine's real limits, and
+builds the pack — including non-Latin scripts (Cyrillic and Greek proven in game) and localized
+backgrounds. The base build still ships no game text and behaves identically without a pack.
 
-**v1.6.1** (released 2026-08-04) was the first maintenance release: a frame-pacing fix so battle
-fast-forward holds the full 2× at every graphics setting, background-threaded HD scene loads, an HD-pack
-**manifest v2** that verifies the pack and explains itself when one can't be used, a **Player Manual
-(PDF)** shipped with each release, and reorganized player documentation (per-feature guide,
-[troubleshooting](troubleshooting.md), [performance](performance.md)).
+### 1.7.1 — Video subtitles 🔜 (in preparation)
+
+Closes the translation framework's one remaining gap: the burned-in narration of the eight story
+videos (six chapter intros + both endings) becomes subtitle-able by a pack — validated timings,
+the game's large font at the original narration's size, identical with and without the HD pack,
+per-line fallback to the burned English. The toolchain gains a fifth export
+(`lang_export_cues.py`) and the corresponding template/validation/build support.
+
+## Beyond
+
+The originally planned feature arc (Stages 1–3, **v1.0–v1.6**) is complete, and the project has
+kept moving where it matters: **v1.7** answered the most-requested community feature, macOS support
+arrived as the first community contribution, and fixes land as issues are reported
+([known_issues.md](known_issues.md)). There is no fixed roadmap beyond the next release — direction
+comes from what players and translators actually need.

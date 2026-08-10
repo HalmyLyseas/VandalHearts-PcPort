@@ -60,6 +60,15 @@ when the load/save menu draws it. So the save file stays portable (it still roun
 and console, and reads correctly under any pack or none), and even saves made before a pack was
 installed show the translated caption.
 
+## Subtitled story videos
+
+The narration burned into the **story videos** — the six chapter intros and both endings — can be
+subtitled *(packs built with the 1.7.1 toolchain or later)*. The port covers the burned-in text and
+draws the pack's translation in the game's large font, at the original narration's own on-screen
+size — identically with or without the HD pack, at every INTERNAL RES setting. Subtitles are a
+**per-line diff** even in a non-Latin pack: a line the pack has not translated keeps its burned-in
+English, which stays readable — so a partially subtitled pack is still a working pack.
+
 ## Localized backgrounds
 
 A pack can also replace backgrounds that have **text baked into the image** — the title card,
@@ -80,6 +89,9 @@ These are deliberate, not omissions:
   number.** These are not text: the game spells them out as lists of picture numbers baked into the
   window layout, so there is no string for a pack to replace. They are short, universally understood
   abbreviations, already Latin in the Japanese original.
+- **The ending's credit roll stays English.** The staff names and their roles ("Producer",
+  "Character Design") are universally understood, and replacing people's names adds nothing — the
+  shipped subtitle templates deliberately leave the credit slides out.
 
 ## Languages
 
