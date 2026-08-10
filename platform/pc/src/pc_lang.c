@@ -123,7 +123,10 @@ static int LangPackDir(char *out, size_t n) {
         return 0;
     }
     if (!PC_GetDeployDir(deploy, sizeof deploy)) return 0;
-    snprintf(out, n, "%s/langpacks/%s", deploy, lang);
+    /* Precision caps make the worst case provably fit the caller's buffer, which is also what
+     * silences MinGW GCC's -Wformat-truncation (it reasons from the format string alone). Deploy
+     * paths near 200 bytes would already have been unusable upstream. */
+    snprintf(out, n, "%.200s/langpacks/%.64s", deploy, lang);
     return 1;
 }
 

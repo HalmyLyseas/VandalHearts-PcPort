@@ -54,7 +54,11 @@ static void subsLoad(const char *path, int baseLBA) {
                            &cur.x, &cur.y, &cur.w, &cur.h) == 6;
         } else if (inCue && strncmp(line, "text ", 5) == 0) {
             if (cur.lineCount < PC_SUBS_MAX_LINES) {
-                strncpy(cur.lines[cur.lineCount], line + 5, PC_SUBS_MAX_TEXT - 1);
+                size_t sl = strlen(line + 5);          /* explicit bounded copy: truncation is */
+                if (sl > PC_SUBS_MAX_TEXT - 1)         /* intended for over-long lines, and this */
+                    sl = PC_SUBS_MAX_TEXT - 1;         /* form says so without a strncpy warning */
+                memcpy(cur.lines[cur.lineCount], line + 5, sl);
+                cur.lines[cur.lineCount][sl] = '\0';
                 cur.lineCount++;
             }
         } else if (inCue && strcmp(line, "end") == 0) {
