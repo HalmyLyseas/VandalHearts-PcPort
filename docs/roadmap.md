@@ -143,6 +143,10 @@ the game's large font at the original narration's size, identical with and witho
 per-line fallback to the burned English. The toolchain gains a fifth export
 (`lang_export_cues.py`) and the corresponding template/validation/build support.
 
+Also ships the project's first community code contribution (thanks to Christopher Ball):
+**save-management hardening** (atomic backup/restore, checksum-validated backups, an overlay
+status line) and **smarter disc auto-discovery** (boot-signature check — multi-track dumps work).
+
 ## Beyond
 
 The originally planned feature arc (Stages 1–3, **v1.0–v1.6**) is complete, and the project has

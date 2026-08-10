@@ -31,6 +31,18 @@ exactly as they were.
   [reference](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/tools/langpack/README.md)
   updated, with new captures.
 
+### Changed
+
+- **Save-management hardening** *(from the project's first community code contribution — thanks
+  to Christopher Ball)*. Backups and restores are now **atomic**: a crash or full disk mid-restore
+  can no longer corrupt the active save card. Every backup is **checksum-validated** (the game's
+  own save-card CRC) before a restore or inspection, so a damaged backup is refused with a clear
+  message instead of being copied over your saves. The SAVES overlay gained a **status line**
+  ("BACKUP CREATED", "RESTORE FAILED", …), and the 64-backup list limit is gone.
+- **Disc auto-discovery improvements** *(same contribution)*. Candidate `.bin` files are verified
+  by their boot signature, so a folder with a **multi-track dump** now finds the data track
+  instead of failing on the first file, and discovery is case-insensitive.
+
 ### Compatibility
 
 - Packs built before 1.7.1 keep working (they simply have no subtitles); packs built with the
