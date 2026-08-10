@@ -89,6 +89,15 @@ if [ "$DO_WIN" = 1 ]; then
     [ -f "$WIN_EXE" ] || die "Windows build produced no .exe"
     WZIP_DIR="$STAGE/win"; mkdir -p "$WZIP_DIR"
     cp "$WIN_EXE" "$WZIP_DIR/"
+    # Ship the exe stripped: debug info has no runtime use on Windows (no backtrace machinery)
+    # and needlessly embeds local build metadata; stripping also cuts the download size. The
+    # unstripped exe stays in build_win/ for local debugging. The guard keeps the shipped copy
+    # free of local paths permanently.
+    x86_64-w64-mingw32-strip "$WZIP_DIR/vandalhearts_pc.exe" \
+        || die "strip failed on the Windows exe"
+    if strings "$WZIP_DIR/vandalhearts_pc.exe" | grep -qE "/home/|$(id -un)"; then
+        die "shipped Windows exe still contains local build paths"
+    fi
     # the 8 runtime DLLs the CMake post-build step stages next to the .exe (6 base + libwebp/libsharpyuv)
     cp "$PC_DIR"/build_win/*.dll "$WZIP_DIR/" 2>/dev/null || die "expected runtime DLLs beside the .exe"
     cp "$INI" "$WZIP_DIR/"
