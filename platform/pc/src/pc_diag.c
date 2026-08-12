@@ -123,7 +123,7 @@ void PC_DebugEvtEntityLog(int objIdx, int tileX, int tileZ, const void *base, co
 }
 
 /* AI spell-target scoring log (build with AI_LOG=1, enable at runtime with VH_AI_LOG). One line per
- * candidate target a caster's AI scored in func_800569A0; the highest SCORE is the target it picks.
+ * candidate target a caster's AI scored in AI_ScoreSpellTargets; the highest SCORE is the target it picks.
  * Shows the term breakdown so a "wrong" choice is explainable -- especially the type-matchup term
  * ADV = -gAdvantage[caster.advantage][target.advantage] (your mage->armor / ranged->flyer doctrine).
  * A high raw gAdvantage means a poor matchup, so it SUBTRACTS from the score (less-preferred). */
@@ -151,8 +151,8 @@ void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
 }
 
 /* bugreport-03 (DEATHANGEL caster never casts): dumps the AI's top-level spell decision in
- * Objf570_AI_TBD case 0 -- every input that can force the melee branch (state 1) plus the state it
- * actually chose. `state` 1 = melee/move only (OBJF_AI_TBD_403), 2/4 = cast (OBJF_AI_TBD_402).
+ * Objf570_AI_ChooseAction case 0 -- every input that can force the melee branch (state 1) plus the state it
+ * actually chose. `state` 1 = melee/move only (OBJF_AI_PLAN_ATTACK), 2/4 = cast (OBJF_AI_PLAN_SPELL_CAST).
  * The two zeroing inputs to watch: spells[]==SPELL_NULL, and mp < gSpells[spell].mpCost (which
  * zeroes spellEffectA/B and drops the AI to state 1 even for a fully-equipped caster). */
 static FILE *s_aiDecFile = NULL;
@@ -305,14 +305,14 @@ static void LogCameraTraceRow(void) {
 
 /* AI-decision-chain trace (timing topic, Finding #1: the "unit active -> blue movement overlay"
  * early-gate). The overlay (gShowBlueMovementGrid=1, set in Objf013_BattleMgr state 7.2) can't fire
- * until BattleMgr STATE 6 exits, and state 6 blocks on `D_80123468 != 0` (battle_0201b8.c:3202),
- * which is set only when the AI-decision object chain finishes (Objf570_AI_TBD -> Objf40x/Objf589,
- * ai.c:278 case 99, via the D_80123480 hand-off). On hardware state 6 lasts ~108 frames; on our build
+ * until BattleMgr STATE 6 exits, and state 6 blocks on `gAiPlanReady != 0` (battle_0201b8.c:3202),
+ * which is set only when the AI-decision object chain finishes (Objf570_AI_ChooseAction -> Objf40x/Objf589,
+ * ai.c:278 case 99, via the gAiPlanDone hand-off). On hardware state 6 lasts ~108 frames; on our build
  * ~18 -> the AI chain completes ~6x faster and the overlay shows early (mid camera-pan). This logs the
  * chain's live state so we can see EXACTLY which sub-state exits early. Env-gated (VH_AI_LOG); reads
  * only game RAM (no src/ changes, matching build untouched). Pairs with 43-camera-focus-easein. */
-extern u8 D_80123468; /* BattleMgr state-6 release flag (battle.h) */
-extern u8 D_80123480; /* Objf570 sub-object hand-off flag (ai.c) */
+extern u8 gAiPlanReady; /* BattleMgr state-6 release flag (battle.h) */
+extern u8 gAiPlanDone; /* Objf570 sub-object hand-off flag (ai.c) */
 extern int g_aiVisitCount[8]; /* cumulative GetRCnt visits per AI range (libkernel.c); for calibration */
 static FILE *s_aiChainFile = NULL;
 
@@ -339,12 +339,12 @@ static void LogAiChainRow(void) {
         if (fi == OBJF_BATTLE_MGR) {
             bmState = gObjectArray[i].state;
             bmState2 = gObjectArray[i].state2;
-        } else if (fi == OBJF_AI_TBD_570) {
+        } else if (fi == OBJF_AI_CHOOSE_ACTION) {
             ai570Idx = (s16)i;
             ai570State = gObjectArray[i].state;
             ai570State2 = gObjectArray[i].state2;
-        } else if (fi == OBJF_AI_TBD_400 || fi == OBJF_AI_TBD_401 || fi == OBJF_AI_TBD_402 ||
-                   fi == OBJF_AI_TBD_403 || fi == OBJF_AI_TBD_404 || fi == OBJF_AI_TBD_589) {
+        } else if (fi == OBJF_AI_BUILD_SPELL_VALUE_GRID || fi == OBJF_AI_BUILD_ENEMY_PROXIMITY_GRID || fi == OBJF_AI_PLAN_SPELL_CAST ||
+                   fi == OBJF_AI_PLAN_ATTACK || fi == OBJF_AI_PLAN_RETREAT || fi == OBJF_AI_MOVE_TO_ESCAPE_POINT) {
             /* the currently-active AI sub-object (first found; the chain runs them one at a time) */
             subFuncIdx = fi;
             subState = gObjectArray[i].state;
@@ -356,7 +356,7 @@ static void LogAiChainRow(void) {
             "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
             "%d,%d,%d,%d,%d,%d,%d,%d\n",
             VSync(-1), gState.primary, bmState, bmState2, gShowBlueMovementGrid,
-            D_80123468, D_80123480, ai570Idx, ai570State, ai570State2,
+            gAiPlanReady, gAiPlanDone, ai570Idx, ai570State, ai570State2,
             subFuncIdx, subState, subState2,
             gCameraPos.vx, gCameraPos.vz, gMapCursorX, gMapCursorZ,
             g_aiVisitCount[0], g_aiVisitCount[1], g_aiVisitCount[2], g_aiVisitCount[3],

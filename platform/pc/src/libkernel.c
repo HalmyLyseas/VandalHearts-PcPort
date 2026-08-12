@@ -231,7 +231,7 @@ static struct timespec s_rcntStart[2];
  *    guessing) + the inner iz2/ix2 scan, which the source shows always
  *    runs the FULL map area (not data-dependent in trip count) with a
  *    cheap per-cell test (~12 instrs) gating an occasional expensive
- *    per-cell scorer call (func_80056F94=57 for 402, func_80056C30=177
+ *    per-cell scorer call (AI_ScoreCastingPosition=57 for 402, AI_ScoreAttackOption=177
  *    for 403) -- assumed 10%-of-cells match (a documented, revisable
  *    guess, not hidden inside a bigger unexplained number) since that's
  *    the one genuinely unknowable-without-deeper-instrumentation piece.
@@ -269,13 +269,13 @@ static struct timespec s_rcntStart[2];
 #define PER_TILE_TEST_COST 12
 #define MATCH_FRACTION_ASSUMED 0.10
 
-extern void Objf570_AI_TBD();
-extern void Objf400_AI_TBD();
-extern void Objf401_AI_TBD();
-extern void Objf402_AI_TBD();
-extern void Objf403_AI_TBD();
-extern void Objf404_AI_TBD();
-extern void Objf589_AI_TBD();
+extern void Objf570_AI_ChooseAction();
+extern void Objf400_AI_BuildSpellValueGrid();
+extern void Objf401_AI_BuildEnemyProximityGrid();
+extern void Objf402_AI_PlanSpellCast();
+extern void Objf403_AI_PlanAttack();
+extern void Objf404_AI_PlanRetreat();
+extern void Objf589_AI_MoveToEscapePoint();
 extern s32 IsLagging(void);
 extern s16 gMapMinX, gMapMinZ, gMapMaxX, gMapMaxZ;
 
@@ -291,13 +291,13 @@ typedef struct {
  *   nm -S --size-sort platform/pc/build/src/ai.o | grep -iE "objf(570|4|589)|islagging" */
 static const AddrRange s_aiThrottleRanges[] = {
     {(void *)IsLagging,      0x30},
-    {(void *)Objf570_AI_TBD, 0x850},
-    {(void *)Objf400_AI_TBD, 0x4d3},
-    {(void *)Objf401_AI_TBD, 0x298},
-    {(void *)Objf402_AI_TBD, 0xb2c},
-    {(void *)Objf403_AI_TBD, 0x946},
-    {(void *)Objf404_AI_TBD, 0x465},
-    {(void *)Objf589_AI_TBD, 0x56e},
+    {(void *)Objf570_AI_ChooseAction, 0x850},
+    {(void *)Objf400_AI_BuildSpellValueGrid, 0x4d3},
+    {(void *)Objf401_AI_BuildEnemyProximityGrid, 0x298},
+    {(void *)Objf402_AI_PlanSpellCast, 0xb2c},
+    {(void *)Objf403_AI_PlanAttack, 0x946},
+    {(void *)Objf404_AI_PlanRetreat, 0x465},
+    {(void *)Objf589_AI_MoveToEscapePoint, 0x56e},
 };
 #define NUM_AI_THROTTLE_RANGES (sizeof(s_aiThrottleRanges) / sizeof(s_aiThrottleRanges[0]))
 

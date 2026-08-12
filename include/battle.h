@@ -124,7 +124,7 @@ extern TileState (*gTileStateGridPtr)[65];
 
 extern s8 gZ_801233dc, gX_801233d8, gTargetZ_80123418, gTargetX_80123414;
 extern u16 gDir_80123470;
-extern u8 D_80123468, D_8012337C;
+extern u8 gAiPlanReady, gAiActionType;
 
 extern u8 gAdvantage[49][49];
 extern u8 gLevelDisparityBonus[160];

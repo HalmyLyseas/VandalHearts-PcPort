@@ -306,11 +306,11 @@ void Objf396_DynamoHum_OrbElectricity(Object *);
 void Objf397_ExplosionBurst_Unused(Object *);
 void Objf398_ExplosionBurstParticle_Unused(Object *);
 void Objf399_Map11(Object *);
-void Objf400_AI_TBD(Object *);
-void Objf401_AI_TBD(Object *);
-void Objf402_AI_TBD(Object *);
-void Objf403_AI_TBD(Object *);
-void Objf404_AI_TBD(Object *);
+void Objf400_AI_BuildSpellValueGrid(Object *);
+void Objf401_AI_BuildEnemyProximityGrid(Object *);
+void Objf402_AI_PlanSpellCast(Object *);
+void Objf403_AI_PlanAttack(Object *);
+void Objf404_AI_PlanRetreat(Object *);
 void Objf405_Panorama(Object *);
 void Objf406_ShopOrDepot(Object *);
 void Objf407_NoopIncState(Object *);
@@ -445,7 +445,7 @@ void Objf564_565_566_MapObject_Water(Object *);
 void Objf567_OpeningChest(Object *);
 void Objf568_MapObject_Rail(Object *);
 void Objf569_572_MapObject_Lava(Object *);
-void Objf570_AI_TBD(Object *);
+void Objf570_AI_ChooseAction(Object *);
 void Objf571_LevelUp(Object *);
 void Objf573_BattleItemsList(Object *);
 void Objf574_DisplayIcon(Object *);
@@ -462,7 +462,7 @@ void Objf584_Noop(Object *);
 void Objf585_BattlePlayerEvent(Object *);
 void Objf586_BattleMsgBox(Object *);
 void Objf587_BattleEnemyEvent(Object *);
-void Objf589_AI_TBD(Object *);
+void Objf589_AI_MoveToEscapePoint(Object *);
 void Objf590_BattleTurnTicker(Object *);
 void Objf591_MapObject_Boulder(Object *);
 void Objf592_BattleTurnStart(Object *);
@@ -981,11 +981,11 @@ ObjFunction gObjFunctionPointers[804] = {
     [397] = Objf397_ExplosionBurst_Unused,
     [398] = Objf398_ExplosionBurstParticle_Unused,
     [399] = Objf399_Map11,
-    [400] = Objf400_AI_TBD,
-    [401] = Objf401_AI_TBD,
-    [402] = Objf402_AI_TBD,
-    [403] = Objf403_AI_TBD,
-    [404] = Objf404_AI_TBD,
+    [400] = Objf400_AI_BuildSpellValueGrid,
+    [401] = Objf401_AI_BuildEnemyProximityGrid,
+    [402] = Objf402_AI_PlanSpellCast,
+    [403] = Objf403_AI_PlanAttack,
+    [404] = Objf404_AI_PlanRetreat,
     [405] = Objf405_Panorama,
     [406] = Objf406_ShopOrDepot,
     [407] = Objf407_NoopIncState,
@@ -1151,7 +1151,7 @@ ObjFunction gObjFunctionPointers[804] = {
     [567] = Objf567_OpeningChest,
     [568] = Objf568_MapObject_Rail,
     [569] = Objf569_572_MapObject_Lava,
-    [570] = Objf570_AI_TBD,
+    [570] = Objf570_AI_ChooseAction,
     [571] = Objf571_LevelUp,
     [572] = Objf569_572_MapObject_Lava,
     [573] = Objf573_BattleItemsList,
@@ -1170,7 +1170,7 @@ ObjFunction gObjFunctionPointers[804] = {
     [586] = Objf586_BattleMsgBox,
     [587] = Objf587_BattleEnemyEvent,
     [588] = Objf026_588_Camera_TBD,
-    [589] = Objf589_AI_TBD,
+    [589] = Objf589_AI_MoveToEscapePoint,
     [590] = Objf590_BattleTurnTicker,
     [591] = Objf591_MapObject_Boulder,
     [592] = Objf592_BattleTurnStart,

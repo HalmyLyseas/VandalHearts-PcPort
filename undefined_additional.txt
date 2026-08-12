@@ -1,0 +1,7 @@
+gAiPlanDone = 0x80123480;
+gAiSubtaskDone = 0x80123484;
+gAiActionType = 0x8012337C;
+gAiSelfCastFallback = 0x80123410;
+gAiPlanReady = 0x80123468;
+gAiTargetScores = 0x8012F63C;
+gAiCastValueGrid = 0x8017DF50;

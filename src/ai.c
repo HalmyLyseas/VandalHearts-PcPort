@@ -1,3 +1,27 @@
+/* Enemy/ally battle AI (segment 0x560f8 region).
+ *
+ * Flow: the battle manager (battle_0201b8.c, enemy-turn state 5) spawns
+ * Objf570_AI_ChooseAction on the acting unit's tile. 570 picks a plan from the unit's
+ * spells, MP, class and HP (plus per-map specials: map 21 = retreat-only, Leena/map 26 =
+ * escape-point movement) and spawns one planner:
+ *   Objf402_AI_PlanSpellCast  -- damage or support spell: builds movement grids, spawns
+ *                                Objf400 (spell value grid) + Objf401 (enemy proximity),
+ *                                then searches every reachable cell x castable cell for
+ *                                the best (move, target) pair.
+ *   Objf403_AI_PlanAttack     -- physical attack: same shape, per-target scoring in
+ *                                AI_ScoreAttackOption (facing/back-attack bonus, path
+ *                                cost, elevation, archer kiting, Leena priority).
+ *   Objf404_AI_PlanRetreat    -- reposition away from enemies onto preferred terrain
+ *                                (also the self-heal positioning step).
+ *   Objf589_AI_MoveToEscapePoint -- scripted goal cells (map 39) or the map edge.
+ * Planners publish: gX/gZ_801233d8 (move destination), gTargetX/Z_80123414 (action
+ * target), gAiActionType (0 move/wait + optional facing, 1 attack, 2 cast), then raise
+ * gAiPlanDone; 570 finishes and raises gAiPlanReady for the battle manager.
+ *
+ * All planners yield on IsLagging() (GetRCnt(RCntCNT1) > 450) so the AI spreads its grid
+ * sweeps across frames -- the port's pacing model for this lives in
+ * platform/pc/src/libkernel.c (per-call-site synthetic counter; see its long comment).
+ * The Tactical-mode magic-susceptibility term (PC_FEAT) hooks AI_ScoreSpellTargets. */
 #include "common.h"
 #include "object.h"
 #include "field.h"
@@ -9,7 +33,7 @@
 
 #ifdef PC_FEAT
 extern int gTacticalMode;   /* Stage 3 1.4 -- F3 AI magic-susceptibility awareness */
-/* F3 tuning constant: weight for the AI magic-susceptibility term in func_800569A0. K=30 tuned in-game
+/* F3 tuning constant: weight for the AI magic-susceptibility term in AI_ScoreSpellTargets. K=30 tuned in-game
  * (2026-07-30; fixture + validation in the 1.4 scope doc). At K=30 the per-magSusc-tier step is 30 pts:
  * resistant (magSusc 1/2) get -60/-30 and are reliably avoided; weak (4/5) get +30/+60 and are preferred
  * -- but only by a 30-pt edge over neutral (3), so base factors (advantage/HP/terrain) stay live as
@@ -17,28 +41,28 @@ extern int gTacticalMode;   /* Stage 3 1.4 -- F3 AI magic-susceptibility awarene
 #define PC_AI_MAGSUSC_K 30
 #endif
 
-void Objf570_AI_TBD(Object *);
-s32 func_800560F8(UnitStatus *);
+void Objf570_AI_ChooseAction(Object *);
+s32 AI_IsTeamDepleted(UnitStatus *);
 s32 IsLagging(void);
-void Objf400_AI_TBD(Object *);
-void func_80056760(UnitStatus *);
-void func_800569A0(UnitStatus *);
-s32 func_80056C30(UnitStatus *, UnitStatus *, u8, u8, u8, u8);
-s32 func_80056F94(UnitStatus *, u8, u8, u8, u8);
-void Objf401_AI_TBD(Object *);
-void Objf402_AI_TBD(Object *);
-void Objf403_AI_TBD(Object *);
-void Objf404_AI_TBD(Object *);
-void Objf589_AI_TBD(Object *);
+void Objf400_AI_BuildSpellValueGrid(Object *);
+void AI_PickFacingTowardEnemies(UnitStatus *);
+void AI_ScoreSpellTargets(UnitStatus *);
+s32 AI_ScoreAttackOption(UnitStatus *, UnitStatus *, u8, u8, u8, u8);
+s32 AI_ScoreCastingPosition(UnitStatus *, u8, u8, u8, u8);
+void Objf401_AI_BuildEnemyProximityGrid(Object *);
+void Objf402_AI_PlanSpellCast(Object *);
+void Objf403_AI_PlanAttack(Object *);
+void Objf404_AI_PlanRetreat(Object *);
+void Objf589_AI_MoveToEscapePoint(Object *);
 
-extern u8 D_80123410, D_80123480, D_80123484;
-extern s16 D_8012F63C[40];
-/* AI casting-score grid, indexed D_8017DF50[iz][ix] where iz is an ABSOLUTE map-Z coordinate
+extern u8 gAiSelfCastFallback, gAiPlanDone, gAiSubtaskDone;
+extern s16 gAiTargetScores[40];
+/* AI casting-score grid, indexed gAiCastValueGrid[iz][ix] where iz is an ABSOLUTE map-Z coordinate
  * (gMapMinZ..gMapMaxZ), not a 0-based index. gMapSizeZ caps at 16 but gMapMinZ can be large, so on
  * tall maps gMapMaxZ reaches 27 -- one row past this [27] declaration. Found by the ASAN sweep on a
- * chapter-4 map (Objf400_AI_TBD, ai.c:381/383/411, and the read at 613).
+ * chapter-4 map (Objf400_AI_BuildSpellValueGrid, ai.c:381/383/411, and the read at 613).
  *
- * The retail game writes that row too; it is safe on hardware because D_8017DF50 (0x8017df50) has
+ * The retail game writes that row too; it is safe on hardware because gAiCastValueGrid (0x8017df50) has
  * 3600 bytes of real allocation before gSlainUnits (0x8017ed60) -- 144 bytes more than this
  * [27][64]=3456 decl -- so row 27 lands in slack. In the PC build the generator emits exactly 3456
  * bytes and the next global (D_801801B0) sits only 32 bytes later, so the same write corrupts it.
@@ -55,15 +79,15 @@ extern s16 D_8012F63C[40];
  * regardless, so the matching build's declaration stays identical and the generator sizes the PC
  * global correctly. See exchange/58. */
 #ifdef PERMUTER
-extern s16 D_8017DF50[29][64];
+extern s16 gAiCastValueGrid[29][64];
 #else
-extern s16 D_8017DF50[27][64];
+extern s16 gAiCastValueGrid[27][64];
 #endif
-extern u8 D_80123484;
+extern u8 gAiSubtaskDone;
 
 #undef OBJF
 #define OBJF 570
-void Objf570_AI_TBD(Object *obj) {
+void Objf570_AI_ChooseAction(Object *obj) {
    Object *newObj;
    UnitStatus *unit;
    u8 spellEffectA, spellEffectB;
@@ -72,7 +96,7 @@ void Objf570_AI_TBD(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      D_80123480 = 0;
+      gAiPlanDone = 0;
       if (gState.mapNum == 21) {
          obj->state = 5;
          obj->state2 = 0;
@@ -184,12 +208,12 @@ void Objf570_AI_TBD(Object *obj) {
          newObj = Obj_GetUnused();
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         newObj->functionIndex = OBJF_AI_TBD_403;
+         newObj->functionIndex = OBJF_AI_PLAN_ATTACK;
          obj->state2++;
 
       // fallthrough
       case 1:
-         if (D_80123480) {
+         if (gAiPlanDone) {
             obj->state = 99;
          }
          break;
@@ -204,12 +228,12 @@ void Objf570_AI_TBD(Object *obj) {
          newObj = Obj_GetUnused();
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         newObj->functionIndex = OBJF_AI_TBD_402;
+         newObj->functionIndex = OBJF_AI_PLAN_SPELL_CAST;
          obj->state2++;
 
       // fallthrough
       case 1:
-         if (D_80123480) {
+         if (gAiPlanDone) {
             obj->state = 99;
          }
          break;
@@ -224,13 +248,13 @@ void Objf570_AI_TBD(Object *obj) {
          newObj = Obj_GetUnused();
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         newObj->functionIndex = OBJF_AI_TBD_404;
+         newObj->functionIndex = OBJF_AI_PLAN_RETREAT;
          obj->state2++;
 
       // fallthrough
       case 1:
-         if (D_80123480) {
-            D_8012337C = 2;
+         if (gAiPlanDone) {
+            gAiActionType = 2;
             gTargetX_80123414 = gX_801233d8;
             gTargetZ_80123418 = gZ_801233dc;
             obj->state = 99;
@@ -247,18 +271,18 @@ void Objf570_AI_TBD(Object *obj) {
          newObj = Obj_GetUnused();
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         newObj->functionIndex = OBJF_AI_TBD_402;
+         newObj->functionIndex = OBJF_AI_PLAN_SPELL_CAST;
          obj->state2++;
 
       // fallthrough
       case 1:
-         if (D_80123480) {
-            if (D_80123410) {
-               D_80123480 = 0;
+         if (gAiPlanDone) {
+            if (gAiSelfCastFallback) {
+               gAiPlanDone = 0;
                newObj = Obj_GetUnused();
                newObj->x1.s.hi = obj->x1.s.hi;
                newObj->z1.s.hi = obj->z1.s.hi;
-               newObj->functionIndex = OBJF_AI_TBD_404;
+               newObj->functionIndex = OBJF_AI_PLAN_RETREAT;
                obj->state2++;
             } else {
                obj->state = 99;
@@ -267,8 +291,8 @@ void Objf570_AI_TBD(Object *obj) {
          break;
 
       case 2:
-         if (D_80123480) {
-            D_8012337C = 2;
+         if (gAiPlanDone) {
+            gAiActionType = 2;
             gTargetX_80123414 = gX_801233d8;
             gTargetZ_80123418 = gZ_801233dc;
             obj->state = 99;
@@ -282,16 +306,16 @@ void Objf570_AI_TBD(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         D_80123480 = 0;
+         gAiPlanDone = 0;
          newObj = Obj_GetUnused();
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         newObj->functionIndex = OBJF_AI_TBD_404;
+         newObj->functionIndex = OBJF_AI_PLAN_RETREAT;
          obj->state2++;
          break;
 
       case 1:
-         if (D_80123480) {
+         if (gAiPlanDone) {
             obj->state = 99;
          }
          break;
@@ -303,16 +327,16 @@ void Objf570_AI_TBD(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         D_80123480 = 0;
+         gAiPlanDone = 0;
          newObj = Obj_GetUnused();
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         newObj->functionIndex = OBJF_AI_TBD_589;
+         newObj->functionIndex = OBJF_AI_MOVE_TO_ESCAPE_POINT;
          obj->state2++;
          break;
 
       case 1:
-         if (D_80123480) {
+         if (gAiPlanDone) {
             obj->state = 99;
          }
          break;
@@ -321,13 +345,13 @@ void Objf570_AI_TBD(Object *obj) {
       break;
 
    case 99:
-      D_80123468 = 1;
+      gAiPlanReady = 1;
       obj->functionIndex = OBJF_NULL;
       break;
    }
 }
 
-s32 func_800560F8(UnitStatus *unit) {
+s32 AI_IsTeamDepleted(UnitStatus *unit) {
    s32 ix, iz;
    u8 team = unit->team;
    s32 ct = 0;
@@ -347,7 +371,7 @@ s32 IsLagging(void) { return (GetRCnt(RCntCNT1) > 450); }
 
 #undef OBJF
 #define OBJF 400
-void Objf400_AI_TBD(Object *obj) {
+void Objf400_AI_BuildSpellValueGrid(Object *obj) {
    UnitStatus *unit;
    UnitStatus *targetUnit;
    s8 team;
@@ -408,14 +432,14 @@ void Objf400_AI_TBD(Object *obj) {
                   for (ix2 = gMapMinX; ix2 <= gMapMaxX; ix2++) {
                      if (gPathGrid5_Ptr[iz2][ix2] != PATH_STEP_UNSET &&
                          gMapUnitsPtr[iz2][ix2].s.unitIdx != 0) {
-                        sVar6 += D_8012F63C[gUnits[gMapUnitsPtr[iz2][ix2].s.unitIdx].idx];
+                        sVar6 += gAiTargetScores[gUnits[gMapUnitsPtr[iz2][ix2].s.unitIdx].idx];
                      }
                   }
                }
 
-               D_8017DF50[iz][ix] = sVar6;
+               gAiCastValueGrid[iz][ix] = sVar6;
             } else {
-               D_8017DF50[iz][ix] = 0;
+               gAiCastValueGrid[iz][ix] = 0;
             }
             //@b9c
             ix++;
@@ -429,7 +453,7 @@ void Objf400_AI_TBD(Object *obj) {
          ix = gMapMinX;
       }
 
-      D_80123484++;
+      gAiSubtaskDone++;
       obj->functionIndex = OBJF_NULL;
       break;
 
@@ -441,9 +465,9 @@ void Objf400_AI_TBD(Object *obj) {
          while (ix <= gMapMaxX) {
             sVar6 = 0;
             if (gMapUnitsPtr[iz][ix].s.unitIdx != 0) {
-               sVar6 = D_8012F63C[gUnits[gMapUnitsPtr[iz][ix].s.unitIdx].idx];
+               sVar6 = gAiTargetScores[gUnits[gMapUnitsPtr[iz][ix].s.unitIdx].idx];
             }
-            D_8017DF50[iz][ix] = sVar6;
+            gAiCastValueGrid[iz][ix] = sVar6;
             ix++;
             if (GetRCnt(RCntCNT1) > 450) {
                OBJ.resumeX = ix;
@@ -455,13 +479,13 @@ void Objf400_AI_TBD(Object *obj) {
          ix = gMapMinX;
       }
 
-      D_80123484++;
+      gAiSubtaskDone++;
       obj->functionIndex = OBJF_NULL;
       break;
    }
 }
 
-void func_80056760(UnitStatus *unit) {
+void AI_PickFacingTowardEnemies(UnitStatus *unit) {
    Object *sprite;
    UnitStatus *otherUnit;
    s32 i;
@@ -522,7 +546,7 @@ void func_80056760(UnitStatus *unit) {
    }
 }
 
-void func_800569A0(UnitStatus *unit) {
+void AI_ScoreSpellTargets(UnitStatus *unit) {
    s16 i;
    UnitStatus *otherUnit;
    Object *sprite;
@@ -551,7 +575,7 @@ void func_800569A0(UnitStatus *unit) {
                /* F3 (Tactical): magic-susceptibility awareness. magSusc 1 = resistant -> LOWER score,
                 * 5 = weak -> RAISE, so the AI prefers magic-weak targets and avoids resistant ones.
                 * No magic-only gate needed: this DAMAGE branch is reached only for magic spells (physical
-                * uses func_80056C30, and every SPELL_EFFECT_DAMAGE already scales with magSusc in the
+                * uses AI_ScoreAttackOption, and every SPELL_EFFECT_DAMAGE already scales with magSusc in the
                 * damage formula). Weight PC_AI_MAGSUSC_K is defined above. */
                magTerm = 0;
                if (gTacticalMode) {
@@ -585,12 +609,12 @@ void func_800569A0(UnitStatus *unit) {
             break;
          }
 
-         D_8012F63C[i] = sVar4;
+         gAiTargetScores[i] = sVar4;
       }
    }
 }
 
-s32 func_80056C30(UnitStatus *unit1, UnitStatus *unit2, u8 z1, u8 x1, u8 z2, u8 x2) {
+s32 AI_ScoreAttackOption(UnitStatus *unit1, UnitStatus *unit2, u8 z1, u8 x1, u8 z2, u8 x2) {
    s32 result;
 
    if (unit2->name == UNIT_LEENA) {
@@ -630,7 +654,7 @@ s32 func_80056C30(UnitStatus *unit1, UnitStatus *unit2, u8 z1, u8 x1, u8 z2, u8 
       break;
    }
 
-   result += D_8012F63C[unit2->idx];
+   result += gAiTargetScores[unit2->idx];
    result -= gPathGrid6_Ptr[z1][x1] * 3;
    result -= (gPathGrid3_Ptr[z1][x1] - 1) / unit1->travelRange * 1000;
    if (result < 1) {
@@ -659,8 +683,8 @@ s32 func_80056C30(UnitStatus *unit1, UnitStatus *unit2, u8 z1, u8 x1, u8 z2, u8 
    return result;
 }
 
-s32 func_80056F94(UnitStatus *unit, u8 z1, u8 x1, u8 z2, u8 x2) {
-   s32 result = D_8017DF50[z2][x2];
+s32 AI_ScoreCastingPosition(UnitStatus *unit, u8 z1, u8 x1, u8 z2, u8 x2) {
+   s32 result = gAiCastValueGrid[z2][x2];
 
    if (result >= 1) {
       result += 10000;
@@ -676,7 +700,7 @@ s32 func_80056F94(UnitStatus *unit, u8 z1, u8 x1, u8 z2, u8 x2) {
 
 #undef OBJF
 #define OBJF 401
-void Objf401_AI_TBD(Object *obj) {
+void Objf401_AI_BuildEnemyProximityGrid(Object *obj) {
    UnitStatus *unit1;
    UnitStatus *unit2;
    Object *sprite1;
@@ -720,7 +744,7 @@ void Objf401_AI_TBD(Object *obj) {
       OBJ_MAP_UNIT(sprite1).s.team = OBJ.team;
       OBJ_MAP_UNIT(sprite1).s.unitIdx = OBJ.unitIdx;
       ClearGrid(0);
-      D_80123484++;
+      gAiSubtaskDone++;
       obj->functionIndex = OBJF_NULL;
       return;
    }
@@ -737,7 +761,7 @@ s32 s_z3_801232f4;
 
 #undef OBJF
 #define OBJF 402
-void Objf402_AI_TBD(Object *obj) {
+void Objf402_AI_PlanSpellCast(Object *obj) {
    UnitStatus *unit;
    Object *sprite;
    Object *newObj;
@@ -754,8 +778,8 @@ void Objf402_AI_TBD(Object *obj) {
          return;
       }
 
-      D_80123480 = 0;
-      D_80123410 = 0;
+      gAiPlanDone = 0;
+      gAiSelfCastFallback = 0;
 
       if (unit->hpFrac < 5000 &&
           gSpellsEx[gCurrentSpell][SPELL_EX_EFFECT] == SPELL_EFFECT_RESTORE_HP) {
@@ -764,7 +788,7 @@ void Objf402_AI_TBD(Object *obj) {
          s_shouldHealSelf_801232d8 = 0;
       }
 
-      func_800569A0(unit);
+      AI_ScoreSpellTargets(unit);
       gDir_80123470 = 0xffff;
       ClearGrid(0);
       ClearGrid(1);
@@ -792,7 +816,7 @@ void Objf402_AI_TBD(Object *obj) {
       if (unit->hp != unit->maxHp) {
          i = 0xff;
       }
-      if (func_800560F8(unit)) {
+      if (AI_IsTeamDepleted(unit)) {
          i = 0xff;
       }
 
@@ -815,25 +839,25 @@ void Objf402_AI_TBD(Object *obj) {
       }
 
       newObj = Obj_GetLastUnused();
-      newObj->functionIndex = OBJF_AI_TBD_400;
+      newObj->functionIndex = OBJF_AI_BUILD_SPELL_VALUE_GRID;
       newObj->d.objf400.unit = unit;
-      D_80123484 = 0;
+      gAiSubtaskDone = 0;
       obj->state++;
       return;
 
    case 5:
-      if (D_80123484 != 0) {
+      if (gAiSubtaskDone != 0) {
          newObj = Obj_GetLastUnused();
-         newObj->functionIndex = OBJF_AI_TBD_401;
+         newObj->functionIndex = OBJF_AI_BUILD_ENEMY_PROXIMITY_GRID;
          newObj->x1.s.hi = obj->x1.s.hi;
          newObj->z1.s.hi = obj->z1.s.hi;
-         D_80123484 = 0;
+         gAiSubtaskDone = 0;
          obj->state++;
       }
       return;
 
    case 6:
-      if (D_80123484 != 0) {
+      if (gAiSubtaskDone != 0) {
          OBJ.resumeZ = gMapMinZ;
          OBJ.resumeX = gMapMinX;
          s_pref_801232e4 = 0;
@@ -873,7 +897,7 @@ void Objf402_AI_TBD(Object *obj) {
                for (iz2 = gMapMinZ; iz2 <= gMapMaxZ; iz2++) {
                   for (ix2 = gMapMinX; ix2 <= gMapMaxX; ix2++) {
                      if (gPathGrid5_Ptr[iz2][ix2] != PATH_STEP_UNSET) {
-                        i = func_80056F94(unit, s_z1_801232e0, s_x1_801232dc, iz2, ix2);
+                        i = AI_ScoreCastingPosition(unit, s_z1_801232e0, s_x1_801232dc, iz2, ix2);
                         if (i > s_pref_801232e4) {
                            s_pref_801232e4 = i;
                            s_z2_801232e8 = s_z1_801232e0;
@@ -915,21 +939,21 @@ void Objf402_AI_TBD(Object *obj) {
 
       if (obj->x1.s.hi == s_x2_801232ec && obj->z1.s.hi == s_z2_801232e8) {
          if (s_pref_801232e4 > 0) {
-            D_8012337C = 2;
+            gAiActionType = 2;
             gTargetX_80123414 = s_x3_801232f0;
             gTargetZ_80123418 = s_z3_801232f4;
          } else {
-            D_8012337C = 0;
-            func_80056760(unit);
+            gAiActionType = 0;
+            AI_PickFacingTowardEnemies(unit);
          }
          obj->state = 99;
       } else if (gPathGrid4_Ptr[s_z2_801232e8][s_x2_801232ec] != PATH_STEP_UNSET) {
-         D_8012337C = 1;
+         gAiActionType = 1;
          gX_801233d8 = s_x2_801232ec;
          gZ_801233dc = s_z2_801232e8;
          gTargetX_80123414 = s_x3_801232f0;
          gTargetZ_80123418 = s_z3_801232f4;
-         D_8012337C = 2;
+         gAiActionType = 2;
          obj->state = 99;
       } else {
          obj->state++;
@@ -960,10 +984,10 @@ void Objf402_AI_TBD(Object *obj) {
          break;
       }
 
-      D_8012337C = 0;
+      gAiActionType = 0;
       gX_801233d8 = s_x2_801232ec;
       gZ_801233dc = s_z2_801232e8;
-      func_80056760(unit);
+      AI_PickFacingTowardEnemies(unit);
       obj->state = 99;
       return;
 
@@ -971,30 +995,30 @@ void Objf402_AI_TBD(Object *obj) {
 
       if (s_shouldHealSelf_801232d8) {
          if (gSpells[gCurrentSpell].area == SPELL_AREA_AOE) {
-            if (D_8012337C == 0) {
-               D_8012337C = 2;
+            if (gAiActionType == 0) {
+               gAiActionType = 2;
                gTargetZ_80123418 = gZ_801233dc;
                gTargetX_80123414 = gX_801233d8;
-               D_80123410 = 1;
+               gAiSelfCastFallback = 1;
             }
          } else if (gSpells[gCurrentSpell].area == SPELL_AREA_NULL) {
-            if (D_8012337C == 0) {
-               D_8012337C = 2;
+            if (gAiActionType == 0) {
+               gAiActionType = 2;
                gTargetZ_80123418 = gZ_801233dc;
                gTargetX_80123414 = gX_801233d8;
-               D_80123410 = 1;
+               gAiSelfCastFallback = 1;
             }
          } else {
-            if (D_8012337C == 0) {
-               D_8012337C = 2;
+            if (gAiActionType == 0) {
+               gAiActionType = 2;
                gTargetZ_80123418 = gZ_801233dc;
                gTargetX_80123414 = gX_801233d8;
-               D_80123410 = 1;
+               gAiSelfCastFallback = 1;
             }
          }
       }
 
-      D_80123480 = 1;
+      gAiPlanDone = 1;
       obj->functionIndex = OBJF_NULL;
       return;
    }
@@ -1010,7 +1034,7 @@ s32 s_z3_80123310;
 
 #undef OBJF
 #define OBJF 403
-void Objf403_AI_TBD(Object *obj) {
+void Objf403_AI_PlanAttack(Object *obj) {
    UnitStatus *unit1;
    UnitStatus *unit2;
    Object *sprite;
@@ -1027,8 +1051,8 @@ void Objf403_AI_TBD(Object *obj) {
          return;
       }
 
-      D_80123480 = 0;
-      func_800569A0(unit1);
+      gAiPlanDone = 0;
+      AI_ScoreSpellTargets(unit1);
       gDir_80123470 = 0xffff;
       ClearGrid(0);
       ClearGrid(1);
@@ -1056,7 +1080,7 @@ void Objf403_AI_TBD(Object *obj) {
       if (unit1->hp != unit1->maxHp) {
          i = 0xff;
       }
-      if (func_800560F8(unit1) != 0) {
+      if (AI_IsTeamDepleted(unit1) != 0) {
          i = 0xff;
       }
 
@@ -1079,15 +1103,15 @@ void Objf403_AI_TBD(Object *obj) {
       }
 
       newObj = Obj_GetLastUnused();
-      newObj->functionIndex = OBJF_AI_TBD_401;
+      newObj->functionIndex = OBJF_AI_BUILD_ENEMY_PROXIMITY_GRID;
       newObj->x1.s.hi = obj->x1.s.hi;
       newObj->z1.s.hi = obj->z1.s.hi;
-      D_80123484 = 0;
+      gAiSubtaskDone = 0;
       obj->state++;
       break;
 
    case 5:
-      if (D_80123484 != 0) {
+      if (gAiSubtaskDone != 0) {
          OBJ.resumeZ = gMapMinZ;
          OBJ.resumeX = gMapMinX;
          s_pref_80123300 = 0;
@@ -1129,7 +1153,7 @@ void Objf403_AI_TBD(Object *obj) {
 
                         unit2 = &gUnits[gMapUnitsPtr[iz2][ix2].s.unitIdx];
                         if (unit1->team != unit2->team) {
-                           i = func_80056C30(unit1, unit2, s_z1_801232fc, s_x1_801232f8, iz2, ix2);
+                           i = AI_ScoreAttackOption(unit1, unit2, s_z1_801232fc, s_x1_801232f8, iz2, ix2);
                            if (i > s_pref_80123300) {
                               s_pref_80123300 = i;
                               s_z2_80123304 = s_z1_801232fc;
@@ -1172,16 +1196,16 @@ void Objf403_AI_TBD(Object *obj) {
 
       if (obj->x1.s.hi == s_x2_80123308 && obj->z1.s.hi == s_z2_80123304) {
          if (s_pref_80123300 != 0) {
-            D_8012337C = 1;
+            gAiActionType = 1;
             gTargetX_80123414 = s_x3_8012330c;
             gTargetZ_80123418 = s_z3_80123310;
          } else {
-            D_8012337C = 0;
-            func_80056760(unit1);
+            gAiActionType = 0;
+            AI_PickFacingTowardEnemies(unit1);
          }
          obj->state = 99;
       } else if (gPathGrid4_Ptr[s_z2_80123304][s_x2_80123308] != PATH_STEP_UNSET) {
-         D_8012337C = 1;
+         gAiActionType = 1;
          gX_801233d8 = s_x2_80123308;
          gZ_801233dc = s_z2_80123304;
          gTargetX_80123414 = s_x3_8012330c;
@@ -1216,15 +1240,15 @@ void Objf403_AI_TBD(Object *obj) {
          break;
       }
 
-      D_8012337C = 0;
+      gAiActionType = 0;
       gX_801233d8 = s_x2_80123308;
       gZ_801233dc = s_z2_80123304;
-      func_80056760(unit1);
+      AI_PickFacingTowardEnemies(unit1);
       obj->state = 99;
       break;
 
    case 99:
-      D_80123480 = 1;
+      gAiPlanDone = 1;
       obj->functionIndex = OBJF_NULL;
       break;
    }
@@ -1236,7 +1260,7 @@ s32 s_x_8012331c;
 
 #undef OBJF
 #define OBJF 404
-void Objf404_AI_TBD(Object *obj) {
+void Objf404_AI_PlanRetreat(Object *obj) {
    UnitStatus *unit;
    Object *sprite;
    Object *newObj;
@@ -1252,7 +1276,7 @@ void Objf404_AI_TBD(Object *obj) {
          return;
       }
 
-      D_80123480 = 0;
+      gAiPlanDone = 0;
       gDir_80123470 = 0xffff;
       ClearGrid(0);
       ClearGrid(1);
@@ -1274,15 +1298,15 @@ void Objf404_AI_TBD(Object *obj) {
       }
 
       newObj = Obj_GetLastUnused();
-      newObj->functionIndex = OBJF_AI_TBD_401;
+      newObj->functionIndex = OBJF_AI_BUILD_ENEMY_PROXIMITY_GRID;
       newObj->x1.s.hi = obj->x1.s.hi;
       newObj->z1.s.hi = obj->z1.s.hi;
-      D_80123484 = 0;
+      gAiSubtaskDone = 0;
       obj->state++;
       break;
 
    case 3:
-      if (D_80123484 == 0) {
+      if (gAiSubtaskDone == 0) {
          break;
       }
 
@@ -1340,15 +1364,15 @@ void Objf404_AI_TBD(Object *obj) {
       break;
 
    case 5:
-      D_8012337C = 0;
+      gAiActionType = 0;
       gX_801233d8 = s_x_8012331c;
       gZ_801233dc = s_z_80123318;
-      func_80056760(unit);
+      AI_PickFacingTowardEnemies(unit);
       obj->state = 99;
       break;
 
    case 99:
-      D_80123480 = 1;
+      gAiPlanDone = 1;
       obj->functionIndex = OBJF_NULL;
       break;
    }
@@ -1363,7 +1387,7 @@ s32 s_x_80123330;
 
 #undef OBJF
 #define OBJF 589
-void Objf589_AI_TBD(Object *obj) {
+void Objf589_AI_MoveToEscapePoint(Object *obj) {
    UnitStatus *unit;
    Object *sprite;
    s32 i;
@@ -1379,7 +1403,7 @@ void Objf589_AI_TBD(Object *obj) {
          return;
       }
 
-      D_80123480 = 0;
+      gAiPlanDone = 0;
       gDir_80123470 = 0xffff;
       ClearGrid(0);
       ClearGrid(1);
@@ -1495,7 +1519,7 @@ void Objf589_AI_TBD(Object *obj) {
       break;
 
    case 5:
-      D_8012337C = 0;
+      gAiActionType = 0;
       gX_801233d8 = s_x_80123330;
       gZ_801233dc = s_z_8012332c;
       gDir_80123470 = 0xffff;
@@ -1503,7 +1527,7 @@ void Objf589_AI_TBD(Object *obj) {
       break;
 
    case 99:
-      D_80123480 = 1;
+      gAiPlanDone = 1;
       obj->functionIndex = OBJF_NULL;
       break;
    }

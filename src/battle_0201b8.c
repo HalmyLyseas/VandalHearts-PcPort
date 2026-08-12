@@ -3370,16 +3370,16 @@ void Objf013_BattleMgr(Object *obj) {
       break;
 
    case 5:
-      D_80123468 = 0;
+      gAiPlanReady = 0;
       obj1 = Obj_GetLastUnused();
-      obj1->functionIndex = OBJF_AI_TBD_570;
+      obj1->functionIndex = OBJF_AI_CHOOSE_ACTION;
       obj1->x1.s.hi = unitSprite->x1.s.hi;
       obj1->z1.s.hi = unitSprite->z1.s.hi;
       obj->state++;
       break;
 
    case 6:
-      if (D_80123468 != 0) {
+      if (gAiPlanReady != 0) {
          if (unitSprite->x1.s.hi == gX_801233d8 && unitSprite->z1.s.hi == gZ_801233dc) {
             obj->state += 2;
             obj->state2 = 0;
@@ -3501,7 +3501,7 @@ void Objf013_BattleMgr(Object *obj) {
    case 8:
       OBJ.todo_x2d = 0;
       ClearBlueMovementGrid();
-      if (D_8012337C == 0) {
+      if (gAiActionType == 0) {
          if (gDir_80123470 == 0xffff) {
             obj->state += 1;
             obj->state2 = 0;
@@ -3511,7 +3511,7 @@ void Objf013_BattleMgr(Object *obj) {
          }
       } else {
          CloseWindow(0x1d);
-         if (D_8012337C == 1) {
+         if (gAiActionType == 1) {
             obj->state += 3;
             obj->state2 = 0;
          } else {
