@@ -165,7 +165,7 @@ void Objf129_ThunderBall_FX3(Object *obj) {
 #define OBJF 148
 /* Sky lightning bolt (Objf147) onto the target, then the lightning engulf after 25 frames.
  * Shared strike finisher: Thunder Ball / HelStone route here via Objf128/129, and the
- * fx_068a10.c Objf120/121 pair does the same for its own driver. */
+ * spells_lightning.c Objf120/121 pair does the same for its own driver. */
 void Objf148_ThunderStrike(Object *obj) {
    Object *obj_v1;
 

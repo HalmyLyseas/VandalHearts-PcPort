@@ -12,7 +12,7 @@
  * Objf702_FlamingRock (OBJF_FLAMING_ROCK) is not a Map 35 object and sits here only by
  * address adjacency: a ballistic burning rock trailing explosion puffs, dying on terrain
  * contact; spawned by Objf336_Salamander_Segment (fx_07851c.c) and by the cut
- * Objf734_MeteorImpact_Unused (split_09a268.c). */
+ * Objf734_MeteorImpact_Unused (fx_event_scenes.c). */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

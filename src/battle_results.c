@@ -1,7 +1,7 @@
 /* The post-battle results screen and the slain-unit tally that feeds it (segment
  * 0x38148).
  *
- * TallySlainUnit is called from every death path of Objf014_BattleUnit (split_03c94c.c):
+ * TallySlainUnit is called from every death path of Objf014_BattleUnit (unit_actor.c):
  * party members set a flag in gPartyMemberSlain, everyone else bumps the matching
  * gSlainUnits count. Both arrays are zeroed per battle by battle_eval.c and mirrored into
  * the in-battle save by card.c. CommitPartyStatus flushes every live gUnits entry back

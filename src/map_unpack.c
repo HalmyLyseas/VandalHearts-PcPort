@@ -13,7 +13,7 @@
  * s16 is the entity count, and each entity's script is a run of s16 (opcode, argument)
  * pairs ending at opcode 99; walking the terminators yields one gEvtEntityDataPointers
  * entry per entity. events.c calls it and hands each pointer to SetupEventEntity
- * (split_03c94c.c).
+ * (unit_actor.c).
  *
  * Objf683_AdjustFaceElevation and Objf684_SlidingFace both index the 76-entry
  * sSlidingFaces table by obj->state2 and move one tile-model face's elevation -- the first

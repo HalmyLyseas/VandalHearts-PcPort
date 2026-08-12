@@ -95,7 +95,7 @@ sanitizer (the wrong texture is a valid in-bounds read of a garbage index).
 **3c. The same leading-pointer shift, but a *cross-type reinterpret* — the struct itself was fine.**
 The Chapter-2 Dolf casting cutscene drew its blue **lightning** as a solid garbage **blob** — ~17k
 quads sampling VRAM page 0 (the framebuffer). Same leading-pointer mechanism as #3b, but with a twist
-that makes it a *different* bug to fix. `func_800ABFB8` (the lightning builder, `src/split_09a268.c`)
+that makes it a *different* bug to fix. `func_800ABFB8` (the lightning builder, `src/fx_event_scenes.c`)
 reads `obj->d.sprite.gfxIdx` (offset 0x28) from callers that pass a **non-sprite** object —
 `Objf319_Map67_Scn34_TBD` passes *its own* object, whose struct has a leading pointer at 0x24. It has an
 existing `if (gfxIdx == GFX_NULL) gfxIdx = GFX_LIGHTNING_5` fallback, and at 32-bit offset 0x28 reads a
@@ -106,7 +106,7 @@ test → OOB `gGfxTPageIds[21977]` → `tpage = 0` → the quads sample VRAM pag
 garbage blob. **Crucially, unlike #3b, `Objf319`'s struct is *correct for its own use*** (`OBJ.entitySprite`
 reads fine) — so the #3b-style "realign the struct" fix does *not* apply. The defect is the **cross-type
 reinterpret** in the shared helper, which relies on a union-aliased field reading 0 on PSX. *Fix
-(`PC_PORT`-gated, `split_09a268.c`):* extend the helper's own `GFX_NULL` fallback to treat any
+(`PC_PORT`-gated, `fx_event_scenes.c`):* extend the helper's own `GFX_NULL` fallback to treat any
 **out-of-range** index as `GFX_NULL`, restoring the intended `GFX_LIGHTNING_5`. Found by an every-frame
 VRAM dump → auto-locate the peak-blob frame → a frame-correlated per-quad log of `gfx` + resolved
 `tpage` + owning `functionIndex` (`VH_OPAQUE_GFX_LOG`, all 9 `AddObjPrim*` opaque branches) → filter

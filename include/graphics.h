@@ -720,7 +720,7 @@ extern u8 **gSpriteStripAnimSets[25];
  * (platform/pc/src/pc_unit_anim_data.c), so the hardware bytes past 144 (adjacent gUnitClutIds read
  * as pointers -- garbage even on hardware) cannot be faithfully reproduced. Entries 144..300 are
  * therefore NULL: the point of widening is SAFETY (the read stays in bounds and yields NULL instead
- * of a dereferenced wild pointer -- gSpriteStripAnimSets IS dereferenced at split_03c94c.c:151),
+ * of a dereferenced wild pointer -- gSpriteStripAnimSets IS dereferenced at unit_actor.c:142),
  * not faithfulness. Believed set-but-unused for rendering: cutscene units take their animset from
  * gEvtEntities (see milestone_cutscene_units_fixed), which is why entries 144..191 being NULL since
  * the earlier fix has not broken any cutscene sprite through ch1-ch4. If a future cutscene sprite

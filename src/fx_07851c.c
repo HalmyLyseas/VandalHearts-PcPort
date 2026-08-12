@@ -2334,7 +2334,7 @@ void Objf332_RollingFire_FX1(Object *obj) {
 #define OBJF 333
 /* Sparkle spiralling inward onto a unit (~248 frames), laying rune-textured Objf323
  * ribbon segments every frame, then gSignal3. Cut: nothing dispatches 333 (Objf323's
- * other user is EVDATA29.DAT / Map20 -- see its comment in split_09a268.c). */
+ * other user is EVDATA29.DAT / Map20 -- see its comment in fx_event_scenes.c). */
 void Objf333_RuneSpiral_Unused(Object *obj) {
    extern s16 gSparkleAnimData_800ff38c[14];
    Object *obj_s3;

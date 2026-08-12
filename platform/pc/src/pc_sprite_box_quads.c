@@ -21,7 +21,7 @@
  * hardware: src/object.c's AddObjPrim8/RenderUnitSprite temporarily rotate a box's Y
  * coordinates in place (`(*quadp)[0].vy = -(...)`) then restore them a few lines later, and
  * several other files swap `gSpriteBoxQuads[N]` between multiple Quad sources entirely
- * (src/split_03c94c.c, src/fx_080b4c.c, src/fx_07851c.c, src/maps_28_31.c) --
+ * (src/unit_actor.c, src/spells_fx_common2.c, src/fx_07851c.c, src/maps_28_31.c) --
  * confirmed as a real, reported SIGSEGV (a write-protection fault, not a bad-pointer fault --
  * the address itself was valid) once `const` put this blob in read-only memory, not a
  * hypothetical. */
@@ -62,7 +62,7 @@ static u8 sSpriteBoxQuadBlob[544] = {
  * on real hardware gSpriteBoxQuads[N] and gQuad_XXX are the SAME object (same VRAM address). The
  * data generator wrongly split each into a frozen blob copy here PLUS a separate writable global,
  * so per-frame BY-NAME writes (projectile.c RotateProjectile -> the arrow; a dozen fx_*; the
- * split_03c94c airman shadow) never reached the renderer -- it read the frozen blob copy. Point
+ * unit_actor.c airman shadow) never reached the renderer -- it read the frozen blob copy. Point
  * these entries at the live globals to restore the single-object hardware behaviour (fixes the
  * flat/un-rotated arrow + many attack effects + flyer shadows). See feedback-25. */
 Quad *gSpriteBoxQuads[19] = {

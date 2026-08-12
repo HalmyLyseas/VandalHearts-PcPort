@@ -11,7 +11,7 @@
  * Data: the block at 0x800ff18c holds shared sprite animation tables -- impact, smoke,
  * salamander, flame, two explosions, faerie and two sparkle loops. Only the faerie and
  * sparkle tables are used by this file; the rest are consumed by neighbouring FX units,
- * and gSmokeAnimData_800ff1b0 had to be made non-static for fx_070604.c: the code split at
+ * and gSmokeAnimData_800ff1b0 had to be made non-static for spells_dark_fire.c: the code split at
  * Objf211 is provisional and cuts across the shared block (see the in-file comment).
  *
  * The PC_FEAT gate in the boulder is the Tactical-only ice re-skin. */

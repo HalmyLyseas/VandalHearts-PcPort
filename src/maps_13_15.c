@@ -13,7 +13,7 @@
  * empty stub EVDATA17 spawns as a placeholder for pirate sprites.
  *
  * Also here, not map-specific: the water sprites Objf297_SplashDroplets /
- * Objf298_SplashWithDroplets (also used by Objf653_ExplodingTile and fx_080b4c.c), and
+ * Objf298_SplashWithDroplets (also used by Objf653_ExplodingTile and spells_fx_common2.c), and
  * SnapCameraLookAt/EaseCameraLookAt, the look-at camera pair shared with
  * Objf673_Map32_Scn63_Cinematic. The embedded MapTileModel literals are plain boxes;
  * anything more complex should be #include'd from assets/ instead. */

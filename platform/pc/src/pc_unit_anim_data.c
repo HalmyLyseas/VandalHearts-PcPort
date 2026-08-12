@@ -4108,7 +4108,7 @@ u8 **gUnitAnimSets[301] = {
      * a pointer -- garbage that happens to be in valid RAM. That is NOT reproducible here, because
      * gUnitAnimSets is reconstructed (this file), not laid out adjacent to our gUnitClutIds. So
      * these entries are NULL: the goal is SAFETY, not faithfulness -- gSpriteStripAnimSets IS
-     * dereferenced (split_03c94c.c:151), so a wild pointer is a real hazard, whereas NULL is caught
+     * dereferenced (unit_actor.c:142), so a wild pointer is a real hazard, whereas NULL is caught
      * by pc_bootstrap.c's fault handler (-> gfxIdx 0). Believed set-but-unused for rendering:
      * cutscene units get their animset from gEvtEntities (milestone_cutscene_units_fixed), which is
      * why 144..191 being NULL since the earlier fix broke no cutscene sprite through ch1-ch4. If a
