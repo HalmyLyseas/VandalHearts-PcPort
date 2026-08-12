@@ -2360,7 +2360,7 @@ void Objf333_RuneSpiral_Unused(Object *obj) {
    // fallthrough
    case 1:
       obj_s3 = Obj_GetUnused();
-      obj_s3->functionIndex = OBJF_FX_TBD_323;
+      obj_s3->functionIndex = OBJF_SUMMON_RUNE_COLUMN_323;
       obj_s3->d.objf323.gfxIdx = GFX_RUNE_1 + rand() % 10;
       obj_s3->d.objf323.semiTrans = 2;
       obj_s3->state2 = 0xff;

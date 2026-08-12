@@ -462,7 +462,7 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
             CloseWindow(0x3d);
             obj->state3 = 1;
             obj->state2 = 0;
-            func_800AA42C();
+            UndimScreen();
             obj->state = 101;
             break;
          }
@@ -2244,7 +2244,7 @@ void Objf796_MainMenu(Object *obj) {
 void State_Title_FileLoadScreen(void) {
    Object *obj;
 
-   Noop_800aa0ac(20, 20, gState.primary);
+   Noop_DebugPrintValue(20, 20, gState.primary);
 
    switch (gState.secondary) {
    case 0:

@@ -1,3 +1,21 @@
+/* Shared FX helpers + event-scene special effects (segment 0x9a268).
+ *
+ * The first ~260 lines are a toolbox used across the fx_* / map_effects_* units: object
+ * spawn and unit-snap helpers (SnapToUnit, CreatePositionedObj, func_800A9E78), tree-wide
+ * render primitives (RenderMaskEffect, RenderSphere, RenderLightningBolt), the camera-zoom
+ * service object (Objf277_Zoom, spawned on every map by SetupMapExtras; its set/stop API
+ * SetCameraZoomTarget_Unused/StopCameraZoom_Unused is dead in retail), the screen dim/undim
+ * pair (DimScreen/UndimScreen, used by the save prompt), and a stripped debug-print pair
+ * (PrintDigit / Noop_DebugPrintValue).
+ *
+ * The remainder is cutscene/event-entity effects, spawned almost exclusively by EVDATA*.DAT
+ * scripts (event opcode 0x1d names an objf index directly -- see the interpreter in
+ * split_03c94c.c): per-scene set pieces (Map44/Scn00, Map36/Scn74-75, Map48/Scn20,
+ * Map43/Scn93, Map67/Scn34, Map61/Scn83, Map20, Map30), reusable particles (rays, sparks,
+ * streaks, rings), entity-overlay transforms (hide the sprite, cross-fade masked clones),
+ * the Dimensional Rift family, blend-mode toggles, and controller-2 debug handlers
+ * (Objf674_DebugSounds, Objf714_DebugCamera). Handlers reachable from no spell table, no
+ * event script and no code path are cut content, suffixed _Unused. */
 #include "common.h"
 #include "object.h"
 #include "units.h"
@@ -9,7 +27,9 @@ s32 D_801233A8;
 
 #undef OBJF
 #define OBJF 391
-void Objf391(Object *obj) {
+/* Pad-2/L2 state toggle over D_801233A8, which nothing reads -- a vestigial debug stub
+ * (same controller-2 idiom as its neighbours Objf674/714). No dispatcher references 391. */
+void Objf391_DebugStub_Unused(Object *obj) {
    switch (obj->state) {
    case 0:
       D_801233A8 = 0;
@@ -139,8 +159,9 @@ void PrintDigit(s32 x, s32 y, s32 digit) {
    AddPrim(&gGraphicsPtr->ot[OT_SIZE - 1], poly);
 }
 
-void Noop_800aa0ac(s32 param_1, s32 param_2, s32 param_3) {
-   // Looking at usage, might've been s/t like DebugPrint(col,row,value)
+void Noop_DebugPrintValue(s32 param_1, s32 param_2, s32 param_3) {
+   /* All three call sites pass (col, row, value) and PrintDigit above is its orphaned
+    * glyph blitter: a debug value-printer emptied for retail. */
 }
 
 void Objf688_Noop(Object *obj) {}
@@ -151,7 +172,7 @@ Object *D_801233CC;
 #define OBJF 277
 void Objf277_Zoom(Object *obj) {
    //? Maybe for debugging? Spawned by SetupMapExtras() (assigned to D_801233CC); can be manipulated
-   // via func_800AA10C() / func_800AA154(), but those appear to be unused.
+   // via SetCameraZoomTarget_Unused() / StopCameraZoom_Unused(), but those appear to be unused.
 
    s32 smoothness;
 
@@ -165,7 +186,7 @@ void Objf277_Zoom(Object *obj) {
    }
 }
 
-void func_800AA10C(s16 param_1, s16 param_2, s16 zoom, s16 smoothness) {
+void SetCameraZoomTarget_Unused(s16 param_1, s16 param_2, s16 zoom, s16 smoothness) {
    switch (D_801233CC->state) {
    case 0:
       D_801233CC->state++;
@@ -180,7 +201,7 @@ void func_800AA10C(s16 param_1, s16 param_2, s16 zoom, s16 smoothness) {
    }
 }
 
-void func_800AA154(void) { D_801233CC->state = 0; }
+void StopCameraZoom_Unused(void) { D_801233CC->state = 0; }
 
 #undef OBJF
 #define OBJF 279
@@ -246,7 +267,7 @@ void DimScreen(void) {
    SetScreenEffectOrdering(-10);
 }
 
-void func_800AA42C(void) {
+void UndimScreen(void) {
    // for un-dim?
    gState.screenEffect->state = 7;
    gState.screenEffect->d.objf369.color.r = gState.screenEffect->d.objf369.color.g =
@@ -378,7 +399,10 @@ void Objf393_Map44_Scn00_ExplosionRays(Object *obj) {
 
 #undef OBJF
 #define OBJF 276
-void Objf276_Fx_TBD(Object *obj) {
+/* Expanding tiled-flames hemisphere, red twin of Objf348_BlueFlameDome_Unused. Unfinished:
+ * state 2 (its own gSignal3 teardown) is unreachable, the flame-wall anim and a local clut
+ * table are dead, and the dome grows without bound. Nothing dispatches 276. */
+void Objf276_RedFlameDome_Unused(Object *obj) {
    static s16 animData[20] = {
        0, GFX_FLAME_WALL_1, 2, GFX_FLAME_WALL_2, 2, GFX_FLAME_WALL_3, 2, GFX_FLAME_WALL_4,
        2, GFX_FLAME_WALL_5, 2, GFX_FLAME_WALL_6, 2, GFX_FLAME_WALL_7, 2, GFX_FLAME_WALL_8,
@@ -456,7 +480,7 @@ void Objf276_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 275
-void Objf275_Fx_TBD(Object *obj) {
+void Objf275_ConvergingExplosion_Unused(Object *obj) {
    static s16 animData[] = {4, GFX_EXPLOSION_1,  2, GFX_EXPLOSION_2,  2, GFX_EXPLOSION_3,
                             2, GFX_EXPLOSION_4,  2, GFX_EXPLOSION_5,  2, GFX_EXPLOSION_6,
                             2, GFX_EXPLOSION_7,  2, GFX_EXPLOSION_8,  2, GFX_EXPLOSION_9,
@@ -678,7 +702,10 @@ static s16 sCluts_801230a4[4] = {CLUT_REDS, CLUT_BLUES, CLUT_PURPLES, CLUT_GREEN
 
 #undef OBJF
 #define OBJF 270
-void Objf270_Fx_TBD(Object *obj) {
+/* Spinning splash-textured column ringed by 8 chained lightning tendrils (Objf269) plus
+ * streak/spark emitters. Unfinished: also spawns 8 UNLINKED tendrils whose link is NULL
+ * (would deref 0), never terminates, and nothing dispatches 270. */
+void Objf270_LightningPillar_Unused(Object *obj) {
    static s16 splashAnimData[20] = {
        0, GFX_SPLASH_1, 1, GFX_SPLASH_2, 1, GFX_SPLASH_3, 1, GFX_SPLASH_4, 1, GFX_SPLASH_5,
        1, GFX_SPLASH_6, 1, GFX_SPLASH_7, 1, GFX_SPLASH_8, 1, GFX_NULL,     1, GFX_NULL};
@@ -696,9 +723,9 @@ void Objf270_Fx_TBD(Object *obj) {
 
       link = obj;
       for (i = 0; i < 8; i++) {
-         CreatePositionedObj(obj, OBJF_FX_TBD_269);
+         CreatePositionedObj(obj, OBJF_LIGHTNING_TENDRIL_UNUSED);
          obj_s0 = Obj_GetUnused();
-         obj_s0->functionIndex = OBJF_FX_TBD_269;
+         obj_s0->functionIndex = OBJF_LIGHTNING_TENDRIL_UNUSED;
          obj_s0->d.objf269.link = link;
          obj_s0->d.objf269.parent = obj;
          link = obj_s0;
@@ -717,7 +744,7 @@ void Objf270_Fx_TBD(Object *obj) {
       sprite = OBJ.sprite;
 
       if (--obj->mem <= 0) {
-         obj_s0 = CreatePositionedObj(obj, OBJF_FX_TBD_099);
+         obj_s0 = CreatePositionedObj(obj, OBJF_STREAK_PARTICLE);
          obj_s0->x1.n += rand() % CV(0.5);
          obj_s0->z1.n += rand() % CV(0.5);
          obj_s0->y1.n += rand() % CV(0.5);
@@ -729,7 +756,7 @@ void Objf270_Fx_TBD(Object *obj) {
       }
 
       if (--obj->mem <= 0) {
-         obj_s0 = CreatePositionedObj(obj, OBJF_FX_TBD_088);
+         obj_s0 = CreatePositionedObj(obj, OBJF_SPARK_PARTICLE);
          obj_s0->x1.n += rand() % CV(0.5);
          obj_s0->z1.n += rand() % CV(0.5);
          obj_s0->y1.n += rand() % CV(0.5);
@@ -768,7 +795,7 @@ void Objf270_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 269
-void Objf269_Fx_TBD(Object *obj) {
+void Objf269_LightningTendril_Unused(Object *obj) {
    static s16 lightningAnimData[20] = {0, GFX_LIGHTNING_1, 2, GFX_LIGHTNING_2, 2, GFX_LIGHTNING_3,
                                        2, GFX_LIGHTNING_4, 2, GFX_LIGHTNING_5, 2, GFX_LIGHTNING_6,
                                        2, GFX_LIGHTNING_7, 2, GFX_LIGHTNING_8, 2, GFX_NULL,
@@ -821,7 +848,7 @@ void Objf269_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 099
-void Objf099_Fx_TBD(Object *obj) {
+void Objf099_StreakParticle(Object *obj) {
    Object *sprite;
    SVECTOR svec;
 
@@ -875,7 +902,7 @@ void Objf099_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 088
-void Objf088_Fx_TBD(Object *obj) {
+void Objf088_SparkParticle(Object *obj) {
    switch (obj->state) {
    case 0:
       OBJ.gfxIdx = GFX_COLOR_12;
@@ -904,7 +931,7 @@ void Objf088_Fx_TBD(Object *obj) {
    }
 }
 
-void func_800ABFB8(Object *sprite) {
+void RenderLightningBolt(Object *sprite) {
    s32 dx, dz, dy;
    s32 i;
    s16 rnd;
@@ -926,7 +953,7 @@ void func_800ABFB8(Object *sprite) {
    sprite_s0->d.sprite.semiTrans = sprite->d.sprite.semiTrans;
    if (sprite_s0->d.sprite.gfxIdx == GFX_NULL
 #ifdef PC_PORT
-       /* Some callers pass a NON-sprite object (e.g. Objf319_Map67_Scn34_TBD) whose d.sprite.gfxIdx
+       /* Some callers pass a NON-sprite object (e.g. Objf319_Map67_Scn34_RiftArcs) whose d.sprite.gfxIdx
         * aliases their own struct. On PSX that offset reads 0 (GFX_NULL), so this fallback selects the
         * lightning gfx. On LP64 a leading pointer in the caller's struct occupies 0x24..0x2B and shifts
         * the read into the pointer, yielding a garbage index (a fixed-arena pointer's low half) that
@@ -967,7 +994,7 @@ void func_800ABFB8(Object *sprite) {
 
 #undef OBJF
 #define OBJF 340
-void Objf340_Map48_Scn20_TBD(Object *obj) {
+void Objf340_Map48_Scn20_LightningFan(Object *obj) {
    Object *obj_s0;
 
    switch (obj->state) {
@@ -995,7 +1022,7 @@ void Objf340_Map48_Scn20_TBD(Object *obj) {
 
    case 1:
       obj_s0 = Obj_GetUnused();
-      obj_s0->functionIndex = OBJF_FX_TBD_099;
+      obj_s0->functionIndex = OBJF_STREAK_PARTICLE;
       obj_s0->x1.n = obj->x1.n + CV(2.0);
       obj_s0->y1.n = obj->y1.n;
       obj_s0->z1.n = obj->z1.n + (rand() % 1024 - CV(2.0));
@@ -1014,13 +1041,13 @@ void Objf340_Map48_Scn20_TBD(Object *obj) {
       obj_s0->z2.n = obj->z1.n;
       obj_s0->y2.n = obj->y1.n + CV(0.5);
       obj_s0->d.sprite.clut = CLUT_BLUES;
-      func_800ABFB8(obj_s0);
+      RenderLightningBolt(obj_s0);
       obj_s0->z2.n = obj->z1.n + (obj->state3 >> 2);
       obj_s0->d.sprite.clut = CLUT_GREENS;
-      func_800ABFB8(obj_s0);
+      RenderLightningBolt(obj_s0);
       obj_s0->z2.n = obj->z1.n - (obj->state3 >> 2);
       obj_s0->d.sprite.clut = CLUT_PURPLES;
-      func_800ABFB8(obj_s0);
+      RenderLightningBolt(obj_s0);
       obj_s0->functionIndex = OBJF_NULL;
       obj->state3 += (1024 - obj->state3) >> 4;
       break;
@@ -1240,7 +1267,10 @@ void RenderSphere(Object *sphere) {
 
 #undef OBJF
 #define OBJF 318
-void Objf318_Fx_TBD(Object *obj) {
+/* Meant to be a sparkle SPHERE over the target (RenderSphere), but state3 -- the
+ * vertical radius -- is never set, so it degenerates to flat expanding ground rings.
+ * gSignal3 on completion (event-FX shape); no EVDATA, spell, or code dispatches 318. */
+void Objf318_ExpandingSparkleRings_Unused(Object *obj) {
    switch (obj->state) {
    case 0:
       SnapToUnit(obj);
@@ -1268,14 +1298,14 @@ void Objf318_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 742
-void Objf742_Map67_Scn34_TBD(Object *obj) {
+void Objf742_Map67_Scn34_RiftArcs_Separate(Object *obj) {
    s32 i;
    Object *p;
 
    p = &gObjectArray[0];
 
    for (i = 0; i < ARRAY_COUNT(gObjectArray); i++) {
-      if (p->functionIndex == OBJF_MAP67_SCN34_TBD_319) {
+      if (p->functionIndex == OBJF_MAP67_SCN34_RIFT_ARCS) {
          if (p->state == 1 && p->state2 == 2) {
             p->state2++;
          }
@@ -1289,7 +1319,7 @@ void Objf742_Map67_Scn34_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 319
-void Objf319_Map67_Scn34_TBD(Object *obj) {
+void Objf319_Map67_Scn34_RiftArcs(Object *obj) {
    Object *obj_s2;
    Object *obj_s0;
    Object *obj_s3;
@@ -1301,7 +1331,7 @@ void Objf319_Map67_Scn34_TBD(Object *obj) {
       obj->z1.n = obj_s2->x1.n;
       obj->y1.n = obj_s2->y1.n + CV(1.0);
 
-      obj_s2 = CreatePositionedObj(obj, OBJF_FX_TBD_320);
+      obj_s2 = CreatePositionedObj(obj, OBJF_MAP67_SCN34_BOLT_ENDPOINT);
       obj_s2->x3.n = obj->x1.n - CV(1.5);
       OBJ.todo_x5c = obj_s2;
 
@@ -1312,7 +1342,7 @@ void Objf319_Map67_Scn34_TBD(Object *obj) {
       obj_s0->d.sprite.semiTrans = 2;
       OBJ.semiTrans = 2;
 
-      obj_s2 = CreatePositionedObj(obj_s0, OBJF_FX_TBD_320);
+      obj_s2 = CreatePositionedObj(obj_s0, OBJF_MAP67_SCN34_BOLT_ENDPOINT);
       obj_s2->x3.n = obj_s0->x1.n + CV(1.5);
       OBJ.todo_x50 = obj_s2;
       obj->state++;
@@ -1323,16 +1353,16 @@ void Objf319_Map67_Scn34_TBD(Object *obj) {
       obj->x2.n = obj_s2->x1.n;
       obj->z2.n = obj_s2->z1.n;
       obj->y2.n = obj_s2->y1.n;
-      func_800ABFB8(obj);
-      func_800ABFB8(obj);
-      func_800ABFB8(obj);
+      RenderLightningBolt(obj);
+      RenderLightningBolt(obj);
+      RenderLightningBolt(obj);
       obj_s0 = OBJ.todo_x58;
       obj_s3 = OBJ.todo_x50;
       obj_s0->x2.n = obj_s3->x1.n;
       obj_s0->z2.n = obj_s3->z1.n;
       obj_s0->y2.n = obj_s3->y1.n;
-      func_800ABFB8(obj_s0);
-      func_800ABFB8(obj_s0);
+      RenderLightningBolt(obj_s0);
+      RenderLightningBolt(obj_s0);
 
       switch (obj->state2) {
       case 0:
@@ -1345,7 +1375,7 @@ void Objf319_Map67_Scn34_TBD(Object *obj) {
       // fallthrough
       case 2:
          if (--obj->state3 <= 0) {
-            obj_s2 = CreatePositionedObj(obj, OBJF_FX_TBD_728);
+            obj_s2 = CreatePositionedObj(obj, OBJF_FLICKERING_EXPAND_RING);
             obj_s2->x1.n -= CV(1.5);
             obj_s2->mem = 16;
             obj->state3 = rand() % 3 + 8;
@@ -1357,7 +1387,7 @@ void Objf319_Map67_Scn34_TBD(Object *obj) {
          obj_s3 = OBJ.todo_x50;
          obj_s2->x2.n = obj_s3->x2.n = obj->x1.n - CV(1.5) - obj->mem;
          if (--obj->state3 <= 0) {
-            obj_s0 = CreatePositionedObj(obj_s3, OBJF_FX_TBD_728);
+            obj_s0 = CreatePositionedObj(obj_s3, OBJF_FLICKERING_EXPAND_RING);
             obj_s0->mem = 16;
             obj->state3 = rand() % 3 + 8;
          }
@@ -1402,7 +1432,7 @@ void Objf319_Map67_Scn34_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 320
-void Objf320_Fx_TBD(Object *obj) {
+void Objf320_Map67_Scn34_BoltEndpoint(Object *obj) {
    s32 i;
    Object *obj_s4;
    s32 r;
@@ -1436,7 +1466,7 @@ void Objf320_Fx_TBD(Object *obj) {
       obj->mem++;
 
       for (i = 0; i < 5; i++) {
-         obj_s4 = CreatePositionedObj(obj, OBJF_FX_TBD_088);
+         obj_s4 = CreatePositionedObj(obj, OBJF_SPARK_PARTICLE);
          a = rand() % DEG(360);
          b = rand() % DEG(360);
          r = rand() % CV(0.125) + CV(0.0625);
@@ -1451,7 +1481,7 @@ void Objf320_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 728
-void Objf728_Fx_TBD(Object *obj) {
+void Objf728_FlickeringExpandRing(Object *obj) {
    s16 halfSize;
 
    switch (obj->state) {
@@ -1482,7 +1512,7 @@ void Objf728_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 323
-void Objf323_713_Fx_TBD(Object *obj) {
+void Objf323_713_SummonRuneColumn(Object *obj) {
    // 323: Spawned by Objf333 (unused?), EVDATA29.DAT (Map20/Magnus)
    // 713: Spawned by EVDATA55.DAT (Map30/Xeno)
 
@@ -1540,9 +1570,9 @@ void Objf323_713_Fx_TBD(Object *obj) {
       dsCylinder->gfxIdx = GFX_COLORS;
       dsCylinder->topRadius = CV(0.0);
       dsCylinder->bottomRadius = CV(0.0);
-      if (obj->functionIndex == OBJF_FX_TBD_323) {
+      if (obj->functionIndex == OBJF_SUMMON_RUNE_COLUMN_323) {
          dsCylinder->clut = CLUT_PURPLES;
-      } else if (obj->functionIndex == OBJF_FX_TBD_713) {
+      } else if (obj->functionIndex == OBJF_SUMMON_RUNE_COLUMN_713) {
          dsCylinder->clut = CLUT_GREENS;
       }
       dsCylinder->useColor = 1;
@@ -1574,7 +1604,7 @@ void Objf323_713_Fx_TBD(Object *obj) {
          if (obj->mem <= 192) {
             r2 = CV(0.5);
             obj_s2 = Obj_GetUnused();
-            obj_s2->functionIndex = OBJF_FX_TBD_707;
+            obj_s2->functionIndex = OBJF_RISING_GLYPH;
             theta = rand() % DEG(360);
             obj_s2->x1.n = obj->x1.n + (r2 * rsin(theta) >> 12);
             obj_s2->z1.n = obj->z1.n + (r2 * rcos(theta) >> 12);
@@ -1704,7 +1734,7 @@ void Objf680_LitDummySprite(Object *obj) {
 
 #undef OBJF
 #define OBJF 682
-void Objf682(Object *obj) {
+void Objf682_RaiseFaces_Unused(Object *obj) {
    // Unused map effect?
 
    AdjustFaceElevation(&gMapRowPointers[5][20], 1, 64);
@@ -1713,6 +1743,8 @@ void Objf682(Object *obj) {
    obj->functionIndex = OBJF_NULL;
 }
 
+/* UNREFERENCED (no caller, not in gObjFunctionPointers[]): the animated twin of
+ * Objf682_RaiseFaces_Unused -- same three hard-coded tiles, +1/frame for 64 frames. */
 void func_800ADF0C(Object *obj) {
    // Unused map effect?
 
@@ -1739,7 +1771,7 @@ void func_800ADF0C(Object *obj) {
 
 #undef OBJF
 #define OBJF 689
-void Objf689_Fx_TBD(Object *obj) {
+void Objf689_EntityFlashBurstRays(Object *obj) {
    // Spawned by: EVDATA29.DAT, EVDATA86.DAT; Entity burst?
 
    u8 local_30[5] = {4, 4, 8, 4, 2};
@@ -1867,7 +1899,7 @@ void Objf689_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 693
-void Objf693_Fx_TBD(Object *obj) {
+void Objf693_EntityRedStripePulse_Unused(Object *obj) {
    Object *entitySprite;
    Object *sprite;
    MaskEffectPreset maskEffect;
@@ -1972,7 +2004,7 @@ void Objf694_Map61_Scn83_AshGlow(Object *obj) {
 
 #undef OBJF
 #define OBJF 695
-void Objf695_696_Fx_TBD(Object *obj) {
+void Objf695_696_EntityBlendFade_Unused(Object *obj) {
    // Unused entity spawn?
 
    s32 i;
@@ -1987,7 +2019,7 @@ void Objf695_696_Fx_TBD(Object *obj) {
       OBJ.entitySprite = entitySprite;
       OBJ.variant_0x24.unk = 0;
       entitySprite->d.sprite.hidden = 1;
-      if (obj->functionIndex == OBJF_FX_TBD_695) {
+      if (obj->functionIndex == OBJF_ENTITY_BLEND_FADE_UNUSED) {
          OBJ.intensity = 128;
          obj->mem = -4;
       } else {
@@ -2021,7 +2053,7 @@ void Objf695_696_Fx_TBD(Object *obj) {
       OBJ.intensity += obj->mem;
       obj->state3 -= abs(obj->mem);
       if (obj->state3 <= 0) {
-         if (obj->functionIndex != OBJF_FX_TBD_695) {
+         if (obj->functionIndex != OBJF_ENTITY_BLEND_FADE_UNUSED) {
             entitySprite->d.sprite.hidden = 0;
          }
          obj->functionIndex = OBJF_NULL;
@@ -2406,7 +2438,7 @@ void Objf705_732_743_744_Transformation(Object *obj) {
 
 #undef OBJF
 #define OBJF 745
-void Objf745_Fx_TBD(Object *obj) {
+void Objf745_MapUnitTransformation_Unused(Object *obj) {
    // Unused?
 
    Object *obj_s3;
@@ -2470,7 +2502,7 @@ void Objf745_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 707
-void Objf707_Fx_TBD(Object *obj) {
+void Objf707_RisingGlyph(Object *obj) {
    s16 halfHeight, halfWidth;
 
    switch (obj->state) {
@@ -2511,9 +2543,9 @@ void Objf707_Fx_TBD(Object *obj) {
 #undef OBJF
 #define OBJF 714
 void Objf714_DebugCamera(Object *obj) {
-   Noop_800aa0ac(1, 3, gState.eventCameraPan.x);
-   Noop_800aa0ac(1, 4, gState.eventCameraPan.y);
-   Noop_800aa0ac(1, 5, gState.eventCameraPan.z);
+   Noop_DebugPrintValue(1, 3, gState.eventCameraPan.x);
+   Noop_DebugPrintValue(1, 4, gState.eventCameraPan.y);
+   Noop_DebugPrintValue(1, 5, gState.eventCameraPan.z);
 
    if (gPad2State & PAD_UP) {
       gState.eventCameraPan.x += CV(0.0625);
@@ -2905,7 +2937,7 @@ void Objf723_HomingParticle(Object *obj) {
 
 #undef OBJF
 #define OBJF 724
-void Objf724_741_Fx_TBD(Object *obj) {
+void Objf724_741_DimensionalRift_Open(Object *obj) {
    // 724: Spawned by EVDATA34.DAT, EVDATA39.DAT, EVDATA83.DAT
    // 741: Spawned by EVDATA40.DAT, EVDATA93.DAT
 
@@ -2936,7 +2968,7 @@ void Objf724_741_Fx_TBD(Object *obj) {
       rift = CreatePositionedObj(obj, OBJF_DIMENSIONAL_RIFT);
       rift->d.objf719.entitySpriteParam = OBJ.entitySprite;
       rift->mem = 2;
-      if (obj->functionIndex == OBJF_FX_TBD_741) {
+      if (obj->functionIndex == OBJF_DIMENSIONAL_RIFT_OPEN_741) {
          rift->mem = 64;
       }
       obj->functionIndex = OBJF_NULL;
@@ -3010,7 +3042,7 @@ void Objf726_CastingRays_Stop(Object *obj) {
 
 #undef OBJF
 #define OBJF 727
-void Objf727(Object *obj) {
+void Objf727_RollingThunderOnEntity_Unused(Object *obj) {
    // Unused? Maybe to reuse Rolling Thunder FX for event entity?
 
    Object *fx;
@@ -3126,7 +3158,7 @@ void Objf794_DisableBlending(Object *obj) {
 
 #undef OBJF
 #define OBJF 734
-void Objf734_Fx_TBD(Object *obj) {
+void Objf734_MeteorImpact_Unused(Object *obj) {
    static s16 rockAnimData[] = {4, GFX_ROCK_1, 2, GFX_ROCK_2, 2, GFX_ROCK_3,
                                 2, GFX_ROCK_4, 2, GFX_NULL,   1, GFX_NULL};
 

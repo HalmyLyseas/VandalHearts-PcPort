@@ -943,7 +943,7 @@ void Objf801_FlameRingSprite(Object *obj) {
    gQuad_800fe63c[3].vy = 0;
    gQuad_800fe63c[3].vz = 0;
 
-   Noop_800aa0ac(10, 10, obj->state);
+   Noop_DebugPrintValue(10, 10, obj->state);
 
    switch (obj->state) {
    case 0:
