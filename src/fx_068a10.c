@@ -787,7 +787,7 @@ void Objf120_Fx_TBD(Object *obj) {
 
    unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
    fx = Obj_GetUnused();
-   fx->functionIndex = OBJF_FX_TBD_148;
+   fx->functionIndex = OBJF_THUNDER_STRIKE;
    fx->x1.n = unitSprite->x1.n;
    fx->y1.n = unitSprite->y1.n;
    fx->z1.n = unitSprite->z1.n;
@@ -805,7 +805,7 @@ void Objf121_Fx_TBD(Object *obj) {
 
    unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
    fx = Obj_GetUnused();
-   fx->functionIndex = OBJF_FX_TBD_148;
+   fx->functionIndex = OBJF_THUNDER_STRIKE;
    fx->x1.n = unitSprite->x1.n;
    fx->y1.n = unitSprite->y1.n;
    fx->z1.n = unitSprite->z1.n;

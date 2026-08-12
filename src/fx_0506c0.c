@@ -1070,7 +1070,8 @@ void Objf137_LightningRingEmitter(Object *obj) {
  * 800 all point here; 135/139 are NULL slots -- the 139 case below is unreachable). See the
  * file header for the element/outcome mapping. Spawners select a variant as
  * OBJF_ENGULF_<element>_DAMAGE + endingFxType (e.g. Evil Stream FX2/FX3 spawn the flame pair
- * with a red palette); no static spawn site for the 799/800 pair has been found. */
+ * with a red palette). The 799/800 pair is dispatched data-driven: it is Delta Mirage's
+ * target/defeat entry in gSpellsEx (no static spawn site by design). */
 void Objf132_EngulfUnit(Object *obj) {
    static struct {
       s16 clut, objf, radius, to_x28, to_x2a;

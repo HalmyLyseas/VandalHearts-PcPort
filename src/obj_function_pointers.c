@@ -108,8 +108,8 @@ void Objf141_ExplosionRingEmitter(Object *);
 void Objf144_HolyLightning_FX2(Object *);
 void Objf145_HolyLightning_ElectricOrb(Object *);
 void Objf146_HolyLightning_FX3(Object *);
-void Objf147_Fx_TBD(Object *);
-void Objf148_Fx_TBD(Object *);
+void Objf147_LightningBolt(Object *);
+void Objf148_ThunderStrike(Object *);
 void Objf149_FlashingUnitSprite(Object *);
 void Objf151_FireGem_FX1(Object *);
 void Objf155_Spellbind_Glyph(Object *);
@@ -138,15 +138,15 @@ void Objf178_ThunderFlash_FX1(Object *);
 void Objf179_ThunderFlash_Ray(Object *);
 void Objf180_SpreadForce_FX1(Object *);
 void Objf181_Spellbind_FX1(Object *);
-void Objf182_Fx_TBD(Object *);
-void Objf183_Fx_TBD(Object *);
+void Objf182_SpikedBallToss_Unused(Object *);
+void Objf183_SpikedBall_Unused(Object *);
 void Objf184_Avalanche_FX1(Object *);
 void Objf185_Avalanche_Rock(Object *);
-void Objf186_Fx_TBD(Object *);
-void Objf187_Fx_TBD(Object *);
+void Objf186_ExplosionStrike_Unused(Object *);
+void Objf187_ExplosionStrikeSlay_Unused(Object *);
 void Objf188_DarkFire_Ray(Object *);
 void Objf189_IceStorm_FX1(Object *);
-void Objf190_Fx_TBD(Object *);
+void Objf190_MagicArrowSingle_Unused(Object *);
 void Objf191_MagicArrow_Arrow(Object *);
 void Objf192_PerfectGuard_FX2(Object *);
 void Objf193_DarkStar_FX2(Object *);
@@ -728,8 +728,8 @@ ObjFunction gObjFunctionPointers[804] = {
     [144] = Objf144_HolyLightning_FX2,
     [145] = Objf145_HolyLightning_ElectricOrb,
     [146] = Objf146_HolyLightning_FX3,
-    [147] = Objf147_Fx_TBD,
-    [148] = Objf148_Fx_TBD,
+    [147] = Objf147_LightningBolt,
+    [148] = Objf148_ThunderStrike,
     [149] = Objf149_FlashingUnitSprite,
     [150] = (ObjFunction)NULL,
     [151] = Objf151_FireGem_FX1,
@@ -763,15 +763,15 @@ ObjFunction gObjFunctionPointers[804] = {
     [179] = Objf179_ThunderFlash_Ray,
     [180] = Objf180_SpreadForce_FX1,
     [181] = Objf181_Spellbind_FX1,
-    [182] = Objf182_Fx_TBD,
-    [183] = Objf183_Fx_TBD,
+    [182] = Objf182_SpikedBallToss_Unused,
+    [183] = Objf183_SpikedBall_Unused,
     [184] = Objf184_Avalanche_FX1,
     [185] = Objf185_Avalanche_Rock,
-    [186] = Objf186_Fx_TBD,
-    [187] = Objf187_Fx_TBD,
+    [186] = Objf186_ExplosionStrike_Unused,
+    [187] = Objf187_ExplosionStrikeSlay_Unused,
     [188] = Objf188_DarkFire_Ray,
     [189] = Objf189_IceStorm_FX1,
-    [190] = Objf190_Fx_TBD,
+    [190] = Objf190_MagicArrowSingle_Unused,
     [191] = Objf191_MagicArrow_Arrow,
     [192] = Objf192_PerfectGuard_FX2,
     [193] = Objf193_DarkStar_FX2,

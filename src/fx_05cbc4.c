@@ -311,7 +311,7 @@ static s16 sAnimData_800fecfc[20] = {5, GFX_TBD_278, 1, GFX_TBD_279, 1, GFX_TBD_
 
 #undef OBJF
 #define OBJF 147
-void Objf147_Fx_TBD(Object *obj) {
+void Objf147_LightningBolt(Object *obj) {
    static s16 lightningAnimData[64] = {
        4, GFX_LIGHTNING_1, 2, GFX_LIGHTNING_2, 2, GFX_LIGHTNING_3, 2, GFX_LIGHTNING_4,
        2, GFX_LIGHTNING_4, 2, GFX_LIGHTNING_5, 2, GFX_LIGHTNING_5, 2, GFX_LIGHTNING_6,

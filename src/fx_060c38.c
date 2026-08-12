@@ -1,3 +1,16 @@
+/* Spell casting effects, part 1 of the FX corpus (segment 0x60c38).
+ *
+ * Mostly _FX1 handlers: the "main" casting visual each spell plays at the caster/target,
+ * dispatched data-driven through gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT]
+ * (see battle_013b94.c) -- there is deliberately no static spawn site for these. The
+ * retail gSpellsEx data is the authoritative handler->spell map and was used to verify
+ * every name in this file. Sub-objects (rays, rocks, glyphs, swirl strokes) are spawned
+ * by their _FX1 driver and named <Spell>_<Thing>.
+ *
+ * Confirmed-unused handlers (in gObjFunctionPointers but referenced by no spell's
+ * gSpellsEx triple and no code path): the spiked-ball toss pair (Objf182/183), the
+ * explosion-strike pair (Objf186/187), and the single-target Magic Arrow (Objf190) --
+ * cut content, kept byte-exact, suffixed _Unused. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -124,7 +137,7 @@ void Objf128_ThunderBall_FX2(Object *obj) {
 
    unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
    fx = Obj_GetUnused();
-   fx->functionIndex = OBJF_FX_TBD_148;
+   fx->functionIndex = OBJF_THUNDER_STRIKE;
    fx->x1.n = unitSprite->x1.n;
    fx->y1.n = unitSprite->y1.n;
    fx->z1.n = unitSprite->z1.n;
@@ -139,7 +152,7 @@ void Objf129_ThunderBall_FX3(Object *obj) {
 
    unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
    fx = Obj_GetUnused();
-   fx->functionIndex = OBJF_FX_TBD_148;
+   fx->functionIndex = OBJF_THUNDER_STRIKE;
    fx->x1.n = unitSprite->x1.n;
    fx->y1.n = unitSprite->y1.n;
    fx->z1.n = unitSprite->z1.n;
@@ -150,7 +163,10 @@ void Objf129_ThunderBall_FX3(Object *obj) {
 
 #undef OBJF
 #define OBJF 148
-void Objf148_Fx_TBD(Object *obj) {
+/* Sky lightning bolt (Objf147) onto the target, then the lightning engulf after 25 frames.
+ * Shared strike finisher: Thunder Ball / HelStone route here via Objf128/129, and the
+ * fx_068a10.c Objf120/121 pair does the same for its own driver. */
+void Objf148_ThunderStrike(Object *obj) {
    Object *obj_v1;
 
    switch (obj->state) {
@@ -162,7 +178,7 @@ void Objf148_Fx_TBD(Object *obj) {
             OBJ.clut = CLUT_REDS;
          }
          obj_v1 = Obj_GetUnused();
-         obj_v1->functionIndex = OBJF_FX_TBD_147;
+         obj_v1->functionIndex = OBJF_LIGHTNING_BOLT;
          obj_v1->x1.n = obj->x1.n;
          obj_v1->y1.n = obj->y1.n;
          obj_v1->z1.n = obj->z1.n;
@@ -1909,8 +1925,9 @@ void Objf180_SpreadForce_FX1(Object *obj) {
 
 #undef OBJF
 #define OBJF 182
-void Objf182_Fx_TBD(Object *obj) {
-   // Toss spiked metal balls onto the target; Unused spell?
+void Objf182_SpikedBallToss_Unused(Object *obj) {
+   /* Toss spiked metal balls onto the target while the camera zoom oscillates.
+    * CONFIRMED UNUSED: no spell's gSpellsEx triple and no code path references 182. */
    Object *obj_s0;
    Object *unitSprite;
    Object *targetSprite;
@@ -1931,7 +1948,7 @@ void Objf182_Fx_TBD(Object *obj) {
       unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
       if (obj->state3 % 8 == 0) {
          obj_s0 = Obj_GetUnused();
-         obj_s0->functionIndex = OBJF_FX_TBD_183;
+         obj_s0->functionIndex = OBJF_SPIKED_BALL_UNUSED;
          obj_s0->x1.n = unitSprite->x1.n;
          obj_s0->y1.n = unitSprite->y1.n + CV(0.5);
          obj_s0->z1.n = unitSprite->z1.n;
@@ -1976,7 +1993,7 @@ void Objf182_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 183
-void Objf183_Fx_TBD(Object *obj) {
+void Objf183_SpikedBall_Unused(Object *obj) {
    static s16 spikedBallAnimData[] = {4, GFX_SPIKED_BALL_1, 2, GFX_SPIKED_BALL_2,
                                       2, GFX_NULL,          1, GFX_NULL};
 
@@ -2260,17 +2277,17 @@ void Objf185_Avalanche_Rock(Object *obj) {
 
 #undef OBJF
 #define OBJF 187
-void Objf187_Fx_TBD(Object *obj) {
+void Objf187_ExplosionStrikeSlay_Unused(Object *obj) {
    Object *fx;
 
-   fx = CreatePositionedObj(obj, OBJF_FX_TBD_186);
+   fx = CreatePositionedObj(obj, OBJF_EXPLOSION_STRIKE_UNUSED);
    fx->d.objf186.fxType = 2;
    obj->functionIndex = OBJF_NULL;
 }
 
 #undef OBJF
 #define OBJF 186
-void Objf186_Fx_TBD(Object *obj) {
+void Objf186_ExplosionStrike_Unused(Object *obj) {
    Object *unitSprite;
    Object *fx;
 
@@ -2294,8 +2311,9 @@ void Objf186_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 190
-void Objf190_Fx_TBD(Object *obj) {
-   // Unused? Maybe a single-target version of Magic Arrow
+void Objf190_MagicArrowSingle_Unused(Object *obj) {
+   /* Single-target Magic Arrow variant (17 arrows at one target + camera pull-back).
+    * CONFIRMED UNUSED: no spell's gSpellsEx triple and no code path references 190. */
    Object *unitSprite;
    Object *targetSprite;
    Object *arrow;
