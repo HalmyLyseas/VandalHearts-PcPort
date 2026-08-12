@@ -135,7 +135,7 @@ the text from a player's own disc, validates a translation against the engine's 
 builds the pack — including non-Latin scripts (Cyrillic and Greek proven in game) and localized
 backgrounds. The base build still ships no game text and behaves identically without a pack.
 
-### 1.7.1 — Video subtitles 🔜 (in preparation)
+### 1.7.1 — Video subtitles ✅
 
 Closes the translation framework's one remaining gap: the burned-in narration of the eight story
 videos (six chapter intros + both endings) becomes subtitle-able by a pack — validated timings,
