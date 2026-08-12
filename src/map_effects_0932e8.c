@@ -2,7 +2,7 @@
  *
  * Objf657_Map38_Floodgate (spawned by SetupMapExtras()) is the driver. On reload it applies
  * the finished state instantly (DepressButton + Map38_SetWater + Map38_RaiseFloodgate).
- * Otherwise, once Objf558_EvaluateBattle38 sets mapState, it runs the shared
+ * Otherwise, once Objf558_EvaluateMap38_SlaySabina sets mapState, it runs the shared
  * OBJF_BUTTON_DEPRESS cutaway, then spawns Objf658_Map38_Floodwater and
  * Objf655_Map38_RaiseFloodgate together. It sweeps the 3x11 channel issuing TA_32 prompts
  * for each non-CLASS_AIRMAN unit caught there, spawns an Objf654_Map38_WashAwayUnit per

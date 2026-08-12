@@ -6,10 +6,10 @@
  * and this map's evaluator before handing control to the intro (battle_0201b8.c).
  * PlayBattleBGM / PlayCurrentBattleBGM pick the track, incl. the map 28 / map 40 overrides.
  *
- * gBattleEvaluator[mapNum] maps each battle to one Objf4xx_EvaluateBattleNN object -- that
- * object IS the map's scripted rule set, polled through gState.needEval (re-evaluate the
- * board) and gState.signal (a search/switch/event trigger raised by the field). NOTE the
- * NN in the names is the MAP number; the displayed battle number is mapNum - 9. Plain maps
+ * gBattleEvaluator[mapNum] maps each battle to one Objf4xx_EvaluateMapNN_<objective>
+ * object -- that object IS the map's scripted rule set, polled through gState.needEval
+ * (re-evaluate the board) and gState.signal (a search/switch/event trigger raised by the
+ * field). NN is the MAP number; the displayed battle number is mapNum - 9. Plain maps
  * use Objf434_EvaluateStandardBattle (all enemies dead = victory, Ash lost = defeat); the
  * named ones add arrival/escape zones, boss or unit-type kill counts, protect clauses, and
  * some drive gState.mapState for the map_effects_* set pieces. The verdict is published as
@@ -406,7 +406,7 @@ s32 CountUnitsOfTeam(s16 team) {
    return ct;
 }
 
-void Objf438_EvaluateBattle08(Object *obj) {
+void Objf438_EvaluateMap08_DemoExit(Object *obj) {
    // TBD gLightRotation.vy ?
    gLightRotation.vy = GetLightRotY() + 0x10;
 
@@ -441,7 +441,7 @@ void Objf438_EvaluateBattle08(Object *obj) {
    }
 }
 
-void Objf426_EvaluateBattle10(Object *obj) {
+void Objf426_EvaluateMap10_SlayZoot(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_ZOOT)) {
@@ -456,7 +456,7 @@ void Objf426_EvaluateBattle10(Object *obj) {
    }
 }
 
-void Objf427_EvaluateBattle11(Object *obj) {
+void Objf427_EvaluateMap11_ReachExit(Object *obj) {
    UnitStatus *p;
    s32 i, arrived;
    u8 x, z;
@@ -505,7 +505,7 @@ void Objf427_EvaluateBattle11(Object *obj) {
    }
 }
 
-void Objf428_EvaluateBattle12(Object *obj) {
+void Objf428_EvaluateMap12_DefeatAll(Object *obj) {
    gLightRotation.vy = GetLightRotY() + 0x10;
    if (gState.needEval) {
       gState.needEval = 0;
@@ -521,7 +521,7 @@ void Objf428_EvaluateBattle12(Object *obj) {
    }
 }
 
-void Objf429_EvaluateBattle13(Object *obj) {
+void Objf429_EvaluateMap13_DefeatAll(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfTeam(TEAM_ENEMY) == 0) {
@@ -536,7 +536,7 @@ void Objf429_EvaluateBattle13(Object *obj) {
    }
 }
 
-void Objf430_EvaluateBattle14(Object *obj) {
+void Objf430_EvaluateMap14_SlayDeathAnts(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfType(UNIT_TYPE_DEATH_ANT) == 0) {
@@ -551,7 +551,7 @@ void Objf430_EvaluateBattle14(Object *obj) {
    }
 }
 
-void Objf431_EvaluateBattle15(Object *obj) {
+void Objf431_EvaluateMap15_SlayHassan(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_HASSAN)) {
@@ -566,7 +566,7 @@ void Objf431_EvaluateBattle15(Object *obj) {
    }
 }
 
-void Objf432_EvaluateBattle16(Object *obj) {
+void Objf432_EvaluateMap16_SlayEvilStatues(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfType(UNIT_TYPE_EVILSTATUE) == 0) {
@@ -584,7 +584,7 @@ void Objf432_EvaluateBattle16(Object *obj) {
    }
 }
 
-void Objf433_EvaluateBattle17(Object *obj) {
+void Objf433_EvaluateMap17_ProtectDolan(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfTeam(TEAM_ENEMY) == 0) {
@@ -621,7 +621,7 @@ void Objf434_EvaluateStandardBattle(Object *obj) {
    }
 }
 
-void Objf435_EvaluateBattle19(Object *obj) {
+void Objf435_EvaluateMap19_ReachExit(Object *obj) {
    UnitStatus *p;
    s32 i, arrived;
    u8 x, z;
@@ -684,7 +684,7 @@ void Objf435_EvaluateBattle19(Object *obj) {
    }
 }
 
-void Objf436_EvaluateBattle20(Object *obj) {
+void Objf436_EvaluateMap20_SlayMagnus(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_MAGNUS)) {
@@ -699,7 +699,7 @@ void Objf436_EvaluateBattle20(Object *obj) {
    }
 }
 
-void Objf437_EvaluateBattle21(Object *obj) {
+void Objf437_EvaluateMap21_DefeatAllIn6Turns(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfTeam(TEAM_ENEMY) == 0) {
@@ -717,7 +717,7 @@ void Objf437_EvaluateBattle21(Object *obj) {
    }
 }
 
-void Objf439_EvaluateBattle23(Object *obj) {
+void Objf439_EvaluateMap23_DefendMageTowers(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (gState.turn > 5) {
@@ -735,7 +735,7 @@ void Objf439_EvaluateBattle23(Object *obj) {
    }
 }
 
-void Objf442_EvaluateBattle26(Object *obj) {
+void Objf442_EvaluateMap26_StopEscapees(Object *obj) {
    UnitStatus *p;
    s32 i;
    s8 x;
@@ -767,7 +767,7 @@ void Objf442_EvaluateBattle26(Object *obj) {
    }
 }
 
-void Objf443_EvaluateBattle27(Object *obj) {
+void Objf443_EvaluateMap27_ProtectClint(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfTeam(TEAM_ENEMY) == 0) {
@@ -798,7 +798,7 @@ void Objf443_EvaluateBattle27(Object *obj) {
    }
 }
 
-void Objf444_EvaluateBattle28(Object *obj) {
+void Objf444_EvaluateMap28_SlayDumas(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_DUMAS)) {
@@ -817,7 +817,7 @@ void Objf444_EvaluateBattle28(Object *obj) {
    }
 }
 
-void Objf445_EvaluateBattle29(Object *obj) {
+void Objf445_EvaluateMap29_ReachExit(Object *obj) {
    UnitStatus *p;
    s32 i, arrived;
    u8 x, z;
@@ -860,7 +860,7 @@ void Objf445_EvaluateBattle29(Object *obj) {
    }
 }
 
-void Objf552_EvaluateBattle32(Object *obj) {
+void Objf552_EvaluateMap32_SlayDallas(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_DALLAS)) {
@@ -875,7 +875,7 @@ void Objf552_EvaluateBattle32(Object *obj) {
    }
 }
 
-void Objf553_EvaluateBattle33(Object *obj) {
+void Objf553_EvaluateMap33_SlayDeathDevs(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfType(UNIT_TYPE_DEATH_DEV_) == 0) {
@@ -896,7 +896,7 @@ void Objf553_EvaluateBattle33(Object *obj) {
    }
 }
 
-void Objf555_EvaluateBattle35(Object *obj) {
+void Objf555_EvaluateMap35_SlayKurtz(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_KURTZ)) {
@@ -915,7 +915,7 @@ void Objf555_EvaluateBattle35(Object *obj) {
    }
 }
 
-void Objf557_EvaluateBattle37(Object *obj) {
+void Objf557_EvaluateMap37_SlaySalamanders(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (CountUnitsOfType(UNIT_TYPE_SALAMANDER) == 0) {
@@ -930,7 +930,7 @@ void Objf557_EvaluateBattle37(Object *obj) {
    }
 }
 
-void Objf558_EvaluateBattle38(Object *obj) {
+void Objf558_EvaluateMap38_SlaySabina(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_SABINA)) {
@@ -949,7 +949,7 @@ void Objf558_EvaluateBattle38(Object *obj) {
    }
 }
 
-void Objf559_EvaluateBattle39(Object *obj) {
+void Objf559_EvaluateMap39_EscortLeena(Object *obj) {
    s32 unitIdx;
    if (gState.needEval) {
       gState.needEval = 0;
@@ -969,7 +969,7 @@ void Objf559_EvaluateBattle39(Object *obj) {
    }
 }
 
-void Objf560_EvaluateBattle40(Object *obj) {
+void Objf560_EvaluateMap40_SlayKane(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_KANE)) {
@@ -984,7 +984,7 @@ void Objf560_EvaluateBattle40(Object *obj) {
    }
 }
 
-void Objf562_EvaluateBattle42(Object *obj) {
+void Objf562_EvaluateMap42_SlayXeno(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_XENO)) {
@@ -999,7 +999,7 @@ void Objf562_EvaluateBattle42(Object *obj) {
    }
 }
 
-void Objf563_EvaluateBattle43(Object *obj) {
+void Objf563_EvaluateMap43_SlayDolf(Object *obj) {
    if (gState.needEval) {
       gState.needEval = 0;
       if (!FindUnitByNameIdx(UNIT_DOLF)) {

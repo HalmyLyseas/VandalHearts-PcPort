@@ -331,24 +331,24 @@ void Objf422_LowerMsgBoxTail(Object *);
 void Objf423_BattleDefeat(Object *);
 void Objf424_BattleEnder(Object *);
 void Objf425_BattleOptions(Object *);
-void Objf426_EvaluateBattle10(Object *);
-void Objf427_EvaluateBattle11(Object *);
-void Objf428_EvaluateBattle12(Object *);
-void Objf429_EvaluateBattle13(Object *);
-void Objf430_EvaluateBattle14(Object *);
-void Objf431_EvaluateBattle15(Object *);
-void Objf432_EvaluateBattle16(Object *);
-void Objf433_EvaluateBattle17(Object *);
+void Objf426_EvaluateMap10_SlayZoot(Object *);
+void Objf427_EvaluateMap11_ReachExit(Object *);
+void Objf428_EvaluateMap12_DefeatAll(Object *);
+void Objf429_EvaluateMap13_DefeatAll(Object *);
+void Objf430_EvaluateMap14_SlayDeathAnts(Object *);
+void Objf431_EvaluateMap15_SlayHassan(Object *);
+void Objf432_EvaluateMap16_SlayEvilStatues(Object *);
+void Objf433_EvaluateMap17_ProtectDolan(Object *);
 void Objf434_EvaluateStandardBattle(Object *);
-void Objf435_EvaluateBattle19(Object *);
-void Objf436_EvaluateBattle20(Object *);
-void Objf437_EvaluateBattle21(Object *);
-void Objf438_EvaluateBattle08(Object *);
-void Objf439_EvaluateBattle23(Object *);
-void Objf442_EvaluateBattle26(Object *);
-void Objf443_EvaluateBattle27(Object *);
-void Objf444_EvaluateBattle28(Object *);
-void Objf445_EvaluateBattle29(Object *);
+void Objf435_EvaluateMap19_ReachExit(Object *);
+void Objf436_EvaluateMap20_SlayMagnus(Object *);
+void Objf437_EvaluateMap21_DefeatAllIn6Turns(Object *);
+void Objf438_EvaluateMap08_DemoExit(Object *);
+void Objf439_EvaluateMap23_DefendMageTowers(Object *);
+void Objf442_EvaluateMap26_StopEscapees(Object *);
+void Objf443_EvaluateMap27_ProtectClint(Object *);
+void Objf444_EvaluateMap28_SlayDumas(Object *);
+void Objf445_EvaluateMap29_ReachExit(Object *);
 void Objf446_BattleVictoryParticle(Object *);
 void Objf447_UnitPortrait(Object *);
 void Objf448_UnitPortraitWrapper(Object *);
@@ -432,15 +432,15 @@ void Objf525_LoadEvent47(Object *);
 void Objf530_Map61_Scn83_VandalHeartForcefield(Object *);
 void Objf535_536_FadeLight(Object *);
 void Objf540_to_545_Map14_Scn15_CloudSpawner(Object *);
-void Objf552_EvaluateBattle32(Object *);
-void Objf553_EvaluateBattle33(Object *);
-void Objf555_EvaluateBattle35(Object *);
-void Objf557_EvaluateBattle37(Object *);
-void Objf558_EvaluateBattle38(Object *);
-void Objf559_EvaluateBattle39(Object *);
-void Objf560_EvaluateBattle40(Object *);
-void Objf562_EvaluateBattle42(Object *);
-void Objf563_EvaluateBattle43(Object *);
+void Objf552_EvaluateMap32_SlayDallas(Object *);
+void Objf553_EvaluateMap33_SlayDeathDevs(Object *);
+void Objf555_EvaluateMap35_SlayKurtz(Object *);
+void Objf557_EvaluateMap37_SlaySalamanders(Object *);
+void Objf558_EvaluateMap38_SlaySabina(Object *);
+void Objf559_EvaluateMap39_EscortLeena(Object *);
+void Objf560_EvaluateMap40_SlayKane(Object *);
+void Objf562_EvaluateMap42_SlayXeno(Object *);
+void Objf563_EvaluateMap43_SlayDolf(Object *);
 void Objf564_565_566_MapObject_Water(Object *);
 void Objf567_OpeningChest(Object *);
 void Objf568_MapObject_Rail(Object *);
@@ -1007,26 +1007,26 @@ ObjFunction gObjFunctionPointers[804] = {
     [423] = Objf423_BattleDefeat,
     [424] = Objf424_BattleEnder,
     [425] = Objf425_BattleOptions,
-    [426] = Objf426_EvaluateBattle10,
-    [427] = Objf427_EvaluateBattle11,
-    [428] = Objf428_EvaluateBattle12,
-    [429] = Objf429_EvaluateBattle13,
-    [430] = Objf430_EvaluateBattle14,
-    [431] = Objf431_EvaluateBattle15,
-    [432] = Objf432_EvaluateBattle16,
-    [433] = Objf433_EvaluateBattle17,
+    [426] = Objf426_EvaluateMap10_SlayZoot,
+    [427] = Objf427_EvaluateMap11_ReachExit,
+    [428] = Objf428_EvaluateMap12_DefeatAll,
+    [429] = Objf429_EvaluateMap13_DefeatAll,
+    [430] = Objf430_EvaluateMap14_SlayDeathAnts,
+    [431] = Objf431_EvaluateMap15_SlayHassan,
+    [432] = Objf432_EvaluateMap16_SlayEvilStatues,
+    [433] = Objf433_EvaluateMap17_ProtectDolan,
     [434] = Objf434_EvaluateStandardBattle,
-    [435] = Objf435_EvaluateBattle19,
-    [436] = Objf436_EvaluateBattle20,
-    [437] = Objf437_EvaluateBattle21,
-    [438] = Objf438_EvaluateBattle08,
-    [439] = Objf439_EvaluateBattle23,
+    [435] = Objf435_EvaluateMap19_ReachExit,
+    [436] = Objf436_EvaluateMap20_SlayMagnus,
+    [437] = Objf437_EvaluateMap21_DefeatAllIn6Turns,
+    [438] = Objf438_EvaluateMap08_DemoExit,
+    [439] = Objf439_EvaluateMap23_DefendMageTowers,
     [440] = (ObjFunction)NULL,
     [441] = (ObjFunction)NULL,
-    [442] = Objf442_EvaluateBattle26,
-    [443] = Objf443_EvaluateBattle27,
-    [444] = Objf444_EvaluateBattle28,
-    [445] = Objf445_EvaluateBattle29,
+    [442] = Objf442_EvaluateMap26_StopEscapees,
+    [443] = Objf443_EvaluateMap27_ProtectClint,
+    [444] = Objf444_EvaluateMap28_SlayDumas,
+    [445] = Objf445_EvaluateMap29_ReachExit,
     [446] = Objf446_BattleVictoryParticle,
     [447] = Objf447_UnitPortrait,
     [448] = Objf448_UnitPortraitWrapper,
@@ -1133,18 +1133,18 @@ ObjFunction gObjFunctionPointers[804] = {
     [549] = (ObjFunction)NULL,
     [550] = (ObjFunction)NULL,
     [551] = (ObjFunction)NULL,
-    [552] = Objf552_EvaluateBattle32,
-    [553] = Objf553_EvaluateBattle33,
+    [552] = Objf552_EvaluateMap32_SlayDallas,
+    [553] = Objf553_EvaluateMap33_SlayDeathDevs,
     [554] = (ObjFunction)NULL,
-    [555] = Objf555_EvaluateBattle35,
+    [555] = Objf555_EvaluateMap35_SlayKurtz,
     [556] = (ObjFunction)NULL,
-    [557] = Objf557_EvaluateBattle37,
-    [558] = Objf558_EvaluateBattle38,
-    [559] = Objf559_EvaluateBattle39,
-    [560] = Objf560_EvaluateBattle40,
+    [557] = Objf557_EvaluateMap37_SlaySalamanders,
+    [558] = Objf558_EvaluateMap38_SlaySabina,
+    [559] = Objf559_EvaluateMap39_EscortLeena,
+    [560] = Objf560_EvaluateMap40_SlayKane,
     [561] = (ObjFunction)NULL,
-    [562] = Objf562_EvaluateBattle42,
-    [563] = Objf563_EvaluateBattle43,
+    [562] = Objf562_EvaluateMap42_SlayXeno,
+    [563] = Objf563_EvaluateMap43_SlayDolf,
     [564] = Objf564_565_566_MapObject_Water,
     [565] = Objf564_565_566_MapObject_Water,
     [566] = Objf564_565_566_MapObject_Water,

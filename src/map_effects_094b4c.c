@@ -4,7 +4,7 @@
  * visible bounds. Map39_Setup() shifts and sinks that staging copy into place, and
  * Map39_SwapSection() swaps a rectangle of it back in as each section surfaces, re-deriving
  * terrain from the tile's texture. Objf656_Map39 is the driver: as
- * Objf559_EvaluateBattle39 advances mapState it pans the camera and raises the next section
+ * Objf559_EvaluateMap39_EscortLeena advances mapState it pans the camera and raises the next section
  * using the local area helpers, dressing the emerging tiles with
  * Objf672_Map39_SplashingTile, which fires OBJF_SPLASH sprites as a tile's highest vertex
  * breaks the surface. Objf754_Map39_Scn82 is the event script's cutscene version of the

@@ -3,7 +3,7 @@
  * The platform is five tiles in a plus shape. Map33_Save/RestorePlatform stash and
  * reinstate their tile models through gScratch1_801317c0, and Map33_LowerPlatform() drops
  * them N steps at once for reloads. Objf651_Map33_LavaPitPlatform (spawned by
- * SetupMapExtras()) is the driver: each time Objf553_EvaluateBattle33 bumps gState.mapState
+ * SetupMapExtras()) is the driver: each time Objf553_EvaluateMap33_SlayDeathDevs bumps gState.mapState
  * it focuses the camera on the unit standing there and spawns one more drop.
  *
  * Objf750_751_Map33_LowerPlatform performs that drop, one handler at two indices: as 751 it

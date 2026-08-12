@@ -1,7 +1,7 @@
 /* Map 35's collapsing bridge, plus the shared flaming-rock projectile.
  *
  * Objf652_Map35_Button (spawned by SetupMapExtras()) is the entire Map 35 sequence. When
- * Objf555_EvaluateBattle35 sets mapState it runs the shared OBJF_BUTTON_DEPRESS cutaway,
+ * Objf555_EvaluateMap35_SlayKurtz sets mapState it runs the shared OBJF_BUTTON_DEPRESS cutaway,
  * focuses on the span, and branches on whether any player unit stands on the 5x2 deck:
  * with no player casualties it simply drops the span, otherwise it walks the deck tile by
  * tile issuing TA_32 dialogue prompts first. Either path throws OBJF_EXPLODING_TILE debris

@@ -1,14 +1,14 @@
 /* Map 17's floodgate and Map 19's paired elevators.
  *
  * Map 17: Objf366_Map17_Button (spawned by SetupMapExtras()) waits on gState.mapState --
- * set by Objf433_EvaluateBattle17 -- runs the shared OBJF_BUTTON_DEPRESS cutaway, then
+ * set by Objf433_EvaluateMap17_ProtectDolan -- runs the shared OBJF_BUTTON_DEPRESS cutaway, then
  * hands off to Objf365_Map17_Floodgate, which slides the gate tiles' faces open, sprays
  * Objf296_Map17_SprayParticle and spawns Objf368_Map17_DrainingWater to animate the channel
  * emptying. Map17_LowerFloodgate() and Map17_RemoveWater() are the instant
  * "already happened" versions applied when the map is reloaded after the fact.
  *
  * Map 19: Objf357_Map19 creates the two OBJF_MAP19_ELEVATOR platforms and, when
- * Objf435_EvaluateBattle19 sets mapState to 1 or 2 (which side was examined), spawns
+ * Objf435_EvaluateMap19_ReachExit sets mapState to 1 or 2 (which side was examined), spawns
  * Objf355_356_Map19_Elevator -- one handler at both indices, branching on its own
  * functionIndex to decide which platform rises and which sinks. Objf358_Map19_Elevator is
  * the per-platform tile-face motion.
@@ -768,7 +768,7 @@ void Objf357_Map19(Object *obj) {
       obj_s1 = OBJ.elevator1;
       obj_s0 = OBJ.elevator2;
 
-      // Set to 1 or 2 by Objf435_EvaluateBattle19, depending on which side is examined.
+      // Set to 1 or 2 by Objf435_EvaluateMap19_ReachExit, depending on which side is examined.
       if (gState.mapState.s.field_0x0 == 1) {
          obj_s3 = Obj_GetUnused();
          obj_s3->functionIndex = OBJF_MAP19_ELEVATOR_356;
