@@ -32,6 +32,18 @@
 #include "audio.h"
 #include "graphics.h"
 
+#ifdef PC_DEBUG_SPELLFX_LOG
+/* Witness-pass hook (exchange decomp-improvement track): logs every gSpellsEx dispatch --
+ * spell id/name, which slot fired (main/target/defeat), and the handler actually invoked
+ * (symbol resolved at runtime) -- so one Vandalier cast-everything session validates the
+ * table-derived FX handler names in-game. Build: make link SPELLFX_LOG=1; run with
+ * VH_SPELLFX_LOG=1. The matching build never defines this. */
+extern void PC_DiagSpellFxLog(int spellId, int slot, int objf);
+#define SPELLFX_LOG(slot, objf) PC_DiagSpellFxLog(gCurrentSpell, slot, objf)
+#else
+#define SPELLFX_LOG(slot, objf)
+#endif
+
 #ifdef PC_FEAT
 /* Language packs (platform/pc/src/pc_lang.c): string literals below wrapped in PC_LANGSTR are
  * offered to the active pack by CONTENT (matched by hash); with no pack, or no entry, the literal
@@ -1184,6 +1196,7 @@ void Objf028_UnitCasting(Object *obj) {
       }
       obj_s1 = Obj_GetUnused();
       obj_s1->functionIndex = gSpellsEx[gCurrentSpell][SPELL_EX_OBJF_MAIN];
+      SPELLFX_LOG(SPELL_EX_OBJF_MAIN, obj_s1->functionIndex);
       obj_s1->x1.s.hi = obj->x1.s.hi;
       obj_s1->z1.s.hi = obj->z1.s.hi;
       gSignal3 = 0;
@@ -1274,14 +1287,17 @@ void Objf028_UnitCasting(Object *obj) {
             case ATK_RES_HIT:
                OBJ_TARGET_TILE_STATE(obj).action = TA_MAG_HIT;
                obj_s1->functionIndex = gSpellsEx[gCurrentSpell][SPELL_EX_OBJF_TARGET];
+               SPELLFX_LOG(SPELL_EX_OBJF_TARGET, obj_s1->functionIndex);
                break;
             case ATK_RES_DEFEATED:
                if (!HasDefeatSpeech(s_targetUnit_801231a8)) {
                   obj_s1->functionIndex = gSpellsEx[gCurrentSpell][SPELL_EX_OBJF_DEFEAT];
+                  SPELLFX_LOG(SPELL_EX_OBJF_DEFEAT, obj_s1->functionIndex);
                   OBJ_TARGET_TILE_STATE(obj).action = TA_MAG_DEFEAT;
                } else {
                   OBJ_TARGET_TILE_STATE(obj).action = TA_MAG_DEFEAT_MSG;
                   obj_s1->functionIndex = gSpellsEx[gCurrentSpell][SPELL_EX_OBJF_TARGET];
+                  SPELLFX_LOG(SPELL_EX_OBJF_TARGET, obj_s1->functionIndex);
                   gSignal4 = 0;
                }
                break;
@@ -1298,6 +1314,7 @@ void Objf028_UnitCasting(Object *obj) {
             obj_s1->x1.s.hi = obj->x3.s.hi;
             obj_s1->z1.s.hi = obj->z3.s.hi;
             obj_s1->functionIndex = gSpellsEx[gCurrentSpell][SPELL_EX_OBJF_TARGET];
+            SPELLFX_LOG(SPELL_EX_OBJF_TARGET, obj_s1->functionIndex);
 
             value1 = s_targetUnit_801231a8->hpFrac / 100;
             value2 = CalculateSpellPowerAndExp(s_casterUnit_801231a4, s_targetUnit_801231a8);
@@ -1350,6 +1367,7 @@ void Objf028_UnitCasting(Object *obj) {
             obj_s1->x1.s.hi = obj->x3.s.hi;
             obj_s1->z1.s.hi = obj->z3.s.hi;
             obj_s1->functionIndex = gSpellsEx[gCurrentSpell][ix];
+            SPELLFX_LOG(ix, obj_s1->functionIndex);
 
             gSignal4 = 1;
             break;
@@ -1443,6 +1461,7 @@ void Objf028_UnitCasting(Object *obj) {
             obj_s1->x1.s.hi = obj->x3.s.hi;
             obj_s1->z1.s.hi = obj->z3.s.hi;
             obj_s1->functionIndex = gSpellsEx[gCurrentSpell][SPELL_EX_OBJF_TARGET];
+            SPELLFX_LOG(SPELL_EX_OBJF_TARGET, obj_s1->functionIndex);
             gSignal4 = 1;
          }
          gSignal3 = 0;

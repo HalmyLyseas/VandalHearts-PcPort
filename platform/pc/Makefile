@@ -373,6 +373,14 @@ $(BUILD_DIR)/src/split_03c94c.o: FORCE
 ifeq ($(AI_LOG),1)
 $(BUILD_DIR)/src/ai.o: GAME_C_FLAGS += -DPC_DEBUG_AI_LOG
 endif
+
+# Witness pass (decomp-improvement): SPELLFX_LOG=1 logs every gSpellsEx FX dispatch (spell,
+# slot, handler symbol) to vh_spellfx_log.txt + stderr, runtime-gated on VH_SPELLFX_LOG.
+# Matching build never defines this (only added under SPELLFX_LOG=1), byte-exact unaffected.
+ifeq ($(SPELLFX_LOG),1)
+$(BUILD_DIR)/src/battle_013b94.o: GAME_C_FLAGS += -DPC_DEBUG_SPELLFX_LOG
+endif
+$(BUILD_DIR)/src/battle_013b94.o: FORCE
 $(BUILD_DIR)/src/ai.o: FORCE
 
 # Debug (epilogue-ocarina-silent bug): AUDIO_CMD_LOG=1 logs every PerformAudioCommand (audio.c) to

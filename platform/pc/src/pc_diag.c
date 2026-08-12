@@ -1,3 +1,4 @@
+#define _GNU_SOURCE 1   /* dladdr (PC_DiagSpellFxLog's symbol resolution) */
 /* pc_diag.c -- the port's env-gated diagnostics, extracted verbatim from libetc.c (which had
  * become the dumping ground for every investigation logger). Nothing here runs unless its VH_*
  * env var is set; the per-tick rows are driven from VSync() via PC_DiagVSyncRows(), and the
@@ -731,4 +732,50 @@ void PC_DiagFps(int mode) {
             s_fpsWindowCalls = 0;
         }
     }
+}
+
+/* Witness-pass logger (decomp-improvement track): one line per gSpellsEx FX dispatch.
+ * Compiled into battle_013b94.c only under `make link SPELLFX_LOG=1`; runtime-gated on
+ * VH_SPELLFX_LOG. Writes vh_spellfx_log.txt and echoes to stderr. The handler NAME is
+ * resolved from the live function pointer via dladdr (the port links -rdynamic), so the
+ * log shows exactly which Objf* symbol ran -- a cast-everything Vandalier session then
+ * validates every table-derived FX name in-game. On Windows (no dladdr) the index alone
+ * is logged. */
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+void PC_DiagSpellFxLog(int spellId, int slot, int objf) {
+    static int enabled = -1;
+    static FILE *f = NULL;
+    static const char *slotNames[] = {"main", "target", "defeat"};
+    extern s8 gSpellNames[72][21];
+    char name[24];
+    const char *sym = "?";
+    int i, j;
+    if (enabled < 0) enabled = (getenv("VH_SPELLFX_LOG") != NULL) ? 1 : 0;
+    if (!enabled) return;
+    if (f == NULL) {
+        f = fopen("vh_spellfx_log.txt", "w");
+        if (f == NULL) { enabled = 0; return; }
+    }
+    /* spell name: 21-byte fixed entries, SJIS full-width spaces (81 40) -> ASCII */
+    for (i = 0, j = 0; spellId >= 0 && spellId < 72 && j < 20; i++) {
+        u8 c = (u8)gSpellNames[spellId][i];
+        if (c == 0) break;
+        if (c == 0x81 && (u8)gSpellNames[spellId][i + 1] == 0x40) { name[j++] = ' '; i++; }
+        else name[j++] = (char)c;
+    }
+    name[j] = '\0';
+#ifndef _WIN32
+    if (objf >= 0 && objf < 804 && gObjFunctionPointers[objf] != NULL) {
+        Dl_info info;
+        if (dladdr((void *)gObjFunctionPointers[objf], &info) && info.dli_sname != NULL)
+            sym = info.dli_sname;
+    }
+#endif
+    fprintf(f, "spell=%2d name=\"%s\" slot=%s objf=%3d handler=%s\n",
+            spellId, name, (slot >= 0 && slot <= 2) ? slotNames[slot] : "?", objf, sym);
+    fflush(f);
+    fprintf(stderr, "[spellfx] %2d %-16s %-6s -> [%3d] %s\n",
+            spellId, name, (slot >= 0 && slot <= 2) ? slotNames[slot] : "?", objf, sym);
 }
