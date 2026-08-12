@@ -3198,7 +3198,7 @@ void Objf734_Fx_TBD(Object *obj) {
          obj_s1->z3.n = 0;
          theta += DEG(45);
       }
-      obj_s1 = CreatePositionedObj(obj, OBJF_FX_TBD_321);
+      obj_s1 = CreatePositionedObj(obj, OBJF_EXPANDING_EXPLOSION_RING_UNUSED);
       obj_s1->y1.n += CV(0.5);
       obj->state3 = 128;
       obj->state++;

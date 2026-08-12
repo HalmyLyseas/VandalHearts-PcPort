@@ -1,3 +1,12 @@
+/* Spell casting effects, part 3 (segment 0x68a10): Holy Lightning, Thunder Ball,
+ * Rolling Thunder, Dark Star and Perfect Guard, dispatched via gSpellsEx (model described
+ * in fx_060c38.c's header).
+ *
+ * Cut content in this file (in gObjFunctionPointers but referenced by no spell's gSpellsEx
+ * triple, no event script on the retail disc, and no code path): the quick thunder-strike
+ * damage/slay pair (Objf120/121 -- shaped exactly like Thunder Ball's Objf128/129 wrappers)
+ * and the lobbed energy-ball attack (Objf222/223, camera-following orb with a full-screen
+ * flash and the gSignal3 main-handler handshake). Suffixed _Unused, kept byte-exact. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -615,7 +624,7 @@ void Objf226_ThunderBall_ChildOrb(Object *obj) {
 
 #undef OBJF
 #define OBJF 222
-void Objf222_Fx_TBD(Object *obj) {
+void Objf222_EnergyBallLob_Unused(Object *obj) {
    Object *obj_s0;
    Object *obj_s1;
    Object *obj_s2;
@@ -626,7 +635,7 @@ void Objf222_Fx_TBD(Object *obj) {
       OBJ.savedZoom = gCameraZoom.vz;
       obj_s0 = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_FX_TBD_223;
+      obj_s1->functionIndex = OBJF_ENERGY_BALL_UNUSED;
       obj_s1->x1.n = obj_s0->x1.n;
       obj_s1->y1.n = obj_s0->y1.n;
       obj_s1->z1.n = obj_s0->z1.n;
@@ -715,7 +724,7 @@ void Objf222_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 223
-void Objf223_Fx_TBD(Object *obj) {
+void Objf223_EnergyBall_Unused(Object *obj) {
    Object *obj_s2;
    Object *obj_s1;
    s32 timer;
@@ -781,7 +790,7 @@ void Objf223_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 120
-void Objf120_Fx_TBD(Object *obj) {
+void Objf120_ThunderStrikeDamage_Unused(Object *obj) {
    Object *unitSprite;
    Object *fx;
 
@@ -799,7 +808,7 @@ void Objf120_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 121
-void Objf121_Fx_TBD(Object *obj) {
+void Objf121_ThunderStrikeSlay_Unused(Object *obj) {
    Object *unitSprite;
    Object *fx;
 

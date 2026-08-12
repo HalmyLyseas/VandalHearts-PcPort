@@ -1,3 +1,9 @@
+/* Spell casting effects, part 6 (segment 0x70604): Dark Fire, Roman Fire, Mood Ring and
+ * Dagger Storm, dispatched via gSpellsEx (see fx_060c38.c), plus shared explosion sprites.
+ * Cut content herein (no spell/event/code dispatch): Objf082/083 (orbiting ember pair,
+ * homing explosion spark) and Objf321 (expanding explosion ring -- its only spawner,
+ * Objf734 in split_09a268.c, is itself unreachable). Objf_Unk_80080924 and the two
+ * func_800* helpers are not referenced at all and keep their address names. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -330,6 +336,9 @@ void Objf188_DarkFire_Ray(Object *obj) {
 
 #undef OBJF
 #define OBJF Unk80080924
+/* UNREACHABLE: declared but absent from gObjFunctionPointers[] -- retail leftover.
+ * Mechanism: 8 smoke puffs bursting outward and arcing up over 10 frames; a near-
+ * duplicate of Objf215_Cloud. Keeps its address name on purpose. */
 void Objf_Unk_80080924(Object *obj) {
    // Very similar to Objf215_Cloud
    extern s16 gSmokeAnimData_800ff1b0[24];
@@ -470,6 +479,8 @@ void Objf_Unk_80080924(Object *obj) {
    }
 }
 
+/* UNREFERENCED (no caller anywhere): sweeps the display-env origin to the right half
+ * and back with two PutDispEnv calls -- a forced display refresh, likely debug. */
 void func_800815B0(void) {
    SetDefDispEnv(&gGraphicsPtr->dispEnv, SCREEN_WIDTH, gGraphicsPtr->dispEnv.disp.y, SCREEN_WIDTH,
                  SCREEN_HEIGHT);
@@ -1026,6 +1037,8 @@ void Objf090_DaggerStorm_FX2(Object *obj) {
    }
 }
 
+/* UNREFERENCED (no caller, not in gObjFunctionPointers[]): draw-for-state3-frames-
+ * then-die tick; reads as the predecessor of Objf337_DaggerStorm_BloodSplatter. */
 void func_80082E48(Object *obj) {
    if (--obj->state3 != 0) {
       AddObjPrim6(gGraphicsPtr->ot, obj, 0);
@@ -1190,7 +1203,7 @@ void Objf092_DaggerStorm_FX1(Object *obj) {
 
 #undef OBJF
 #define OBJF 082
-void Objf082_Fx_TBD(Object *obj) {
+void Objf082_OrbitingEmberPair_Unused(Object *obj) {
    Object *obj_s3;
    Object *sprite;
    SVECTOR vector;
@@ -1253,7 +1266,7 @@ void Objf082_Fx_TBD(Object *obj) {
    }
 }
 
-void Objf083_Fx_TBD(Object *obj) {
+void Objf083_HomingExplosionSpark_Unused(Object *obj) {
    switch (obj->state) {
    case 0:
       obj->d.sprite.gfxIdx = GFX_COLOR_15;
@@ -1315,7 +1328,10 @@ void Objf309_Explosion(Object *obj) {
 
 #undef OBJF
 #define OBJF 321
-void Objf321_Fx_TBD(Object *obj) {
+/* 8 counter-rotating explosion sprites on a linearly expanding ring. Only spawner is
+ * Objf734 (split_09a268.c) -- itself dispatched by nothing in retail, so this whole
+ * flaming-rock-impact chain is cut content. */
+void Objf321_ExpandingExplosionRing_Unused(Object *obj) {
    Object *sprite;
    s32 i;
    s16 *p;

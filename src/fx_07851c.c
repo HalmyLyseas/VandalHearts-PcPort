@@ -1,3 +1,17 @@
+/* Spell casting effects, part 7 (segment 0x7851c): the multi-object "creature and weather"
+ * spells -- Dark Hurricane, Dynamo Hum, Salamander, Rolling Fire, Roman Fire, Wyrmfang and
+ * Avalanche chains -- plus Flame Breath (monster melee), the casting-pose FX, the treasure/
+ * item-reveal cluster and Map32's smokestacks. Dispatched via gSpellsEx (see fx_060c38.c);
+ * drivers own the gSignal3 completion handshake, children do not.
+ *
+ * This file carries the largest block of cut content in the corpus, all verified against
+ * the retail gSpellsEx dump, the parsed EVDATA event scripts, and a whole-tree reference
+ * search: eight orphaned table-resident handlers (suffixed _Unused: converging sparkle,
+ * shrinking ground arc, casting-FX spawner, duplicate sparkle, red-X marker, rune spiral,
+ * blue flame dome, morph-mesh node, plus the explosion-burst pair 397/398 and the
+ * Salamander breath-head 377 whose breath phase no shipped head ever signals), three
+ * handlers absent from gObjFunctionPointers entirely (Objf_Unk_*, unreachable), and a
+ * zero-arg Noop stub. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -29,7 +43,7 @@ static s16 sSmokeAnimData_800ff688[24] = {
 
 #undef OBJF
 #define OBJF 284
-void Objf284_Fx_TBD(Object *obj) {
+void Objf284_ConvergingSparkle_Unused(Object *obj) {
    static s16 sparkleAnimData[14] = {7, GFX_SPARKLE_1, 3, GFX_SPARKLE_2, 3, GFX_SPARKLE_3,
                                      3, GFX_SPARKLE_4, 3, GFX_SPARKLE_5, 3, GFX_NULL,
                                      1, GFX_NULL};
@@ -94,7 +108,7 @@ void Objf284_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 286
-void Objf286_Fx_TBD(Object *obj) {
+void Objf286_ShrinkingGroundArc_Unused(Object *obj) {
    s32 radius;
 
    switch (obj->state) {
@@ -181,7 +195,7 @@ void Objf285_CastingFx(Object *obj) {
 
 #undef OBJF
 #define OBJF 287
-void Objf287_Fx_TBD(Object *obj) {
+void Objf287_CastingFxSpawner_Unused(Object *obj) {
    Object *unitSprite;
    Object *castingFx;
 
@@ -498,6 +512,8 @@ void Objf280_DarkHurricane_Target(Object *obj) {
    }
 }
 
+/* UNREACHABLE: not in gObjFunctionPointers[]. Salamander head + per-frame screen-space
+ * red-spark wedge for 128 frames, then gSignal3 -- driver-shaped test code. */
 void Objf_Unk_80089298(Object *obj) {
    Object *sprite;
    POLY_FT4 *poly;
@@ -833,7 +849,9 @@ void Objf388_DarkHurricane_FX1(Object *obj) {
 
 #undef OBJF
 #define OBJF 392
-void Objf392_Fx_TBD(Object *obj) {
+/* Non-drawing 9x9 lattice vertex: flat layout -> neighbour relaxation -> sphere mapping,
+ * driven by a controller object whose handler does not exist in retail. Cut content. */
+void Objf392_MorphMeshNode_Unused(Object *obj) {
    Object *obj_s1;
    Object *obj1;
    Object *obj2;
@@ -899,6 +917,9 @@ void Objf392_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF Unk8008a364
+/* UNREACHABLE: not in gObjFunctionPointers[]. Camera-spinning disc that re-samples the
+ * framebuffer through its own quad (GetTPage(2, ...) + flipped verts); never terminates
+ * -- an abandoned mirror/reflection experiment. */
 void Objf_Unk_8008a364(Object *obj) {
    Object *sprite;
    POLY_FT4 *poly;
@@ -1316,7 +1337,7 @@ void Objf394_DynamoHum_FX1(Object *obj) {
 
 #undef OBJF
 #define OBJF 398
-void Objf398_Fx_TBD(Object *obj) {
+void Objf398_ExplosionBurstParticle_Unused(Object *obj) {
    static s16 explosionAnimData[26] = {3, GFX_EXPLOSION_1,  1, GFX_EXPLOSION_2,  1, GFX_EXPLOSION_3,
                                        1, GFX_EXPLOSION_4,  1, GFX_EXPLOSION_5,  2, GFX_EXPLOSION_6,
                                        2, GFX_EXPLOSION_7,  2, GFX_EXPLOSION_8,  2, GFX_EXPLOSION_9,
@@ -1351,7 +1372,7 @@ void Objf398_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 397
-void Objf397_Fx_TBD(Object *obj) {
+void Objf397_ExplosionBurst_Unused(Object *obj) {
    Object *obj_s2;
    s32 rnd;
 
@@ -1368,7 +1389,7 @@ void Objf397_Fx_TBD(Object *obj) {
       gCameraRotation.vy += 4;
       if (obj->state3 % 3 == 0) {
          obj_s2 = Obj_GetUnused();
-         obj_s2->functionIndex = OBJF_FX_TBD_398;
+         obj_s2->functionIndex = OBJF_EXPLOSION_BURST_PARTICLE_UNUSED;
          obj_s2->x1.n = obj->x1.n;
          obj_s2->z1.n = obj->z1.n;
          obj_s2->y1.n = obj->y1.n;
@@ -1506,6 +1527,8 @@ void Objf382_FlameBreath(Object *obj) {
    }
 }
 
+/* UNREFERENCED zero-arg stub (wrong signature for the function table) -- most likely a
+ * deleted handler's remnant, kept for byte/ordering exactness. */
 void Noop_8008bca8() {}
 
 void Objf274_Noop(Object *obj) {}
@@ -1855,7 +1878,7 @@ void Objf292_BlueItemSparkle(Object *obj) {
 
 #undef OBJF
 #define OBJF 293
-void Objf293_Fx_TBD(Object *obj) {
+void Objf293_Sparkle_Unused(Object *obj) {
    static s16 sparkleAnimData[14] = {5, GFX_SPARKLE_1, 3, GFX_SPARKLE_2, 3, GFX_SPARKLE_3,
                                      3, GFX_SPARKLE_4, 3, GFX_SPARKLE_5, 3, GFX_NULL,
                                      1, GFX_NULL};
@@ -2015,6 +2038,9 @@ void Objf290_294_761_RevealItem(Object *obj) {
 
 #undef OBJF
 #define OBJF Unk8008d1f0
+/* UNREACHABLE: not in gObjFunctionPointers[]. 128-frame camera-plane blue globe over the
+ * target; un-hides the unit sprite on exit (written to follow a handler that hides it,
+ * like the engulf family) and raises gSignal3 -- target/defeat-shaped, never wired up. */
 void Objf_Unk_8008d1f0(Object *obj) {
    Object *unitSprite;
    SVectorXZY *p;
@@ -2306,7 +2332,10 @@ void Objf332_RollingFire_FX1(Object *obj) {
 
 #undef OBJF
 #define OBJF 333
-void Objf333_Fx_TBD(Object *obj) {
+/* Sparkle spiralling inward onto a unit (~248 frames), laying rune-textured Objf323
+ * ribbon segments every frame, then gSignal3. Cut: nothing dispatches 333 (Objf323's
+ * other user is EVDATA29.DAT / Map20 -- see its comment in split_09a268.c). */
+void Objf333_RuneSpiral_Unused(Object *obj) {
    extern s16 gSparkleAnimData_800ff38c[14];
    Object *obj_s3;
    s16 a, b;
@@ -2375,7 +2404,7 @@ void Objf333_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 348
-void Objf348_Fx_TBD(Object *obj) {
+void Objf348_BlueFlameDome_Unused(Object *obj) {
    Object *dataStore;
    Object *sprite;
    Cylinder *dsCylinder;
@@ -2873,7 +2902,11 @@ void Objf336_Salamander_Segment(Object *obj) {
 
 #undef OBJF
 #define OBJF 377
-void Objf377_Fx_TBD(Object *obj) {
+/* An objf335/336-compatible Salamander chain link (identical struct layout + chaining
+ * math) drawing the directional head; when its link reports mem == 2 it emits Flame
+ * Breath particles -- but no shipped head handler ever writes mem = 2, and nothing
+ * spawns 377: a cut breath-phase variant of the Salamander. */
+void Objf377_SalamanderBreathHead_Unused(Object *obj) {
    SVECTOR vector;
    s16 headGfx[8] = {GFX_SALAMANDER_S, GFX_SALAMANDER_SE, GFX_SALAMANDER_E, GFX_SALAMANDER_NE,
                      GFX_SALAMANDER_N, GFX_SALAMANDER_NE, GFX_SALAMANDER_E, GFX_SALAMANDER_SE};
@@ -2971,7 +3004,7 @@ void Objf377_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 331
-void Objf331_Fx_TBD(Object *obj) {
+void Objf331_RedXMark_Unused(Object *obj) {
    Object *parent = OBJ.parent;
 
    switch (obj->state) {

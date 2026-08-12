@@ -1,3 +1,8 @@
+/* Spell casting effects, part 2 (segment 0x5cbc4): Fire Gem, Delta Mirage, Explosion and
+ * Stone Shower drivers with their sub-objects and drawing helpers. Dispatched data-driven
+ * via gSpellsEx (see fx_060c38.c's header for the model). DrawLightningBoltSegment renders
+ * one jagged segment of Objf147_LightningBolt's sky bolt; DrawDeltaMirageTriangle renders
+ * the spell's rotating three-edged figure with its mask effect. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -233,7 +238,7 @@ void Objf173_FireGem_Beam(Object *obj) {
    }
 }
 
-void func_8006D1AC(Object *fx, Object *sprite, s16 param_3, s16 param_4, s16 param_5, s16 param_6,
+void DrawLightningBoltSegment(Object *fx, Object *sprite, s16 param_3, s16 param_4, s16 param_5, s16 param_6,
                    s16 param_7, s16 param_8, s16 param_9) {
 
    sprite->d.sprite.coords[0].x = fx->x1.n + param_3 + 0x100;
@@ -369,12 +374,12 @@ void Objf147_LightningBolt(Object *obj) {
       OBJ.todo_x44 += 0x40 - (rand() % 0x80);
 
       UpdateObjAnimation(sprite);
-      func_8006D1AC(obj, sprite, 0, 0, 0, OBJ.todo_x34, OBJ.todo_x36, OBJ.todo_x38, 0);
-      func_8006D1AC(obj, sprite, OBJ.todo_x34, OBJ.todo_x36, OBJ.todo_x38, OBJ.todo_x3a,
+      DrawLightningBoltSegment(obj, sprite, 0, 0, 0, OBJ.todo_x34, OBJ.todo_x36, OBJ.todo_x38, 0);
+      DrawLightningBoltSegment(obj, sprite, OBJ.todo_x34, OBJ.todo_x36, OBJ.todo_x38, OBJ.todo_x3a,
                     OBJ.todo_x3c, OBJ.todo_x3e, 0);
-      func_8006D1AC(obj, sprite, OBJ.todo_x3a, OBJ.todo_x3c, OBJ.todo_x3e, OBJ.todo_x40,
+      DrawLightningBoltSegment(obj, sprite, OBJ.todo_x3a, OBJ.todo_x3c, OBJ.todo_x3e, OBJ.todo_x40,
                     OBJ.todo_x42, OBJ.todo_x44, 0);
-      func_8006D1AC(obj, sprite, OBJ.todo_x40, OBJ.todo_x42, OBJ.todo_x44, OBJ.todo_x4c,
+      DrawLightningBoltSegment(obj, sprite, OBJ.todo_x40, OBJ.todo_x42, OBJ.todo_x44, OBJ.todo_x4c,
                     OBJ.todo_x4e, OBJ.todo_x50, 1);
 
       if (sprite->d.sprite.animFinished) {
@@ -385,7 +390,7 @@ void Objf147_LightningBolt(Object *obj) {
    }
 }
 
-void func_8006DCD8(Object *deltaMirage) {
+void DrawDeltaMirageTriangle(Object *deltaMirage) {
    s32 i;
    s16 *p;
    s16 current;
@@ -491,7 +496,7 @@ void Objf156_DeltaMirage_FX1(Object *obj) {
 
    // fallthrough
    case 1:
-      func_8006DCD8(obj);
+      DrawDeltaMirageTriangle(obj);
 
       switch (obj->state2) {
       case 0:
@@ -537,7 +542,7 @@ void Objf156_DeltaMirage_FX1(Object *obj) {
 
    // fallthrough
    case 3:
-      func_8006DCD8(obj);
+      DrawDeltaMirageTriangle(obj);
       OBJ.todo_x24 += 0x10;
       OBJ.timer++;
       OBJ.todo_x36 -= 4;

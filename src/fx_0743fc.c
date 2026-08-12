@@ -1,3 +1,8 @@
+/* Spell casting effects, part 4 (segment 0x743fc): support/child FX for Healing Circle,
+ * the magic-restoration family, Life Orb and Evil Stream -- cylinder rendering, rays,
+ * bubble swirls and per-target sprite fades. Dispatched via gSpellsEx (see fx_060c38.c).
+ * Objf325/326 are cut content (no spell, event, or code dispatches them): a CLUT-cycling
+ * fade tick and a rising red-sparkle pillar built from Evil Stream's exact asset set. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -673,7 +678,7 @@ void EvilStream_RenderSkull(Object *evilStream, s16 height) {
    skullSprite->functionIndex = OBJF_NULL;
 }
 
-void Objf325_Fx_TBD(Object *obj) {
+void Objf325_ClutCycleFadeSprite_Unused(Object *obj) {
    POLY_FT4 *poly;
 
    obj->d.sprite.clut = 3 + obj->state2 % 3;
@@ -814,7 +819,7 @@ void Objf307_324_EvilStream_FX2_FX3(Object *obj) {
 
 #undef OBJF
 #define OBJF 326
-void Objf326_Fx_TBD(Object *obj) {
+void Objf326_RisingSparklePillar_Unused(Object *obj) {
    Object *sprite;
    Object *dataStore;
    Cylinder *dsCylinder;

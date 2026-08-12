@@ -1,3 +1,8 @@
+/* Spell casting effects, part 5 (segment 0x76e14): FX1 drivers for the magic-restoration
+ * family (Magic Charge / Mage Oil / Mage Gem) and Healing Circle/Wave, plus the shared
+ * sparkle child. Dispatched via gSpellsEx (see fx_060c38.c). Objf384 (a skull rising
+ * row-by-row over the target, sharing Evil Stream's GFX_SKULL asset) is cut content;
+ * Objf_Unk_80087b58 is not even in gObjFunctionPointers -- an unreachable test handler. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -427,8 +432,10 @@ void Objf383_Sparkle(Object *obj) {
 
 #undef OBJF
 #define OBJF 384
-void Objf384_Fx_TBD(Object *obj) {
-   // Unused FX1? Stretched skull restored row by row, with the current bottom row drawn stretched.
+/* A skull (Evil Stream's GFX_SKULL) restored row by row rising over the hidden target
+ * sprite, bottom row smeared to the screen edge; gSignal3 on completion (FX1-shaped).
+ * Cut content: no spell, event, or code dispatches 384. */
+void Objf384_SkullRise_Unused(Object *obj) {
    Object *unitSprite;
    Object *sprite;
    POLY_FT4 *poly;
@@ -512,6 +519,9 @@ void Objf711_712_Noop(void) {}
 
 #undef OBJF
 #define OBJF Unk80087b58
+/* UNREACHABLE: declared but absent from gObjFunctionPointers[] -- a test handler.
+ * Mechanism: sine-pulsed flat-grey cylinder on the target for 512 frames, then
+ * gSignal3. Keeps its address name on purpose. */
 void Objf_Unk_80087b58(Object *obj) {
    Object *dataStore;
    Cylinder *dsCylinder;

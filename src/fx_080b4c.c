@@ -1,3 +1,10 @@
+/* Event/map ambience and the generic particle library (segment 0x80b4c): rain, ripples,
+ * campfire, chimney smoke, dusk tint; the generic particles (Objf710/739) and their
+ * emitters (projectile trails 764-769); item-spell dispatch (770-789); and assorted battle
+ * FX (level-up, stat raised, faint, Phase Shift, Wyrmfang). Ambience objects are spawned
+ * by event scripts (opcode 0x1d in EVDATA*.DAT names an objf index directly), which is why
+ * several handlers here have no C spawn site. Objf790 (an ember-puff emitter, the only
+ * spawner of OBJF_PARTICLE_739) appears in no retail event script -- cut content. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -1547,7 +1554,10 @@ void Objf764_to_769_ProjectileTrail(Object *obj) {
 
 #undef OBJF
 #define OBJF 790
-void Objf790_Fx_TBD(Object *obj) {
+/* Perpetual emitter of upward-drifting ember puffs (spawns OBJF_PARTICLE_739 every
+ * 0-7 frames, forever). In the event-object index block but no retail EVDATA script
+ * spawns it -- cut ambience; Objf739_Particle is unreachable along with it. */
+void Objf790_EmberEmitter_Unused(Object *obj) {
    static s16 explosionAnimData[26] = {3, GFX_EXPLOSION_1,  1, GFX_EXPLOSION_2,  1, GFX_EXPLOSION_3,
                                        1, GFX_EXPLOSION_4,  2, GFX_EXPLOSION_5,  2, GFX_EXPLOSION_6,
                                        2, GFX_EXPLOSION_7,  2, GFX_EXPLOSION_8,  2, GFX_EXPLOSION_9,
