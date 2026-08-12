@@ -231,7 +231,7 @@ void Objf650_Map32_CarRelease(Object *obj) {
          OBJ.endX = sCarXPositions[OBJ.carIdx];
          obj->x2.n = 0;
          obj->x3.n = -3;
-         OBJ.todo_x26 = 0;
+         OBJ.camOffsetAccum = 0;
 
          startX = OBJ.startX / CV(1.0);
          endX = OBJ.endX / CV(1.0);
@@ -464,7 +464,7 @@ void Objf650_Map32_CarRelease(Object *obj) {
          k = 64;
       }
 
-      for (i = D_80122E28; i < startX; i++) {
+      for (i = gMapViewOriginX; i < startX; i++) {
          for (j = 1; j < 7; j++) {
             tileModel = &gMapRowPointers[j][i];
             RenderMapTile(gGraphicsPtr->ot, tileModel, GRID_COLOR_NONE);
@@ -500,7 +500,7 @@ void Objf650_Map32_CarRelease(Object *obj) {
       TransMatrix(&gCameraMatrix, &gCameraZoom);
       SetRotMatrix(&gCameraMatrix);
       SetTransMatrix(&gCameraMatrix);
-      gCameraPos.vx += OBJ.todo_x24;
+      gCameraPos.vx += OBJ.camOffsetX;
       RotTrans(&gCameraPos, (VECTOR *)gCameraMatrix.t, &flag);
       SetTransMatrix(&gCameraMatrix);
 
@@ -530,10 +530,10 @@ void Objf650_Map32_CarRelease(Object *obj) {
       obj_s0->functionIndex = OBJF_NULL;
       PopMatrix();
       gCameraPos.vx = savedCamPosX;
-      OBJ.todo_x26 += obj->x2.n;
+      OBJ.camOffsetAccum += obj->x2.n;
       obj->x2.n += obj->x3.n;
-      OBJ.todo_x24 = OBJ.todo_x26 >> 3;
-      if (OBJ.todo_x24 > -0x400) {
+      OBJ.camOffsetX = OBJ.camOffsetAccum >> 3;
+      if (OBJ.camOffsetX > -0x400) {
          break;
       }
 
@@ -561,7 +561,7 @@ void Objf650_Map32_CarRelease(Object *obj) {
       EaseOutCamera(&OBJ.camera, 2);
       if (++obj->state3 >= 32) {
          AssignToMainCamera(&OBJ.camera);
-         OBJ.todo_x24 = 0;
+         OBJ.camOffsetX = 0;
          OBJ.carIdx++;
          OBJ.startX = OBJ.endX;
          obj->state = 1;

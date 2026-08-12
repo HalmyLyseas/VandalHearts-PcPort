@@ -422,8 +422,8 @@ void Objf314_InwardRay(Object *obj) {
    case 0:
       OBJ.theta1 = -(rand() % DEG(33.75));
       OBJ.theta2 = rand() % DEG(360);
-      if (OBJ.todo_x38 == 0) {
-         OBJ.todo_x38 = 0x500;
+      if (OBJ.dist == 0) {
+         OBJ.dist = 0x500;
       }
       OBJ.unused_0x3A = rand() % 0x40 + 0x20;
       rnd = (rand() >> 3) % 0x1000;
@@ -432,16 +432,16 @@ void Objf314_InwardRay(Object *obj) {
       } else {
          obj->mem = 2;
       }
-      OBJ.todo_x54 = -0x20 - rand() % 0x40;
+      OBJ.rotationSpeed_unused = -0x20 - rand() % 0x40;
       OBJ.gfxIdx = GFX_COLOR_15;
       obj->state2 = 0;
 
-      radius = OBJ.todo_x38 * rcos(OBJ.theta1) >> 12;
+      radius = OBJ.dist * rcos(OBJ.theta1) >> 12;
       OBJ.coords[1].x = obj->x2.n + (radius * rcos(OBJ.theta2) >> 12);
       OBJ.coords[1].z = obj->z2.n + (radius * rsin(OBJ.theta2) >> 12);
       OBJ.coords[3].x = obj->x2.n + (radius * rcos(OBJ.theta2 + 16) >> 12);
       OBJ.coords[3].z = obj->z2.n + (radius * rsin(OBJ.theta2 + 16) >> 12);
-      OBJ.coords[1].y = OBJ.coords[3].y = obj->y2.n + (OBJ.todo_x38 * rsin(OBJ.theta1) >> 12);
+      OBJ.coords[1].y = OBJ.coords[3].y = obj->y2.n + (OBJ.dist * rsin(OBJ.theta1) >> 12);
 
       OBJ.otOfs = 16;
       obj->state++;
@@ -451,13 +451,13 @@ void Objf314_InwardRay(Object *obj) {
       obj->state2++;
       OBJ.clut = 3 + obj->state2 % 3;
 
-      OBJ.todo_x38 += (0 - OBJ.todo_x38) >> obj->mem;
-      radius = (OBJ.todo_x38 * rcos(OBJ.theta1)) >> 12;
+      OBJ.dist += (0 - OBJ.dist) >> obj->mem;
+      radius = (OBJ.dist * rcos(OBJ.theta1)) >> 12;
       OBJ.coords[0].x = obj->x2.n + (radius * rcos(OBJ.theta2) >> 12);
       OBJ.coords[0].z = obj->z2.n + (radius * rsin(OBJ.theta2) >> 12);
       OBJ.coords[2].x = obj->x2.n + (radius * rcos(OBJ.theta2 + 16) >> 12);
       OBJ.coords[2].z = obj->z2.n + (radius * rsin(OBJ.theta2 + 16) >> 12);
-      OBJ.coords[0].y = OBJ.coords[2].y = obj->y2.n + (OBJ.todo_x38 * rsin(OBJ.theta1) >> 12);
+      OBJ.coords[0].y = OBJ.coords[2].y = obj->y2.n + (OBJ.dist * rsin(OBJ.theta1) >> 12);
 
       obj->x1.n = OBJ.coords[0].x;
       obj->z1.n = OBJ.coords[0].z;
@@ -471,7 +471,7 @@ void Objf314_InwardRay(Object *obj) {
       OBJ.coords[3].z = OBJ.coords[2].z;
       OBJ.coords[1].y = OBJ.coords[3].y = OBJ.coords[0].y;
 
-      if (OBJ.todo_x38 <= 0x80) {
+      if (OBJ.dist <= 0x80) {
          obj->state++;
       }
       break;

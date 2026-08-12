@@ -517,15 +517,15 @@ typedef struct Object_004_005_408 {
    /* :0x24 */ s32 effectPhase;
    /* :0x28 */ s16 clut;
    /* :0x2A */ s16 choicesTopMargin;
-   /* :0x2C */ /*s16 todo_x2c;*/ s32 todo_x2c;
+   /* :0x2C */ /*s16 highlightY;*/ s32 highlightY;
    ///* :0x2E */ s16 highlightYOffset;
-   /* :0x30 */ s32 todo_x30;
+   /* :0x30 */ s32 dstHighlightY;
    /* :0x34 */ s8 highlightHeight;
    /* :0x35 */ s8 choiceCt;
    /* :0x36 */ s8 choiceHeight;
    /* :0x37 */ s8 windowId;
    /* :0x38 */ s16 halfHeight;
-   /* :0x3A */ s16 todo_x3a;
+   /* :0x3A */ s16 effectHalfHeight;
    /* :0x3C */ s16 halfWidth;
    /* :0x3E */ u8 unk_0x3E[2];
    /* :0x40 */ s16 relQuadX0;
@@ -575,7 +575,7 @@ typedef struct Object_013 {
    /* :0x24 */ struct UnitStatus *unit;
    /* :0x28 */ struct Object *unitSprite;
    /* :0x2C */ s8 timer;
-   /* :0x2D */ s8 todo_x2d;
+   /* :0x2D */ s8 followUnit;
    /* :0x2E */ u8 unk_0x2E[50];
 } Object_013;
 
@@ -673,9 +673,9 @@ typedef struct Object_023 {
 /* Camera - Bounce Zoom */
 typedef struct Object_024 {
    /* :0x24 */ s16 soft;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x26 */ s16 decayAngle;
+   /* :0x28 */ s16 amplitude;
+   /* :0x2A */ s16 phase;
    /* :0x2C */ s16 savedZoom;
    /* :0x2E */ u8 unk_0x2E[50];
 } Object_024;
@@ -707,7 +707,7 @@ typedef struct Object_026_588 {
    /* :0x3E */ s16 geomOfsY;
    /* :0x40 */ s16 dstGeomOfsY;
    /* :0x42 */ u8 unk_0x42[2];
-   /* :0x44 */ s8 todo_x44;
+   /* :0x44 */ s8 wideOcclusionTest;
    /* :0x45 */ u8 unk_0x45[27];
 } Object_026_588;
 
@@ -762,14 +762,14 @@ typedef struct Object_040 {
    /* :0x2C */ s8 facing;
    /* :0x2D */ s8 terrain;
    /* :0x2E */ u8 unk_0x2E[34];
-   /* :0x50 */ s16 lid_todo_x50;
-   /* :0x52 */ s16 lid_todo_x52;
-   /* :0x54 */ s16 lid_todo_x54;
-   /* :0x56 */ s16 lid_todo_x56;
-   /* :0x58 */ s16 lid_todo_x58;
-   /* :0x5A */ s16 lid_todo_x5a;
-   /* :0x5C */ s16 lid_todo_x5c;
-   /* :0x5E */ s16 lid_todo_x5e;
+   /* :0x50 */ s16 lidCrease1Z;
+   /* :0x52 */ s16 lidCrease1Y;
+   /* :0x54 */ s16 lidCrease2Z;
+   /* :0x56 */ s16 lidCrease2Y;
+   /* :0x58 */ s16 lidBackZ;
+   /* :0x5A */ s16 lidBackY;
+   /* :0x5C */ s16 lidFrontZ;
+   /* :0x5E */ s16 lidFrontY;
 } Object_040;
 
 /* Map Object - Crate */
@@ -914,8 +914,8 @@ typedef struct Object_075 {
 typedef struct Object_076 {
    /* :0x24 */ s16 timer;
    /* :0x26 */ u8 unk_0x26[40];
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x4E */ s16 axis;
+   /* :0x50 */ s16 dirSign;
    /* :0x52 */ u8 unk_0x52[14];
 } Object_076;
 
@@ -924,8 +924,8 @@ typedef struct Object_077 {
    /* :0x24 */ s16 fade;
    /* :0x26 */ u8 unk_0x26[38];
    /* :0x4C */ s16 angle;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x4E */ s16 axis;
+   /* :0x50 */ s16 dirSign;
    /* :0x52 */ u8 unk_0x52[14];
 } Object_077;
 
@@ -958,7 +958,7 @@ typedef struct Object_082 {
    /* :0x2C */ s16 theta3;
    /* :0x2E */ s16 theta4;
    /* :0x30 */ u8 unk_0x30[40];
-   /* :0x58 */ struct Object *todo_x58;
+   /* :0x58 */ struct Object *anchor;
    /* :0x5C */ struct Object *sprite;
 } Object_082;
 
@@ -989,7 +989,7 @@ typedef struct Object_088 {
 
 /* Map 15 - Scene 17 - Cinematic */
 typedef struct Object_089 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 approachOfsX;
    /* :0x26 */ u8 unk_0x26[2];
    /* :0x28 */ Camera camera;
    /* :0x36 */ u8 unk_0x36[26];
@@ -1002,9 +1002,9 @@ typedef struct Object_089 {
 
 /* Dagger Storm - FX2 */
 typedef struct Object_090 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x24 */ s16 theta1;
+   /* :0x26 */ s16 theta2;
+   /* :0x28 */ s16 radius;
    /* :0x2A */ u8 unk_0x2A[50];
    /* :0x5C */ s16 fatal;
    /* :0x5E */ u8 unk_0x5E[2];
@@ -1012,9 +1012,9 @@ typedef struct Object_090 {
 
 /* Dagger Storm - Dagger */
 typedef struct Object_091 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x24 */ s16 theta1;
+   /* :0x26 */ s16 theta2;
+   /* :0x28 */ s16 radius;
    /* :0x2A */ u8 unk_0x2A[18];
    /* :0x3C */ SVectorXZY positions[4];
    /* :0x54 */ u8 unk_0x54[4];
@@ -1076,11 +1076,11 @@ typedef struct Object_098 {
 typedef struct Object_099 {
    /* :0x24 */ s16 theta1;
    /* :0x26 */ s16 theta2;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 speed;
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 clut;
    /* :0x2E */ u8 unk_0x2E[2];
-   /* :0x30 */ s16 todo_x30;
+   /* :0x30 */ s16 lifetime;
    /* :0x32 */ u8 unk_0x32[42];
    /* :0x5C */ struct Object *sprite;
 } Object_099;
@@ -1097,10 +1097,10 @@ typedef struct Object_100 {
 
 /* Healing Sparkle */
 typedef struct Object_101 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x24 */ s16 riseY;
+   /* :0x26 */ s16 orbitAngle;
+   /* :0x28 */ s16 riseSpeed;
+   /* :0x2A */ s16 orbitSpeed;
    /* :0x2C */ u8 unk_0x2C[44];
    /* :0x58 */ struct Object *sprite;
    /* :0x5C */ struct Object *parent;
@@ -1117,10 +1117,10 @@ typedef struct Object_102_227 {
 
 /* Poison Bubbles */
 typedef struct Object_103 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x24 */ s16 riseY;
+   /* :0x26 */ s16 baseAngle;
+   /* :0x28 */ s16 riseSpeed;
+   /* :0x2A */ s16 swayRadius;
    /* :0x2C */ u8 unk_0x2C[44];
    /* :0x58 */ struct Object *sprite;
    /* :0x5C */ struct Object *parent;
@@ -1128,10 +1128,10 @@ typedef struct Object_103 {
 
 /* Cure - FX2 */
 typedef struct Object_104 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 animAngle;
+   /* :0x26 */ s16 collapseAngle;
    /* :0x28 */ u8 unk_0x28[24];
-   /* :0x40 */ s16 todo_x40;
+   /* :0x40 */ s16 ringSpin;
    /* :0x42 */ u8 unk_0x42[2];
    /* :0x44 */ struct Object *ringSprite;
    /* :0x48 */ u8 unk_0x48[20];
@@ -1140,8 +1140,8 @@ typedef struct Object_104 {
 
 /* Magic Charge - FX3 */
 typedef struct Object_106 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 animAngle;
+   /* :0x26 */ s16 bobAngle;
    /* :0x28 */ u8 unk_0x28[52];
    /* :0x5C */ struct Object *glyphRing;
 } Object_106;
@@ -1152,9 +1152,9 @@ typedef struct Object_107 {
    /* :0x30 */ s16 fade;
    /* :0x32 */ s16 fadeTicker;
    /* :0x34 */ u8 unk_0x34[24];
-   /* :0x4C */ s16 todo_x4c;
+   /* :0x4C */ s16 killOnFadeOut;
    /* :0x4E */ u8 unk_0x4E[10];
-   /* :0x58 */ s16 todo_x58;
+   /* :0x58 */ s16 ringAngle;
    /* :0x5A */ u8 unk_0x5A[6];
 } Object_107;
 
@@ -1177,7 +1177,7 @@ typedef struct Object_109 {
 
 /* Casting Stat Buff */
 typedef struct Object_110 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 theta;
    /* :0x26 */ u8 unk_0x26[10];
    /* :0x30 */ s16 glyphsFade;
    /* :0x32 */ s16 crestFade;
@@ -1191,7 +1191,7 @@ typedef struct Object_110 {
 /* Faerie - FX2 */
 typedef struct Object_115 {
    /* :0x24 */ s16 theta;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x26 */ s16 dist;
    /* :0x28 */ u8 unk_0x28[4];
    /* :0x2C */ s16 timer;
    /* :0x2E */ u8 unk_0x2E[42];
@@ -1259,11 +1259,11 @@ typedef struct Object_122 {
 
 /* FX - TBD */
 typedef struct Object_130 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 bandStart;
+   /* :0x26 */ s16 bandEnd;
    /* :0x28 */ u8 unk_0x28[38];
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x4E */ s16 dirZ;
+   /* :0x50 */ s16 dirX;
    /* :0x52 */ u8 unk_0x52[14];
 } Object_130;
 
@@ -1292,13 +1292,13 @@ typedef struct Object_132_Etc {
 typedef struct Object_133_Etc {
    /* :0x24 */ s16 clut;
    /* :0x26 */ s16 semiTrans;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a; // increments x34
-   /* :0x2C */ s16 todo_x2c;
+   /* :0x28 */ s16 maxHeight;
+   /* :0x2A */ s16 pulseSpeed; // increments x34
+   /* :0x2C */ s16 unused_0x2C;
    /* :0x2E */ s16 radius;
    /* :0x30 */ s16 theta;
    /* :0x32 */ s16 h;
-   /* :0x34 */ s16 todo_x34;
+   /* :0x34 */ s16 pulsePhase;
    /* :0x36 */ u8 unk_0x36[22];
    /* :0x4C */ s16 timer;
    /* :0x4E */ u8 unk_0x4E[14];
@@ -1324,9 +1324,9 @@ typedef struct Object_145 {
    /* :0x3A */ s16 x_2;
    /* :0x3C */ s16 y_2;
    /* :0x3E */ s16 z_2;
-   /* :0x40 */ s16 todo_x40; //
-   /* :0x42 */ s16 todo_x42; //? Randomized but never used?
-   /* :0x44 */ s16 todo_x44; //
+   /* :0x40 */ s16 unusedJitterX; //
+   /* :0x42 */ s16 unusedJitterY; //? Randomized but never used?
+   /* :0x44 */ s16 unusedJitterZ; //
    /* :0x46 */ u8 unk_0x46[6];
    /* :0x4C */ s16 x_3;
    /* :0x4E */ s16 y_3;
@@ -1342,19 +1342,19 @@ typedef struct Object_145 {
 typedef struct Object_147 {
    /* :0x24 */ s16 clut;
    /* :0x26 */ u8 unk_0x26[14];
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
-   /* :0x38 */ s16 todo_x38;
-   /* :0x3A */ s16 todo_x3a;
-   /* :0x3C */ s16 todo_x3c;
-   /* :0x3E */ s16 todo_x3e;
-   /* :0x40 */ s16 todo_x40;
-   /* :0x42 */ s16 todo_x42;
-   /* :0x44 */ s16 todo_x44;
+   /* :0x34 */ s16 joint1X;
+   /* :0x36 */ s16 joint1Y;
+   /* :0x38 */ s16 joint1Z;
+   /* :0x3A */ s16 joint2X;
+   /* :0x3C */ s16 joint2Y;
+   /* :0x3E */ s16 joint2Z;
+   /* :0x40 */ s16 joint3X;
+   /* :0x42 */ s16 joint3Y;
+   /* :0x44 */ s16 joint3Z;
    /* :0x46 */ u8 unk_0x46[6];
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x4C */ s16 tipX;
+   /* :0x4E */ s16 tipY;
+   /* :0x50 */ s16 tipZ;
    /* :0x52 */ u8 unk_0x52[10];
    /* :0x5C */ struct Object *sprite;
 } Object_147;
@@ -1383,45 +1383,45 @@ typedef struct Object_149 {
 typedef struct Object_155 {
    /* :0x24 */ s16 initialIdx;
    /* :0x26 */ u8 unk_0x26[2];
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 gfxIdx;
    /* :0x2A */ u8 unk_0x2A[7];
-   /* :0x31 */ u8 todo_x31;
+   /* :0x31 */ u8 semiTrans;
    /* :0x32 */ u8 unk_0x32[10];
    PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
    /* :0x54 */ s16 idx;
    /* :0x56 */ s16 theta;
-   /* :0x58 */ s16 todo_x58;
-   /* :0x5A */ s16 todo_x5a;
-   /* :0x5C */ s16 todo_x5c;
-   /* :0x5E */ s16 todo_x5e;
+   /* :0x58 */ s16 layerY;
+   /* :0x5A */ s16 yOfs;
+   /* :0x5C */ s16 ySpeed;
+   /* :0x5E */ s16 wobblePhase;
 } Object_155;
 
 /* Delta Mirage - FX1 */
 typedef struct Object_156 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x24 */ s16 theta;
+   /* :0x26 */ s16 edgeAngle0;
+   /* :0x28 */ s16 edgeAngle1;
+   /* :0x2A */ s16 edgeAngle2;
    /* :0x2C */ u8 unk_0x2C[4];
    /* :0x30 */ s16 timer;
    /* :0x32 */ u8 unk_0x32[4];
-   /* :0x36 */ s16 todo_x36;
+   /* :0x36 */ s16 collapsePhase;
    /* :0x38 */ u8 unk_0x38[40];
 } Object_156;
 
 /* Delta Mirage - Ray */
 typedef struct Object_157 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
+   /* :0x24 */ s16 maxLength;
+   /* :0x26 */ s16 thetaX;
+   /* :0x28 */ s16 thetaZ;
+   /* :0x2A */ s16 thetaY;
+   /* :0x2C */ s16 dThetaX;
+   /* :0x2E */ s16 dThetaZ;
+   /* :0x30 */ s16 dThetaY;
+   /* :0x32 */ s16 timer;
+   /* :0x34 */ s16 length;
+   /* :0x36 */ s16 lengthScale;
    /* :0x38 */ u8 unk_0x38[36];
    /* :0x5C */ struct Object *parent;
 } Object_157;
@@ -1435,33 +1435,33 @@ typedef struct Object_158 {
 
 /* Explosion - Rays */
 typedef struct Object_159 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
-   /* :0x38 */ s16 todo_x38;
-   /* :0x3A */ s16 todo_x3a;
-   /* :0x3C */ s16 todo_x3c;
-   /* :0x3E */ s16 todo_x3e;
-   /* :0x40 */ s16 todo_x40;
-   /* :0x42 */ s16 todo_x42;
-   /* :0x44 */ s16 todo_x44;
-   /* :0x46 */ s16 todo_x46;
-   /* :0x48 */ s16 todo_x48;
-   /* :0x4A */ s16 todo_x4a;
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
-   /* :0x52 */ s16 todo_x52;
+   /* :0x24 */ s16 theta1;
+   /* :0x26 */ s16 span1;
+   /* :0x28 */ s16 speed1;
+   /* :0x2A */ s16 radius1;
+   /* :0x2C */ s16 theta2;
+   /* :0x2E */ s16 span2;
+   /* :0x30 */ s16 speed2;
+   /* :0x32 */ s16 radius2;
+   /* :0x34 */ s16 theta3;
+   /* :0x36 */ s16 span3;
+   /* :0x38 */ s16 speed3;
+   /* :0x3A */ s16 radius3;
+   /* :0x3C */ s16 theta4;
+   /* :0x3E */ s16 span4;
+   /* :0x40 */ s16 speed4;
+   /* :0x42 */ s16 radius4;
+   /* :0x44 */ s16 theta5;
+   /* :0x46 */ s16 span5;
+   /* :0x48 */ s16 speed5;
+   /* :0x4A */ s16 radius5;
+   /* :0x4C */ s16 theta6;
+   /* :0x4E */ s16 span6;
+   /* :0x50 */ s16 speed6;
+   /* :0x52 */ s16 radius6;
    /* :0x54 */ u8 unk_0x54[4];
-   /* :0x58 */ s16 todo_x58;
-   /* :0x5A */ s16 todo_x5a;
+   /* :0x58 */ s16 spin;
+   /* :0x5A */ s16 tilt;
    /* :0x5C */ struct Object *sprite;
 } Object_159;
 
@@ -1470,7 +1470,7 @@ typedef struct Object_160 {
    /* :0x24 */ struct Object *targetSprite;
    /* :0x28 */ s16 timer;
    /* :0x2A */ u8 unk_0x2A[2];
-   /* :0x2C */ s16 todo_x2c;
+   /* :0x2C */ s16 unused_0x2C;
    /* :0x2E */ u8 unk_0x2E[30];
    /* :0x4C */ s16 clut;
    /* :0x4E */ s16 fade;
@@ -1497,7 +1497,7 @@ typedef struct Object_162 {
 
 /* Stone Shower - FX1 */
 typedef struct Object_163 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 radius;
    /* :0x26 */ s16 timer;
    /* :0x28 */ u8 unk_0x28[52];
    /* :0x5C */ struct Object *dataStore;
@@ -1505,15 +1505,15 @@ typedef struct Object_163 {
 
 /* Stone Shower - Rock */
 typedef struct Object_164 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x24 */ s16 yOfs;
+   /* :0x26 */ s16 theta;
+   /* :0x28 */ s16 ySpeed;
    /* :0x2A */ u8 unk_0x2A[6];
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
+   /* :0x30 */ s16 radius;
+   /* :0x32 */ s16 delay;
    /* :0x34 */ u8 unk_0x34[24];
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
+   /* :0x4C */ s16 startY;
+   /* :0x4E */ s16 endY;
    /* :0x50 */ u8 unk_0x50[4];
    /* :0x54 */ s16 downward;
    /* :0x56 */ u8 unk_0x56[2];
@@ -1531,74 +1531,74 @@ typedef struct Object_165 {
 
 /* Rainbow Swirl */
 typedef struct Object_167 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
-   /* :0x38 */ s16 todo_x38;
-   /* :0x3A */ s16 todo_x3a;
-   /* :0x3C */ s16 todo_x3c;
-   /* :0x3E */ s16 todo_x3e;
-   /* :0x40 */ s16 todo_x40;
-   /* :0x42 */ s16 todo_x42;
-   /* :0x44 */ s16 todo_x44;
-   /* :0x46 */ s16 todo_x46;
-   /* :0x48 */ s16 todo_x48;
-   /* :0x4A */ s16 todo_x4a;
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
-   /* :0x52 */ s16 todo_x52;
-   /* :0x54 */ s16 todo_x54;
-   /* :0x56 */ s16 todo_x56;
-   /* :0x58 */ s16 todo_x58;
-   /* :0x5A */ s16 todo_x5a;
+   /* :0x24 */ s16 theta1;
+   /* :0x26 */ s16 span1;
+   /* :0x28 */ s16 speed1;
+   /* :0x2A */ s16 y1;
+   /* :0x2C */ s16 theta2;
+   /* :0x2E */ s16 span2;
+   /* :0x30 */ s16 speed2;
+   /* :0x32 */ s16 y2;
+   /* :0x34 */ s16 theta3;
+   /* :0x36 */ s16 span3;
+   /* :0x38 */ s16 speed3;
+   /* :0x3A */ s16 y3;
+   /* :0x3C */ s16 theta4;
+   /* :0x3E */ s16 span4;
+   /* :0x40 */ s16 speed4;
+   /* :0x42 */ s16 y4;
+   /* :0x44 */ s16 theta5;
+   /* :0x46 */ s16 span5;
+   /* :0x48 */ s16 speed5;
+   /* :0x4A */ s16 y5;
+   /* :0x4C */ s16 theta6;
+   /* :0x4E */ s16 span6;
+   /* :0x50 */ s16 speed6;
+   /* :0x52 */ s16 y6;
+   /* :0x54 */ s16 arcWidth;
+   /* :0x56 */ s16 radius;
+   /* :0x58 */ s16 spin;
+   /* :0x5A */ s16 semiTrans;
    /* :0x5C */ struct Object *sprite;
 } Object_167;
 
 /* Rainbow Stroke - Rainbow Swirl */
 typedef struct Object_168 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
-   /* :0x38 */ s16 todo_x38;
-   /* :0x3A */ s16 todo_x3a;
-   /* :0x3C */ s16 todo_x3c;
-   /* :0x3E */ s16 todo_x3e;
-   /* :0x40 */ s16 todo_x40;
-   /* :0x42 */ s16 todo_x42;
-   /* :0x44 */ s16 todo_x44;
-   /* :0x46 */ s16 todo_x46;
-   /* :0x48 */ s16 todo_x48;
-   /* :0x4A */ s16 todo_x4a;
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
-   /* :0x52 */ s16 todo_x52;
-   /* :0x54 */ s16 todo_x54;
-   /* :0x56 */ s16 todo_x56;
-   /* :0x58 */ s16 todo_x58;
-   /* :0x5A */ s16 todo_x5a;
+   /* :0x24 */ s16 theta1;
+   /* :0x26 */ s16 span1;
+   /* :0x28 */ s16 speed1;
+   /* :0x2A */ s16 y1;
+   /* :0x2C */ s16 theta2;
+   /* :0x2E */ s16 span2;
+   /* :0x30 */ s16 speed2;
+   /* :0x32 */ s16 y2;
+   /* :0x34 */ s16 theta3;
+   /* :0x36 */ s16 span3;
+   /* :0x38 */ s16 speed3;
+   /* :0x3A */ s16 y3;
+   /* :0x3C */ s16 theta4;
+   /* :0x3E */ s16 span4;
+   /* :0x40 */ s16 speed4;
+   /* :0x42 */ s16 y4;
+   /* :0x44 */ s16 theta5;
+   /* :0x46 */ s16 span5;
+   /* :0x48 */ s16 speed5;
+   /* :0x4A */ s16 y5;
+   /* :0x4C */ s16 theta6;
+   /* :0x4E */ s16 span6;
+   /* :0x50 */ s16 speed6;
+   /* :0x52 */ s16 y6;
+   /* :0x54 */ s16 arcWidth;
+   /* :0x56 */ s16 radius;
+   /* :0x58 */ s16 spin;
+   /* :0x5A */ s16 semiTrans;
    /* :0x5C */ struct Object *sprite;
 } Object_168;
 
 /* Evil Stream - FX1 */
 typedef struct Object_169 {
    /* :0x24 */ s16 clut;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x26 */ s16 growPhase;
    /* :0x28 */ u8 unk_0x28[2];
    /* :0x2A */ s16 fade;
    /* :0x2C */ u8 unk_0x2C[52];
@@ -1613,42 +1613,42 @@ typedef struct Object_170 {
 /* Homing Ray */
 typedef struct Object_171 {
    /* :0x24 */ s16 clut;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x26 */ s16 amplitudeX;
+   /* :0x28 */ s16 amplitudeY;
+   /* :0x2A */ s16 amplitudeZ;
    /* :0x2C */ s16 dx;
    /* :0x2E */ s16 dz;
    /* :0x30 */ s16 dy;
    /* :0x32 */ u8 unk_0x32[2];
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
+   /* :0x34 */ s16 headIdx;
+   /* :0x36 */ s16 tailIdx;
    /* :0x38 */ u8 unk_0x38[40];
 } Object_171;
 
 /* Holy Pressure - Cube */
 typedef struct Object_172 {
    /* :0x24 */ u8 unk_0x24[4];
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 spin;
    /* :0x2A */ s16 timer;
    /* :0x2C */ u8 unk_0x2C[52];
 } Object_172;
 
 /* Fire Gem - Beam */
 typedef struct Object_173 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
+   /* :0x24 */ s16 spinPhase;
+   /* :0x26 */ s16 colorIdx;
+   /* :0x28 */ s16 beamHeight;
+   /* :0x2A */ s16 ringY;
+   /* :0x2C */ s16 colorDescending;
+   /* :0x2E */ s16 colorTimer;
+   /* :0x30 */ s16 phase;
    /* :0x32 */ u8 unk_0x32[42];
    /* :0x5C */ struct Object *fx;
 } Object_173;
 
 /* Rainbow Storm - FX1 */
 typedef struct Object_175 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 theta;
    /* :0x26 */ u8 unk_0x26[50];
    /* :0x58 */ s16 iterator;
    /* :0x5A */ u8 unk_0x5A[2];
@@ -1657,7 +1657,7 @@ typedef struct Object_175 {
 
 /* Rainbow Stroke - FX1 */
 typedef struct Object_176 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 theta;
    /* :0x26 */ u8 unk_0x26[50];
    /* :0x58 */ struct Object *cam;
    /* :0x5C */ struct Object *fx;
@@ -1674,40 +1674,40 @@ typedef struct Object_177 {
 
 /* Thunder Flash - FX1 */
 typedef struct Object_178 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 maxRadius;
    /* :0x26 */ u8 unk_0x26[2];
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 theta;
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 fade;
    /* :0x2E */ u8 unk_0x2E[8];
    /* :0x36 */ s16 timer;
-   /* :0x38 */ s16 todo_x38;
+   /* :0x38 */ s16 unused_0x38;
    /* :0x3A */ u8 unk_0x3A[36];
-   /* :0x5E */ s16 todo_x5e;
+   /* :0x5E */ s16 unused_0x5E;
 } Object_178;
 
 /* Thunder Flash - Ray */
 typedef struct Object_179 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
+   /* :0x24 */ s16 maxRadius;
+   /* :0x26 */ s16 thetaX;
+   /* :0x28 */ s16 thetaZ;
+   /* :0x2A */ s16 thetaY;
+   /* :0x2C */ s16 thetaXSpeed;
+   /* :0x2E */ s16 thetaZSpeed;
+   /* :0x30 */ s16 thetaYSpeed;
+   /* :0x32 */ s16 timer;
    /* :0x34 */ u8 unk_0x34[2];
-   /* :0x36 */ s16 todo_x36;
+   /* :0x36 */ s16 growth;
    /* :0x38 */ u8 unk_0x38[36];
    /* :0x5C */ struct Object *parent;
 } Object_179;
 
 /* Spread Force - FX1 */
 typedef struct Object_180 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 maxRadius;
    /* :0x26 */ u8 unk_0x26[2];
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x28 */ s16 growth;
+   /* :0x2A */ s16 arcStep;
    /* :0x2C */ s16 fade;
    /* :0x2E */ u8 unk_0x2E[8];
    /* :0x36 */ s16 timer;
@@ -1721,7 +1721,7 @@ typedef struct Object_180 {
 typedef struct Object_182 {
    /* :0x24 */ s16 savedZoom;
    /* :0x26 */ s16 theta;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 unused_0x28;
    /* :0x2A */ u8 unk_0x2A[50];
    /* :0x5C */ struct Object *cam; // objf026
 } Object_182;
@@ -1729,9 +1729,9 @@ typedef struct Object_182 {
 /* FX - TBD */
 typedef struct Object_183 {
    /* :0x24 */ u8 unk_0x24[2];
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x26 */ s16 wobbleX;
+   /* :0x28 */ s16 wobbleY;
+   /* :0x2A */ s16 wobbleZ;
    /* :0x2C */ s16 dx;
    /* :0x2E */ s16 dz;
    /* :0x30 */ s16 dy;
@@ -1744,17 +1744,17 @@ typedef struct Object_183 {
 /* Avalanche - FX1 */
 typedef struct Object_184 {
    /* :0x24 */ s16 timer;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x26 */ s16 rise;
    /* :0x28 */ u8 unk_0x28[2];
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
+   /* :0x2A */ s16 dropHeight;
+   /* :0x2C */ s16 fallTimer;
    /* :0x2E */ u8 unk_0x2E[2];
    /* :0x30 */ s16 dx;
    /* :0x32 */ s16 dz;
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
-   /* :0x38 */ s16 todo_x38;
-   /* :0x3A */ s16 todo_x3a;
+   /* :0x34 */ s16 xOfs_unused;
+   /* :0x36 */ s16 zOfs_unused;
+   /* :0x38 */ s16 dropSpan;
+   /* :0x3A */ s16 fallOfs;
    /* :0x3C */ u8 unk_0x3C[4];
    /* :0x40 */ struct Object *cam;      // objf026
    /* :0x44 */ struct Object *boulder;  // objf211
@@ -1780,38 +1780,38 @@ typedef struct Object_186 {
 
 /* Dark Fire - Ray */
 typedef struct Object_188 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
-   /* :0x32 */ s16 todo_x32;
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
+   /* :0x24 */ s16 maxRadius;
+   /* :0x26 */ s16 thetaX;
+   /* :0x28 */ s16 thetaZ;
+   /* :0x2A */ s16 thetaY;
+   /* :0x2C */ s16 thetaXSpeed;
+   /* :0x2E */ s16 thetaZSpeed;
+   /* :0x30 */ s16 thetaYSpeed;
+   /* :0x32 */ s16 timer;
+   /* :0x34 */ s16 radius;
+   /* :0x36 */ s16 growth;
    /* :0x38 */ u8 unk_0x38[36];
    /* :0x5C */ struct Object *target;
 } Object_188;
 
 /* Ice Storm - FX1 */
 typedef struct Object_189 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x24 */ s16 unused_0x24;
+   /* :0x26 */ s16 theta1;
+   /* :0x28 */ s16 theta2;
    /* :0x2A */ u8 unk_0x2A[2];
-   /* :0x2C */ s16 todo_x2c;
+   /* :0x2C */ s16 spin;
    /* :0x2E */ u8 unk_0x2E[46];
-   /* :0x5C */ s16 todo_x5c;
+   /* :0x5C */ s16 uvScroll;
    /* :0x5E */ u8 unk_0x5E[2];
 } Object_189;
 
 /* Magic Arrow - Arrow */
 typedef struct Object_191 {
    /* :0x24 */ s16 clut_unused;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x26 */ s16 wobbleX;
+   /* :0x28 */ s16 wobbleY;
+   /* :0x2A */ s16 wobbleZ;
    /* :0x2C */ s16 dx;
    /* :0x2E */ s16 dz;
    /* :0x30 */ s16 dy;
@@ -1822,20 +1822,20 @@ typedef struct Object_191 {
 
 /* Perfect Guard - FX2 */
 typedef struct Object_192 {
-   /* :0x24 */ s16 todo_x24;
+   /* :0x24 */ s16 theta;
    /* :0x26 */ u8 unk_0x26[50];
-   /* :0x58 */ s16 todo_x58;
-   /* :0x5A */ s16 todo_x5a;
-   /* :0x5C */ s16 todo_x5c;
-   /* :0x5E */ s16 todo_x5e;
+   /* :0x58 */ s16 openFinished;
+   /* :0x5A */ s16 closeFinished;
+   /* :0x5C */ s16 uvScroll;
+   /* :0x5E */ s16 spinTimer;
 } Object_192;
 
 /* Dark Star - FX3 */
 typedef struct Object_193 {
    /* :0x24 */ s16 timer;
    /* :0x26 */ u8 unk_0x26[40];
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x4E */ s16 triRadius;
+   /* :0x50 */ s16 orbitRadius;
    /* :0x52 */ u8 unk_0x52[8];
    /* :0x5A */ s16 endingFxType;
    /* :0x5C */ struct Object *targetSprite;
@@ -1852,11 +1852,11 @@ typedef struct Object_195 {
 typedef struct Object_196 {
    /* :0x24 */ s16 timer;
    /* :0x26 */ u8 unk_0x26[2];
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
+   /* :0x28 */ s16 phase;
+   /* :0x2A */ s16 theta;
+   /* :0x2C */ s16 wobble;
    /* :0x2E */ u8 unk_0x2E[6];
-   /* :0x34 */ s16 todo_x34;
+   /* :0x34 */ s16 radius;
    /* :0x36 */ u8 unk_0x36[22];
    /* :0x4C */ s16 clut;
    /* :0x4E */ u8 unk_0x4E[6];
@@ -1878,12 +1878,12 @@ typedef struct Object_197 {
 
 /* Rolling Thunder - Casting Bolt */
 typedef struct Object_198 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
+   /* :0x24 */ s16 pulseTheta;
+   /* :0x26 */ s16 theta;
+   /* :0x28 */ s16 pulseSpeed;
+   /* :0x2A */ s16 baseHeight;
+   /* :0x2C */ s16 radiusTheta;
+   /* :0x2E */ s16 rotationSpeed;
    /* :0x30 */ u8 unk_0x30[40];
    /* :0x58 */ struct Object *sprite;
    /* :0x5C */ struct Object *parent;
@@ -1922,11 +1922,11 @@ typedef struct Object_202_746 {
 /* Blocking Impact */
 typedef struct Object_203 {
    /* :0x24 */ u8 unk_0x24[4];
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 theta;
    /* :0x2A */ u8 unk_0x2A[34];
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x4C */ s16 xOfs;
+   /* :0x4E */ s16 zOfs;
+   /* :0x50 */ s16 yOfs;
    /* :0x52 */ u8 unk_0x52[6];
    /* :0x58 */ s16 direction;
    /* :0x5A */ u8 unk_0x5A[2];
@@ -1987,7 +1987,7 @@ typedef struct Object_208 {
 typedef struct Object_211 {
    /* :0x24 */ s16 todo_x24;
    /* :0x26 */ u8 unk_0x26[38];
-   /* :0x4C */ s16 todo_x4c;
+   /* :0x4C */ s16 scale;
    /* :0x4E */ s16 rotY;
    /* :0x50 */ s16 rotZ;
    /* :0x52 */ s16 rotX;
@@ -1996,14 +1996,14 @@ typedef struct Object_211 {
 
 /* Holy Lightning - Casting Bolt */
 typedef struct Object_212 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
+   /* :0x24 */ s16 pulseTheta;
+   /* :0x26 */ s16 theta;
+   /* :0x28 */ s16 pulseSpeed;
+   /* :0x2A */ s16 baseHeight;
+   /* :0x2C */ s16 riseOfs;
+   /* :0x2E */ s16 riseSpeed;
    /* :0x30 */ u8 unk_0x30[28];
-   /* :0x4C */ s16 todo_x4c;
+   /* :0x4C */ s16 riseSpeedBias;
    /* :0x4E */ u8 unk_0x4E[10];
    /* :0x58 */ struct Object *sprite;
    /* :0x5C */ struct Object *parent;
@@ -2048,8 +2048,8 @@ typedef struct Object_215 {
 
 /* Explosion - FX2 */
 typedef struct Object_220 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 theta;
+   /* :0x26 */ s16 spin;
    /* :0x28 */ u8 unk_0x28[50];
    /* :0x5A */ s16 endingFxType;
    /* :0x5C */ struct Object *sprite;
@@ -2100,9 +2100,9 @@ typedef struct Object_225 {
 /* Thunder Ball - Child Orb */
 typedef struct Object_226 {
    /* :0x24 */ u8 unk_0x24[2];
-   /* :0x26 */ s16 todo_x26;
+   /* :0x26 */ s16 wobbleX;
    /* :0x28 */ u8 unk_0x28[2];
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x2A */ s16 wobbleZ;
    /* :0x2C */ s16 dx;
    /* :0x2E */ s16 dz;
    /* :0x30 */ s16 dy;
@@ -2150,8 +2150,8 @@ typedef struct Object_269 {
 
 /* FX - TBD */
 typedef struct Object_270 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 unused_0x24;
+   /* :0x26 */ s16 unused_0x26;
    /* :0x28 */ u8 unk_0x28[48];
    /* :0x58 */ struct Object *sprite;
    /* :0x5C */ u8 unk_0x5C[4];
@@ -2191,11 +2191,11 @@ typedef struct Object_273 {
    /* :0x32 */ u8 unk_0x32[2];
    /* :0x34 */ s16 theta1;
    /* :0x36 */ s16 theta2;
-   /* :0x38 */ s16 todo_x38;
+   /* :0x38 */ s16 dist;
    /* :0x3A */ s16 unused_0x3A;
    PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
-   /* :0x54 */ s16 todo_x54;
+   /* :0x54 */ s16 rotationSpeed_unused;
    /* :0x56 */ u8 unk_0x56[10];
 } Object_273;
 
@@ -2212,8 +2212,8 @@ typedef struct Object_275 {
 
 /* Zoom - TBD */
 typedef struct Object_277 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 panX_unused;
+   /* :0x26 */ s16 panZ_unused;
    /* :0x28 */ s16 dstZoom;
    /* :0x2A */ u8 unk_0x2A[14];
    /* :0x38 */ s16 smoothness;
@@ -2414,11 +2414,11 @@ typedef struct Object_314 {
    /* :0x32 */ s16 otOfs;
    /* :0x34 */ s16 theta1;
    /* :0x36 */ s16 theta2;
-   /* :0x38 */ s16 todo_x38;
+   /* :0x38 */ s16 dist;
    /* :0x3A */ s16 unused_0x3A;
    PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXZY coords[4];
-   /* :0x54 */ s16 todo_x54;
+   /* :0x54 */ s16 rotationSpeed_unused;
    /* :0x56 */ u8 unk_0x56[10];
 } Object_314;
 
@@ -2454,10 +2454,10 @@ typedef struct Object_319 {
    /* :0x28 */ u8 unk_0x28[9];
    /* :0x31 */ s8 semiTrans;
    /* :0x32 */ u8 unk_0x32[30];
-   /* :0x50 */ struct Object *todo_x50;
+   /* :0x50 */ struct Object *arc2Endpoint;
    /* :0x54 */ u8 unk_0x54[4];
-   /* :0x58 */ struct Object *todo_x58;
-   /* :0x5C */ struct Object *todo_x5c;
+   /* :0x58 */ struct Object *arc2;
+   /* :0x5C */ struct Object *arc1Endpoint;
 } Object_319;
 
 /* FX - TBD */
@@ -2539,7 +2539,7 @@ typedef struct Object_332 {
 
 /* Salamander - FX1 */
 typedef struct Object_334 {
-   /* :0x24 */ s32 todo_x24;
+   /* :0x24 */ s32 rockSpawnCounter;
    /* :0x28 */ u8 unk_0x28[56];
 } Object_334;
 
@@ -2547,10 +2547,10 @@ typedef struct Object_334 {
 typedef struct Object_335_336 {
    /* :0x24 */ s16 theta1;
    /* :0x26 */ s16 theta2;
-   /* :0x28 */ s16 todo_x28;
-   /* :0x2A */ s16 todo_x2a;
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
+   /* :0x28 */ s16 theta3;
+   /* :0x2A */ s16 theta4;
+   /* :0x2C */ s16 radius;
+   /* :0x2E */ s16 theta5;
    /* :0x30 */ SVectorXYZ position1;
    /* :0x36 */ u8 unk_0x36[2];
    /* :0x38 */ SVectorXYZ position2;
@@ -2603,9 +2603,9 @@ typedef struct Object_347 {
 
 /* FX - TBD */
 typedef struct Object_348 {
-   /* :0x24 */ s16 todo_x24[8];
-   /* :0x34 */ s16 todo_x34[8];
-   /* :0x44 */ s16 todo_x44[8];
+   /* :0x24 */ s16 targetRadius[8];
+   /* :0x34 */ s16 radius[8];
+   /* :0x44 */ s16 unused_0x44[8];
    /* :0x54 */ u8 unk_0x54[8];
    /* :0x5C */ struct Object *dataStore; // cylinder
 } Object_348;
@@ -2625,10 +2625,10 @@ typedef struct Object_351 {
    /* :0x38 */ s16 readingFromStringTable;
    /* :0x3A */ s16 indentChars;
    /* :0x3C */ RECT rect;
-   /* :0x44 */ s8 todo_x44;
+   /* :0x44 */ s8 fastForward;
    /* :0x45 */ s8 todo_x45;
    /* :0x46 */ u8 unk_0x46[2];
-   /* :0x48 */ s16 todo_x48;
+   /* :0x48 */ s16 speakAnimSuppressed;
    /* :0x4A */ u8 unk_0x4A[10];
    /* :0x54 */ u8 *textResumePtr;
    /* :0x58 */ struct Object *buttonIcon;
@@ -2668,17 +2668,17 @@ typedef struct Object_357 {
 
 /* Map 19 - Elevator (TBD) */
 typedef struct Object_358 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x24 */ s16 riseAccum0;
+   /* :0x26 */ s16 riseAccum1;
+   /* :0x28 */ s16 riseAccum2;
    /* :0x2A */ u8 unk_0x2A[2];
-   /* :0x2C */ s16 todo_x2c;
-   /* :0x2E */ s16 todo_x2e;
-   /* :0x30 */ s16 todo_x30;
+   /* :0x2C */ s16 riseSpeed0;
+   /* :0x2E */ s16 riseSpeed1;
+   /* :0x30 */ s16 riseSpeed2;
    /* :0x32 */ u8 unk_0x32[2];
-   /* :0x34 */ s16 todo_x34;
-   /* :0x36 */ s16 todo_x36;
-   /* :0x38 */ s16 todo_x38;
+   /* :0x34 */ s16 riseApplied0;
+   /* :0x36 */ s16 riseApplied1;
+   /* :0x38 */ s16 riseApplied2;
    /* :0x3A */ u8 unk_0x3A[38];
 } Object_358;
 
@@ -2781,7 +2781,7 @@ typedef struct Object_377 {
    /* :0x30 */ u8 unk_0x30[36];
    /* :0x54 */ struct Object *sprite;
    /* :0x58 */ u8 unk_0x58[4];
-   /* :0x5C */ struct Object *todo_x5c;
+   /* :0x5C */ struct Object *link;
 } Object_377;
 
 /* Phase Shift - FX1 */
@@ -2876,12 +2876,12 @@ typedef struct Object_390 {
 
 /* FX - TBD */
 typedef struct Object_392 {
-   /* :0x24 */ struct Object *todo_x24;
-   /* :0x28 */ struct Object *todo_x28;
-   /* :0x2C */ struct Object *todo_x2c;
-   /* :0x30 */ struct Object *todo_x30;
+   /* :0x24 */ struct Object *neighborY0;
+   /* :0x28 */ struct Object *neighborY1;
+   /* :0x2C */ struct Object *neighborX0;
+   /* :0x30 */ struct Object *neighborX1;
    /* :0x34 */ u8 unk_0x34[40];
-   /* :0x5C */ struct Object *todo_x5c;
+   /* :0x5C */ struct Object *controller;
 } Object_392;
 
 /* Map 44 - Scene 00 - Explosion Rays */
@@ -2919,7 +2919,7 @@ typedef struct Object_395 {
 typedef struct Object_396 {
    /* :0x24 */ u8 unk_0x24[4];
    /* :0x28 */ s16 gfxIdx;
-   /* :0x2A */ s16 todo_x2a;
+   /* :0x2A */ s16 bowDir;
    /* :0x2C */ s16 clut;
    /* :0x2E */ u8 unk_0x2E[10];
    /* :0x38 */ void *animData;
@@ -3093,15 +3093,15 @@ typedef struct Object_446 {
    /* :0x34 */ u8 unk_0x34[8];
    PC_PORT_COORDS_ALIAS_PAD8
    /* :0x3C */ SVectorXY coords[4];
-   /* :0x4C */ s16 todo_x4c;
-   /* :0x4E */ s16 todo_x4e;
-   /* :0x50 */ s16 todo_x50;
-   /* :0x52 */ s16 todo_x52;
-   /* :0x54 */ s16 todo_x54;
-   /* :0x56 */ s16 todo_x56;
-   /* :0x58 */ s16 todo_x58;
-   /* :0x5A */ s16 todo_x5a;
-   /* :0x5C */ s16 todo_x5c;
+   /* :0x4C */ s16 angle0;
+   /* :0x4E */ s16 angle1;
+   /* :0x50 */ s16 angleStep0;
+   /* :0x52 */ s16 angleStep1;
+   /* :0x54 */ s16 radius0;
+   /* :0x56 */ s16 radius1;
+   /* :0x58 */ s16 radiusStep0;
+   /* :0x5A */ s16 radiusStep1;
+   /* :0x5C */ s16 life;
    /* :0x5E */ s16 delay;
 } Object_446;
 
@@ -3323,8 +3323,8 @@ typedef struct Object_597 {
 
 /* Map 32 - Car Release */
 typedef struct Object_650 {
-   /* :0x24 */ s16 todo_x24;
-   /* :0x26 */ s16 todo_x26;
+   /* :0x24 */ s16 camOffsetX;
+   /* :0x26 */ s16 camOffsetAccum;
    /* :0x28 */ s16 startX;
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 carIdx;
@@ -3357,10 +3357,10 @@ typedef struct Object_652 {
    /* :0x4C */ s16 tileX;
    /* :0x4E */ s16 tileZ;
    /* :0x50 */ u8 unk_0x50[4];
-   /* :0x54 */ s16 todo_x54;
+   /* :0x54 */ s16 smokeTimer;
    /* :0x56 */ u8 unk_0x56[2];
    /* :0x58 */ s16 hitPlayerUnit;
-   /* :0x5A */ s16 todo_x5a;
+   /* :0x5A */ s16 smokeElapsed;
    /* :0x5C */ struct Object *buttonDepress;
 } Object_652;
 
@@ -3414,7 +3414,7 @@ typedef struct Object_658 {
    /* :0x2A */ u8 unk_0x2A[2];
    /* :0x2C */ s16 timer;
    /* :0x2E */ u8 unk_0x2E[2];
-   /* :0x30 */ s16 todo_x30;
+   /* :0x30 */ s16 waveAccum;
    /* :0x32 */ u8 unk_0x32[46];
 } Object_658;
 
@@ -3516,11 +3516,11 @@ typedef struct Object_680 {
 /* Stat Buff FX */
 typedef struct Object_681 {
    /* :0x24 */ struct Object *unitSprite;
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 spinTheta;
    /* :0x2A */ u8 unk_0x2A[34];
    /* :0x4C */ s16 clut;
    /* :0x4E */ s16 fade;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x50 */ s16 phase;
    /* :0x52 */ u8 unk_0x52[14];
 } Object_681;
 
@@ -3648,11 +3648,11 @@ typedef struct Object_724 {
 /* Stat Buff Icon */
 typedef struct Object_733 {
    /* :0x24 */ u8 unk_0x24[4];
-   /* :0x28 */ s16 todo_x28;
+   /* :0x28 */ s16 spinTheta;
    /* :0x2A */ u8 unk_0x2A[34];
    /* :0x4C */ s16 type;
    /* :0x4E */ s16 clut;
-   /* :0x50 */ s16 todo_x50;
+   /* :0x50 */ s16 phase;
    /* :0x52 */ u8 unk_0x52[10];
    /* :0x5C */ struct Object *sprite;
 } Object_733;
@@ -3670,7 +3670,7 @@ typedef struct Object_747_748 {
    /* :0x26 */ s16 radius;
    /* :0x28 */ s16 amplitude;
    /* :0x2A */ s16 timer;
-   /* :0x2C */ s16 todo_x2c;
+   /* :0x2C */ s16 amplitudeTheta;
    /* :0x2E */ u8 unk_0x2E[50];
 } Object_747_748;
 
@@ -3802,8 +3802,8 @@ typedef struct Object_Unk_8008d1f0 {
 } Object_Unk_8008d1f0;
 
 typedef struct Object_Unk_UsedBy392 {
-   /* :0x24 */ s32 todo_x24;
-   /* :0x28 */ s32 todo_x28;
+   /* :0x24 */ s32 mode;
+   /* :0x28 */ s32 killFlag;
    /* :0x2C */ s16 theta;
    /* :0x2E */ u8 unk_0x2E[50];
 } Object_Unk_UsedBy392;

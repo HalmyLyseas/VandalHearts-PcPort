@@ -164,11 +164,11 @@ void State_FileSaveScreen(void) {
    case 1:
       obj = Obj_GetUnused();
       obj->functionIndex = OBJF_FILE_SAVE_MENU;
-      gState.D_8014053E = 0;
+      gState.subObjDone = 0;
       gState.secondary++;
       break;
    case 2:
-      if (gState.D_8014053E != 0) {
+      if (gState.subObjDone != 0) {
          gState.primary = gState.state6;
          gState.secondary = 0;
          gState.state3 = 0;
@@ -192,11 +192,11 @@ void State_FileLoadScreen(void) {
    case 1:
       obj = Obj_GetUnused();
       obj->functionIndex = OBJF_FILE_LOAD_MENU;
-      gState.D_8014053E = 0;
+      gState.subObjDone = 0;
       gState.secondary++;
       break;
    case 2:
-      if (gState.D_8014053E != 0) {
+      if (gState.subObjDone != 0) {
          gState.primary = gState.state6;
          gState.secondary = 0;
          gState.state3 = 0;

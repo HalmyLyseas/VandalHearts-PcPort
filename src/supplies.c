@@ -111,14 +111,14 @@ extern u8 gShopInventories[10][10][20]; // [shopId][category][item]
 extern u8 *gItemDescriptions2[101];
 
 // TODO
-extern s32 D_801F6D40; // gold as displayed last
-extern u8 D_801F6D44;  // timer
-extern s16 D_8012338C; // wnd
-extern u8 D_801F6D88;  // is equipped
-extern u8 D_801F6D8C;  // transferring from depot
-extern u8 D_801F6D90;  // choice (slot+1) of party member item to transfer
-extern u8 D_801F6D94;  // item to transfer
-extern u8 D_801F6D98;  // partyIdx of transfer src
+extern s32 gDisplayedGold; // gold as displayed last
+extern u8 gSupplyMenuTimer;  // timer
+extern s16 gItemListWindowId; // wnd
+extern u8 gDepotItemIsEquipped;  // is equipped
+extern u8 gDepotTransferFromDepot;  // transferring from depot
+extern u8 gDepotTransferSrcSlot;  // choice (slot+1) of party member item to transfer
+extern u8 gDepotTransferItem;  // item to transfer
+extern u8 gDepotTransferSrcMember;  // partyIdx of transfer src
 
 void RenderScrollIndicator(u8 downward, s16 x, s16 y) {
    s16 halfSize;
@@ -752,12 +752,12 @@ void Objf406_ShopOrDepot(Object *obj) {
       gWindowChoiceHeight = 17;
       gWindowChoicesTopMargin = 10;
       FadeInScreen(2, 10);
-      D_801F6D44 = 30;
+      gSupplyMenuTimer = 30;
       obj->state++;
 
    // fallthrough
    case 1:
-      if (--D_801F6D44 == 0) {
+      if (--gSupplyMenuTimer == 0) {
          j = 0;
          for (i = 1; i < PARTY_CT; i++) {
             if (gPartyMembers[i].inParty) {
@@ -969,13 +969,13 @@ void Objf406_ShopOrDepot(Object *obj) {
             DrawText(68, 20, 29, 2, 0, gItemDescriptions2[i]);
          }
          gWindowActiveIdx = 0x3a;
-         D_8012338C = 0x3a;
+         gItemListWindowId = 0x3a;
          SlideWindowTo(0x3a, 10, 90);
          if (gPadStateNewPresses & PAD_X) {
             SlideWindowTo(0x3a, 84, 250);
             CloseWindow(0x3a);
             gWindowActiveIdx = 0;
-            D_8012338C = 0;
+            gItemListWindowId = 0;
             obj->state = 4;
             obj->state2 = 0;
             SlideWindowTo(0x38, 12, 90);
@@ -1579,7 +1579,7 @@ void Objf406_ShopOrDepot(Object *obj) {
 #endif
          DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
          gWindowActiveIdx = 0x3f;
-         D_8012338C = 0x3f;
+         gItemListWindowId = 0x3f;
          DisplayCustomWindowWithSetChoice(0x3f, 5, 1, 40, 0, 0,
                                           gMenuMem_SellingFromParty[OBJ.partyIdx1]);
          SlideWindowTo(0x3f, 10, 90);
@@ -1605,7 +1605,7 @@ void Objf406_ShopOrDepot(Object *obj) {
          if ((gPadStateNewPresses & PAD_X) || (gWindowChoice.raw == 0x3fff)) {
             SlideWindowTo(0x3f, 90, 240);
             CloseWindow(0x3f);
-            D_8012338C = 0;
+            gItemListWindowId = 0;
             obj->state = 30;
             obj->state2 = 0;
          } else if (gWindowChoice.s.windowId == 0x3f && gWindowChoice.s.choice != 0) {
@@ -1650,7 +1650,7 @@ void Objf406_ShopOrDepot(Object *obj) {
          DrawWindow(0x34, 0, 0, 312, 90, -400, -400, WBS_DRAGON, 0);
          DrawText(68, 20, 30, 2, 0, gTextPointers[34]);
          gWindowActiveIdx = 0x3f;
-         D_8012338C = 0x3f;
+         gItemListWindowId = 0x3f;
          obj->state2 -= 2;
          break;
 
@@ -1673,7 +1673,7 @@ void Objf406_ShopOrDepot(Object *obj) {
             DrawText(68, 20, 30, 2, 0, gTextPointers[35]);
             CloseWindow(0x37);
             gWindowActiveIdx = 0x3f;
-            D_8012338C = 0x3f;
+            gItemListWindowId = 0x3f;
             obj->state2 -= 4;
          } else if (gWindowChoice.raw == 0x3702 || gWindowChoice.raw == 0x37ff) {
             CloseWindow(0x37);
@@ -1759,7 +1759,7 @@ void Objf406_ShopOrDepot(Object *obj) {
          DrawSjisText(28, 110, 30, 2, 0, sInventoryBuffer);
          DisplayCustomWindowWithSetChoice(0x40, 5, 1, 50, 1, 0, gState.choices[5]);
          gWindowActiveIdx = 0x40;
-         D_8012338C = 0x40;
+         gItemListWindowId = 0x40;
          SlideWindowTo(0x40, 10, 90);
          DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
          DrawText(68, 20, 30, 2, 0, gTextPointers[38]);
@@ -1787,7 +1787,7 @@ void Objf406_ShopOrDepot(Object *obj) {
             SlideWindowTo(0x40, 84, 250);
             CloseWindow(0x40);
             gWindowActiveIdx = 0;
-            D_8012338C = 0;
+            gItemListWindowId = 0;
             obj->state = 33;
             obj->state2 = 1;
          }
@@ -1826,7 +1826,7 @@ void Objf406_ShopOrDepot(Object *obj) {
          DrawWindow(0x34, 0, 0, 312, 90, -400, -400, WBS_DRAGON, 0);
          DrawText(68, 20, 30, 2, 0, gTextPointers[42]);
          gWindowActiveIdx = 0x40;
-         D_8012338C = 0x40;
+         gItemListWindowId = 0x40;
          obj->state2 -= 2;
          break;
 
@@ -1846,7 +1846,7 @@ void Objf406_ShopOrDepot(Object *obj) {
             DrawText(68, 20, 30, 2, 0, gTextPointers[43]);
             CloseWindow(0x37);
             gWindowActiveIdx = 0x40;
-            D_8012338C = 0x40;
+            gItemListWindowId = 0x40;
             obj->state2 -= 4;
          } else if (gWindowChoice.raw == 0x3702 || gWindowChoice.raw == 0x37ff) {
             CloseWindow(0x37);
@@ -1895,8 +1895,8 @@ void Objf406_ShopOrDepot(Object *obj) {
       OBJ.partyNeedsRedraw = 1;
       SlideWindowTo(0x34, 4, 10);
       SlideWindowTo(0x35, 252, 10);
-      D_801F6D8C = 0;
-      D_801F6D88 = 0;
+      gDepotTransferFromDepot = 0;
+      gDepotItemIsEquipped = 0;
       DrawWindow(0x34, 0, 0, 312, 90, -400, -400, WBS_DRAGON, 0);
       DrawText(20, 20, 30, 2, 0, gTextPointers[45]);
       DrawWindow(0x3b, 412, 100, 96, 136, 90, 90, WBS_CROSSED, OBJ.partyRows);
@@ -1938,8 +1938,8 @@ void Objf406_ShopOrDepot(Object *obj) {
          obj->state = 90;
       } else if (gWindowChoice.s.windowId == 0x3b && gWindowChoice.s.choice != 0) {
          CloseWindow(0x3b);
-         D_801F6D98 = gCurrentParty[OBJ.partyTop + gHighlightedChoice - 1];
-         if (D_801F6D98 == 13) {
+         gDepotTransferSrcMember = gCurrentParty[OBJ.partyTop + gHighlightedChoice - 1];
+         if (gDepotTransferSrcMember == 13) {
             obj->state = 53;
             obj->state2 = 0;
          } else {
@@ -1958,16 +1958,16 @@ void Objf406_ShopOrDepot(Object *obj) {
          gWindowChoiceHeight = 17;
          gWindowChoicesTopMargin = 10;
          DrawWindow(0x3f, 0, 100, 200, 108, 10, 390, WBS_CROSSED, 5);
-         ListPartyMemberInventory(D_801F6D98, 0);
+         ListPartyMemberInventory(gDepotTransferSrcMember, 0);
 #ifdef PC_FEAT
          if (PC_LangItemNames1Byte()) DrawPartyItemList1Byte(0);
          else
 #endif
          DrawSjisText(28, 110, 19, 2, 0, sInventoryBuffer);
          gWindowActiveIdx = 0x3f;
-         D_8012338C = 0x3f;
+         gItemListWindowId = 0x3f;
          DisplayCustomWindowWithSetChoice(0x3f, 5, 1, 40, 0, 0,
-                                          gMenuMem_PartyInventory[D_801F6D98]);
+                                          gMenuMem_PartyInventory[gDepotTransferSrcMember]);
          SlideWindowTo(0x3f, 10, 90);
          obj->state2++;
          break;
@@ -1978,7 +1978,7 @@ void Objf406_ShopOrDepot(Object *obj) {
 
       // fallthrough
       case 2:
-         gMenuMem_PartyInventory[D_801F6D98] = gState.choices[4];
+         gMenuMem_PartyInventory[gDepotTransferSrcMember] = gState.choices[4];
          if ((gPadStateNewPresses & PAD_DOWN) || (gPadStateNewPresses & PAD_UP)) {
             OBJ.selectionModified = 1;
          }
@@ -1991,24 +1991,24 @@ void Objf406_ShopOrDepot(Object *obj) {
          if ((gPadStateNewPresses & PAD_X) || (gWindowChoice.raw == 0x3fff)) {
             SlideWindowTo(0x3f, 90, 240);
             CloseWindow(0x3f);
-            D_8012338C = 0;
+            gItemListWindowId = 0;
             obj->state = 50;
             obj->state2 = 0;
          } else {
             if (gWindowChoice.s.windowId == 0x3f && gWindowChoice.s.choice != 0) {
-               D_801F6D94 = gPartyMemberInventory[gHighlightedChoice - 1];
-               if (D_801F6D94 != ITEM_NULL) {
-                  D_801F6D90 = gHighlightedChoice;
-                  if (gHighlightedChoice == 4 && gPartyMembers[D_801F6D98].items[0] == ITEM_NULL) {
+               gDepotTransferItem = gPartyMemberInventory[gHighlightedChoice - 1];
+               if (gDepotTransferItem != ITEM_NULL) {
+                  gDepotTransferSrcSlot = gHighlightedChoice;
+                  if (gHighlightedChoice == 4 && gPartyMembers[gDepotTransferSrcMember].items[0] == ITEM_NULL) {
                      // First listed item could map to either since they're displayed contiguously
-                     D_801F6D90 = gHighlightedChoice + 1;
+                     gDepotTransferSrcSlot = gHighlightedChoice + 1;
                   }
-                  if (D_801F6D90 < 4) {
-                     D_801F6D88 = 1;
+                  if (gDepotTransferSrcSlot < 4) {
+                     gDepotItemIsEquipped = 1;
                   }
                   SlideWindowTo(0x3f, 90, 240);
                   CloseWindow(0x3f);
-                  D_8012338C = 0;
+                  gItemListWindowId = 0;
                   gWindowActiveIdx = 0;
                   obj->state = 55;
                   obj->state2 = 0;
@@ -2025,7 +2025,7 @@ void Objf406_ShopOrDepot(Object *obj) {
       switch (obj->state2) {
       case 0:
          // "Which type of possession do you want to transfer?"
-         D_801F6D88 = 0;
+         gDepotItemIsEquipped = 0;
          DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
          DrawText(20, 20, 30, 2, 0, gTextPointers[47]);
          obj->state2++;
@@ -2098,7 +2098,7 @@ void Objf406_ShopOrDepot(Object *obj) {
                                           gMenuMem_ShopOrDepot[OBJ.depotCategory].ofs);
          SlideWindowTo(0x40, 10, 90);
          gWindowActiveIdx = 0x40;
-         D_8012338C = 0x40;
+         gItemListWindowId = 0x40;
          DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
          DrawText(20, 20, 30, 2, 0, gTextPointers[49]);
          obj->state2++;
@@ -2125,17 +2125,17 @@ void Objf406_ShopOrDepot(Object *obj) {
             SlideWindowTo(0x40, 90, 240);
             CloseWindow(0x40);
             gWindowActiveIdx = 0;
-            D_8012338C = 0;
+            gItemListWindowId = 0;
             obj->state = 53;
             obj->state2 = 0;
          }
          if (gWindowChoice.s.windowId == 0x40 && gWindowChoice.s.choice != 0) {
-            D_801F6D94 = gDepotInventoryPtr[OBJ.depotTop + gHighlightedChoice - 1];
-            if (D_801F6D94 != ITEM_NULL) {
-               D_801F6D8C = 1;
+            gDepotTransferItem = gDepotInventoryPtr[OBJ.depotTop + gHighlightedChoice - 1];
+            if (gDepotTransferItem != ITEM_NULL) {
+               gDepotTransferFromDepot = 1;
                SlideWindowTo(0x40, 90, 240);
                CloseWindow(0x40);
-               D_8012338C = 0;
+               gItemListWindowId = 0;
                gWindowActiveIdx = 0;
                obj->state = 55;
                obj->state2 = 0;
@@ -2164,14 +2164,14 @@ void Objf406_ShopOrDepot(Object *obj) {
          DrawSmallEquipmentWindow(gCurrentParty[OBJ.partyChoice - 1]);
          DrawWindow(0x3c, 256, 200, 128, 36, 108, 188, WBS_CROSSED, 0);
 #ifdef PC_FEAT
-         if (PC_LangItemNames1Byte()) DrawItemName1Byte(272, 210, 0, D_801F6D94, ITEM1B_NAME_TIGHT);
+         if (PC_LangItemNames1Byte()) DrawItemName1Byte(272, 210, 0, gDepotTransferItem, ITEM1B_NAME_TIGHT);
          else
 #endif
-         DrawSjisText(272, 210, 19, 2, 0, gItemNamesSjis[D_801F6D94]);
+         DrawSjisText(272, 210, 19, 2, 0, gItemNamesSjis[gDepotTransferItem]);
          DisplayCustomWindow(0x3c, 2, 1, 50, 1, 0);
          obj_v1 = Obj_GetUnused();
          obj_v1->functionIndex = OBJF_DISPLAY_ICON;
-         obj_v1->d.sprite.gfxIdx = GFX_ITEM_ICONS_OFS + D_801F6D94;
+         obj_v1->d.sprite.gfxIdx = GFX_ITEM_ICONS_OFS + gDepotTransferItem;
          obj_v1->x1.n = 116;
          obj_v1->y1.n = 198;
          obj->state2++;
@@ -2195,14 +2195,14 @@ void Objf406_ShopOrDepot(Object *obj) {
             OBJ.partyChoice = i;
             DrawSmallEquipmentWindow(gCurrentParty[i - 1]);
          }
-         if (gItemEquipmentTypes[D_801F6D94] != EQUIPMENT_TYPE_ITEM) {
+         if (gItemEquipmentTypes[gDepotTransferItem] != EQUIPMENT_TYPE_ITEM) {
             SlideWindowTo(0x3d, 240, 170);
          }
          i = gCurrentParty[OBJ.partyTop + gHighlightedChoice - 1];
          if (OBJ.partyIdx2 != i && i < 13) {
             OBJ.partyIdx2 = i;
             DrawWindow(0x3d, 324, 140, 64, 54, 240, 170, WBS_CROSSED, 0);
-            UpdateStatChangeText(D_801F6D94, OBJ.partyIdx2);
+            UpdateStatChangeText(gDepotTransferItem, OBJ.partyIdx2);
             DrawSjisText(328, 151, 10, 2, 0, sStatChangeBuffer);
          }
          if (i >= 13) {
@@ -2227,12 +2227,12 @@ void Objf406_ShopOrDepot(Object *obj) {
             obj->state = 80;
             obj->state2 = 0;
          } else if (gWindowChoice.s.windowId == 0x3b && gWindowChoice.s.choice != 0) {
-            D_8012338C = 0;
+            gItemListWindowId = 0;
             gWindowActiveIdx = 0;
             OBJ.partyIdx1 = gCurrentParty[OBJ.partyTop + gHighlightedChoice - 1];
-            if (OBJ.partyIdx1 == D_801F6D98 &&
-                (D_801F6D88 != 0 || D_801F6D8C != 0 ||
-                 !gEquipmentTypeClassCapability[gItemEquipmentTypes[D_801F6D94]]
+            if (OBJ.partyIdx1 == gDepotTransferSrcMember &&
+                (gDepotItemIsEquipped != 0 || gDepotTransferFromDepot != 0 ||
+                 !gEquipmentTypeClassCapability[gItemEquipmentTypes[gDepotTransferItem]]
                                                [gUnits[OBJ.partyIdx1].class])) {
                // "You gave it back to yourself."
                DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
@@ -2240,27 +2240,27 @@ void Objf406_ShopOrDepot(Object *obj) {
                obj->state = 56;
                obj->state2 = 0;
             } else if (OBJ.partyIdx1 == 13) {
-               if (D_801F6D88 == 0) {
+               if (gDepotItemIsEquipped == 0) {
                   obj->state = 58;
                   obj->state2 = 0;
                } else {
                   obj->state = 57;
                   obj->state2 = 0;
                }
-            } else if (gEquipmentTypeClassCapability[gItemEquipmentTypes[D_801F6D94]]
+            } else if (gEquipmentTypeClassCapability[gItemEquipmentTypes[gDepotTransferItem]]
                                                     [gUnits[OBJ.partyIdx1].class] &&
-                       D_801F6D94 != ITEM_V_HEART &&
+                       gDepotTransferItem != ITEM_V_HEART &&
                        !(OBJ.partyIdx1 == UNIT_ASH &&
                          gPartyMembers[UNIT_ASH].weapon == ITEM_V_HEART &&
-                         gItemEquipmentTypes[D_801F6D94] <= EQUIPMENT_TYPE_V_HEART)) {
+                         gItemEquipmentTypes[gDepotTransferItem] <= EQUIPMENT_TYPE_V_HEART)) {
                SlideWindowTo(0x3d, 350, 170);
                CloseWindow(0x3d);
                SlideWindowTo(0x3e, 240, 168);
-               if (D_801F6D88 != 0) {
+               if (gDepotItemIsEquipped != 0) {
                   obj->state = 62;
                   obj->state2 = 0;
                } else {
-                  if (OBJ.partyIdx1 == D_801F6D98) {
+                  if (OBJ.partyIdx1 == gDepotTransferSrcMember) {
                      obj->state = 64;
                      obj->state2 = 0;
                   } else {
@@ -2269,14 +2269,14 @@ void Objf406_ShopOrDepot(Object *obj) {
                   }
                }
             } else {
-               if (OBJ.partyIdx1 == D_801F6D98 &&
-                   gItemEquipmentTypes[D_801F6D94] <= EQUIPMENT_TYPE_V_HEART) {
+               if (OBJ.partyIdx1 == gDepotTransferSrcMember &&
+                   gItemEquipmentTypes[gDepotTransferItem] <= EQUIPMENT_TYPE_V_HEART) {
                   // "You gave it back to yourself."
                   DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
                   DrawText(20, 20, 30, 2, 0, gTextPointers[51]);
                   obj->state = 56;
                   obj->state2 = 0;
-               } else if (D_801F6D88 != 0) {
+               } else if (gDepotItemIsEquipped != 0) {
                   obj->state = 59;
                   obj->state2 = 0;
                } else {
@@ -2330,8 +2330,8 @@ void Objf406_ShopOrDepot(Object *obj) {
          // "Item was transferred to the supply wagon."
          DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
          DrawText(20, 20, 30, 2, 0, gTextPointers[53]);
-         gState.depot[D_801F6D94]++;
-         gPartyMembers[D_801F6D98].items[D_801F6D90 - 4] = ITEM_NULL;
+         gState.depot[gDepotTransferItem]++;
+         gPartyMembers[gDepotTransferSrcMember].items[gDepotTransferSrcSlot - 4] = ITEM_NULL;
          obj->state2++;
 
       // fallthrough
@@ -2372,15 +2372,15 @@ void Objf406_ShopOrDepot(Object *obj) {
          // "Possession has been transferred."
          DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
          DrawText(20, 20, 30, 2, 0, gTextPointers[55]);
-         if (D_801F6D8C != 0) {
-            gState.depot[D_801F6D94]--;
+         if (gDepotTransferFromDepot != 0) {
+            gState.depot[gDepotTransferItem]--;
          } else {
-            gPartyMembers[D_801F6D98].items[D_801F6D90 - 4] = ITEM_NULL;
+            gPartyMembers[gDepotTransferSrcMember].items[gDepotTransferSrcSlot - 4] = ITEM_NULL;
          }
          if (gPartyMembers[OBJ.partyIdx1].items[0] == ITEM_NULL) {
-            gPartyMembers[OBJ.partyIdx1].items[0] = D_801F6D94;
+            gPartyMembers[OBJ.partyIdx1].items[0] = gDepotTransferItem;
          } else {
-            gPartyMembers[OBJ.partyIdx1].items[1] = D_801F6D94;
+            gPartyMembers[OBJ.partyIdx1].items[1] = gDepotTransferItem;
          }
          DrawSmallEquipmentWindow(gCurrentParty[OBJ.partyChoice - 1]);
          obj->state2++;
@@ -2439,16 +2439,16 @@ void Objf406_ShopOrDepot(Object *obj) {
             CloseWindow(0x37);
             DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
             DrawText(20, 20, 30, 2, 0, gTextPointers[59]);
-            i = gItemEquipmentTypes[D_801F6D94];
+            i = gItemEquipmentTypes[gDepotTransferItem];
             if (i <= EQUIPMENT_TYPE_V_HEART) {
-               gPartyMembers[D_801F6D98].weapon = gPartyMembers[OBJ.partyIdx1].weapon;
-               gPartyMembers[OBJ.partyIdx1].weapon = D_801F6D94;
+               gPartyMembers[gDepotTransferSrcMember].weapon = gPartyMembers[OBJ.partyIdx1].weapon;
+               gPartyMembers[OBJ.partyIdx1].weapon = gDepotTransferItem;
             } else if (i <= EQUIPMENT_TYPE_V_HELM) {
-               gPartyMembers[D_801F6D98].helmet = gPartyMembers[OBJ.partyIdx1].helmet;
-               gPartyMembers[OBJ.partyIdx1].helmet = D_801F6D94;
+               gPartyMembers[gDepotTransferSrcMember].helmet = gPartyMembers[OBJ.partyIdx1].helmet;
+               gPartyMembers[OBJ.partyIdx1].helmet = gDepotTransferItem;
             } else {
-               gPartyMembers[D_801F6D98].armor = gPartyMembers[OBJ.partyIdx1].armor;
-               gPartyMembers[OBJ.partyIdx1].armor = D_801F6D94;
+               gPartyMembers[gDepotTransferSrcMember].armor = gPartyMembers[OBJ.partyIdx1].armor;
+               gPartyMembers[OBJ.partyIdx1].armor = gDepotTransferItem;
             }
             DrawSmallEquipmentWindow(OBJ.partyIdx1);
             obj->state2++;
@@ -2498,25 +2498,25 @@ void Objf406_ShopOrDepot(Object *obj) {
             CloseWindow(0x37);
             DrawWindow(0x34, 0, 0, 312, 90, 4, 10, WBS_DRAGON, 0);
             DrawText(20, 20, 30, 2, 0, gTextPointers[63]);
-            i = gItemEquipmentTypes[D_801F6D94];
+            i = gItemEquipmentTypes[gDepotTransferItem];
             if (i <= EQUIPMENT_TYPE_V_HEART) {
                j = gPartyMembers[OBJ.partyIdx1].weapon;
-               gPartyMembers[OBJ.partyIdx1].weapon = D_801F6D94;
+               gPartyMembers[OBJ.partyIdx1].weapon = gDepotTransferItem;
             } else if (i < EQUIPMENT_TYPE_ARMOR) {
                j = gPartyMembers[OBJ.partyIdx1].helmet;
-               gPartyMembers[OBJ.partyIdx1].helmet = D_801F6D94;
+               gPartyMembers[OBJ.partyIdx1].helmet = gDepotTransferItem;
             } else {
                j = gPartyMembers[OBJ.partyIdx1].armor;
-               gPartyMembers[OBJ.partyIdx1].armor = D_801F6D94;
+               gPartyMembers[OBJ.partyIdx1].armor = gDepotTransferItem;
             }
-            if (D_801F6D8C != 0) {
-               gState.depot[D_801F6D94]--;
+            if (gDepotTransferFromDepot != 0) {
+               gState.depot[gDepotTransferItem]--;
                gState.depot[j]++;
             } else {
-               if (D_801F6D90 == 4) {
-                  gPartyMembers[D_801F6D98].items[0] = j;
+               if (gDepotTransferSrcSlot == 4) {
+                  gPartyMembers[gDepotTransferSrcMember].items[0] = j;
                } else {
-                  gPartyMembers[D_801F6D98].items[1] = j;
+                  gPartyMembers[gDepotTransferSrcMember].items[1] = j;
                }
             }
             DrawSmallEquipmentWindow(OBJ.partyIdx1);
@@ -2553,7 +2553,7 @@ void Objf406_ShopOrDepot(Object *obj) {
       break;
 
    case 80:
-      D_8012338C = 0;
+      gItemListWindowId = 0;
       gWindowActiveIdx = 0;
       SlideWindowTo(0x3b, 330, 90);
       CloseWindow(0x3b);
@@ -2569,7 +2569,7 @@ void Objf406_ShopOrDepot(Object *obj) {
       break;
 
    case 90:
-      D_801F6D44 = 40;
+      gSupplyMenuTimer = 40;
       obj->state++;
       obj->state2 = 0;
 
@@ -2578,15 +2578,15 @@ void Objf406_ShopOrDepot(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         if (--D_801F6D44 == 0) {
+         if (--gSupplyMenuTimer == 0) {
             FadeOutScreen(2, 6);
-            D_801F6D44 = 50;
+            gSupplyMenuTimer = 50;
             obj->state2++;
          }
          break;
 
       case 1:
-         if (--D_801F6D44 == 0) {
+         if (--gSupplyMenuTimer == 0) {
             if (gState.prevState == 6 || gState.prevState == 28) {
                gState.primary = STATE_28;
             }
@@ -2741,18 +2741,18 @@ void Objf406_ShopOrDepot(Object *obj) {
    // fallthrough
    case 1:
       if (--OBJ.goldTimer == 0) {
-         D_801F6D40 = gState.gold;
+         gDisplayedGold = gState.gold;
 #ifdef PC_FEAT
          /* exchange/91: the 1-byte item list needs the right area, so shrink the gold box (104->72),
           * draw the amount in the small font, and slide it right (208->241) to sit clear of the list. */
          if (PC_LangItemNames1Byte()) {
             DrawWindow(0x36, 256, 98, GOLD1B_W, 36, 408, 90, WBS_CROSSED, 0);
-            DrawGold1Byte(D_801F6D40);
+            DrawGold1Byte(gDisplayedGold);
          } else
 #endif
          {
             DrawWindow(0x36, 256, 98, 104, 36, 408, 90, WBS_CROSSED, 0);
-            EmbedIntAsSjis(D_801F6D40, sGoldBuffer, 6);
+            EmbedIntAsSjis(gDisplayedGold, sGoldBuffer, 6);
             DrawSjisText(256, 109, 10, 2, 0, sGoldBuffer);
          }
          DisplayCustomWindow(0x36, 0, 1, 49, 0, 0);
@@ -2766,8 +2766,8 @@ void Objf406_ShopOrDepot(Object *obj) {
       break;
 
    case 2:
-      if (D_801F6D40 != gState.gold) {
-         D_801F6D40 = gState.gold;
+      if (gDisplayedGold != gState.gold) {
+         gDisplayedGold = gState.gold;
 #ifdef PC_FEAT
          if (PC_LangItemNames1Byte()) {
             DrawGold1Byte(gState.gold);
@@ -2799,7 +2799,7 @@ void Objf009_ItemIconMgr(Object *obj) {
       gState.dynamicIcons[i].gfxIdx = GFX_NULL;
    }
 
-   if (D_8012338C == 0x40) {
+   if (gItemListWindowId == 0x40) {
       p = &gObjectArray[0];
       for (j = 0; j < OBJ_DATA_CT; j++, p++) {
          if (p->functionIndex == OBJF_WINDOW_TBD_005 && p->d.objf005.windowId == 0x40 &&
@@ -2828,7 +2828,7 @@ void Objf009_ItemIconMgr(Object *obj) {
       }
    }
 
-   if (D_8012338C == 0x3f) {
+   if (gItemListWindowId == 0x3f) {
       p = &gObjectArray[0];
       for (j = 0; j < OBJ_DATA_CT; j++, p++) {
          if (p->functionIndex == OBJF_WINDOW_TBD_005 && p->d.objf005.windowId == 0x3f &&
@@ -2855,7 +2855,7 @@ void Objf009_ItemIconMgr(Object *obj) {
       }
    }
 
-   if (D_8012338C == 0x3a) {
+   if (gItemListWindowId == 0x3a) {
       p = &gObjectArray[0];
       for (j = 0; j < OBJ_DATA_CT; j++, p++) {
          if (p->functionIndex == OBJF_WINDOW_TBD_005 && p->d.objf005.windowId == 0x3a &&

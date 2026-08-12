@@ -283,16 +283,16 @@ void Objf115_Faerie_FX2(Object *obj) {
       obj_s1->d.sprite.animData = sFaerieAnimData_800ff27c;
       OBJ.faerieSprite = obj_s1;
 
-      OBJ.todo_x26 = 0x200;
+      OBJ.dist = 0x200;
       obj->mem = 3;
       obj->state++;
 
    // fallthrough
    case 1:
       obj_s1 = OBJ.faerieSprite;
-      obj_s1->x1.n = obj->x1.n + (OBJ.todo_x26 + CV(0.625)) * rcos(OBJ.theta) / ONE;
-      obj_s1->z1.n = obj->z1.n + (OBJ.todo_x26 + CV(0.625)) * rsin(OBJ.theta) / ONE;
-      obj_s1->y1.n = obj->y1.n + CV(1.5) + OBJ.todo_x26;
+      obj_s1->x1.n = obj->x1.n + (OBJ.dist + CV(0.625)) * rcos(OBJ.theta) / ONE;
+      obj_s1->z1.n = obj->z1.n + (OBJ.dist + CV(0.625)) * rsin(OBJ.theta) / ONE;
+      obj_s1->y1.n = obj->y1.n + CV(1.5) + OBJ.dist;
       UpdateObjAnimation(obj_s1);
       AddObjPrim6(gGraphicsPtr->ot, obj_s1, 0);
 
@@ -307,9 +307,9 @@ void Objf115_Faerie_FX2(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x26 -= 10;
-         if (OBJ.todo_x26 < 0) {
-            OBJ.todo_x26 = 0;
+         OBJ.dist -= 10;
+         if (OBJ.dist < 0) {
+            OBJ.dist = 0;
             obj->state2++;
             obj_s1 = Obj_GetUnused();
             obj_s1->functionIndex = OBJF_FAERIE_TARGET;
@@ -328,14 +328,14 @@ void Objf115_Faerie_FX2(Object *obj) {
          break;
 
       case 2:
-         OBJ.todo_x26 += 10;
-         if (OBJ.todo_x26 == 220) {
+         OBJ.dist += 10;
+         if (OBJ.dist == 220) {
             obj_s1 = Obj_GetUnused();
             obj_s1->functionIndex = OBJF_DISPLAY_DAMAGE_2;
             obj_s1->x1.s.hi = obj->x1.s.hi;
             obj_s1->z1.s.hi = obj->z1.s.hi;
          }
-         if (OBJ.todo_x26 > 0x200) {
+         if (OBJ.dist > 0x200) {
             obj->functionIndex = OBJF_NULL;
             gSignal3 = 1;
             obj_s1->functionIndex = OBJF_NULL;
@@ -485,7 +485,7 @@ void Objf211_Avalanche_Boulder(Object *obj) {
       }
 #endif
 
-      iVar8s = OBJ.todo_x4c;
+      iVar8s = OBJ.scale;
       PushMatrix();
       rotation.vx = OBJ.rotX;
       rotation.vz = OBJ.rotZ;

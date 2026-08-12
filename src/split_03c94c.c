@@ -1145,7 +1145,7 @@ void Objf014_BattleUnit(Object *obj) {
             obj1->functionIndex = OBJF_MID_BATTLE_TRANSFORMATION;
             obj1->x1.s.hi = sprite->x1.s.hi;
             obj1->z1.s.hi = sprite->z1.s.hi;
-            gState.D_801405A4 = 0;
+            gState.transformFxDone = 0;
             obj->state2++;
          }
          break;
@@ -1164,7 +1164,7 @@ void Objf014_BattleUnit(Object *obj) {
       case 9:
          if (--OBJ.timer == 0) {
             PerformAudioCommand(AUDIO_CMD_FADE_OUT_8_1);
-            gState.D_801405A4 = 1;
+            gState.transformFxDone = 1;
             /*gSignal3 = 1;
             gSignal4 = 1;
             sprite->functionIndex = OBJF_NULL;

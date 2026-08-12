@@ -186,7 +186,7 @@ extern s16 gMapMarginX, gMapMarginZ;
 extern s16 gMapSizeX, gMapSizeZ;
 extern s16 gMapDataSizeX, gMapDataSizeZ;
 extern VECTOR gMapScale;
-extern s32 D_80122E28, D_80122E2C;
+extern s32 gMapViewOriginX, gMapViewOriginZ;
 extern u8 gOverheadMapState;
 extern BVectorZXY gMapCursorStartingPos[BATTLE_CT];
 extern HiddenItem gMapHiddenItems[BATTLE_CT][2];

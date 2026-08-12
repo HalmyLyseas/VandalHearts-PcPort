@@ -28,17 +28,17 @@ void Objf173_FireGem_Beam(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      OBJ.todo_x2a = 0x800;
+      OBJ.ringY = 0x800;
       obj->state++;
 
    // fallthrough
    case 1:
       obj_s2 = Obj_GetUnused();
       obj_s2->functionIndex = OBJF_NOOP;
-      obj_s2->d.sprite.gfxIdx = GFX_COLOR_1 + OBJ.todo_x26;
+      obj_s2->d.sprite.gfxIdx = GFX_COLOR_1 + OBJ.colorIdx;
       obj_s2->d.sprite.semiTrans = 1;
 
-      a = rsin(OBJ.todo_x24);
+      a = rsin(OBJ.spinPhase);
       positions[0].vx = CV(1.25) * rcos(a) >> 12;
       positions[0].vz = CV(1.25) * rsin(a) >> 12;
       positions[1].vx = CV(1.25) * rcos(a + 0x555) >> 12;
@@ -51,13 +51,13 @@ void Objf173_FireGem_Beam(Object *obj) {
       positions[4].vz = CV(1.25) * rsin(a + 0x7ff) >> 12;
       positions[5].vx = CV(1.25) * rcos(a + 0xd55) >> 12;
       positions[5].vz = CV(1.25) * rsin(a + 0xd55) >> 12;
-      OBJ.todo_x24 += 0x20;
+      OBJ.spinPhase += 0x20;
 
       obj_s2->d.sprite.coords[0].x = obj_s2->d.sprite.coords[1].x = x + positions[0].vx;
       obj_s2->d.sprite.coords[0].z = obj_s2->d.sprite.coords[1].z = z + positions[0].vz;
-      // y += OBJ.todo_x2a;
+      // y += OBJ.ringY;
       obj_s2->d.sprite.coords[0].y = obj_s2->d.sprite.coords[1].y = obj_s2->d.sprite.coords[2].y =
-          obj_s2->d.sprite.coords[3].y = (y + OBJ.todo_x2a);
+          obj_s2->d.sprite.coords[3].y = (y + OBJ.ringY);
       obj_s2->d.sprite.coords[2].x = x + positions[1].vx;
       obj_s2->d.sprite.coords[2].z = z + positions[1].vz;
       obj_s2->d.sprite.coords[3].x = x + positions[2].vx;
@@ -72,20 +72,20 @@ void Objf173_FireGem_Beam(Object *obj) {
       obj_s2->d.sprite.coords[3].z = z + positions[5].vz;
       AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
-      if ((OBJ.todo_x2c == 0) && (++OBJ.todo_x2e % 3 == 0)) {
-         OBJ.todo_x26++;
-         if (OBJ.todo_x26 == 7) {
-            OBJ.todo_x2c++;
-            OBJ.todo_x26 = 6;
+      if ((OBJ.colorDescending == 0) && (++OBJ.colorTimer % 3 == 0)) {
+         OBJ.colorIdx++;
+         if (OBJ.colorIdx == 7) {
+            OBJ.colorDescending++;
+            OBJ.colorIdx = 6;
          }
-      } else if ((OBJ.todo_x2e % 3 == 0) && (--OBJ.todo_x26 < 0)) {
-         OBJ.todo_x2c = 0;
-         OBJ.todo_x26 = 0;
+      } else if ((OBJ.colorTimer % 3 == 0) && (--OBJ.colorIdx < 0)) {
+         OBJ.colorDescending = 0;
+         OBJ.colorIdx = 0;
       }
 
-      OBJ.todo_x2a -= 0x40;
-      if (OBJ.todo_x2a < 0) {
-         OBJ.todo_x2a = 0;
+      OBJ.ringY -= 0x40;
+      if (OBJ.ringY < 0) {
+         OBJ.ringY = 0;
          obj_v1 = Obj_GetUnused();
          obj_v1->functionIndex = OBJF_FLASHING_UNIT_SPRITE;
          obj_v1->x1.n = obj->x1.n;
@@ -100,10 +100,10 @@ void Objf173_FireGem_Beam(Object *obj) {
    case 2:
       obj_s2 = Obj_GetUnused();
       obj_s2->functionIndex = OBJF_NOOP;
-      obj_s2->d.sprite.gfxIdx = GFX_COLOR_1 + OBJ.todo_x26;
+      obj_s2->d.sprite.gfxIdx = GFX_COLOR_1 + OBJ.colorIdx;
       obj_s2->d.sprite.semiTrans = 1;
 
-      a = rsin(OBJ.todo_x24);
+      a = rsin(OBJ.spinPhase);
       positions[0].vx = CV(1.25) * rcos(a) >> 12;
       positions[0].vz = CV(1.25) * rsin(a) >> 12;
       positions[1].vx = CV(1.25) * rcos(a + 0x555) >> 12;
@@ -116,21 +116,21 @@ void Objf173_FireGem_Beam(Object *obj) {
       positions[4].vz = CV(1.25) * rsin(a + 0x7ff) >> 12;
       positions[5].vx = CV(1.25) * rcos(a + 0xd55) >> 12;
       positions[5].vz = CV(1.25) * rsin(a + 0xd55) >> 12;
-      OBJ.todo_x24 += 0x20;
+      OBJ.spinPhase += 0x20;
 
       for (i = 0; i < 6; i++) {
          obj_s2->d.sprite.coords[0].x = x;
          obj_s2->d.sprite.coords[0].z = z;
-         obj_s2->d.sprite.coords[0].y = obj->y1.n + OBJ.todo_x28;
+         obj_s2->d.sprite.coords[0].y = obj->y1.n + OBJ.beamHeight;
          obj_s2->d.sprite.coords[1].x = x;
          obj_s2->d.sprite.coords[1].z = z;
-         obj_s2->d.sprite.coords[1].y = obj->y1.n + OBJ.todo_x28;
+         obj_s2->d.sprite.coords[1].y = obj->y1.n + OBJ.beamHeight;
          obj_s2->d.sprite.coords[2].x = x + positions[local_38[i][0]].vx;
          obj_s2->d.sprite.coords[2].z = z + positions[local_38[i][0]].vz;
-         obj_s2->d.sprite.coords[2].y = obj->y1.n + OBJ.todo_x2a;
+         obj_s2->d.sprite.coords[2].y = obj->y1.n + OBJ.ringY;
          obj_s2->d.sprite.coords[3].x = x + positions[local_38[i][1]].vx;
          obj_s2->d.sprite.coords[3].z = z + positions[local_38[i][1]].vz;
-         obj_s2->d.sprite.coords[3].y = obj->y1.n + OBJ.todo_x2a;
+         obj_s2->d.sprite.coords[3].y = obj->y1.n + OBJ.ringY;
 
          obj_s2->x1.n = (obj_s2->d.sprite.coords[0].x + obj_s2->d.sprite.coords[1].x +
                          obj_s2->d.sprite.coords[2].x + obj_s2->d.sprite.coords[3].x) >>
@@ -148,85 +148,85 @@ void Objf173_FireGem_Beam(Object *obj) {
 
       obj_s2->d.sprite.coords[0].x = x + positions[0].vx;
       obj_s2->d.sprite.coords[0].z = z + positions[0].vz;
-      obj_s2->d.sprite.coords[0].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[0].y = obj->y1.n + OBJ.ringY;
       obj_s2->d.sprite.coords[1].x = x + positions[0].vx;
       obj_s2->d.sprite.coords[1].z = z + positions[0].vz;
-      obj_s2->d.sprite.coords[1].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[1].y = obj->y1.n + OBJ.ringY;
       obj_s2->d.sprite.coords[2].x = x + positions[1].vx;
       obj_s2->d.sprite.coords[2].z = z + positions[1].vz;
-      obj_s2->d.sprite.coords[2].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[2].y = obj->y1.n + OBJ.ringY;
       obj_s2->d.sprite.coords[3].x = x + positions[2].vx;
       obj_s2->d.sprite.coords[3].z = z + positions[2].vz;
-      obj_s2->d.sprite.coords[3].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[3].y = obj->y1.n + OBJ.ringY;
       AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
       obj_s2->d.sprite.coords[0].x = x + positions[3].vx;
       obj_s2->d.sprite.coords[0].z = z + positions[3].vz;
-      obj_s2->d.sprite.coords[0].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[0].y = obj->y1.n + OBJ.ringY;
       obj_s2->d.sprite.coords[1].x = x + positions[3].vx;
       obj_s2->d.sprite.coords[1].z = z + positions[3].vz;
-      obj_s2->d.sprite.coords[1].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[1].y = obj->y1.n + OBJ.ringY;
       obj_s2->d.sprite.coords[2].x = x + positions[4].vx;
       obj_s2->d.sprite.coords[2].z = z + positions[4].vz;
-      obj_s2->d.sprite.coords[2].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[2].y = obj->y1.n + OBJ.ringY;
       obj_s2->d.sprite.coords[3].x = x + positions[5].vx;
       obj_s2->d.sprite.coords[3].z = z + positions[5].vz;
-      obj_s2->d.sprite.coords[3].y = obj->y1.n + OBJ.todo_x2a;
+      obj_s2->d.sprite.coords[3].y = obj->y1.n + OBJ.ringY;
       AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
       obj_s2->functionIndex = OBJF_NULL;
 
       switch (obj->state3) {
       case 0:
-         if ((OBJ.todo_x2c == 0) && (++OBJ.todo_x2e % 3 == 0)) {
-            OBJ.todo_x26++;
-            if (OBJ.todo_x26 == 7) {
-               OBJ.todo_x2c++;
-               OBJ.todo_x26 = 6;
+         if ((OBJ.colorDescending == 0) && (++OBJ.colorTimer % 3 == 0)) {
+            OBJ.colorIdx++;
+            if (OBJ.colorIdx == 7) {
+               OBJ.colorDescending++;
+               OBJ.colorIdx = 6;
             }
-         } else if ((OBJ.todo_x2e % 3 == 0) && (--OBJ.todo_x26 < 0)) {
-            OBJ.todo_x2c = 0;
-            OBJ.todo_x26 = 0;
+         } else if ((OBJ.colorTimer % 3 == 0) && (--OBJ.colorIdx < 0)) {
+            OBJ.colorDescending = 0;
+            OBJ.colorIdx = 0;
          }
-         OBJ.todo_x28 += CV(0.75);
-         if (OBJ.todo_x28 > CV(8.0)) {
-            OBJ.todo_x28 = CV(8.0);
+         OBJ.beamHeight += CV(0.75);
+         if (OBJ.beamHeight > CV(8.0)) {
+            OBJ.beamHeight = CV(8.0);
             obj->state3++;
          }
          break;
 
       case 1:
-         if ((OBJ.todo_x2c == 0) && (++OBJ.todo_x2e % 3 == 0)) {
-            OBJ.todo_x26++;
-            if (OBJ.todo_x26 == 7) {
-               OBJ.todo_x2c++;
-               OBJ.todo_x26 = 6;
+         if ((OBJ.colorDescending == 0) && (++OBJ.colorTimer % 3 == 0)) {
+            OBJ.colorIdx++;
+            if (OBJ.colorIdx == 7) {
+               OBJ.colorDescending++;
+               OBJ.colorIdx = 6;
             }
-         } else if ((OBJ.todo_x2e % 3 == 0) && (--OBJ.todo_x26 < 0)) {
-            OBJ.todo_x2c = 0;
-            OBJ.todo_x26 = 0;
-            OBJ.todo_x30++;
+         } else if ((OBJ.colorTimer % 3 == 0) && (--OBJ.colorIdx < 0)) {
+            OBJ.colorDescending = 0;
+            OBJ.colorIdx = 0;
+            OBJ.phase++;
          }
-         if (OBJ.todo_x30 == 2) {
+         if (OBJ.phase == 2) {
             obj->state3++;
-            OBJ.todo_x28 = 0;
+            OBJ.beamHeight = 0;
          }
          break;
 
       case 2:
-         OBJ.todo_x28 = CV(8.0) * (ONE - rsin(OBJ.todo_x30)) >> 12;
-         if ((OBJ.todo_x2c == 0) && (++OBJ.todo_x2e % 3 == 0)) {
-            OBJ.todo_x26++;
-            if (OBJ.todo_x26 == 7) {
-               OBJ.todo_x2c++;
-               OBJ.todo_x26 = 6;
+         OBJ.beamHeight = CV(8.0) * (ONE - rsin(OBJ.phase)) >> 12;
+         if ((OBJ.colorDescending == 0) && (++OBJ.colorTimer % 3 == 0)) {
+            OBJ.colorIdx++;
+            if (OBJ.colorIdx == 7) {
+               OBJ.colorDescending++;
+               OBJ.colorIdx = 6;
             }
-         } else if ((OBJ.todo_x2e % 3 == 0) && (--OBJ.todo_x26 < 0)) {
-            OBJ.todo_x2c = 0;
-            OBJ.todo_x26 = 0;
+         } else if ((OBJ.colorTimer % 3 == 0) && (--OBJ.colorIdx < 0)) {
+            OBJ.colorDescending = 0;
+            OBJ.colorIdx = 0;
          }
-         OBJ.todo_x30 += 0x20;
-         if (OBJ.todo_x30 > 0x400) {
+         OBJ.phase += 0x20;
+         if (OBJ.phase > 0x400) {
             obj->functionIndex = OBJF_NULL;
             obj_v1 = OBJ.fx;
             obj_v1->state = 99;
@@ -333,18 +333,18 @@ void Objf147_LightningBolt(Object *obj) {
    case 0:
       obj->y1.n += CV(4.0);
 
-      OBJ.todo_x4c = 0x80 - (rand() % 0x100);
-      OBJ.todo_x50 = 0x80 - (rand() % 0x100);
-      OBJ.todo_x4e = -0x400;
-      OBJ.todo_x34 = OBJ.todo_x4c / 4;
-      OBJ.todo_x36 = OBJ.todo_x4e / 4;
-      OBJ.todo_x38 = OBJ.todo_x50 / 4;
-      OBJ.todo_x3a = OBJ.todo_x34 * 2;
-      OBJ.todo_x3c = OBJ.todo_x36 * 2;
-      OBJ.todo_x3e = OBJ.todo_x38 * 2;
-      OBJ.todo_x40 = OBJ.todo_x34 * 3;
-      OBJ.todo_x42 = OBJ.todo_x36 * 3;
-      OBJ.todo_x44 = OBJ.todo_x38 * 3;
+      OBJ.tipX = 0x80 - (rand() % 0x100);
+      OBJ.tipZ = 0x80 - (rand() % 0x100);
+      OBJ.tipY = -0x400;
+      OBJ.joint1X = OBJ.tipX / 4;
+      OBJ.joint1Y = OBJ.tipY / 4;
+      OBJ.joint1Z = OBJ.tipZ / 4;
+      OBJ.joint2X = OBJ.joint1X * 2;
+      OBJ.joint2Y = OBJ.joint1Y * 2;
+      OBJ.joint2Z = OBJ.joint1Z * 2;
+      OBJ.joint3X = OBJ.joint1X * 3;
+      OBJ.joint3Y = OBJ.joint1Y * 3;
+      OBJ.joint3Z = OBJ.joint1Z * 3;
 
       if (OBJ.clut == CLUT_NULL) {
          OBJ.clut = CLUT_REDS;
@@ -363,24 +363,24 @@ void Objf147_LightningBolt(Object *obj) {
    case 1:
       sprite = OBJ.sprite;
 
-      OBJ.todo_x34 += 0x40 - (rand() % 0x80);
-      OBJ.todo_x36 += 8 - (rand() % 0x10);
-      OBJ.todo_x38 += 0x40 - (rand() % 0x80);
-      OBJ.todo_x3a += 0x40 - (rand() % 0x80);
-      OBJ.todo_x3c += 8 - (rand() % 0x10);
-      OBJ.todo_x3e += 0x40 - (rand() % 0x80);
-      OBJ.todo_x40 += 0x40 - (rand() % 0x80);
-      OBJ.todo_x42 += 8 - (rand() % 0x10);
-      OBJ.todo_x44 += 0x40 - (rand() % 0x80);
+      OBJ.joint1X += 0x40 - (rand() % 0x80);
+      OBJ.joint1Y += 8 - (rand() % 0x10);
+      OBJ.joint1Z += 0x40 - (rand() % 0x80);
+      OBJ.joint2X += 0x40 - (rand() % 0x80);
+      OBJ.joint2Y += 8 - (rand() % 0x10);
+      OBJ.joint2Z += 0x40 - (rand() % 0x80);
+      OBJ.joint3X += 0x40 - (rand() % 0x80);
+      OBJ.joint3Y += 8 - (rand() % 0x10);
+      OBJ.joint3Z += 0x40 - (rand() % 0x80);
 
       UpdateObjAnimation(sprite);
-      DrawLightningBoltSegment(obj, sprite, 0, 0, 0, OBJ.todo_x34, OBJ.todo_x36, OBJ.todo_x38, 0);
-      DrawLightningBoltSegment(obj, sprite, OBJ.todo_x34, OBJ.todo_x36, OBJ.todo_x38, OBJ.todo_x3a,
-                    OBJ.todo_x3c, OBJ.todo_x3e, 0);
-      DrawLightningBoltSegment(obj, sprite, OBJ.todo_x3a, OBJ.todo_x3c, OBJ.todo_x3e, OBJ.todo_x40,
-                    OBJ.todo_x42, OBJ.todo_x44, 0);
-      DrawLightningBoltSegment(obj, sprite, OBJ.todo_x40, OBJ.todo_x42, OBJ.todo_x44, OBJ.todo_x4c,
-                    OBJ.todo_x4e, OBJ.todo_x50, 1);
+      DrawLightningBoltSegment(obj, sprite, 0, 0, 0, OBJ.joint1X, OBJ.joint1Y, OBJ.joint1Z, 0);
+      DrawLightningBoltSegment(obj, sprite, OBJ.joint1X, OBJ.joint1Y, OBJ.joint1Z, OBJ.joint2X,
+                    OBJ.joint2Y, OBJ.joint2Z, 0);
+      DrawLightningBoltSegment(obj, sprite, OBJ.joint2X, OBJ.joint2Y, OBJ.joint2Z, OBJ.joint3X,
+                    OBJ.joint3Y, OBJ.joint3Z, 0);
+      DrawLightningBoltSegment(obj, sprite, OBJ.joint3X, OBJ.joint3Y, OBJ.joint3Z, OBJ.tipX,
+                    OBJ.tipY, OBJ.tipZ, 1);
 
       if (sprite->d.sprite.animFinished) {
          obj->functionIndex = OBJF_NULL;
@@ -400,9 +400,9 @@ void DrawDeltaMirageTriangle(Object *deltaMirage) {
    Object *sprite;
 
    if (deltaMirage->state == 3) {
-      a = 0x100 + (0x400 * rsin(DEG(90) - deltaMirage->d.objf156.todo_x36 * 2) >> 12);
+      a = 0x100 + (0x400 * rsin(DEG(90) - deltaMirage->d.objf156.collapsePhase * 2) >> 12);
       b = 0;
-      c = 0x200 * rcos(DEG(90) - deltaMirage->d.objf156.todo_x36 * 2) >> 12;
+      c = 0x200 * rcos(DEG(90) - deltaMirage->d.objf156.collapsePhase * 2) >> 12;
    } else {
       a = 0x100;
       b = 0;
@@ -418,23 +418,23 @@ void DrawDeltaMirageTriangle(Object *deltaMirage) {
    sprite->d.sprite.clut = CLUT_BLUES;
    sprite->d.sprite.semiTrans = 1;
 
-   p = &deltaMirage->d.objf156.todo_x26;
+   p = &deltaMirage->d.objf156.edgeAngle0;
    for (i = 0; i < 3 - deltaMirage->state2; i++, p++) {
       current = *p;
 
       switch (i) {
       case 2:
-         d = deltaMirage->d.objf156.todo_x24 + 0xaaa;
-         e = deltaMirage->d.objf156.todo_x24;
+         d = deltaMirage->d.objf156.theta + 0xaaa;
+         e = deltaMirage->d.objf156.theta;
          break;
       case 1:
-         d = deltaMirage->d.objf156.todo_x24 + 0x555;
-         e = deltaMirage->d.objf156.todo_x24 + 0xaaa;
+         d = deltaMirage->d.objf156.theta + 0x555;
+         e = deltaMirage->d.objf156.theta + 0xaaa;
          break;
       case 0:
       default:
-         d = deltaMirage->d.objf156.todo_x24;
-         e = deltaMirage->d.objf156.todo_x24 + 0x555;
+         d = deltaMirage->d.objf156.theta;
+         e = deltaMirage->d.objf156.theta + 0x555;
          break;
       }
 
@@ -485,7 +485,7 @@ void Objf156_DeltaMirage_FX1(Object *obj) {
       obj->y1.n = GetTerrainElevation(gTargetZ, gTargetX);
       obj->x1.n = unitSprite->x1.n;
       obj->z1.n = unitSprite->z1.n;
-      OBJ.todo_x24 = gCameraRotation.vy - 0x656;
+      OBJ.theta = gCameraRotation.vy - 0x656;
 
       obj_v1 = Obj_GetUnused();
       obj_v1->functionIndex = OBJF_FOCUS_CAMERA;
@@ -500,23 +500,23 @@ void Objf156_DeltaMirage_FX1(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x2a += 0x20;
-         if (OBJ.todo_x2a > DEG(90)) {
-            OBJ.todo_x2a = DEG(90);
+         OBJ.edgeAngle2 += 0x20;
+         if (OBJ.edgeAngle2 > DEG(90)) {
+            OBJ.edgeAngle2 = DEG(90);
             obj->state++;
          }
          break;
       case 1:
-         OBJ.todo_x28 += 0x20;
-         if (OBJ.todo_x28 > DEG(90)) {
-            OBJ.todo_x28 = DEG(90);
+         OBJ.edgeAngle1 += 0x20;
+         if (OBJ.edgeAngle1 > DEG(90)) {
+            OBJ.edgeAngle1 = DEG(90);
             obj->state2--;
          }
          break;
       case 2:
-         OBJ.todo_x26 += 0x20;
-         if (OBJ.todo_x26 > DEG(90)) {
-            OBJ.todo_x26 = DEG(90);
+         OBJ.edgeAngle0 += 0x20;
+         if (OBJ.edgeAngle0 > DEG(90)) {
+            OBJ.edgeAngle0 = DEG(90);
             obj->state2--;
          }
          break;
@@ -537,24 +537,24 @@ void Objf156_DeltaMirage_FX1(Object *obj) {
          obj_v1->functionIndex = OBJF_DELTA_MIRAGE_RAY;
          obj_v1->d.objf157.parent = obj;
       }
-      OBJ.todo_x36 = 0x200;
+      OBJ.collapsePhase = 0x200;
       obj->state++;
 
    // fallthrough
    case 3:
       DrawDeltaMirageTriangle(obj);
-      OBJ.todo_x24 += 0x10;
+      OBJ.theta += 0x10;
       OBJ.timer++;
-      OBJ.todo_x36 -= 4;
-      if (OBJ.todo_x36 == 0x28) {
+      OBJ.collapsePhase -= 4;
+      if (OBJ.collapsePhase == 0x28) {
          gSignal3 = 1;
       }
-      if (OBJ.todo_x36 < 0x20) {
+      if (OBJ.collapsePhase < 0x20) {
          gLightColor.r += 12;
          gLightColor.g += 12;
          gLightColor.b += 12;
       }
-      if (OBJ.todo_x36 < 0) {
+      if (OBJ.collapsePhase < 0) {
          obj->functionIndex = OBJF_NULL;
          gLightColor.r = 0x80;
          gLightColor.g = 0x80;
@@ -576,13 +576,13 @@ void Objf157_DeltaMirage_Ray(Object *obj) {
       obj->z1.n = obj_s0->z1.n;
       obj->y1.n = obj_s0->y1.n;
 
-      OBJ.todo_x24 = 0x400 + (rand() % 0x400);
-      OBJ.todo_x26 = rand() % 0x1000;
-      OBJ.todo_x28 = rand() % 0x1000;
-      OBJ.todo_x2a = rand() % 0x1000;
-      OBJ.todo_x2c = 0x60 - (rand() % 0xc1);
-      OBJ.todo_x2e = 0x60 - (rand() % 0xc1);
-      OBJ.todo_x30 = 0x60 - (rand() % 0xc1);
+      OBJ.maxLength = 0x400 + (rand() % 0x400);
+      OBJ.thetaX = rand() % 0x1000;
+      OBJ.thetaZ = rand() % 0x1000;
+      OBJ.thetaY = rand() % 0x1000;
+      OBJ.dThetaX = 0x60 - (rand() % 0xc1);
+      OBJ.dThetaZ = 0x60 - (rand() % 0xc1);
+      OBJ.dThetaY = 0x60 - (rand() % 0xc1);
 
       obj->state++;
 
@@ -594,47 +594,47 @@ void Objf157_DeltaMirage_Ray(Object *obj) {
       obj_s0->d.sprite.clut = CLUT_BLUES;
       obj_s0->d.sprite.semiTrans = 1;
 
-      OBJ.todo_x34 = OBJ.todo_x24 * OBJ.todo_x36 / 0x30;
+      OBJ.length = OBJ.maxLength * OBJ.lengthScale / 0x30;
       obj_s0->d.sprite.coords[0].x = obj->x1.n;
       obj_s0->d.sprite.coords[0].z = obj->z1.n;
       obj_s0->d.sprite.coords[0].y = obj->y1.n;
       obj_s0->d.sprite.coords[1].x = obj->x1.n;
       obj_s0->d.sprite.coords[1].z = obj->z1.n;
       obj_s0->d.sprite.coords[1].y = obj->y1.n;
-      obj_s0->d.sprite.coords[2].x = obj->x1.n + OBJ.todo_x34 * rcos(OBJ.todo_x26) / ONE;
-      obj_s0->d.sprite.coords[2].z = obj->z1.n + OBJ.todo_x34 * rsin(OBJ.todo_x28) / ONE;
-      obj_s0->d.sprite.coords[2].y = obj->y1.n + OBJ.todo_x34 * rsin(OBJ.todo_x2a) / ONE;
-      obj_s0->d.sprite.coords[3].x = obj->x1.n + OBJ.todo_x34 * rcos(OBJ.todo_x26 + 0x10) / ONE;
-      obj_s0->d.sprite.coords[3].z = obj->z1.n + OBJ.todo_x34 * rsin(OBJ.todo_x28 + 0x10) / ONE;
-      obj_s0->d.sprite.coords[3].y = obj->y1.n + OBJ.todo_x34 * rsin(OBJ.todo_x2a + 0x10) / ONE;
+      obj_s0->d.sprite.coords[2].x = obj->x1.n + OBJ.length * rcos(OBJ.thetaX) / ONE;
+      obj_s0->d.sprite.coords[2].z = obj->z1.n + OBJ.length * rsin(OBJ.thetaZ) / ONE;
+      obj_s0->d.sprite.coords[2].y = obj->y1.n + OBJ.length * rsin(OBJ.thetaY) / ONE;
+      obj_s0->d.sprite.coords[3].x = obj->x1.n + OBJ.length * rcos(OBJ.thetaX + 0x10) / ONE;
+      obj_s0->d.sprite.coords[3].z = obj->z1.n + OBJ.length * rsin(OBJ.thetaZ + 0x10) / ONE;
+      obj_s0->d.sprite.coords[3].y = obj->y1.n + OBJ.length * rsin(OBJ.thetaY + 0x10) / ONE;
 
       AddObjPrim4(gGraphicsPtr->ot, obj_s0);
 
-      OBJ.todo_x26 += OBJ.todo_x2c;
-      OBJ.todo_x28 += OBJ.todo_x2e;
-      OBJ.todo_x2a += OBJ.todo_x30;
+      OBJ.thetaX += OBJ.dThetaX;
+      OBJ.thetaZ += OBJ.dThetaZ;
+      OBJ.thetaY += OBJ.dThetaY;
 
       obj_s0->functionIndex = OBJF_NULL;
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x32++;
-         OBJ.todo_x36++;
-         if (OBJ.todo_x36 == 0x31) {
+         OBJ.timer++;
+         OBJ.lengthScale++;
+         if (OBJ.lengthScale == 0x31) {
             obj->state2++;
-            OBJ.todo_x36 = 0x30;
+            OBJ.lengthScale = 0x30;
          }
          break;
       case 1:
-         OBJ.todo_x32++;
-         if (OBJ.todo_x32 == 0x81) {
+         OBJ.timer++;
+         if (OBJ.timer == 0x81) {
             obj->state2++;
          }
          break;
       case 2:
-         OBJ.todo_x32++;
-         OBJ.todo_x36 -= 3;
-         if (OBJ.todo_x36 == 0) {
+         OBJ.timer++;
+         OBJ.lengthScale -= 3;
+         if (OBJ.lengthScale == 0) {
             obj->functionIndex = OBJF_NULL;
          }
          break;
@@ -706,7 +706,7 @@ void Objf158_Explosion_FX1(Object *obj) {
          obj_s0->x1.n = obj->x1.n;
          obj_s0->y1.n = obj->y1.n + CV(0.25);
          obj_s0->z1.n = obj->z1.n;
-         obj_s0->d.objf159.todo_x5a = OBJ.timer;
+         obj_s0->d.objf159.tilt = OBJ.timer;
       }
       if (OBJ.timer == 150) {
          gSignal3 = 1;
@@ -739,24 +739,24 @@ void Objf159_Explosion_Rays(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      OBJ.todo_x24 = rand() % 0x1000;
-      OBJ.todo_x26 = rand() % 0x300 + 0x300;
-      OBJ.todo_x28 = rand() % 0x40 + 0x40;
-      OBJ.todo_x2c = rand() % 0x1000;
-      OBJ.todo_x2e = rand() % 0x300 + 0x300;
-      OBJ.todo_x30 = rand() % 0x40 + 0x40;
-      OBJ.todo_x34 = rand() % 0x1000;
-      OBJ.todo_x36 = rand() % 0x300 + 0x300;
-      OBJ.todo_x38 = rand() % 0x40 + 0x40;
-      OBJ.todo_x3c = rand() % 0x1000;
-      OBJ.todo_x3e = rand() % 0x300 + 0x300;
-      OBJ.todo_x40 = rand() % 0x40 + 0x40;
-      OBJ.todo_x44 = rand() % 0x1000;
-      OBJ.todo_x46 = rand() % 0x300 + 0x300;
-      OBJ.todo_x48 = rand() % 0x40 + 0x40;
-      OBJ.todo_x4c = rand() % 0x1000;
-      OBJ.todo_x4e = rand() % 0x300 + 0x300;
-      OBJ.todo_x50 = rand() % 0x40 + 0x40;
+      OBJ.theta1 = rand() % 0x1000;
+      OBJ.span1 = rand() % 0x300 + 0x300;
+      OBJ.speed1 = rand() % 0x40 + 0x40;
+      OBJ.theta2 = rand() % 0x1000;
+      OBJ.span2 = rand() % 0x300 + 0x300;
+      OBJ.speed2 = rand() % 0x40 + 0x40;
+      OBJ.theta3 = rand() % 0x1000;
+      OBJ.span3 = rand() % 0x300 + 0x300;
+      OBJ.speed3 = rand() % 0x40 + 0x40;
+      OBJ.theta4 = rand() % 0x1000;
+      OBJ.span4 = rand() % 0x300 + 0x300;
+      OBJ.speed4 = rand() % 0x40 + 0x40;
+      OBJ.theta5 = rand() % 0x1000;
+      OBJ.span5 = rand() % 0x300 + 0x300;
+      OBJ.speed5 = rand() % 0x40 + 0x40;
+      OBJ.theta6 = rand() % 0x1000;
+      OBJ.span6 = rand() % 0x300 + 0x300;
+      OBJ.speed6 = rand() % 0x40 + 0x40;
 
       sprite = Obj_GetUnused();
       sprite->functionIndex = OBJF_NOOP;
@@ -774,40 +774,40 @@ void Objf159_Explosion_Rays(Object *obj) {
    case 1:
       sprite = OBJ.sprite;
       sum = 0;
-      angle = OBJ.todo_x58;
-      OBJ.todo_x58 += 8;
+      angle = OBJ.spin;
+      OBJ.spin += 8;
 
       for (i = 0; i < 6; i++) {
          switch (i) {
          case 0:
-            a = OBJ.todo_x2a;
-            b = a - OBJ.todo_x26;
-            angleOfs = OBJ.todo_x24;
+            a = OBJ.radius1;
+            b = a - OBJ.span1;
+            angleOfs = OBJ.theta1;
             break;
          case 1:
-            a = OBJ.todo_x32;
-            b = a - OBJ.todo_x2e;
-            angleOfs = OBJ.todo_x2c;
+            a = OBJ.radius2;
+            b = a - OBJ.span2;
+            angleOfs = OBJ.theta2;
             break;
          case 2:
-            a = OBJ.todo_x3a;
-            b = a - OBJ.todo_x36;
-            angleOfs = OBJ.todo_x34;
+            a = OBJ.radius3;
+            b = a - OBJ.span3;
+            angleOfs = OBJ.theta3;
             break;
          case 3:
-            a = OBJ.todo_x42;
-            b = a - OBJ.todo_x3e;
-            angleOfs = OBJ.todo_x3c;
+            a = OBJ.radius4;
+            b = a - OBJ.span4;
+            angleOfs = OBJ.theta4;
             break;
          case 4:
-            a = OBJ.todo_x4a;
-            b = a - OBJ.todo_x46;
-            angleOfs = OBJ.todo_x44;
+            a = OBJ.radius5;
+            b = a - OBJ.span5;
+            angleOfs = OBJ.theta5;
             break;
          case 5:
-            a = OBJ.todo_x52;
-            b = a - OBJ.todo_x4e;
-            angleOfs = OBJ.todo_x4c;
+            a = OBJ.radius6;
+            b = a - OBJ.span6;
+            angleOfs = OBJ.theta6;
             break;
          }
 
@@ -821,10 +821,10 @@ void Objf159_Explosion_Rays(Object *obj) {
          }
 
          sum += b;
-         h_1 = a * OBJ.todo_x5a / 180;
-         h_2 = b * OBJ.todo_x5a / 180;
-         a = a * (180 - OBJ.todo_x5a) / 180;
-         b = b * (180 - OBJ.todo_x5a) / 180;
+         h_1 = a * OBJ.tilt / 180;
+         h_2 = b * OBJ.tilt / 180;
+         a = a * (180 - OBJ.tilt) / 180;
+         b = b * (180 - OBJ.tilt) / 180;
 
          sprite->d.sprite.coords[0].x = obj->x1.n + (a * rcos(angle + angleOfs) >> 12);
          sprite->d.sprite.coords[0].z = obj->z1.n + (a * rsin(angle + angleOfs) >> 12);
@@ -847,12 +847,12 @@ void Objf159_Explosion_Rays(Object *obj) {
          AddObjPrim3(gGraphicsPtr->ot, sprite);
       }
 
-      OBJ.todo_x2a += OBJ.todo_x28;
-      OBJ.todo_x32 += OBJ.todo_x30;
-      OBJ.todo_x3a += OBJ.todo_x38;
-      OBJ.todo_x42 += OBJ.todo_x40;
-      OBJ.todo_x4a += OBJ.todo_x48;
-      OBJ.todo_x52 += OBJ.todo_x50;
+      OBJ.radius1 += OBJ.speed1;
+      OBJ.radius2 += OBJ.speed2;
+      OBJ.radius3 += OBJ.speed3;
+      OBJ.radius4 += OBJ.speed4;
+      OBJ.radius5 += OBJ.speed5;
+      OBJ.radius6 += OBJ.speed6;
 
       if (sum == 0x2400) {
          obj->functionIndex = OBJF_NULL;
@@ -902,42 +902,42 @@ void Objf220_Explosion_FX2(Object *obj) {
 
       for (i = 0; i < 6; i++) {
          for (j = 0; j < 16; j++) {
-            if (OBJ.todo_x24 <= 0x400) {
-               a = (i * 0x80 + 0x80) * (ONE - rcos(OBJ.todo_x24)) / ONE;
+            if (OBJ.theta <= 0x400) {
+               a = (i * 0x80 + 0x80) * (ONE - rcos(OBJ.theta)) / ONE;
             } else {
-               a = (i * 0x80 + 0x80) + (i * 0x80 + 0x80) * (ONE - rcos(OBJ.todo_x24 - 0x400)) / ONE;
+               a = (i * 0x80 + 0x80) + (i * 0x80 + 0x80) * (ONE - rcos(OBJ.theta - 0x400)) / ONE;
             }
 
             if (i % 2 == 0) {
-               b = a * rcos(j * 0x100 + OBJ.todo_x26 * i) >> 12;
-               c = a * rsin(j * 0x100 + OBJ.todo_x26 * i) >> 12;
+               b = a * rcos(j * 0x100 + OBJ.spin * i) >> 12;
+               c = a * rsin(j * 0x100 + OBJ.spin * i) >> 12;
             } else {
-               b = a * rcos(j * 0x100 - OBJ.todo_x26 * i) >> 12;
-               c = a * rsin(j * 0x100 - OBJ.todo_x26 * i) >> 12;
+               b = a * rcos(j * 0x100 - OBJ.spin * i) >> 12;
+               c = a * rsin(j * 0x100 - OBJ.spin * i) >> 12;
             }
 
             obj_s6->x1.n = obj->x1.n + b;
             obj_s6->z1.n = obj->z1.n + c;
 
-            if (OBJ.todo_x24 <= 0x400) {
+            if (OBJ.theta <= 0x400) {
                obj_s6->y1.n = obj->y1.n + (rsin(a * 4) >> 4);
             } else {
                obj_s6->y1.n =
-                   obj->y1.n + (rsin(a * 4) >> 4) - 0x200 * rsin(OBJ.todo_x24 - 0x400) / ONE;
+                   obj->y1.n + (rsin(a * 4) >> 4) - 0x200 * rsin(OBJ.theta - 0x400) / ONE;
             }
 
             AddObjPrim6(gGraphicsPtr->ot, obj_s6, 0);
          }
       }
 
-      OBJ.todo_x26 += 0x60;
-      OBJ.todo_x24 += 0x24;
-      if (OBJ.todo_x24 == 0x5e8) {
+      OBJ.spin += 0x60;
+      OBJ.theta += 0x24;
+      if (OBJ.theta == 0x5e8) {
          obj_s6 = Obj_GetUnused();
          obj_s6->functionIndex = OBJF_ENGULF_FLAME_DAMAGE + OBJ.endingFxType;
          obj_s6->x1.n = obj->x1.n;
          obj_s6->z1.n = obj->z1.n;
-      } else if (OBJ.todo_x24 >= 0x800) {
+      } else if (OBJ.theta >= 0x800) {
          obj->functionIndex = OBJF_NULL;
          obj_s6->functionIndex = OBJF_NULL;
       }
@@ -987,7 +987,7 @@ void Objf163_StoneShower_FX1(Object *obj) {
       sprite->d.sprite.semiTrans = 1;
       sprite->d.sprite.gfxIdx = GFX_COLOR_15;
 
-      radius = OBJ.todo_x24;
+      radius = OBJ.radius;
       for (i = 0; i < 32; i++) {
          sprite->d.sprite.coords[0].x = obj->x1.n + (radius * rsin(i * 0x80) >> 12);
          sprite->d.sprite.coords[0].z = obj->z1.n + (radius * rcos(i * 0x80) >> 12);
@@ -1023,11 +1023,11 @@ void Objf163_StoneShower_FX1(Object *obj) {
          gCameraRotation.vx += 4;
          gCameraRotation.vy += 16;
 
-         OBJ.todo_x24 += 8;
-         if (OBJ.todo_x24 >= 0xc0) {
+         OBJ.radius += 8;
+         if (OBJ.radius >= 0xc0) {
             sprite->functionIndex = OBJF_NULL;
             obj->state2++;
-            OBJ.todo_x24 = 0xc0;
+            OBJ.radius = 0xc0;
          }
          break;
 
@@ -1043,7 +1043,7 @@ void Objf163_StoneShower_FX1(Object *obj) {
             obj_s0->functionIndex = OBJF_STONE_SHOWER_ROCK;
             obj_s0->d.objf164.parent = obj;
             obj_s0->d.objf164.downward = 0;
-            obj_s0->d.objf164.todo_x32 = rand() % 5;
+            obj_s0->d.objf164.delay = rand() % 5;
             pDataStoreAsObjs[i] = obj_s0;
          }
          obj->state2++;
@@ -1066,8 +1066,8 @@ void Objf163_StoneShower_FX1(Object *obj) {
          gCameraRotation.vx += 4;
          gCameraRotation.vy += 16;
 
-         OBJ.todo_x24 -= 8;
-         if (OBJ.todo_x24 < 0) {
+         OBJ.radius -= 8;
+         if (OBJ.radius < 0) {
             obj_s0 = OBJ.dataStore;
             obj_s0->functionIndex = OBJF_NULL;
             pDataStoreAsObjs = obj_s0->d.dataStore.objs;
@@ -1116,7 +1116,7 @@ void Objf165_StoneShower_FX2(Object *obj) {
          obj_s0->functionIndex = OBJF_STONE_SHOWER_ROCK;
          obj_s0->d.objf164.parent = obj;
          obj_s0->d.objf164.downward = 1;
-         obj_s0->d.objf164.todo_x32 = 0;
+         obj_s0->d.objf164.delay = 0;
          pDataStoreAsObjs[i] = obj_s0;
       }
       obj->state++;
@@ -1194,25 +1194,25 @@ void Objf164_StoneShower_Rock(Object *obj) {
    // fallthrough
    case 1:
       if (!OBJ.downward) {
-         OBJ.todo_x4c = 0;
-         OBJ.todo_x4e = 0x800;
-         OBJ.todo_x28 = rand() % 0x50 + 0x32;
+         OBJ.startY = 0;
+         OBJ.endY = 0x800;
+         OBJ.ySpeed = rand() % 0x50 + 0x32;
       } else {
-         OBJ.todo_x4c = 0x400;
-         OBJ.todo_x4e = 0;
-         OBJ.todo_x28 = -0x50 - (rand() % 0x78);
+         OBJ.startY = 0x400;
+         OBJ.endY = 0;
+         OBJ.ySpeed = -0x50 - (rand() % 0x78);
       }
 
-      OBJ.todo_x26 = rand() % 0x1000;
-      OBJ.todo_x30 = rand() % 0xa0 + 0x20;
-      OBJ.todo_x24 = OBJ.todo_x4c;
+      OBJ.theta = rand() % 0x1000;
+      OBJ.radius = rand() % 0xa0 + 0x20;
+      OBJ.yOfs = OBJ.startY;
       obj_s1 = OBJ.sprite;
       obj_s1->d.sprite.animInitialized = 0;
       obj->state++;
 
    // fallthrough
    case 2:
-      if (obj->state2++ == OBJ.todo_x32) {
+      if (obj->state2++ == OBJ.delay) {
          obj->state++;
          obj->state2 = 0;
       }
@@ -1220,20 +1220,20 @@ void Objf164_StoneShower_Rock(Object *obj) {
 
    case 3:
       obj_s1 = OBJ.sprite;
-      a = OBJ.todo_x26;
-      obj_s1->x1.n = obj->x1.n + OBJ.todo_x30 * rcos(a) / ONE;
-      obj_s1->z1.n = obj->z1.n + OBJ.todo_x30 * rsin(a) / ONE;
-      obj_s1->y1.n = obj->y1.n + OBJ.todo_x24;
+      a = OBJ.theta;
+      obj_s1->x1.n = obj->x1.n + OBJ.radius * rcos(a) / ONE;
+      obj_s1->z1.n = obj->z1.n + OBJ.radius * rsin(a) / ONE;
+      obj_s1->y1.n = obj->y1.n + OBJ.yOfs;
       UpdateObjAnimation(obj_s1);
       AddObjPrim6(gGraphicsPtr->ot, obj_s1, 0);
 
-      OBJ.todo_x24 += OBJ.todo_x28;
+      OBJ.yOfs += OBJ.ySpeed;
       if (!OBJ.downward) {
-         if (OBJ.todo_x24 >= OBJ.todo_x4e) {
+         if (OBJ.yOfs >= OBJ.endY) {
             obj->state = 1;
          }
       } else {
-         if (OBJ.todo_x24 <= OBJ.todo_x4e) {
+         if (OBJ.yOfs <= OBJ.endY) {
             obj->state = 1;
             obj_s1 = Obj_GetUnused();
             obj_s1->functionIndex = OBJF_BOUNCE_ZOOM;

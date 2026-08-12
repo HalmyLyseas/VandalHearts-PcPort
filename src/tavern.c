@@ -2,7 +2,7 @@
  * No unit/roster logic lives here.
  *
  * Entry: main.c STATE_TAVERN -> State_Tavern() picks the background by townState and
- * spawns Objf576_Tavern, a per-chapter state machine indexed by gState.D_80140530
+ * spawns Objf576_Tavern, a per-chapter state machine indexed by gState.tavernVisit
  * (the tavern visit number 0..12): state2 0 opens the Talk/Leave menu, 1-3 run the
  * gossip loop (choice -> Tavern_StartQueuedGossip -> Tavern_FinishGossip; needSpeak[]
  * tracks which of the four NPCs still has news), and once all have spoken state2 4
@@ -272,7 +272,7 @@ s32 Objf576_Tavern(Object *obj) {
 
    case 1:
 
-      switch (gState.D_80140530) {
+      switch (gState.tavernVisit) {
       case 0:
 
          switch (obj->state2) {
@@ -453,10 +453,10 @@ s32 Objf576_Tavern(Object *obj) {
                   obj->state2 = 0;
                }
                break;
-            } // switch (state3) (via state:1 -> D_80140530:0 -> state2:4)
+            } // switch (state3) (via state:1 -> tavernVisit:0 -> state2:4)
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:0)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:0)
 
          break;
 
@@ -534,7 +534,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:1)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:1)
 
          break;
 
@@ -674,10 +674,10 @@ s32 Objf576_Tavern(Object *obj) {
                   obj->state2 = 0;
                }
                break;
-            } // switch (state3) (via state:1 -> D_80140530:2 -> state2:4)
+            } // switch (state3) (via state:1 -> tavernVisit:2 -> state2:4)
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:2)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:2)
 
          break;
 
@@ -793,7 +793,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:3)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:3)
 
          break;
 
@@ -914,7 +914,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:4)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:4)
 
          break;
 
@@ -1055,10 +1055,10 @@ s32 Objf576_Tavern(Object *obj) {
                   obj->state2 = 1;
                }
                break;
-            } // switch (state3) (via state:1 -> D_80140530:5 -> state2:4)
+            } // switch (state3) (via state:1 -> tavernVisit:5 -> state2:4)
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:5)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:5)
 
          break;
 
@@ -1129,7 +1129,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:6)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:6)
 
          break;
 
@@ -1200,7 +1200,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:7)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:7)
 
          break;
 
@@ -1320,7 +1320,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:8)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:8)
 
          break;
 
@@ -1391,7 +1391,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:9)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:9)
 
          break;
 
@@ -1462,7 +1462,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:10)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:10)
 
          break;
 
@@ -1540,7 +1540,7 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:11)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:11)
 
          break;
 
@@ -1661,10 +1661,10 @@ s32 Objf576_Tavern(Object *obj) {
             }
 
             break;
-         } // switch (obj->state2) (via state:1 -> D_80140530:12)
+         } // switch (obj->state2) (via state:1 -> tavernVisit:12)
 
          break;
-      } // switch (gState.D_80140530) (via state:1)
+      } // switch (gState.tavernVisit) (via state:1)
 
       break;
 
@@ -1694,7 +1694,7 @@ s32 Objf576_Tavern(Object *obj) {
             gState.state3 = 0;
             gState.state4 = 0;
 
-            switch (gState.D_80140530) {
+            switch (gState.tavernVisit) {
             case 0:
                gState.townState = 4;
                break;
@@ -1740,7 +1740,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 12:
                gState.townState = 0x20;
                break;
-            } // switch (gState.D_80140530) (via state:99 -> state2:2)
+            } // switch (gState.tavernVisit) (via state:99 -> state2:2)
 
             break;
          }

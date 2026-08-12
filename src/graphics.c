@@ -1186,8 +1186,8 @@ void RenderField(void) {
 
    if (gOverheadMapState == 1) {
       gOverheadMapState = 2;
-      D_80123358 = D_80122E28;
-      D_8012335C = D_80122E2C;
+      D_80123358 = gMapViewOriginX;
+      D_8012335C = gMapViewOriginZ;
    }
 
    if (gOverheadMapState != 0) {
@@ -1204,43 +1204,43 @@ void RenderField(void) {
 
    switch ((gCameraRotation.vy & 0xfff) >> 10) {
    case CAM_DIR_SOUTH:
-      endX = D_80122E28 + gMapSizeX - 2;
-      startX = D_80122E28;
-      endZ = D_80122E2C + gMapSizeZ - 1;
-      startZ = D_80122E2C + 1;
-      xEdgeStartX = D_80122E28;
-      xEdgeZ = D_80122E2C;
-      zEdgeX = D_80122E28 + gMapSizeX - 1;
+      endX = gMapViewOriginX + gMapSizeX - 2;
+      startX = gMapViewOriginX;
+      endZ = gMapViewOriginZ + gMapSizeZ - 1;
+      startZ = gMapViewOriginZ + 1;
+      xEdgeStartX = gMapViewOriginX;
+      xEdgeZ = gMapViewOriginZ;
+      zEdgeX = gMapViewOriginX + gMapSizeX - 1;
       zEdgeStartZ = startZ;
       break;
    case CAM_DIR_EAST:
-      endX = D_80122E28 + gMapSizeX - 2;
-      startX = D_80122E28;
-      endZ = D_80122E2C + gMapSizeZ - 2;
-      startZ = D_80122E2C;
-      xEdgeStartX = D_80122E28;
-      xEdgeZ = D_80122E2C + gMapSizeZ - 1;
-      zEdgeX = D_80122E28 + gMapSizeX - 1;
+      endX = gMapViewOriginX + gMapSizeX - 2;
+      startX = gMapViewOriginX;
+      endZ = gMapViewOriginZ + gMapSizeZ - 2;
+      startZ = gMapViewOriginZ;
+      xEdgeStartX = gMapViewOriginX;
+      xEdgeZ = gMapViewOriginZ + gMapSizeZ - 1;
+      zEdgeX = gMapViewOriginX + gMapSizeX - 1;
       zEdgeStartZ = startZ;
       break;
    case CAM_DIR_NORTH:
-      endX = D_80122E28 + gMapSizeX - 1;
-      startX = D_80122E28 + 1;
-      endZ = D_80122E2C + gMapSizeZ - 2;
-      startZ = D_80122E2C;
-      xEdgeStartX = D_80122E28;
-      xEdgeZ = D_80122E2C + gMapSizeZ - 1;
-      zEdgeX = D_80122E28;
+      endX = gMapViewOriginX + gMapSizeX - 1;
+      startX = gMapViewOriginX + 1;
+      endZ = gMapViewOriginZ + gMapSizeZ - 2;
+      startZ = gMapViewOriginZ;
+      xEdgeStartX = gMapViewOriginX;
+      xEdgeZ = gMapViewOriginZ + gMapSizeZ - 1;
+      zEdgeX = gMapViewOriginX;
       zEdgeStartZ = startZ;
       break;
    case CAM_DIR_WEST:
-      endX = D_80122E28 + gMapSizeX - 1;
-      startX = D_80122E28 + 1;
-      endZ = D_80122E2C + gMapSizeZ - 1;
-      startZ = D_80122E2C + 1;
-      xEdgeStartX = D_80122E28;
-      xEdgeZ = D_80122E2C;
-      zEdgeX = D_80122E28;
+      endX = gMapViewOriginX + gMapSizeX - 1;
+      startX = gMapViewOriginX + 1;
+      endZ = gMapViewOriginZ + gMapSizeZ - 1;
+      startZ = gMapViewOriginZ + 1;
+      xEdgeStartX = gMapViewOriginX;
+      xEdgeZ = gMapViewOriginZ;
+      zEdgeX = gMapViewOriginX;
       zEdgeStartZ = startZ;
       break;
    }
@@ -1856,7 +1856,7 @@ s32 GetBestViewOfTargetPlus90(s8 z, s8 x, s32 param_3) {
 }
 
 //? Count, followed by count tile offsets within viewable range? (CHECKME)
-static s8 D_80106894[] = {
+static s8 sViewObstructionOfsFlat[] = {
     33, 1,  0,  1,  0,  -1, 1,   1,  -1, 1,   2,  -1, 2,   1,  -2, 2,   2,  -2, 2,   3,
     -2, 4,  2,  -3, 4,  3,  -3,  4,  4,  -3,  6,  3,  -4,  6,  4,  -4,  6,  5,  -4,  8,
     4,  -5, 8,  5,  -5, 8,  6,   -5, 10, 5,   -6, 10, 6,   -6, 10, 7,   -6, 12, 6,   -7,
@@ -1864,7 +1864,7 @@ static s8 D_80106894[] = {
     -9, 16, 10, -9, 17, 9,  -10, 17, 10, -10, 17, 11, -10, 19, 10, -11, 19, 11, -11, 19,
 };
 
-static s8 D_801068F8[] = {
+static s8 sViewOfsLevelW[] = {
     41, 2,  0,  1,  0, -1,  1,  1,  -1,  1,  2,  -1,  1,  3,  -1,  2,  1,  -2,  2,  2,  -2,
     2,  3,  -2, 2,  4, -2,  4,  2,  -3,  4,  3,  -3,  4,  4,  -3,  4,  5,  -3,  6,  3,  -4,
     6,  4,  -4, 6,  5, -4,  6,  6,  -4,  8,  4,  -5,  8,  5,  -5,  8,  6,  -5,  8,  7,  -5,
@@ -1873,7 +1873,7 @@ static s8 D_801068F8[] = {
     16, 11, -9, 18, 9, -10, 17, 10, -10, 17, 11, -10, 18, 10, -11, 19, 11, -11, 19,
 };
 
-static s8 D_80106974[] = {
+static s8 sViewOfsLevelE[] = {
     41, 1, 0,  1,  -1, -1, 1,  0, -1,  1,  1, -1,  1,  2,  -1,  2,  0,  -2,  2,  1, -2,
     2,  2, -2, 2,  3,  -2, 4,  1, -3,  4,  2, -3,  4,  3,  -3,  4,  4,  -3,  6,  2, -4,
     6,  3, -4, 6,  4,  -4, 6,  5, -4,  8,  3, -5,  8,  4,  -5,  8,  5,  -5,  8,  6, -5,
@@ -1882,7 +1882,7 @@ static s8 D_80106974[] = {
     15, 9, -9, 16, 10, -9, 17, 8, -10, 17, 9, -10, 17, 10, -10, 17, 10, -11, 19,
 };
 
-static s8 D_801069F0[] = {
+static s8 sViewOfsLevelS[] = {
     41, 1, 1,  1,  1, 0,  1,  2,  0,  2,  0, -1,  1,  1,  -1,  1,  2,  -1,  2,  3,  -1,
     4,  1, -2, 2,  2, -2, 2,  3,  -2, 4,  4, -2,  6,  2,  -3,  4,  3,  -3,  4,  4,  -3,
     6,  5, -3, 7,  3, -4, 6,  4,  -4, 6,  5, -4,  8,  6,  -4,  9,  4,  -5,  8,  5,  -5,
@@ -1890,7 +1890,7 @@ static s8 D_801069F0[] = {
     12, 7, -7, 12, 8, -7, 13, 9,  -7, 15, 7, -8,  13, 8,  -8,  14, 9,  -8,  15, 10, -8,
     17, 8, -9, 15, 9, -9, 16, 10, -9, 17, 9, -10, 17, 10, -10, 18, 11, -10, 19,
 };
-static s8 D_80106A6C[] = {
+static s8 sViewOfsLevelN[] = {
     39, 1,  0,  1,  1,   -1, 1,  2,   -1, 2,  0,   -2, 1,  1,   -2, 1,  2,   -2, 2,  3,
     -2, 4,  1,  -3, 2,   2,  -3, 2,   3,  -3, 4,   4,  -3, 6,   2,  -4, 4,   3,  -4, 4,
     4,  -4, 6,  5,  -4,  8,  3,  -5,  6,  4,  -5,  6,  5,  -5,  8,  6,  -5,  10, 4,  -6,
@@ -1898,7 +1898,7 @@ static s8 D_80106A6C[] = {
     -7, 14, 7,  -8, 12,  8,  -8, 13,  9,  -8, 15,  7,  -9, 14,  8,  -9, 14,  9,  -9, 15,
     10, -9, 17, 9,  -10, 16, 10, -10, 17, 11, -10, 19, 10, -11, 18, 11, -11, 19,
 };
-static s8 D_80106AE4[] = {
+static s8 sViewOfsAboveW[] = {
     41, 2,  0,  0,  0, -1,  1,  1,  -1,  0,  2,  -1,  0,  3,  -1,  2,  1,  -2,  2,  2,  -2,
     2,  3,  -2, 2,  4, -2,  4,  2,  -3,  4,  3,  -3,  3,  4,  -3,  4,  5,  -3,  5,  3,  -4,
     6,  4,  -4, 5,  5, -4,  6,  6,  -4,  7,  4,  -5,  8,  5,  -5,  7,  6,  -5,  8,  7,  -5,
@@ -1906,7 +1906,7 @@ static s8 D_80106AE4[] = {
     12, 9,  -7, 14, 7, -8,  13, 8,  -8,  13, 9,  -8,  14, 8,  -9,  15, 9,  -9,  15, 10, -9,
     16, 11, -9, 18, 9, -10, 17, 10, -10, 17, 11, -10, 18, 10, -11, 19, 11, -11, 19,
 };
-static s8 D_80106B60[] = {
+static s8 sViewOfsAboveE[] = {
     41, 1, 0,  1,  -1, -1, 0,  0, -1,  0,  1, -1,  1,  2,  -1,  2,  0,  -2,  2,  1, -2,
     2,  2, -2, 2,  3,  -2, 4,  1, -3,  3,  2, -3,  4,  3,  -3,  4,  4,  -3,  6,  2, -4,
     5,  3, -4, 6,  4,  -4, 6,  5, -4,  8,  3, -5,  7,  4,  -5,  8,  5,  -5,  8,  6, -5,
@@ -1914,7 +1914,7 @@ static s8 D_80106B60[] = {
     12, 8, -7, 14, 6,  -8, 13, 7, -8,  13, 8, -8,  14, 9,  -8,  15, 7,  -9,  15, 8, -9,
     15, 9, -9, 16, 10, -9, 17, 8, -10, 17, 9, -10, 17, 10, -10, 17, 10, -11, 19,
 };
-static s8 D_80106BDC[] = {
+static s8 sViewOfsAboveS[] = {
     41, 1, 1,  0,  1, 0,  0,  2,  0,  1,  0, -1,  1,  1,  -1,  1,  2,  -1,  2,  3,  -1,
     3,  1, -2, 2,  2, -2, 2,  3,  -2, 4,  4, -2,  5,  2,  -3,  4,  3,  -3,  4,  4,  -3,
     6,  5, -3, 7,  3, -4, 6,  4,  -4, 6,  5, -4,  8,  6,  -4,  9,  4,  -5,  8,  5,  -5,
@@ -1922,7 +1922,7 @@ static s8 D_80106BDC[] = {
     12, 7, -7, 12, 8, -7, 13, 9,  -7, 15, 7, -8,  13, 8,  -8,  14, 9,  -8,  15, 10, -8,
     17, 8, -9, 15, 9, -9, 16, 10, -9, 17, 9, -10, 17, 10, -10, 18, 11, -10, 19,
 };
-static s8 D_80106C58[] = {
+static s8 sViewOfsAboveN[] = {
     39, 1,  0,  1,  1,   -1, 0,  2,   -1, 2,  0,   -2, 0,  1,   -2, 0,  2,   -2, 2,  3,
     -2, 4,  1,  -3, 2,   2,  -3, 2,   3,  -3, 4,   4,  -3, 6,   2,  -4, 4,   3,  -4, 4,
     4,  -4, 5,  5,  -4,  8,  3,  -5,  5,  4,  -5,  6,  5,  -5,  7,  6,  -5,  10, 4,  -6,
@@ -1930,7 +1930,7 @@ static s8 D_80106C58[] = {
     -7, 14, 7,  -8, 12,  8,  -8, 13,  9,  -8, 15,  7,  -9, 13,  8,  -9, 14,  9,  -9, 15,
     10, -9, 17, 9,  -10, 16, 10, -10, 17, 11, -10, 19, 10, -11, 18, 11, -11, 19,
 };
-static s8 D_80106CD0[] = {
+static s8 sViewOfsBelowW[] = {
     41, 2,  0,  2,  0, -1,  1,  1,  -1,  0,  2,  -1,  2,  3,  -1,  3,  1,  -2,  2,  2,  -2,
     2,  3,  -2, 3,  4, -2,  5,  2,  -3,  4,  3,  -3,  4,  4,  -3,  5,  5,  -3,  7,  3,  -4,
     6,  4,  -4, 6,  5, -4,  7,  6,  -4,  9,  4,  -5,  8,  5,  -5,  8,  6,  -5,  9,  7,  -5,
@@ -1938,7 +1938,7 @@ static s8 D_80106CD0[] = {
     13, 9,  -7, 15, 7, -8,  13, 8,  -8,  14, 9,  -8,  15, 8,  -9,  15, 9,  -9,  16, 10, -9,
     17, 11, -9, 19, 9, -10, 17, 10, -10, 17, 11, -10, 19, 10, -11, 19, 11, -11, 19,
 };
-static s8 D_80106D4C[] = {
+static s8 sViewOfsBelowE[] = {
     41, 1, 0,  1,  -1, -1, 2,  0, -1,  1,  1, -1,  1,  2,  -1,  2,  0,  -2,  3,  1, -2,
     2,  2, -2, 2,  3,  -2, 4,  1, -3,  5,  2, -3,  4,  3,  -3,  4,  4,  -3,  6,  2, -4,
     7,  3, -4, 6,  4,  -4, 6,  5, -4,  8,  3, -5,  9,  4,  -5,  8,  5,  -5,  8,  6, -5,
@@ -1946,7 +1946,7 @@ static s8 D_80106D4C[] = {
     12, 8, -7, 14, 6,  -8, 14, 7, -8,  13, 8, -8,  14, 9,  -8,  15, 7,  -9,  16, 8, -9,
     15, 9, -9, 16, 10, -9, 17, 8, -10, 18, 9, -10, 17, 10, -10, 17, 10, -11, 19,
 };
-static s8 D_80106DC8[] = {
+static s8 sViewOfsBelowS[] = {
     41, 1, 1,  2,  1, 0,  1,  2,  0,  3,  0, -1,  1,  1,  -1,  1,  2,  -1,  2,  3,  -1,
     5,  1, -2, 2,  2, -2, 2,  3,  -2, 4,  4, -2,  7,  2,  -3,  4,  3,  -3,  4,  4,  -3,
     6,  5, -3, 8,  3, -4, 6,  4,  -4, 6,  5, -4,  8,  6,  -4,  10, 4,  -5,  8,  5,  -5,
@@ -1954,7 +1954,7 @@ static s8 D_80106DC8[] = {
     12, 7, -7, 12, 8, -7, 14, 9,  -7, 16, 7, -8,  13, 8,  -8,  14, 9,  -8,  15, 10, -8,
     18, 8, -9, 15, 9, -9, 16, 10, -9, 17, 9, -10, 17, 10, -10, 18, 11, -10, 19,
 };
-static s8 D_80106E44[] = {
+static s8 sViewOfsBelowN[] = {
     39, 1,  0,  1,  1,   -1, 1,  2,   -1, 2,  0,   -2, 2,  1,   -2, 2,  2,   -2, 2,  3,
     -2, 4,  1,  -3, 3,   2,  -3, 3,   3,  -3, 4,   4,  -3, 6,   2,  -4, 5,   3,  -4, 5,
     4,  -4, 6,  5,  -4,  8,  3,  -5,  7,  4,  -5,  7,  5,  -5,  8,  6,  -5,  10, 4,  -6,
@@ -1964,12 +1964,12 @@ static s8 D_80106E44[] = {
 };
 
 //? Arrays for each of the four directions, for level/downward/upward viewing ranges (CHECKME)
-static s8 *D_80106EBC[] = {D_801069F0, D_801068F8, D_80106A6C, D_80106974, D_80106BDC, D_80106AE4,
-                           D_80106C58, D_80106B60, D_80106DC8, D_80106CD0, D_80106E44, D_80106D4C};
+static s8 *sViewObstructionTables[] = {sViewOfsLevelS, sViewOfsLevelW, sViewOfsLevelN, sViewOfsLevelE, sViewOfsAboveS, sViewOfsAboveW,
+                           sViewOfsAboveN, sViewOfsAboveE, sViewOfsBelowS, sViewOfsBelowW, sViewOfsBelowN, sViewOfsBelowE};
 
 /* Counts map tiles that block the camera's view of tile (z,x) at the given yaw, walking
  * an offset table selected by the elevation relation to the target and facing
- * (D_80106EBC; D_80106894 is the alternate table when param_5 is set). Backs all four
+ * (sViewObstructionTables; sViewObstructionOfsFlat is the alternate table when param_5 is set). Backs all four
  * GetBestViewOfTarget* pickers. */
 s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
    s32 result;
@@ -1991,7 +1991,7 @@ s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
    angleDir = (angle & 0xfff) >> 10;
    dir = (dir + angleDir) & 3;
 
-   psVar2 = &D_80106EBC[0];
+   psVar2 = &sViewObstructionTables[0];
    if (elevation > gTerrainPtr[gTargetZ][gTargetX].s.elevation) {
       psVar2 += 4;
    }
@@ -2002,7 +2002,7 @@ s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
 
    p = *psVar2;
    if (param_5) {
-      p = &D_80106894[0];
+      p = &sViewObstructionOfsFlat[0];
    }
 
    count = *p++;

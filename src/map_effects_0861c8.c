@@ -860,7 +860,7 @@ void Objf089_Map15_Scn17_Cinematic(Object *obj) {
       obj->y2.n = CV(2.0);
 
       AssignFromMainCamera(&OBJ.camera);
-      OBJ.todo_x24 = 0xc00;
+      OBJ.approachOfsX = 0xc00;
       obj->state++;
       break;
 
@@ -881,15 +881,15 @@ void Objf089_Map15_Scn17_Cinematic(Object *obj) {
       TransMatrix(&gCameraMatrix, &gCameraZoom);
       SetRotMatrix(&gCameraMatrix);
       SetTransMatrix(&gCameraMatrix);
-      gCameraPos.vx += OBJ.todo_x24;
+      gCameraPos.vx += OBJ.approachOfsX;
 
-      if (OBJ.todo_x24 >= 0x200) {
-         OBJ.todo_x24 -= 8;
-      } else if (OBJ.todo_x24 >= 0x40) {
-         OBJ.todo_x24 -= 4;
-      } else if (OBJ.todo_x24 >= 1) {
-         OBJ.todo_x24 -= 1;
-         OBJ.todo_x24 += -(OBJ.todo_x24) >> 4;
+      if (OBJ.approachOfsX >= 0x200) {
+         OBJ.approachOfsX -= 8;
+      } else if (OBJ.approachOfsX >= 0x40) {
+         OBJ.approachOfsX -= 4;
+      } else if (OBJ.approachOfsX >= 1) {
+         OBJ.approachOfsX -= 1;
+         OBJ.approachOfsX += -(OBJ.approachOfsX) >> 4;
       } else {
          obj->state++;
       }
@@ -928,8 +928,8 @@ void Objf089_Map15_Scn17_Cinematic(Object *obj) {
       gCameraPos.vx = camPosX;
       gCameraRotation.vy = camRotY;
 
-      obj->x3.n = 0x1000 - OBJ.todo_x24;
-      obj->x2.n = (OBJ.todo_x24 << 3) + obj->x3.n;
+      obj->x3.n = 0x1000 - OBJ.approachOfsX;
+      obj->x2.n = (OBJ.approachOfsX << 3) + obj->x3.n;
       obj->x1.n -= CV(0.0625);
       obj->z1.n -= CV(0.046875);
       obj->y1.n -= CV(0.015625);
@@ -963,7 +963,7 @@ void Objf089_Map15_Scn17_Cinematic(Object *obj) {
          for (i = 0; i < 1; i++) {
             obj_s1 = Obj_GetUnused();
             obj_s1->functionIndex = OBJF_MAP15_HULL_SPLASH;
-            obj_s1->x1.n = (i + 4) * CV(1.0) + (OBJ.todo_x24 << 3);
+            obj_s1->x1.n = (i + 4) * CV(1.0) + (OBJ.approachOfsX << 3);
             obj_s1->z1.n = (i + 15) * CV(1.0);
             obj_s1->y1.n = CV(0.5);
             obj_s1->x2.n = CV(-0.1875);

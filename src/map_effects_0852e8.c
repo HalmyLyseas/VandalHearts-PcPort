@@ -5,7 +5,7 @@
  * tables. It switches on gState.mapNum and spawns that map's scripted-scenery driver
  * (drawbridges, buttons, floodgates, the sand pit, the lava-pit platform, the car release,
  * the barricade...) plus ambient objects -- rain, chimney smoke, Map 38's seven torch
- * flames -- and the camera-zoom service object kept in D_801233CC. InEventScene() picks the
+ * flames -- and the camera-zoom service object kept in gCameraZoomObj. InEventScene() picks the
  * cutscene vs. battle variant and gates the battle-only drivers.
  *
  * The rest is the toolkit every other map_effects file builds on: tile-model elevation
@@ -37,13 +37,13 @@ s32 InEventScene(void) {
 }
 
 void SetupMapExtras(void) {
-   extern Object *D_801233CC;
+   extern Object *gCameraZoomObj;
    Object *obj;
    s32 i;
 
    obj = Obj_GetUnused();
    obj->functionIndex = OBJF_CAMERA_TBD_277;
-   D_801233CC = obj;
+   gCameraZoomObj = obj;
 
    if (gState.mapNum == 11) {
       obj = Obj_GetUnused();

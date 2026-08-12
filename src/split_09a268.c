@@ -166,12 +166,12 @@ void Noop_DebugPrintValue(s32 param_1, s32 param_2, s32 param_3) {
 
 void Objf688_Noop(Object *obj) {}
 
-Object *D_801233CC;
+Object *gCameraZoomObj;
 
 #undef OBJF
 #define OBJF 277
 void Objf277_Zoom(Object *obj) {
-   //? Maybe for debugging? Spawned by SetupMapExtras() (assigned to D_801233CC); can be manipulated
+   //? Maybe for debugging? Spawned by SetupMapExtras() (assigned to gCameraZoomObj); can be manipulated
    // via SetCameraZoomTarget_Unused() / StopCameraZoom_Unused(), but those appear to be unused.
 
    s32 smoothness;
@@ -187,21 +187,21 @@ void Objf277_Zoom(Object *obj) {
 }
 
 void SetCameraZoomTarget_Unused(s16 param_1, s16 param_2, s16 zoom, s16 smoothness) {
-   switch (D_801233CC->state) {
+   switch (gCameraZoomObj->state) {
    case 0:
-      D_801233CC->state++;
+      gCameraZoomObj->state++;
 
    // fallthrough
    default:
-      D_801233CC->d.objf277.todo_x24 = param_1;
-      D_801233CC->d.objf277.todo_x26 = param_2;
-      D_801233CC->d.objf277.dstZoom = zoom;
-      D_801233CC->d.objf277.smoothness = smoothness;
+      gCameraZoomObj->d.objf277.panX_unused = param_1;
+      gCameraZoomObj->d.objf277.panZ_unused = param_2;
+      gCameraZoomObj->d.objf277.dstZoom = zoom;
+      gCameraZoomObj->d.objf277.smoothness = smoothness;
       break;
    }
 }
 
-void StopCameraZoom_Unused(void) { D_801233CC->state = 0; }
+void StopCameraZoom_Unused(void) { gCameraZoomObj->state = 0; }
 
 #undef OBJF
 #define OBJF 279
@@ -518,7 +518,7 @@ void Objf273_OutwardRay(Object *obj) {
       OBJ.theta1 = rand() % DEG(33.75);
       OBJ.theta2 = rand() % DEG(360);
       OBJ.unused_0x3A = rand() % 64 + 32;
-      OBJ.todo_x38 = CV(0.5);
+      OBJ.dist = CV(0.5);
       obj->x3.n = 32;
       obj->z3.n = 8;
 
@@ -529,7 +529,7 @@ void Objf273_OutwardRay(Object *obj) {
          obj->mem = 2;
       }
 
-      OBJ.todo_x54 = -32 - rand() % 64;
+      OBJ.rotationSpeed_unused = -32 - rand() % 64;
 
       switch (obj->state3) {
       case 0:
@@ -546,26 +546,26 @@ void Objf273_OutwardRay(Object *obj) {
 
       obj->state2 = 0;
 
-      r = (OBJ.todo_x38 * rcos(OBJ.theta1)) >> 12;
+      r = (OBJ.dist * rcos(OBJ.theta1)) >> 12;
       OBJ.coords[1].x = obj->x2.n + (r * rcos(OBJ.theta2) >> 12);
       OBJ.coords[1].z = obj->z2.n + (r * rsin(OBJ.theta2) >> 12);
       OBJ.coords[3].x = obj->x2.n + (r * rcos(OBJ.theta2 + DEG(1.40625)) >> 12);
       OBJ.coords[3].z = obj->z2.n + (r * rsin(OBJ.theta2 + DEG(1.40625)) >> 12);
-      OBJ.coords[1].y = OBJ.coords[3].y = obj->y2.n + (OBJ.todo_x38 * rsin(OBJ.theta1) >> 12);
+      OBJ.coords[1].y = OBJ.coords[3].y = obj->y2.n + (OBJ.dist * rsin(OBJ.theta1) >> 12);
 
       obj->state++;
 
    // fallthrough
    case 1:
-      OBJ.todo_x38 += obj->x3.n;
+      OBJ.dist += obj->x3.n;
       obj->x3.n += obj->z3.n;
 
-      r = (OBJ.todo_x38 * rcos(OBJ.theta1)) >> 12;
+      r = (OBJ.dist * rcos(OBJ.theta1)) >> 12;
       OBJ.coords[0].x = obj->x2.n + (r * rcos(OBJ.theta2) >> 12);
       OBJ.coords[0].z = obj->z2.n + (r * rsin(OBJ.theta2) >> 12);
       OBJ.coords[2].x = obj->x2.n + (r * rcos(OBJ.theta2 + DEG(1.40625)) >> 12);
       OBJ.coords[2].z = obj->z2.n + (r * rsin(OBJ.theta2 + DEG(1.40625)) >> 12);
-      OBJ.coords[0].y = OBJ.coords[2].y = obj->y2.n + (OBJ.todo_x38 * rsin(OBJ.theta1) >> 12);
+      OBJ.coords[0].y = OBJ.coords[2].y = obj->y2.n + (OBJ.dist * rsin(OBJ.theta1) >> 12);
 
       obj->x1.n = OBJ.coords[0].x;
       obj->z1.n = OBJ.coords[0].z;
@@ -579,7 +579,7 @@ void Objf273_OutwardRay(Object *obj) {
       OBJ.coords[3].z = OBJ.coords[2].z;
       OBJ.coords[1].y = OBJ.coords[3].y = OBJ.coords[0].y;
 
-      if (OBJ.todo_x38 >= CV(4.5)) {
+      if (OBJ.dist >= CV(4.5)) {
          obj->state++;
       }
       break;
@@ -750,7 +750,7 @@ void Objf270_LightningPillar_Unused(Object *obj) {
          obj_s0->y1.n += rand() % CV(0.5);
          obj_s0->d.objf099.theta1 = 0;
          obj_s0->d.objf099.theta2 = 0;
-         obj_s0->d.objf099.todo_x28 = rand() % 64 + 128;
+         obj_s0->d.objf099.speed = rand() % 64 + 128;
          obj_s0->d.objf099.clut = sCluts_801230a4[rand() % 4];
          obj->mem += rand() % 4;
       }
@@ -787,8 +787,8 @@ void Objf270_LightningPillar_Unused(Object *obj) {
       RenderCylinder(dsCylinder);
       obj_s0->functionIndex = OBJF_NULL;
 
-      OBJ.todo_x24 = 0;
-      OBJ.todo_x26 = 0;
+      OBJ.unused_0x24 = 0;
+      OBJ.unused_0x26 = 0;
       break;
    }
 }
@@ -863,12 +863,12 @@ void Objf099_StreakParticle(Object *obj) {
       sprite->d.sprite.clut = OBJ.clut;
       sprite->d.sprite.semiTrans = 2;
       OBJ.sprite = sprite;
-      obj->mem = OBJ.todo_x30;
+      obj->mem = OBJ.lifetime;
       obj->state++;
 
    // fallthrough
    case 1:
-      SphericalToVector(&svec, OBJ.todo_x28, OBJ.theta1, OBJ.theta2);
+      SphericalToVector(&svec, OBJ.speed, OBJ.theta1, OBJ.theta2);
       obj->x1.n += svec.vx;
       obj->z1.n += svec.vz;
       obj->y1.n += svec.vy;
@@ -1028,9 +1028,9 @@ void Objf340_Map48_Scn20_LightningFan(Object *obj) {
       obj_s0->z1.n = obj->z1.n + (rand() % 1024 - CV(2.0));
       obj_s0->d.objf099.theta1 = DEG(180);
       obj_s0->d.objf099.theta2 = DEG(0);
-      obj_s0->d.objf099.todo_x28 = rand() % 64 + 256;
+      obj_s0->d.objf099.speed = rand() % 64 + 256;
       obj_s0->d.objf099.clut = sCluts_801230a4[rand() % 4];
-      obj_s0->d.objf099.todo_x30 = 16;
+      obj_s0->d.objf099.lifetime = 16;
 
       obj_s0 = Obj_GetUnused();
       obj_s0->functionIndex = OBJF_NOOP;
@@ -1333,31 +1333,31 @@ void Objf319_Map67_Scn34_RiftArcs(Object *obj) {
 
       obj_s2 = CreatePositionedObj(obj, OBJF_MAP67_SCN34_BOLT_ENDPOINT);
       obj_s2->x3.n = obj->x1.n - CV(1.5);
-      OBJ.todo_x5c = obj_s2;
+      OBJ.arc1Endpoint = obj_s2;
 
       obj_s0 = CreatePositionedObj(obj, OBJF_NOOP);
       obj_s0->x1.n -= CV(3.0);
-      OBJ.todo_x58 = obj_s0;
+      OBJ.arc2 = obj_s0;
       obj_s0->d.sprite.clut = CLUT_PURPLES;
       obj_s0->d.sprite.semiTrans = 2;
       OBJ.semiTrans = 2;
 
       obj_s2 = CreatePositionedObj(obj_s0, OBJF_MAP67_SCN34_BOLT_ENDPOINT);
       obj_s2->x3.n = obj_s0->x1.n + CV(1.5);
-      OBJ.todo_x50 = obj_s2;
+      OBJ.arc2Endpoint = obj_s2;
       obj->state++;
 
    // fallthrough
    case 1:
-      obj_s2 = OBJ.todo_x5c;
+      obj_s2 = OBJ.arc1Endpoint;
       obj->x2.n = obj_s2->x1.n;
       obj->z2.n = obj_s2->z1.n;
       obj->y2.n = obj_s2->y1.n;
       RenderLightningBolt(obj);
       RenderLightningBolt(obj);
       RenderLightningBolt(obj);
-      obj_s0 = OBJ.todo_x58;
-      obj_s3 = OBJ.todo_x50;
+      obj_s0 = OBJ.arc2;
+      obj_s3 = OBJ.arc2Endpoint;
       obj_s0->x2.n = obj_s3->x1.n;
       obj_s0->z2.n = obj_s3->z1.n;
       obj_s0->y2.n = obj_s3->y1.n;
@@ -1383,8 +1383,8 @@ void Objf319_Map67_Scn34_RiftArcs(Object *obj) {
          break;
 
       case 3:
-         obj_s2 = OBJ.todo_x5c;
-         obj_s3 = OBJ.todo_x50;
+         obj_s2 = OBJ.arc1Endpoint;
+         obj_s3 = OBJ.arc2Endpoint;
          obj_s2->x2.n = obj_s3->x2.n = obj->x1.n - CV(1.5) - obj->mem;
          if (--obj->state3 <= 0) {
             obj_s0 = CreatePositionedObj(obj_s3, OBJF_FLICKERING_EXPAND_RING);
@@ -1422,7 +1422,7 @@ void Objf319_Map67_Scn34_RiftArcs(Object *obj) {
       break;
 
    case 5:
-      obj_s0 = OBJ.todo_x58;
+      obj_s0 = OBJ.arc2;
       obj_s0->functionIndex = OBJF_NULL;
       obj->functionIndex = OBJF_NULL;
       gSignal3 = 1;
@@ -2103,7 +2103,7 @@ void Objf697_Map43_Scn93_FlameSphere(Object *obj) {
       obj_v1->x2.n = obj->x1.n;
       obj_v1->z2.n = obj->z1.n;
       obj_v1->y2.n = obj->y1.n + CV(0.5);
-      obj_v1->d.objf314.todo_x38 = 256;
+      obj_v1->d.objf314.dist = 256;
       RenderSphere(sphere);
       break;
    }
@@ -2422,7 +2422,7 @@ void Objf705_732_743_744_Transformation(Object *obj) {
    }
 
    if (obj->functionIndex == OBJF_MID_BATTLE_TRANSFORMATION) {
-      if (gState.D_801405A4 != 0) {
+      if (gState.transformFxDone != 0) {
          if (obj_s1 != NULL) {
             obj_s1->d.sprite.hidden = 0;
          }
@@ -2567,9 +2567,9 @@ void Objf714_DebugCamera(Object *obj) {
    }
 }
 
-s16 D_8012334C;
-s16 D_80123350;
-s16 D_80123354;
+s16 gRiftSpinYZ;
+s16 gRiftSpinXZ_Red;
+s16 gRiftSpinXZ_Blue;
 
 #undef OBJF
 #define OBJF 719
@@ -2596,9 +2596,9 @@ void Objf719_DimensionalRift(Object *obj) {
       OBJ.gfxIdx = GFX_MASK_EFFECT_1;
       OBJ.clut = CLUT_BLUES;
       OBJ.semiTrans = 2;
-      D_8012334C = 0;
-      D_80123350 = 0;
-      D_80123354 = DEG(180);
+      gRiftSpinYZ = 0;
+      gRiftSpinXZ_Red = 0;
+      gRiftSpinXZ_Blue = DEG(180);
 
       sphere = CreatePositionedObj(obj, OBJF_NOOP);
       OBJ.sphere = sphere;
@@ -2610,7 +2610,7 @@ void Objf719_DimensionalRift(Object *obj) {
 
    // fallthrough
    case 1:
-      ApplyMaskEffect(496 << 2, 384, 64, 64, 384 << 2, 256, D_8012334C % 32, D_80123350 % 32,
+      ApplyMaskEffect(496 << 2, 384, 64, 64, 384 << 2, 256, gRiftSpinYZ % 32, gRiftSpinXZ_Red % 32,
                       GFX_MASK_EFFECT_1, 0);
 
       entitySprite = OBJ.entitySprite;
@@ -2655,8 +2655,8 @@ void Objf719_DimensionalRift(Object *obj) {
       quad1[0].vz = quad1[1].vz = -halfSize;
       quad1[2].vz = quad1[3].vz = halfSize;
 
-      RotateQuadYZ(quad1, quad3, D_8012334C);
-      RotateQuadXZ(quad3, quad2, D_80123350);
+      RotateQuadYZ(quad1, quad3, gRiftSpinYZ);
+      RotateQuadXZ(quad3, quad2, gRiftSpinXZ_Red);
 
       pCoord = &OBJ.coords[0];
       for (i = 0; i < 4; i++) {
@@ -2669,8 +2669,8 @@ void Objf719_DimensionalRift(Object *obj) {
       OBJ.clut = CLUT_REDS;
       AddObjPrim4(gGraphicsPtr->ot, obj);
 
-      RotateQuadYZ(quad1, quad3, D_8012334C);
-      RotateQuadXZ(quad3, quad2, D_80123354);
+      RotateQuadYZ(quad1, quad3, gRiftSpinYZ);
+      RotateQuadXZ(quad3, quad2, gRiftSpinXZ_Blue);
 
       pCoord = &OBJ.coords[0];
       for (i = 0; i < 4; i++) {
@@ -2689,19 +2689,19 @@ void Objf719_DimensionalRift(Object *obj) {
       OBJ.coords[2].z = OBJ.coords[3].z = obj->z1.n + halfSize;
       OBJ.coords[0].y = OBJ.coords[1].y = OBJ.coords[2].y = OBJ.coords[3].y = obj->y1.n;
 
-      ApplyMaskEffect(448 << 2, 384, 64, 64, 416 << 2, 384, D_8012334C % 32, D_80123350 % 32,
+      ApplyMaskEffect(448 << 2, 384, 64, 64, 416 << 2, 384, gRiftSpinYZ % 32, gRiftSpinXZ_Red % 32,
                       GFX_MASK_EFFECT_2, 0);
       OBJ.gfxIdx = GFX_MASK_EFFECT_2;
       OBJ.semiTrans = 0;
       AddObjPrim4(gGraphicsPtr->ot, obj);
-      D_8012334C += 16;
-      D_80123350 += 8;
-      D_80123354 -= DEG(1.40625);
+      gRiftSpinYZ += 16;
+      gRiftSpinXZ_Red += 8;
+      gRiftSpinXZ_Blue -= DEG(1.40625);
 
       sphere = OBJ.sphere;
       sphere->mem = halfSize;
-      sphere->state3 = halfSize + ((halfSize >> 1) * rsin(D_8012334C * 8) >> 12);
-      sphere->state2 = D_8012334C;
+      sphere->state3 = halfSize + ((halfSize >> 1) * rsin(gRiftSpinYZ * 8) >> 12);
+      sphere->state2 = gRiftSpinYZ;
       sphere->d.sprite.clut = CLUT_BLUES;
       RenderSphere(sphere);
       break;
@@ -3242,9 +3242,9 @@ void Objf734_MeteorImpact_Unused(Object *obj) {
          obj_s1->y1.n += CV(0.5);
          obj_s1->d.objf141.clut = CLUT_REDS;
          obj_s1->d.objf141.semiTrans = 2;
-         obj_s1->d.objf141.todo_x2c = 1;
-         obj_s1->d.objf141.todo_x28 = 0x20;
-         obj_s1->d.objf141.todo_x2a = 0xaa;
+         obj_s1->d.objf141.unused_0x2C = 1;
+         obj_s1->d.objf141.maxHeight = 0x20;
+         obj_s1->d.objf141.pulseSpeed = 0xaa;
          obj_s1->d.objf141.radius = CV(0.4375);
       }
       if (--obj->state3 <= 0) {
@@ -3317,7 +3317,7 @@ void Objf253_SpawnGraveMarker(Object *obj) {
 #undef OBJF
 #define OBJF 530
 void Objf530_Map61_Scn83_VandalHeartForcefield(Object *obj) {
-   extern SVECTOR D_80124EB4[6];
+   extern SVECTOR gForcefieldRingVerts[6];
 
    Object *obj_s0;
    s32 i;
@@ -3363,8 +3363,8 @@ void Objf530_Map61_Scn83_VandalHeartForcefield(Object *obj) {
    theta = OBJ.theta;
 
    for (i = 0; i < 6; i++) {
-      D_80124EB4[i].vx = CV(0.5) * rsin(theta + i * (DEG(360) / 6)) / ONE;
-      D_80124EB4[i].vz = CV(0.5) * rcos(theta + i * (DEG(360) / 6)) / ONE;
+      gForcefieldRingVerts[i].vx = CV(0.5) * rsin(theta + i * (DEG(360) / 6)) / ONE;
+      gForcefieldRingVerts[i].vz = CV(0.5) * rcos(theta + i * (DEG(360) / 6)) / ONE;
    }
 
    if (obj->state2 != 0) {
@@ -3376,17 +3376,17 @@ void Objf530_Map61_Scn83_VandalHeartForcefield(Object *obj) {
    }
 
    for (i = 0; i < 5; i++) {
-      obj_s0->d.sprite.coords[0].x = D_80124EB4[i].vx + obj->x1.n;
-      obj_s0->d.sprite.coords[0].z = D_80124EB4[i].vz + obj->z1.n;
+      obj_s0->d.sprite.coords[0].x = gForcefieldRingVerts[i].vx + obj->x1.n;
+      obj_s0->d.sprite.coords[0].z = gForcefieldRingVerts[i].vz + obj->z1.n;
       obj_s0->d.sprite.coords[0].y = obj->y1.n + CV(1.25);
-      obj_s0->d.sprite.coords[1].x = D_80124EB4[i + 1].vx + obj->x1.n;
-      obj_s0->d.sprite.coords[1].z = D_80124EB4[i + 1].vz + obj->z1.n;
+      obj_s0->d.sprite.coords[1].x = gForcefieldRingVerts[i + 1].vx + obj->x1.n;
+      obj_s0->d.sprite.coords[1].z = gForcefieldRingVerts[i + 1].vz + obj->z1.n;
       obj_s0->d.sprite.coords[1].y = obj->y1.n + CV(1.25);
-      obj_s0->d.sprite.coords[2].x = D_80124EB4[i].vx + obj->x1.n;
-      obj_s0->d.sprite.coords[2].z = D_80124EB4[i].vz + obj->z1.n;
+      obj_s0->d.sprite.coords[2].x = gForcefieldRingVerts[i].vx + obj->x1.n;
+      obj_s0->d.sprite.coords[2].z = gForcefieldRingVerts[i].vz + obj->z1.n;
       obj_s0->d.sprite.coords[2].y = obj->y1.n;
-      obj_s0->d.sprite.coords[3].x = D_80124EB4[i + 1].vx + obj->x1.n;
-      obj_s0->d.sprite.coords[3].z = D_80124EB4[i + 1].vz + obj->z1.n;
+      obj_s0->d.sprite.coords[3].x = gForcefieldRingVerts[i + 1].vx + obj->x1.n;
+      obj_s0->d.sprite.coords[3].z = gForcefieldRingVerts[i + 1].vz + obj->z1.n;
       obj_s0->d.sprite.coords[3].y = obj->y1.n;
 
       AddObjPrim4(gGraphicsPtr->ot, obj_s0);
@@ -3396,17 +3396,17 @@ void Objf530_Map61_Scn83_VandalHeartForcefield(Object *obj) {
       }
    }
 
-   obj_s0->d.sprite.coords[0].x = D_80124EB4[5].vx + obj->x1.n;
-   obj_s0->d.sprite.coords[0].z = D_80124EB4[5].vz + obj->z1.n;
+   obj_s0->d.sprite.coords[0].x = gForcefieldRingVerts[5].vx + obj->x1.n;
+   obj_s0->d.sprite.coords[0].z = gForcefieldRingVerts[5].vz + obj->z1.n;
    obj_s0->d.sprite.coords[0].y = obj->y1.n + CV(1.25);
-   obj_s0->d.sprite.coords[1].x = D_80124EB4[0].vx + obj->x1.n;
-   obj_s0->d.sprite.coords[1].z = D_80124EB4[0].vz + obj->z1.n;
+   obj_s0->d.sprite.coords[1].x = gForcefieldRingVerts[0].vx + obj->x1.n;
+   obj_s0->d.sprite.coords[1].z = gForcefieldRingVerts[0].vz + obj->z1.n;
    obj_s0->d.sprite.coords[1].y = obj->y1.n + CV(1.25);
-   obj_s0->d.sprite.coords[2].x = D_80124EB4[5].vx + obj->x1.n;
-   obj_s0->d.sprite.coords[2].z = D_80124EB4[5].vz + obj->z1.n;
+   obj_s0->d.sprite.coords[2].x = gForcefieldRingVerts[5].vx + obj->x1.n;
+   obj_s0->d.sprite.coords[2].z = gForcefieldRingVerts[5].vz + obj->z1.n;
    obj_s0->d.sprite.coords[2].y = obj->y1.n;
-   obj_s0->d.sprite.coords[3].x = D_80124EB4[0].vx + obj->x1.n;
-   obj_s0->d.sprite.coords[3].z = D_80124EB4[0].vz + obj->z1.n;
+   obj_s0->d.sprite.coords[3].x = gForcefieldRingVerts[0].vx + obj->x1.n;
+   obj_s0->d.sprite.coords[3].z = gForcefieldRingVerts[0].vz + obj->z1.n;
    obj_s0->d.sprite.coords[3].y = obj->y1.n;
 
    AddObjPrim4(gGraphicsPtr->ot, obj_s0);
@@ -3419,11 +3419,11 @@ void Objf530_Map61_Scn83_VandalHeartForcefield(Object *obj) {
       obj_s0->d.sprite.coords[0].x = obj_s0->d.sprite.coords[1].x = obj->x1.n;
       obj_s0->d.sprite.coords[0].z = obj_s0->d.sprite.coords[1].z = obj->z1.n;
       obj_s0->d.sprite.coords[0].y = obj_s0->d.sprite.coords[1].y = obj->y1.n + CV(1.5);
-      obj_s0->d.sprite.coords[2].x = D_80124EB4[i].vx + obj->x1.n;
-      obj_s0->d.sprite.coords[2].z = D_80124EB4[i].vz + obj->z1.n;
+      obj_s0->d.sprite.coords[2].x = gForcefieldRingVerts[i].vx + obj->x1.n;
+      obj_s0->d.sprite.coords[2].z = gForcefieldRingVerts[i].vz + obj->z1.n;
       obj_s0->d.sprite.coords[2].y = obj->y1.n + CV(1.25);
-      obj_s0->d.sprite.coords[3].x = D_80124EB4[i + 1].vx + obj->x1.n;
-      obj_s0->d.sprite.coords[3].z = D_80124EB4[i + 1].vz + obj->z1.n;
+      obj_s0->d.sprite.coords[3].x = gForcefieldRingVerts[i + 1].vx + obj->x1.n;
+      obj_s0->d.sprite.coords[3].z = gForcefieldRingVerts[i + 1].vz + obj->z1.n;
       obj_s0->d.sprite.coords[3].y = obj->y1.n + CV(1.25);
 
       AddObjPrim4(gGraphicsPtr->ot, obj_s0);
@@ -3436,11 +3436,11 @@ void Objf530_Map61_Scn83_VandalHeartForcefield(Object *obj) {
    obj_s0->d.sprite.coords[0].x = obj_s0->d.sprite.coords[1].x = obj->x1.n;
    obj_s0->d.sprite.coords[0].z = obj_s0->d.sprite.coords[1].z = obj->z1.n;
    obj_s0->d.sprite.coords[0].y = obj_s0->d.sprite.coords[1].y = obj->y1.n + CV(1.5);
-   obj_s0->d.sprite.coords[2].x = D_80124EB4[5].vx + obj->x1.n;
-   obj_s0->d.sprite.coords[2].z = D_80124EB4[5].vz + obj->z1.n;
+   obj_s0->d.sprite.coords[2].x = gForcefieldRingVerts[5].vx + obj->x1.n;
+   obj_s0->d.sprite.coords[2].z = gForcefieldRingVerts[5].vz + obj->z1.n;
    obj_s0->d.sprite.coords[2].y = obj->y1.n + CV(1.25);
-   obj_s0->d.sprite.coords[3].x = D_80124EB4[0].vx + obj->x1.n;
-   obj_s0->d.sprite.coords[3].z = D_80124EB4[0].vz + obj->z1.n;
+   obj_s0->d.sprite.coords[3].x = gForcefieldRingVerts[0].vx + obj->x1.n;
+   obj_s0->d.sprite.coords[3].z = gForcefieldRingVerts[0].vz + obj->z1.n;
    obj_s0->d.sprite.coords[3].y = obj->y1.n + CV(1.25);
 
    AddObjPrim4(gGraphicsPtr->ot, obj_s0);

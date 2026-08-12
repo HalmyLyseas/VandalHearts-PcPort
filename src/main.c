@@ -195,12 +195,12 @@ void Objf582_MainMenu_Jpn(Object *obj) {
             dialog = Obj_GetUnused();
             dialog->functionIndex = OBJF_FILE_LOAD_MENU_DEBUG;
             obj->state++;
-            gState.D_8014053E = 0;
+            gState.subObjDone = 0;
          }
       }
       break;
    case 2:
-      if (gState.D_8014053E != 0) {
+      if (gState.subObjDone != 0) {
          gState.primary = STATE_LOAD_DEBUG_MENU;
       }
       break;

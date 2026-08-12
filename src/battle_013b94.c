@@ -529,7 +529,7 @@ void Objf021_UnitAttacking(Object *obj) {
             newObj->d.objf026.target = obj2;
             newObj->d.objf026.type = 3;
             if (attacker->class != CLASS_ARCHER) {
-               newObj->d.objf026.todo_x44 = 1;
+               newObj->d.objf026.wideOcclusionTest = 1;
             }
 
             OBJ.countering = 1;

@@ -476,7 +476,7 @@ void Objf351_MsgBoxText(Object *obj) {
       gState.msgBoxFinished = 0;
       gState.msgBoxPagePaused = 0;
       obj->state3 = 1;
-      OBJ.todo_x48 = 0;
+      OBJ.speakAnimSuppressed = 0;
 
       OBJ.textSpeed = textSpeeds[gState.textSpeed & 7];
       if (gState.vsyncMode != 2) {
@@ -555,7 +555,7 @@ void Objf351_MsgBoxText(Object *obj) {
       buttonIcon->y3.n = buttonIconY + 16;
 
       OBJ.textPtr = gState.currentTextPointers[OBJ.textPtrIdx];
-      OBJ.todo_x44 = 0;
+      OBJ.fastForward = 0;
 
       OBJ.rect.x = obj->x1.n + 512;
       if (OBJ.type == 1) {
@@ -586,13 +586,13 @@ void Objf351_MsgBoxText(Object *obj) {
       if (gPadStateNewPresses & PAD_X) {
          OBJ.textSpeedAccum += 0x4000;
       }
-      if (OBJ.todo_x44 == 0 && (gPadStateNewPresses & PAD_CIRCLE)) {
-         OBJ.todo_x44 = 1;
+      if (OBJ.fastForward == 0 && (gPadStateNewPresses & PAD_CIRCLE)) {
+         OBJ.fastForward = 1;
       }
       if (OBJ.todo_x45 != 0 && !(gPadState & PAD_CIRCLE)) {
-         OBJ.todo_x44 = 0;
+         OBJ.fastForward = 0;
       }
-      if ((gPadState & PAD_CIRCLE) && (OBJ.todo_x44 != 0)) {
+      if ((gPadState & PAD_CIRCLE) && (OBJ.fastForward != 0)) {
          OBJ.textSpeedAccum += 0x200;
          if (OBJ.textSpeedAccum > 0x4000) {
             OBJ.textSpeedAccum = 0x4000;
@@ -631,7 +631,7 @@ void Objf351_MsgBoxText(Object *obj) {
             p += 2;
             obj->x3.n++;
             OBJ.textSpeedAccum -= 0x100;
-            if (sjis > 0x823f && OBJ.todo_x48 == 0) {
+            if (sjis > 0x823f && OBJ.speakAnimSuppressed == 0) {
                if (gState.vsyncMode != 2) {
                   n = 6;
                } else {
@@ -715,8 +715,8 @@ void Objf351_MsgBoxText(Object *obj) {
 
                case 'O':
                case 'o':
-                  OBJ.todo_x48++;
-                  OBJ.todo_x48 %= 2;
+                  OBJ.speakAnimSuppressed++;
+                  OBJ.speakAnimSuppressed %= 2;
                   p++;
                   OBJ.textPtr++;
                   continue;
@@ -805,7 +805,7 @@ void Objf351_MsgBoxText(Object *obj) {
          obj->y3.n = 0;
          gState.msgBoxPagePaused = 1;
          OBJ.textSpeedAccum = 0;
-         OBJ.todo_x44 = 0;
+         OBJ.fastForward = 0;
       }
       break;
 

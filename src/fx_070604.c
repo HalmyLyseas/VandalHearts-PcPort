@@ -269,13 +269,13 @@ void Objf188_DarkFire_Ray(Object *obj) {
       obj->x1.n = target->x1.n;
       obj->z1.n = target->z1.n;
 
-      OBJ.todo_x24 = CV(3.0) + rand() % CV(3.0);
-      OBJ.todo_x26 = rand() % DEG(360);
-      OBJ.todo_x28 = rand() % DEG(360);
-      OBJ.todo_x2a = rand() % DEG(360);
-      OBJ.todo_x2c = 0x60 - rand() % 0xc1;
-      OBJ.todo_x2e = 0x60 - rand() % 0xc1;
-      OBJ.todo_x30 = 0x60 - rand() % 0xc1;
+      OBJ.maxRadius = CV(3.0) + rand() % CV(3.0);
+      OBJ.thetaX = rand() % DEG(360);
+      OBJ.thetaZ = rand() % DEG(360);
+      OBJ.thetaY = rand() % DEG(360);
+      OBJ.thetaXSpeed = 0x60 - rand() % 0xc1;
+      OBJ.thetaZSpeed = 0x60 - rand() % 0xc1;
+      OBJ.thetaYSpeed = 0x60 - rand() % 0xc1;
 
       obj->state++;
 
@@ -287,7 +287,7 @@ void Objf188_DarkFire_Ray(Object *obj) {
       sprite->d.sprite.clut = CLUT_BLUES;
       sprite->d.sprite.semiTrans = 1;
 
-      OBJ.todo_x34 = OBJ.todo_x24 * OBJ.todo_x36 / 0x20;
+      OBJ.radius = OBJ.maxRadius * OBJ.growth / 0x20;
 
       sprite->d.sprite.coords[0].x = obj->x1.n;
       sprite->d.sprite.coords[0].z = obj->z1.n;
@@ -295,36 +295,36 @@ void Objf188_DarkFire_Ray(Object *obj) {
       sprite->d.sprite.coords[1].x = obj->x1.n;
       sprite->d.sprite.coords[1].z = obj->z1.n;
       sprite->d.sprite.coords[1].y = obj->y1.n;
-      sprite->d.sprite.coords[2].x = obj->x1.n + OBJ.todo_x34 * rcos(OBJ.todo_x26) / ONE;
-      sprite->d.sprite.coords[2].z = obj->z1.n + OBJ.todo_x34 * rsin(OBJ.todo_x28) / ONE;
-      sprite->d.sprite.coords[2].y = obj->y1.n + OBJ.todo_x34 * rsin(OBJ.todo_x2a) / ONE;
-      sprite->d.sprite.coords[3].x = obj->x1.n + OBJ.todo_x34 * rcos(OBJ.todo_x26 + 8) / ONE;
-      sprite->d.sprite.coords[3].z = obj->z1.n + OBJ.todo_x34 * rsin(OBJ.todo_x28 + 8) / ONE;
-      sprite->d.sprite.coords[3].y = obj->y1.n + OBJ.todo_x34 * rsin(OBJ.todo_x2a + 8) / ONE;
+      sprite->d.sprite.coords[2].x = obj->x1.n + OBJ.radius * rcos(OBJ.thetaX) / ONE;
+      sprite->d.sprite.coords[2].z = obj->z1.n + OBJ.radius * rsin(OBJ.thetaZ) / ONE;
+      sprite->d.sprite.coords[2].y = obj->y1.n + OBJ.radius * rsin(OBJ.thetaY) / ONE;
+      sprite->d.sprite.coords[3].x = obj->x1.n + OBJ.radius * rcos(OBJ.thetaX + 8) / ONE;
+      sprite->d.sprite.coords[3].z = obj->z1.n + OBJ.radius * rsin(OBJ.thetaZ + 8) / ONE;
+      sprite->d.sprite.coords[3].y = obj->y1.n + OBJ.radius * rsin(OBJ.thetaY + 8) / ONE;
 
       AddObjPrim4(gGraphicsPtr->ot, sprite);
-      OBJ.todo_x26 += OBJ.todo_x2c;
-      OBJ.todo_x28 += OBJ.todo_x2e;
-      OBJ.todo_x2a += OBJ.todo_x30;
+      OBJ.thetaX += OBJ.thetaXSpeed;
+      OBJ.thetaZ += OBJ.thetaZSpeed;
+      OBJ.thetaY += OBJ.thetaYSpeed;
 
       sprite->functionIndex = OBJF_NULL;
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x36 += 2;
-         if (OBJ.todo_x36 == 0x20) {
+         OBJ.growth += 2;
+         if (OBJ.growth == 0x20) {
             obj->state2++;
          }
          break;
       case 1:
-         OBJ.todo_x32++;
-         if (OBJ.todo_x32 == 0x5c) {
+         OBJ.timer++;
+         if (OBJ.timer == 0x5c) {
             obj->state2++;
          }
          break;
       case 2:
-         OBJ.todo_x36 -= 2;
-         if (OBJ.todo_x36 <= 0) {
+         OBJ.growth -= 2;
+         if (OBJ.growth <= 0) {
             obj->functionIndex = OBJF_NULL;
          }
          break;
@@ -943,9 +943,9 @@ void Objf090_DaggerStorm_FX2(Object *obj) {
 
       if (obj->state3 % 8 == 0) {
          for (i = 0; i < 16; i++) {
-            a = OBJ.todo_x24 = rand() % 0x400;
-            b = OBJ.todo_x26 = rand() % 0x1000;
-            c = OBJ.todo_x28 = 0x200 + rand() % 0x200;
+            a = OBJ.theta1 = rand() % 0x400;
+            b = OBJ.theta2 = rand() % 0x1000;
+            c = OBJ.radius = 0x200 + rand() % 0x200;
 
             dagger = Obj_GetUnused();
             if (dagger == NULL) {
@@ -957,14 +957,14 @@ void Objf090_DaggerStorm_FX2(Object *obj) {
             } else {
                dagger->state2 = 2;
             }
-            dagger->d.objf091.todo_x28 = 0xd4;
+            dagger->d.objf091.radius = 0xd4;
             dagger->x2.n = obj->x1.n;
             dagger->y2.n = obj->y1.n + CV(0.5);
             dagger->z2.n = obj->z1.n;
-            dagger->d.objf091.todo_x24 = a;
-            dagger->d.objf091.todo_x26 = b;
-            dagger->d.objf091.todo_x28 = c;
-            SphericalToVector(&svector, OBJ.todo_x28, OBJ.todo_x24, OBJ.todo_x26);
+            dagger->d.objf091.theta1 = a;
+            dagger->d.objf091.theta2 = b;
+            dagger->d.objf091.radius = c;
+            SphericalToVector(&svector, OBJ.radius, OBJ.theta1, OBJ.theta2);
             dagger->x1.n = obj->x1.n + svector.vx;
             dagger->y1.n = obj->y1.n + svector.vy;
             dagger->z1.n = obj->z1.n + svector.vz;
@@ -989,15 +989,15 @@ void Objf090_DaggerStorm_FX2(Object *obj) {
             dagger->d.objf091.positions[1].y = 0;
             dagger->d.objf091.positions[1].x = 0;
             dagger->d.objf091.positions[1].z = 0;
-            SphericalToVector(&svector, OBJ.todo_x28, OBJ.todo_x24, OBJ.todo_x26 + 0x40);
+            SphericalToVector(&svector, OBJ.radius, OBJ.theta1, OBJ.theta2 + 0x40);
             dagger->d.objf091.positions[3].y = obj->y1.n + svector.vy - dagger->y1.n;
             dagger->d.objf091.positions[3].x = obj->x1.n + svector.vx - dagger->x1.n;
             dagger->d.objf091.positions[3].z = obj->z1.n + svector.vz - dagger->z1.n;
-            SphericalToVector(&svector, OBJ.todo_x28 + 0xa0, OBJ.todo_x24, OBJ.todo_x26);
+            SphericalToVector(&svector, OBJ.radius + 0xa0, OBJ.theta1, OBJ.theta2);
             dagger->d.objf091.positions[0].y = obj->y1.n + svector.vy - dagger->y1.n;
             dagger->d.objf091.positions[0].x = obj->x1.n + svector.vx - dagger->x1.n;
             dagger->d.objf091.positions[0].z = obj->z1.n + svector.vz - dagger->z1.n;
-            SphericalToVector(&svector, OBJ.todo_x28 + 0xa0, OBJ.todo_x24, OBJ.todo_x26 + 0x40);
+            SphericalToVector(&svector, OBJ.radius + 0xa0, OBJ.theta1, OBJ.theta2 + 0x40);
             dagger->d.objf091.positions[2].y = obj->y1.n + svector.vy - dagger->y1.n;
             dagger->d.objf091.positions[2].x = obj->x1.n + svector.vx - dagger->x1.n;
             dagger->d.objf091.positions[2].z = obj->z1.n + svector.vz - dagger->z1.n;
@@ -1210,7 +1210,7 @@ void Objf082_OrbitingEmberPair_Unused(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      obj_s3 = OBJ.todo_x58;
+      obj_s3 = OBJ.anchor;
       obj->state3 = obj_s3->functionIndex;
 
       sprite = Obj_GetUnused();
@@ -1229,7 +1229,7 @@ void Objf082_OrbitingEmberPair_Unused(Object *obj) {
    // fallthrough
    case 1:
       sprite = OBJ.sprite;
-      obj_s3 = OBJ.todo_x58;
+      obj_s3 = OBJ.anchor;
 
       if (obj_s3->functionIndex != obj->state3) {
          obj->state++;

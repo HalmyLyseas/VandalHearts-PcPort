@@ -403,8 +403,8 @@ void Objf677_RainfallDrop(Object *obj) {
       break;
 
    case 2:
-      if ((obj->x1.s.hi < D_80122E28) || (obj->x1.s.hi > gMapSizeX + D_80122E28 - 1) ||
-          (obj->z1.s.hi < D_80122E2C) || (obj->z1.s.hi > gMapSizeZ + D_80122E2C - 1)) {
+      if ((obj->x1.s.hi < gMapViewOriginX) || (obj->x1.s.hi > gMapSizeX + gMapViewOriginX - 1) ||
+          (obj->z1.s.hi < gMapViewOriginZ) || (obj->z1.s.hi > gMapSizeZ + gMapViewOriginZ - 1)) {
          obj->functionIndex = OBJF_NULL;
          break;
       }

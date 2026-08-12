@@ -1212,7 +1212,7 @@ void DisplayCustomWindowWithSetChoice(s32 windowId, u8 effect, u8 translucentHig
       SaveRestorePos(&restored1, &restored2, 1);
       window->x1.n = restored1 - 64;
       window->y1.n = restored2 - 13;
-      HI_H(window->d.objf004.todo_x30) = 1;
+      HI_H(window->d.objf004.dstHighlightY) = 1;
       break;
    case 0x1c:
       SaveRestoreHp(&restored1, &restored2, &restored3, 1);
@@ -1379,7 +1379,7 @@ void Objf004_005_408_Window(Object *obj) {
          DrawGlyphStripGroup(gGlyphStripGroups[OBJ.windowId], GFX_WINDOW_TBD_657 + OBJ.windowId);
       }
 
-      OBJ.todo_x3a = OBJ.halfHeight + (OBJ.halfHeight >> 1);
+      OBJ.effectHalfHeight = OBJ.halfHeight + (OBJ.halfHeight >> 1);
       obj->y1.n += OBJ.halfHeight;
 
       window = Obj_GetUnused();
@@ -1428,10 +1428,10 @@ void Objf004_005_408_Window(Object *obj) {
             highlight->d.sprite.hidden = 0;
          }
 
-         OBJ.todo_x2c = OBJ.choicesTopMargin << 16;
+         OBJ.highlightY = OBJ.choicesTopMargin << 16;
          obj->state++;
          obj->state3 = 0;
-         OBJ.todo_x2c = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
+         OBJ.highlightY = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
          break;
       case 1:
       case 2:
@@ -1464,10 +1464,10 @@ void Objf004_005_408_Window(Object *obj) {
                if (highlight) {
                   highlight->d.sprite.hidden = 0;
                }
-               OBJ.todo_x2c = OBJ.choicesTopMargin << 16;
+               OBJ.highlightY = OBJ.choicesTopMargin << 16;
                obj->state++;
                obj->state3 = 0;
-               OBJ.todo_x2c = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
+               OBJ.highlightY = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
             }
          }
          break;
@@ -1512,10 +1512,10 @@ void Objf004_005_408_Window(Object *obj) {
                if (highlight) {
                   highlight->d.sprite.hidden = 0;
                }
-               OBJ.todo_x2c = OBJ.choicesTopMargin << 16;
+               OBJ.highlightY = OBJ.choicesTopMargin << 16;
                obj->state++;
                obj->state3 = 0;
-               OBJ.todo_x2c = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
+               OBJ.highlightY = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
             }
          }
          break;
@@ -1527,7 +1527,7 @@ void Objf004_005_408_Window(Object *obj) {
          OBJ.relQuadX3 = OBJ.halfWidth;
 
          OBJ.effectPhase += 0xc0;
-         OBJ.relQuadY0 = -(rcos((OBJ.effectPhase - 0x400) & 0xfff) * OBJ.todo_x3a >> 12);
+         OBJ.relQuadY0 = -(rcos((OBJ.effectPhase - 0x400) & 0xfff) * OBJ.effectHalfHeight >> 12);
          OBJ.relQuadY1 = OBJ.relQuadY0;
          OBJ.relQuadY2 = -OBJ.relQuadY0;
          OBJ.relQuadY3 = -OBJ.relQuadY0;
@@ -1541,10 +1541,10 @@ void Objf004_005_408_Window(Object *obj) {
             if (highlight) {
                highlight->d.sprite.hidden = 0;
             }
-            OBJ.todo_x2c = OBJ.choicesTopMargin << 16;
+            OBJ.highlightY = OBJ.choicesTopMargin << 16;
             obj->state++;
             //@3fdc
-            OBJ.todo_x2c = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
+            OBJ.highlightY = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
          }
          break;
 
@@ -1580,12 +1580,12 @@ void Objf004_005_408_Window(Object *obj) {
          }
          obj->state2 = CLAMP(obj->state2, 0, OBJ.choiceCt - 1); //@4110
       }
-      OBJ.todo_x30 = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
+      OBJ.dstHighlightY = (obj->state2 * OBJ.choiceHeight + OBJ.choicesTopMargin) << 16;
 
       if (gState.vsyncMode == 0) {
-         OBJ.todo_x2c += (OBJ.todo_x30 - OBJ.todo_x2c) >> 1;
+         OBJ.highlightY += (OBJ.dstHighlightY - OBJ.highlightY) >> 1;
       } else {
-         OBJ.todo_x2c = OBJ.todo_x30;
+         OBJ.highlightY = OBJ.dstHighlightY;
       }
 
       if (gWindowActiveIdx == OBJ.windowId) {
@@ -1715,7 +1715,7 @@ void Objf004_005_408_Window(Object *obj) {
          // fallthrough
          case 1:
             OBJ.effectPhase -= 0xc0;
-            OBJ.relQuadY0 = -(rcos((OBJ.effectPhase - 0x400U) & 0xfff) * OBJ.todo_x3a >> 12);
+            OBJ.relQuadY0 = -(rcos((OBJ.effectPhase - 0x400U) & 0xfff) * OBJ.effectHalfHeight >> 12);
             OBJ.relQuadY1 = OBJ.relQuadY0;
             OBJ.relQuadY2 = -OBJ.relQuadY0;
             OBJ.relQuadY3 = -OBJ.relQuadY0;
@@ -1758,7 +1758,7 @@ void Objf004_005_408_Window(Object *obj) {
 
    if (highlight && OBJ.choiceCt != 0 && obj->state == 2) {
       //@479c
-      highlight->y1.n = window->d.sprite2.coords[1].y + (OBJ.todo_x2c >> 16);
+      highlight->y1.n = window->d.sprite2.coords[1].y + (OBJ.highlightY >> 16);
       highlight->y3.n = highlight->y1.n + OBJ.highlightHeight;
       highlight->x1.n = window->d.sprite2.coords[0].x;
       highlight->x3.n = window->d.sprite2.coords[1].x;
@@ -1770,7 +1770,7 @@ void Objf004_005_408_Window(Object *obj) {
       gGfxTPageCells[GFX_WINDOW_TBD_657] = gGfxTPageCells[GFX_WINDOW_TBD_657 + OBJ.windowId];
       gGfxTPageIds[GFX_WINDOW_TBD_657] = gGfxTPageIds[GFX_WINDOW_TBD_657 + OBJ.windowId];
       gGfxSubTextures[GFX_WINDOW_TBD_657][1] =
-          (OBJ.todo_x2c >> 16) + gGfxSubTextures[GFX_WINDOW_TBD_657 + OBJ.windowId][1];
+          (OBJ.highlightY >> 16) + gGfxSubTextures[GFX_WINDOW_TBD_657 + OBJ.windowId][1];
       gGfxSubTextures[GFX_WINDOW_TBD_657][3] = OBJ.highlightHeight;
       if (OBJ.windowId == gWindowActiveIdx) {
          highlight->d.sprite.clut = CLUT_NULL;

@@ -232,7 +232,7 @@ static void LogCameraTraceRow(void) {
                 "camPosX,camPosY,camPosZ,camRotX,camRotY,camZoomZ,"
                 "camObjIdx,camObjFuncIdx,camObjState,targetObjIdx,targetX,targetY,targetZ,"
                 /* 30-fresh-look-deterministic-camera-hypothesis.md: winOrigin[X/Z] is the
-                 * actual render-window origin (D_80122E28/2C, src/battle_0201b8.c:193), the
+                 * actual render-window origin (gMapViewOriginX/2C, src/battle_0201b8.c:193), the
                  * derived quantity the terrain-window + sprite-cull both key off; camDirQuad is
                  * the yaw quadrant RenderField selects (src/graphics.c:1178). startCur[X/Z/Y]
                  * is gMapCursorStartingPos[mapNum] as read at RUNTIME on this build -- confirms
@@ -298,7 +298,7 @@ static void LogCameraTraceRow(void) {
             gCameraPos.vx, gCameraPos.vy, gCameraPos.vz,
             gCameraRotation.vx, gCameraRotation.vy, gCameraZoom.vz,
             camObjIdx, camObjFuncIdx, camObjState, targetObjIdx, targetX, targetY, targetZ,
-            D_80122E28, D_80122E2C, camDirQuad, startCurX, startCurZ, startCurY,
+            gMapViewOriginX, gMapViewOriginZ, camDirQuad, startCurX, startCurZ, startCurY,
             gMapCursorX, gMapCursorZ,
             gState.fieldRenderingDisabled, fadeLevel);
     fflush(s_camTraceFile);

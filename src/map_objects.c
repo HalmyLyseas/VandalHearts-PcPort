@@ -1060,31 +1060,31 @@ void Objf048_Push(Object *obj) {
 
 void TiltChestLid(Object *chest, s16 angle, u8 facing) {
    if (facing == 0) {
-      chest->d.objf040.lid_todo_x5c =
-          chest->d.objf040.lid_todo_x58 + (CV(0.875) * rcos(angle & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x5e =
-          chest->d.objf040.lid_todo_x5a + (CV(0.875) * rcos((angle + DEG(90)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x50 =
-          chest->d.objf040.lid_todo_x58 + (CV(0.375) * rcos((angle - DEG(56.25)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x52 =
-          chest->d.objf040.lid_todo_x5a + (CV(0.375) * rcos((angle + DEG(33.75)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x54 =
-          chest->d.objf040.lid_todo_x58 + (CV(0.75) * rcos((angle - DEG(22.5)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x56 =
-          chest->d.objf040.lid_todo_x5a + (CV(0.75) * rcos((angle + DEG(67.5)) & 0xfff) >> 12);
+      chest->d.objf040.lidFrontZ =
+          chest->d.objf040.lidBackZ + (CV(0.875) * rcos(angle & 0xfff) >> 12);
+      chest->d.objf040.lidFrontY =
+          chest->d.objf040.lidBackY + (CV(0.875) * rcos((angle + DEG(90)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease1Z =
+          chest->d.objf040.lidBackZ + (CV(0.375) * rcos((angle - DEG(56.25)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease1Y =
+          chest->d.objf040.lidBackY + (CV(0.375) * rcos((angle + DEG(33.75)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease2Z =
+          chest->d.objf040.lidBackZ + (CV(0.75) * rcos((angle - DEG(22.5)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease2Y =
+          chest->d.objf040.lidBackY + (CV(0.75) * rcos((angle + DEG(67.5)) & 0xfff) >> 12);
    } else {
-      chest->d.objf040.lid_todo_x58 =
-          chest->d.objf040.lid_todo_x5c - (CV(0.875) * rcos(angle & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x5a =
-          chest->d.objf040.lid_todo_x5e + (CV(0.875) * rcos((angle + DEG(90)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x54 =
-          chest->d.objf040.lid_todo_x5c - (CV(0.375) * rcos((angle - DEG(56.25)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x56 =
-          chest->d.objf040.lid_todo_x5e + (CV(0.375) * rcos((angle + DEG(33.75)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x50 =
-          chest->d.objf040.lid_todo_x5c - (CV(0.75) * rcos((angle - DEG(22.5)) & 0xfff) >> 12);
-      chest->d.objf040.lid_todo_x52 =
-          chest->d.objf040.lid_todo_x5e + (CV(0.75) * rcos((angle + DEG(67.5)) & 0xfff) >> 12);
+      chest->d.objf040.lidBackZ =
+          chest->d.objf040.lidFrontZ - (CV(0.875) * rcos(angle & 0xfff) >> 12);
+      chest->d.objf040.lidBackY =
+          chest->d.objf040.lidFrontY + (CV(0.875) * rcos((angle + DEG(90)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease2Z =
+          chest->d.objf040.lidFrontZ - (CV(0.375) * rcos((angle - DEG(56.25)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease2Y =
+          chest->d.objf040.lidFrontY + (CV(0.375) * rcos((angle + DEG(33.75)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease1Z =
+          chest->d.objf040.lidFrontZ - (CV(0.75) * rcos((angle - DEG(22.5)) & 0xfff) >> 12);
+      chest->d.objf040.lidCrease1Y =
+          chest->d.objf040.lidFrontY + (CV(0.75) * rcos((angle + DEG(67.5)) & 0xfff) >> 12);
    }
 }
 
@@ -1129,14 +1129,14 @@ void Objf040_MapObject_Chest(Object *obj) {
       obj->x1.s.lo = CV(0.5);
       obj->z1.s.lo = CV(0.5);
       obj->y1.n = GetTerrainElevation(obj->z1.s.hi, obj->x1.s.hi);
-      OBJ.lid_todo_x50 = obj->z1.n - CV(0.25);
-      OBJ.lid_todo_x54 = obj->z1.n + CV(0.25);
-      OBJ.lid_todo_x58 = obj->z1.n - CV(0.4375);
-      OBJ.lid_todo_x5c = obj->z1.n + CV(0.4375);
-      OBJ.lid_todo_x52 = obj->y1.n + CV(0.8125);
-      OBJ.lid_todo_x56 = obj->y1.n + CV(0.8125);
-      OBJ.lid_todo_x5a = obj->y1.n + CV(0.5);
-      OBJ.lid_todo_x5e = obj->y1.n + CV(0.5);
+      OBJ.lidCrease1Z = obj->z1.n - CV(0.25);
+      OBJ.lidCrease2Z = obj->z1.n + CV(0.25);
+      OBJ.lidBackZ = obj->z1.n - CV(0.4375);
+      OBJ.lidFrontZ = obj->z1.n + CV(0.4375);
+      OBJ.lidCrease1Y = obj->y1.n + CV(0.8125);
+      OBJ.lidCrease2Y = obj->y1.n + CV(0.8125);
+      OBJ.lidBackY = obj->y1.n + CV(0.5);
+      OBJ.lidFrontY = obj->y1.n + CV(0.5);
       obj->state++;
       break;
 
@@ -1157,7 +1157,7 @@ void Objf040_MapObject_Chest(Object *obj) {
             PerformAudioCommand(AUDIO_CMD_PLAY_XA(36));
          } else {
             newObj->functionIndex = OBJF_REVEAL_MIMIC;
-            gState.D_8014053E = 0;
+            gState.subObjDone = 0;
             PerformAudioCommand(AUDIO_CMD_PLAY_XA(132));
          }
          obj->state++;
@@ -1235,7 +1235,7 @@ void Objf040_MapObject_Chest(Object *obj) {
    case 7:
       if (--obj->mem == 0) {
          OBJ_TILE_STATE(obj).action = TA_NONE;
-         gState.D_8014053E = 1;
+         gState.subObjDone = 1;
          gSignal3 = 1;
          obj->functionIndex = OBJF_NULL;
       }
@@ -1291,25 +1291,25 @@ void Objf040_MapObject_Chest(Object *obj) {
       face->d.sprite.coords[2].x = face->d.sprite.coords[0].x;
       face->d.sprite.coords[1].x = obj->x1.n + CV(0.4375);
       face->d.sprite.coords[3].x = face->d.sprite.coords[1].x;
-      face->d.sprite.coords[0].z = OBJ.lid_todo_x50;
-      face->d.sprite.coords[1].z = OBJ.lid_todo_x50;
-      face->d.sprite.coords[2].z = OBJ.lid_todo_x58;
-      face->d.sprite.coords[3].z = OBJ.lid_todo_x58;
-      face->d.sprite.coords[0].y = OBJ.lid_todo_x52;
-      face->d.sprite.coords[1].y = OBJ.lid_todo_x52;
-      face->d.sprite.coords[2].y = OBJ.lid_todo_x5a;
-      face->d.sprite.coords[3].y = OBJ.lid_todo_x5a;
+      face->d.sprite.coords[0].z = OBJ.lidCrease1Z;
+      face->d.sprite.coords[1].z = OBJ.lidCrease1Z;
+      face->d.sprite.coords[2].z = OBJ.lidBackZ;
+      face->d.sprite.coords[3].z = OBJ.lidBackZ;
+      face->d.sprite.coords[0].y = OBJ.lidCrease1Y;
+      face->d.sprite.coords[1].y = OBJ.lidCrease1Y;
+      face->d.sprite.coords[2].y = OBJ.lidBackY;
+      face->d.sprite.coords[3].y = OBJ.lidBackY;
       face->d.sprite.gfxIdx = chestGfx[idx++];
       AddObjPrim4(gGraphicsPtr->ot, face); //[4]
 
-      face->d.sprite.coords[0].z = OBJ.lid_todo_x54;
-      face->d.sprite.coords[1].z = OBJ.lid_todo_x54;
-      face->d.sprite.coords[2].z = OBJ.lid_todo_x5c;
-      face->d.sprite.coords[3].z = OBJ.lid_todo_x5c;
-      face->d.sprite.coords[0].y = OBJ.lid_todo_x56;
-      face->d.sprite.coords[1].y = OBJ.lid_todo_x56;
-      face->d.sprite.coords[2].y = OBJ.lid_todo_x5e;
-      face->d.sprite.coords[3].y = OBJ.lid_todo_x5e;
+      face->d.sprite.coords[0].z = OBJ.lidCrease2Z;
+      face->d.sprite.coords[1].z = OBJ.lidCrease2Z;
+      face->d.sprite.coords[2].z = OBJ.lidFrontZ;
+      face->d.sprite.coords[3].z = OBJ.lidFrontZ;
+      face->d.sprite.coords[0].y = OBJ.lidCrease2Y;
+      face->d.sprite.coords[1].y = OBJ.lidCrease2Y;
+      face->d.sprite.coords[2].y = OBJ.lidFrontY;
+      face->d.sprite.coords[3].y = OBJ.lidFrontY;
       face->d.sprite.gfxIdx = chestGfx[idx++];
       AddObjPrim4(gGraphicsPtr->ot, face); //[5]
 
@@ -1317,14 +1317,14 @@ void Objf040_MapObject_Chest(Object *obj) {
       face->d.sprite.coords[2].x = face->d.sprite.coords[0].x;
       face->d.sprite.coords[1].x = face->d.sprite.coords[0].x;
       face->d.sprite.coords[3].x = face->d.sprite.coords[0].x;
-      face->d.sprite.coords[0].z = OBJ.lid_todo_x50;
-      face->d.sprite.coords[1].z = OBJ.lid_todo_x54;
-      face->d.sprite.coords[2].z = OBJ.lid_todo_x58;
-      face->d.sprite.coords[3].z = OBJ.lid_todo_x5c;
-      face->d.sprite.coords[0].y = OBJ.lid_todo_x52;
-      face->d.sprite.coords[1].y = OBJ.lid_todo_x56;
-      face->d.sprite.coords[2].y = OBJ.lid_todo_x5a;
-      face->d.sprite.coords[3].y = OBJ.lid_todo_x5e;
+      face->d.sprite.coords[0].z = OBJ.lidCrease1Z;
+      face->d.sprite.coords[1].z = OBJ.lidCrease2Z;
+      face->d.sprite.coords[2].z = OBJ.lidBackZ;
+      face->d.sprite.coords[3].z = OBJ.lidFrontZ;
+      face->d.sprite.coords[0].y = OBJ.lidCrease1Y;
+      face->d.sprite.coords[1].y = OBJ.lidCrease2Y;
+      face->d.sprite.coords[2].y = OBJ.lidBackY;
+      face->d.sprite.coords[3].y = OBJ.lidFrontY;
       face->d.sprite.gfxIdx = chestGfx[idx++];
       AddObjPrim4(gGraphicsPtr->ot, face); //[6]
 
@@ -1339,14 +1339,14 @@ void Objf040_MapObject_Chest(Object *obj) {
       face->d.sprite.coords[2].x = face->d.sprite.coords[0].x;
       face->d.sprite.coords[1].x = obj->x1.n - CV(0.4375);
       face->d.sprite.coords[3].x = face->d.sprite.coords[1].x;
-      face->d.sprite.coords[0].z = OBJ.lid_todo_x54;
-      face->d.sprite.coords[1].z = OBJ.lid_todo_x54;
-      face->d.sprite.coords[2].z = OBJ.lid_todo_x50;
-      face->d.sprite.coords[3].z = OBJ.lid_todo_x50;
-      face->d.sprite.coords[0].y = OBJ.lid_todo_x56;
-      face->d.sprite.coords[1].y = OBJ.lid_todo_x56;
-      face->d.sprite.coords[2].y = OBJ.lid_todo_x52;
-      face->d.sprite.coords[3].y = OBJ.lid_todo_x52;
+      face->d.sprite.coords[0].z = OBJ.lidCrease2Z;
+      face->d.sprite.coords[1].z = OBJ.lidCrease2Z;
+      face->d.sprite.coords[2].z = OBJ.lidCrease1Z;
+      face->d.sprite.coords[3].z = OBJ.lidCrease1Z;
+      face->d.sprite.coords[0].y = OBJ.lidCrease2Y;
+      face->d.sprite.coords[1].y = OBJ.lidCrease2Y;
+      face->d.sprite.coords[2].y = OBJ.lidCrease1Y;
+      face->d.sprite.coords[3].y = OBJ.lidCrease1Y;
       face->d.sprite.gfxIdx = chestGfx[idx++];
       AddObjPrim4(gGraphicsPtr->ot, face); //[8]
 

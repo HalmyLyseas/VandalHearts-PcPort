@@ -342,7 +342,7 @@ s32 State_Battle(void) {
          gClearSavedPadState = 1;
          gPlayerControlSuppressed = 1;
          gIsEnemyTurn = 1;
-         gState.D_80140859 = 0;
+         gState.demoBattleOver = 0;
       } else if (gState.primary != STATE_LOAD_IN_BATTLE_SAVE) {
          gSignal1 = 1;
          newObj = Obj_GetUnused();
@@ -420,7 +420,7 @@ void Objf438_EvaluateMap08_DemoExit(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      if ((gState.D_80140859 != 0) || ((gPadStateNewPresses & PAD_START) != 0)) {
+      if ((gState.demoBattleOver != 0) || ((gPadStateNewPresses & PAD_START) != 0)) {
          FadeOutScreen(2, 6);
          PerformAudioCommand(AUDIO_CMD_FADE_OUT_8_4);
          obj->d.objf438.delay = 75;
@@ -1101,45 +1101,45 @@ void Objf446_BattleVictoryParticle(Object *obj) {
 
    // fallthrough
    case 1:
-      OBJ.todo_x5c = 50;
-      OBJ.todo_x50 = rand() % 100 + 100;
-      OBJ.todo_x58 = rand() % 5 + 2;
-      OBJ.todo_x52 = rand() % 100 + 100;
-      OBJ.todo_x5a = rand() % 5 + 2;
+      OBJ.life = 50;
+      OBJ.angleStep0 = rand() % 100 + 100;
+      OBJ.radiusStep0 = rand() % 5 + 2;
+      OBJ.angleStep1 = rand() % 100 + 100;
+      OBJ.radiusStep1 = rand() % 5 + 2;
 
       if (rand() % 2 != 0) {
-         OBJ.todo_x50 *= -1;
+         OBJ.angleStep0 *= -1;
       }
       if (rand() % 2 != 0) {
-         OBJ.todo_x52 *= -1;
+         OBJ.angleStep1 *= -1;
       }
 
-      OBJ.todo_x4c = OBJ.todo_x50 * OBJ.todo_x5c;
-      OBJ.todo_x4e = OBJ.todo_x52 * OBJ.todo_x5c;
-      OBJ.todo_x54 = OBJ.todo_x58 * OBJ.todo_x5c;
-      OBJ.todo_x56 = OBJ.todo_x5a * OBJ.todo_x5c;
+      OBJ.angle0 = OBJ.angleStep0 * OBJ.life;
+      OBJ.angle1 = OBJ.angleStep1 * OBJ.life;
+      OBJ.radius0 = OBJ.radiusStep0 * OBJ.life;
+      OBJ.radius1 = OBJ.radiusStep1 * OBJ.life;
 
       obj->state++;
       break;
 
    case 2:
-      if (--OBJ.todo_x5c != -1) {
-         OBJ.todo_x4c -= OBJ.todo_x50;
-         OBJ.todo_x4e -= OBJ.todo_x52;
-         OBJ.todo_x54 -= OBJ.todo_x58;
-         OBJ.todo_x56 -= OBJ.todo_x5a;
+      if (--OBJ.life != -1) {
+         OBJ.angle0 -= OBJ.angleStep0;
+         OBJ.angle1 -= OBJ.angleStep1;
+         OBJ.radius0 -= OBJ.radiusStep0;
+         OBJ.radius1 -= OBJ.radiusStep1;
       } else {
          obj->state++;
       }
       break;
    }
 
-   x = (rcos(OBJ.todo_x4c & 0xfff) * OBJ.todo_x54) >> 12;
-   y = (rcos((OBJ.todo_x4c + DEG(90)) & 0xfff) * OBJ.todo_x54) >> 12;
+   x = (rcos(OBJ.angle0 & 0xfff) * OBJ.radius0) >> 12;
+   y = (rcos((OBJ.angle0 + DEG(90)) & 0xfff) * OBJ.radius0) >> 12;
 
-   x += (rcos(OBJ.todo_x4e & 0xfff) * OBJ.todo_x56) >> 12;
-   y += (rcos((OBJ.todo_x4e + DEG(90)) & 0xfff) * OBJ.todo_x56) >> 12;
-   angle = OBJ.todo_x4c + DEG(45);
+   x += (rcos(OBJ.angle1 & 0xfff) * OBJ.radius1) >> 12;
+   y += (rcos((OBJ.angle1 + DEG(90)) & 0xfff) * OBJ.radius1) >> 12;
+   angle = OBJ.angle0 + DEG(45);
 
    if (x > 0) {
       d = x * x;
@@ -1164,6 +1164,6 @@ void Objf446_BattleVictoryParticle(Object *obj) {
    OBJ.coords[3].y = y + ((rcos(angle & 0xfff) * d) >> 12);
    OBJ.coords[2].y = y + ((rcos((angle + DEG(270)) & 0xfff) * d) >> 12);
 
-   OBJ.otOfs = 55 - OBJ.todo_x5c;
+   OBJ.otOfs = 55 - OBJ.life;
    AddObjPrim2(gGraphicsPtr->ot, obj);
 }

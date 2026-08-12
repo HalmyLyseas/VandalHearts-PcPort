@@ -53,7 +53,7 @@ typedef struct State {
    u8 townState;
    u8 scene;
    u8 field_0x3;
-   u8 D_80140530;
+   u8 tavernVisit;
    u8 chapterOutro;
    u8 movieIdxToPlay;
    u8 worldMapDestination;
@@ -64,7 +64,7 @@ typedef struct State {
    s32 frameCounter;
    u8 chapter;
    u8 section;
-   u8 D_8014053E;
+   u8 subObjDone;
    u8 field_0x13;
    DynamicIcon dynamicIcons[7];
    BigInt experience;
@@ -80,7 +80,7 @@ typedef struct State {
    s32 state6;
    s32 state7; //<- Sometimes used to communicate objf# of scene loader
    s32 state8;
-   s32 D_801405A4;
+   s32 transformFxDone;
 
    u32 battleEval;
    u8 needEval;
@@ -157,7 +157,7 @@ typedef struct State {
    u8 cameraMode;
    u8 mapCursorOutOfRange;
    u8 shielding;
-   u8 D_80140859;
+   u8 demoBattleOver;
    u8 vsyncNoWait;
    u8 suppressLoadingScreen;
    u8 eventChoice;

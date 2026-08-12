@@ -861,19 +861,19 @@ void Objf392_MorphMeshNode_Unused(Object *obj) {
    s8 unused[24];
 
    // Not enough context to identify which objf to use for this.
-   obj_s1 = OBJ.todo_x5c;
+   obj_s1 = OBJ.controller;
 
-   if (obj_s1->d.objfUnkUsedBy392.todo_x28 == 99) {
+   if (obj_s1->d.objfUnkUsedBy392.killFlag == 99) {
       obj->functionIndex = OBJF_NULL;
       return;
    }
 
-   obj1 = OBJ.todo_x24;
-   obj2 = OBJ.todo_x28;
-   obj3 = OBJ.todo_x2c;
-   obj4 = OBJ.todo_x30;
+   obj1 = OBJ.neighborY0;
+   obj2 = OBJ.neighborY1;
+   obj3 = OBJ.neighborX0;
+   obj4 = OBJ.neighborX1;
 
-   switch (obj_s1->d.objfUnkUsedBy392.todo_x24) {
+   switch (obj_s1->d.objfUnkUsedBy392.mode) {
    case 0:
       obj->x1.n = obj->x3.n * 12 - 0x30;
       obj->y1.n = obj->y3.n * 12 - 0x30;
@@ -1101,7 +1101,7 @@ void Objf396_DynamoHum_OrbElectricity(Object *obj) {
       dy = (link1->y1.n - link2->y1.n);
       i = SquareRoot0(dx * dx + dy * dy + dz * dz);
       OBJ.length = i;
-      OBJ.todo_x2a = obj->x3.n;
+      OBJ.bowDir = obj->x3.n;
 
       if (obj->x3.n != 0) {
          obj->x3.n = 0;
@@ -1140,7 +1140,7 @@ void Objf396_DynamoHum_OrbElectricity(Object *obj) {
       if (length < OBJ.length) {
          sVar5 = (OBJ.length - length) / 2;
 
-         switch (OBJ.todo_x2a) {
+         switch (OBJ.bowDir) {
          case 0:
             obj->y1.n += sVar5 * obj->y3.n;
             obj->x1.n += sVar5 * obj->x3.n;
@@ -1161,7 +1161,7 @@ void Objf396_DynamoHum_OrbElectricity(Object *obj) {
             vector.vy = 0;
             VectorNormalS(&vector, &normalized);
 
-            if (OBJ.todo_x2a == 2) {
+            if (OBJ.bowDir == 2) {
                obj->x3.n = -(normalized.vz >> 11);
                obj->z3.n = normalized.vx >> 11;
                obj->y3.n = 0;
@@ -2152,7 +2152,7 @@ void Objf385_RevealMimic(Object *obj) {
       if (++obj->state2 >= 0x20) {
          obj->state2 = 0x30;
       }
-      if (gState.D_8014053E != 0) {
+      if (gState.subObjDone != 0) {
          obj->functionIndex = OBJF_NULL;
       }
       break;
@@ -2187,8 +2187,8 @@ void Objf301_Map32_SmokestackParticle(Object *obj) {
       qswap = gSpriteBoxQuads[7];
       gSpriteBoxQuads[7] = &quad;
       UpdateObjAnimation(obj);
-      if ((obj->x1.s.hi < D_80122E28) || (obj->x1.s.hi > gMapSizeX + D_80122E28 - 1) ||
-          (obj->z1.s.hi < D_80122E2C) || (obj->z1.s.hi > gMapSizeZ + D_80122E2C - 1)) {
+      if ((obj->x1.s.hi < gMapViewOriginX) || (obj->x1.s.hi > gMapSizeX + gMapViewOriginX - 1) ||
+          (obj->z1.s.hi < gMapViewOriginZ) || (obj->z1.s.hi > gMapSizeZ + gMapViewOriginZ - 1)) {
          obj->d.sprite.hidden = 1;
       } else {
          obj->d.sprite.hidden = 0;
@@ -2442,9 +2442,9 @@ void Objf348_BlueFlameDome_Unused(Object *obj) {
       dsCylinder->theta = 0;
 
       for (i = 0; i < 8; i++) {
-         OBJ.todo_x24[i] = (rand() >> 2) % 0x100 + 0x200;
-         OBJ.todo_x34[i] = 0;
-         OBJ.todo_x44[i] = (rand() >> 2) % 0x180;
+         OBJ.targetRadius[i] = (rand() >> 2) % 0x100 + 0x200;
+         OBJ.radius[i] = 0;
+         OBJ.unused_0x44[i] = (rand() >> 2) % 0x180;
       }
 
       obj->state++;
@@ -2482,8 +2482,8 @@ void Objf348_BlueFlameDome_Unused(Object *obj) {
       theta_0xc0 = 0xc0;
 
       for (i = 0; i < 8; i++) {
-         OBJ.todo_x34[i] += (OBJ.todo_x24[i] - OBJ.todo_x34[i]) >> 3;
-         iVar6 = OBJ.todo_x34[i];
+         OBJ.radius[i] += (OBJ.targetRadius[i] - OBJ.radius[i]) >> 3;
+         iVar6 = OBJ.radius[i];
 
          sprite->d.sprite.coords[1].x = sprite->d.sprite.coords[0].x =
              obj->x1.n + (iVar6 * rcos(i * DEG(45)) >> 12);
@@ -2544,14 +2544,14 @@ void Objf334_Salamander_FX1(Object *obj) {
          current->d.objf336.link = previous;
          current->d.objf336.theta1 = 0;
          current->d.objf336.theta2 = 0;
-         current->d.objf336.todo_x2c = 0;
-         current->d.objf336.todo_x2e = i * 0x111;
+         current->d.objf336.radius = 0;
+         current->d.objf336.theta5 = i * 0x111;
          current->d.objf336.parent = obj;
          current->mem = 0;
          previous = current;
       }
 
-      OBJ.todo_x24 = 0;
+      OBJ.rockSpawnCounter = 0;
       obj->state++;
 
    // fallthrough
@@ -2712,9 +2712,9 @@ void Objf335_Salamander_Head(Object *obj) {
          obj->state3 = -obj->state3;
       }
 
-      OBJ.todo_x2a = OBJ.theta2;
-      OBJ.todo_x28 = OBJ.theta1;
-      OBJ.todo_x2c = unaff_s1 + 0xa0;
+      OBJ.theta4 = OBJ.theta2;
+      OBJ.theta3 = OBJ.theta1;
+      OBJ.radius = unaff_s1 + 0xa0;
       PanCamera(obj->x1.n, obj->y1.n, obj->z1.n, 2);
 
       switch (obj->z3.n) {
@@ -2845,16 +2845,16 @@ void Objf336_Salamander_Segment(Object *obj) {
       OBJ.position2.z = OBJ.position1.z;
       OBJ.position1.z = obj->z1.n;
 
-      OBJ.todo_x2c = 0x40 + (0x20 * rsin(OBJ.todo_x2e) >> 12);
-      OBJ.todo_x2e = (OBJ.todo_x2e + 0x40) & 0xfff;
+      OBJ.radius = 0x40 + (0x20 * rsin(OBJ.theta5) >> 12);
+      OBJ.theta5 = (OBJ.theta5 + 0x40) & 0xfff;
       obj->x1.n = link->d.objf336.position1.x;
       obj->z1.n = link->d.objf336.position1.z;
       obj->y1.n = link->d.objf336.position1.y;
-      OBJ.todo_x2c = link->d.objf336.todo_x2c;
+      OBJ.radius = link->d.objf336.radius;
       OBJ.theta2 = 0;
-      OBJ.todo_x2a = link->d.objf336.todo_x2a;
-      OBJ.todo_x28 = link->d.objf336.todo_x28 + OBJ.theta1;
-      vector_unused.vy = OBJ.todo_x2c * rsin(OBJ.todo_x2a) >> 12;
+      OBJ.theta4 = link->d.objf336.theta4;
+      OBJ.theta3 = link->d.objf336.theta3 + OBJ.theta1;
+      vector_unused.vy = OBJ.radius * rsin(OBJ.theta4) >> 12;
       sprite->x1.n = obj->x1.n;
       sprite->z1.n = obj->z1.n;
       sprite->y1.n = obj->y1.n;
@@ -2874,8 +2874,8 @@ void Objf336_Salamander_Segment(Object *obj) {
       AddObjPrim6(gGraphicsPtr->ot, sprite, 0);
 
       if (obj->mem == 99) {
-         if (fx1->d.objf334.todo_x24 < 2) {
-            fx1->d.objf334.todo_x24++;
+         if (fx1->d.objf334.rockSpawnCounter < 2) {
+            fx1->d.objf334.rockSpawnCounter++;
          } else {
             if (Obj_CountUnused() > 100) {
                randomAngle = rand() % DEG(360);
@@ -2884,7 +2884,7 @@ void Objf336_Salamander_Segment(Object *obj) {
                flamingRock->x2.n = (0x40 * rsin(randomAngle) >> 12);
                flamingRock->z2.n = (0x40 * rcos(randomAngle) >> 12);
                flamingRock->y3.n = -12;
-               fx1->d.objf334.todo_x24 = 0;
+               fx1->d.objf334.rockSpawnCounter = 0;
             }
          }
          obj->state++;
@@ -2931,7 +2931,7 @@ void Objf377_SalamanderBreathHead_Unused(Object *obj) {
    // fallthrough
    case 1:
       sprite = OBJ.sprite;
-      obj_s4 = OBJ.todo_x5c;
+      obj_s4 = OBJ.link;
 
       dir = (((gCameraRotation.vy - OBJ.theta3) & 0xfff) / DEG(45)) & 7;
       sprite->d.sprite.gfxIdx = headGfx[dir];
@@ -2972,8 +2972,8 @@ void Objf377_SalamanderBreathHead_Unused(Object *obj) {
          }
       }
 
-      OBJ.theta3 = obj_s4->d.objf335.todo_x28 + OBJ.theta1;
-      OBJ.theta4 = obj_s4->d.objf335.todo_x2a + OBJ.theta2;
+      OBJ.theta3 = obj_s4->d.objf335.theta3 + OBJ.theta1;
+      OBJ.theta4 = obj_s4->d.objf335.theta4 + OBJ.theta2;
 
       iVar3 = OBJ.radius * rsin(OBJ.theta4) >> 12;
       vector.vy = iVar3;
@@ -3046,8 +3046,8 @@ void Objf747_748_Wyrmfang_Flames(Object *obj) {
       OBJ.radius = 0;
    }
 
-   OBJ.todo_x2c = (OBJ.todo_x2c + 280) & 0x7ff;
-   OBJ.amplitude = 1200 * rcos((OBJ.todo_x2c - DEG(90)) & 0xfff) >> 12;
+   OBJ.amplitudeTheta = (OBJ.amplitudeTheta + 280) & 0x7ff;
+   OBJ.amplitude = 1200 * rcos((OBJ.amplitudeTheta - DEG(90)) & 0xfff) >> 12;
 
    switch (obj->state) {
    case 0:

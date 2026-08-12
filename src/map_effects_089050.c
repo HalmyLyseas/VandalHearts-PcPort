@@ -472,15 +472,15 @@ void Objf358_Map19_Elevator(Object *obj) {
    // fallthrough
    case 2:
       obj->state3 = 0x100;
-      OBJ.todo_x24 = 0;
-      OBJ.todo_x26 = 0;
-      OBJ.todo_x28 = 0;
-      OBJ.todo_x2c = 0x100;
-      OBJ.todo_x2e = 0x100;
-      OBJ.todo_x30 = 0x100;
-      OBJ.todo_x34 = 0;
-      OBJ.todo_x36 = 0;
-      OBJ.todo_x38 = 0;
+      OBJ.riseAccum0 = 0;
+      OBJ.riseAccum1 = 0;
+      OBJ.riseAccum2 = 0;
+      OBJ.riseSpeed0 = 0x100;
+      OBJ.riseSpeed1 = 0x100;
+      OBJ.riseSpeed2 = 0x100;
+      OBJ.riseApplied0 = 0;
+      OBJ.riseApplied1 = 0;
+      OBJ.riseApplied2 = 0;
       obj->state++;
 
    // fallthrough
@@ -488,31 +488,31 @@ void Objf358_Map19_Elevator(Object *obj) {
       tileModel = &OBJ_TILE_MODEL(obj);
       sign = (obj->mem != 0) ? +1 : -1;
 
-      OBJ.todo_x24 += OBJ.todo_x2c;
-      diff = (OBJ.todo_x24 >> 8) - (OBJ.todo_x34 >> 8);
+      OBJ.riseAccum0 += OBJ.riseSpeed0;
+      diff = (OBJ.riseAccum0 >> 8) - (OBJ.riseApplied0 >> 8);
       if (diff > 0) {
          AdjustFaceElevation(tileModel, 0, diff * sign);
-         OBJ.todo_x34 += diff * 0x100;
+         OBJ.riseApplied0 += diff * 0x100;
       }
 
-      OBJ.todo_x26 += OBJ.todo_x2e;
-      diff = (OBJ.todo_x26 >> 8) - (OBJ.todo_x36 >> 8);
+      OBJ.riseAccum1 += OBJ.riseSpeed1;
+      diff = (OBJ.riseAccum1 >> 8) - (OBJ.riseApplied1 >> 8);
       if (diff > 0) {
          AdjustFaceElevation(tileModel, 1, diff * sign);
-         OBJ.todo_x36 += diff * 0x100;
+         OBJ.riseApplied1 += diff * 0x100;
       }
 
-      OBJ.todo_x28 += OBJ.todo_x30;
-      diff = (OBJ.todo_x28 >> 8) - (OBJ.todo_x38 >> 8);
+      OBJ.riseAccum2 += OBJ.riseSpeed2;
+      diff = (OBJ.riseAccum2 >> 8) - (OBJ.riseApplied2 >> 8);
       if (diff > 0) {
          tileModel->vertices[tileModel->faces[2][0]].vy += diff * sign;
          tileModel->vertices[tileModel->faces[2][1]].vy += diff * sign;
          tileModel->vertices[tileModel->faces[2][2]].vy += diff * sign;
-         OBJ.todo_x38 += diff * 0x100;
+         OBJ.riseApplied2 += diff * 0x100;
          OBJ_TERRAIN(obj).s.elevation = -tileModel->vertices[0].vy >> 4;
       }
 
-      if (OBJ.todo_x24 >= 0x3000) {
+      if (OBJ.riseAccum0 >= 0x3000) {
          obj->state++;
       }
       break;

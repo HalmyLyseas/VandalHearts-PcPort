@@ -366,8 +366,8 @@ s32 HasDefeatSpeech(UnitStatus *unit) {
 }
 
 s32 IsSpriteOutsideVisibleRange(Object *sprite) {
-   if ((sprite->x1.s.hi >= D_80122E28) && (sprite->x1.s.hi <= gMapSizeX + D_80122E28 - 1) &&
-       (sprite->z1.s.hi >= D_80122E2C) && (sprite->z1.s.hi <= gMapSizeZ + D_80122E2C - 1)) {
+   if ((sprite->x1.s.hi >= gMapViewOriginX) && (sprite->x1.s.hi <= gMapSizeX + gMapViewOriginX - 1) &&
+       (sprite->z1.s.hi >= gMapViewOriginZ) && (sprite->z1.s.hi <= gMapSizeZ + gMapViewOriginZ - 1)) {
       return 0;
    } else {
       return 1;

@@ -249,9 +249,9 @@ void Objf145_HolyLightning_ElectricOrb(Object *obj) {
       OBJ.x_2 += 0x18 - rand() % 0x30;
       OBJ.y_2 += 4 - rand() % 8;
       OBJ.z_2 += 0x18 - rand() % 0x30;
-      OBJ.todo_x40 += 0x18 - rand() % 0x30;
-      OBJ.todo_x42 += 4 - rand() % 8;
-      OBJ.todo_x44 += 0x18 - rand() % 0x30;
+      OBJ.unusedJitterX += 0x18 - rand() % 0x30;
+      OBJ.unusedJitterY += 4 - rand() % 8;
+      OBJ.unusedJitterZ += 0x18 - rand() % 0x30;
 
       obj_s4->d.sprite.coords[0].x = obj->x1.n + CV(0.75) + OBJ.x_4;
       obj_s4->d.sprite.coords[0].y = obj->y1.n;
@@ -560,8 +560,8 @@ void Objf226_ThunderBall_ChildOrb(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      OBJ.todo_x26 = CV(1.0) - rand() % CV(2.0);
-      OBJ.todo_x2a = CV(1.0) - rand() % CV(2.0);
+      OBJ.wobbleX = CV(1.0) - rand() % CV(2.0);
+      OBJ.wobbleZ = CV(1.0) - rand() % CV(2.0);
 
       obj_s2 = Obj_GetUnused();
       OBJ.orbSprite = obj_s2;
@@ -588,9 +588,9 @@ void Objf226_ThunderBall_ChildOrb(Object *obj) {
       timer = OBJ.timer;
 
       obj_s2->x1.n =
-          obj->x1.n + (OBJ.todo_x26 * rsin(timer * 0x40) >> 11) + (timer * OBJ.dx / 0x20);
+          obj->x1.n + (OBJ.wobbleX * rsin(timer * 0x40) >> 11) + (timer * OBJ.dx / 0x20);
       obj_s2->z1.n =
-          obj->z1.n + (OBJ.todo_x2a * rsin(timer * 0x40) >> 11) + (timer * OBJ.dz / 0x20);
+          obj->z1.n + (OBJ.wobbleZ * rsin(timer * 0x40) >> 11) + (timer * OBJ.dz / 0x20);
       obj_s2->y1.n = obj->y1.n + (CV(1.5) * rsin(timer * 0x40) >> 11) + (timer * OBJ.dy / 0x20);
 
       lightningSprite->x1.n = obj_s2->x1.n;
@@ -856,8 +856,8 @@ void Objf195_RollingThunder_FX2(Object *obj) {
          obj_v1->functionIndex = OBJF_ROLLING_THUNDER_ORB_PAIR;
          obj_v1->x1.s.hi = obj->x1.s.hi;
          obj_v1->z1.s.hi = obj->z1.s.hi;
-         obj_v1->d.objf196.todo_x28 = i * 0x400;
-         obj_v1->d.objf196.todo_x2a = DEG(45);
+         obj_v1->d.objf196.phase = i * 0x400;
+         obj_v1->d.objf196.theta = DEG(45);
          obj_v1->d.objf196.clut = cluts[i];
       }
       obj->state++;
@@ -914,8 +914,8 @@ void Objf196_RollingThunder_OrbPair(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x34 += 0x10;
-         if (OBJ.todo_x34 == 0x100) {
+         OBJ.radius += 0x10;
+         if (OBJ.radius == 0x100) {
             obj->state2++;
          }
          break;
@@ -925,8 +925,8 @@ void Objf196_RollingThunder_OrbPair(Object *obj) {
          }
          break;
       case 2:
-         OBJ.todo_x34 -= 0x10;
-         if (OBJ.todo_x34 == 0) {
+         OBJ.radius -= 0x10;
+         if (OBJ.radius == 0) {
             obj->state2++;
          }
          break;
@@ -936,13 +936,13 @@ void Objf196_RollingThunder_OrbPair(Object *obj) {
       orbSprite = OBJ.orbSprite;
       lightningSprite = OBJ.lightningSprite;
 
-      OBJ.todo_x2c = rsin(rcos(OBJ.timer * 8));
-      x_3 = OBJ.todo_x34 * rcos(OBJ.todo_x28 + OBJ.todo_x2c) >> 12;
-      z_3 = OBJ.todo_x34 * rsin(OBJ.todo_x28 + OBJ.todo_x2c) >> 12;
-      y_3 = OBJ.todo_x34 * rsin(OBJ.todo_x2a) >> 12;
-      x_3 = rcos(OBJ.todo_x2a) * x_3 / ONE;
-      z_3 = rcos(OBJ.todo_x2a) * z_3 / ONE;
-      OBJ.todo_x2a += DEG(5.625);
+      OBJ.wobble = rsin(rcos(OBJ.timer * 8));
+      x_3 = OBJ.radius * rcos(OBJ.phase + OBJ.wobble) >> 12;
+      z_3 = OBJ.radius * rsin(OBJ.phase + OBJ.wobble) >> 12;
+      y_3 = OBJ.radius * rsin(OBJ.theta) >> 12;
+      x_3 = rcos(OBJ.theta) * x_3 / ONE;
+      z_3 = rcos(OBJ.theta) * z_3 / ONE;
+      OBJ.theta += DEG(5.625);
 
       UpdateObjAnimation(orbSprite);
 
@@ -1125,8 +1125,8 @@ void Objf193_DarkStar_FX2(Object *obj) {
 
          switch (obj->state3) {
          case 0:
-            OBJ.todo_x4e += 6;
-            OBJ.todo_x50 += 8;
+            OBJ.triRadius += 6;
+            OBJ.orbitRadius += 8;
             gLightColor.r -= 3;
             gLightColor.g -= 3;
             gLightColor.b -= 3;
@@ -1136,15 +1136,15 @@ void Objf193_DarkStar_FX2(Object *obj) {
             break;
 
          case 2:
-            OBJ.todo_x4e -= 6;
-            OBJ.todo_x50 -= 8;
+            OBJ.triRadius -= 6;
+            OBJ.orbitRadius -= 8;
             gLightColor.r += 3;
             gLightColor.g += 3;
             gLightColor.b += 3;
             break;
          }
 
-         a = OBJ.todo_x50;
+         a = OBJ.orbitRadius;
          ApplyMaskEffect(452 << 2, 400, 32, 32, 416 << 2, 384, OBJ.timer * 2 % 64, 0,
                          GFX_MASK_EFFECT_1, 0);
 
@@ -1163,22 +1163,22 @@ void Objf193_DarkStar_FX2(Object *obj) {
          b = a * rcos(OBJ.timer * 0x20) >> 12;
          c = a * rsin(OBJ.timer * 0x20) >> 12;
 
-         tmp = OBJ.todo_x4e * rcos(OBJ.timer * 0x10) / ONE + b;
+         tmp = OBJ.triRadius * rcos(OBJ.timer * 0x10) / ONE + b;
          obj_s2->d.sprite.coords[0].x = obj_s2->d.sprite.coords[1].x = x + tmp;
-         obj_s2->d.sprite.coords[2].x = x + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0x556) / ONE + b;
-         obj_s2->d.sprite.coords[3].x = x + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + b;
+         obj_s2->d.sprite.coords[2].x = x + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0x556) / ONE + b;
+         obj_s2->d.sprite.coords[3].x = x + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + b;
 
-         tmp = OBJ.todo_x4e * rsin(OBJ.timer * 8) / ONE + 0x80;
+         tmp = OBJ.triRadius * rsin(OBJ.timer * 8) / ONE + 0x80;
          obj_s2->d.sprite.coords[0].y = obj_s2->d.sprite.coords[1].y = y + tmp;
-         obj_s2->d.sprite.coords[2].y = y + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0x556) / ONE + 0x80;
-         obj_s2->d.sprite.coords[3].y = y + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0xaac) / ONE + 0x80;
+         obj_s2->d.sprite.coords[2].y = y + OBJ.triRadius * rsin(OBJ.timer * 8 + 0x556) / ONE + 0x80;
+         obj_s2->d.sprite.coords[3].y = y + OBJ.triRadius * rsin(OBJ.timer * 8 + 0xaac) / ONE + 0x80;
 
-         tmp = OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10)) / ONE + c;
+         tmp = OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10)) / ONE + c;
          obj_s2->d.sprite.coords[0].z = obj_s2->d.sprite.coords[1].z = z + tmp;
          obj_s2->d.sprite.coords[2].z =
-             z + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + c;
+             z + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + c;
          obj_s2->d.sprite.coords[3].z =
-             z + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + c;
+             z + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + c;
 
          AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
@@ -1197,22 +1197,22 @@ void Objf193_DarkStar_FX2(Object *obj) {
          b = a * rcos(OBJ.timer * 0x20 + 0x800) >> 12;
          c = a * rsin(OBJ.timer * 0x20 + 0x800) >> 12;
 
-         tmp = OBJ.todo_x4e * rcos(OBJ.timer * 0x10) / ONE + c;
+         tmp = OBJ.triRadius * rcos(OBJ.timer * 0x10) / ONE + c;
          obj_s2->d.sprite.coords[0].z = obj_s2->d.sprite.coords[1].z = z + tmp;
-         obj_s2->d.sprite.coords[2].z = z + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0x556) / ONE + c;
-         obj_s2->d.sprite.coords[3].z = z + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + c;
+         obj_s2->d.sprite.coords[2].z = z + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0x556) / ONE + c;
+         obj_s2->d.sprite.coords[3].z = z + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + c;
 
-         tmp = OBJ.todo_x4e * rsin(OBJ.timer * 8) / ONE + b;
+         tmp = OBJ.triRadius * rsin(OBJ.timer * 8) / ONE + b;
          obj_s2->d.sprite.coords[0].x = obj_s2->d.sprite.coords[1].x = x + tmp;
-         obj_s2->d.sprite.coords[2].x = x + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0x556) / ONE + b;
-         obj_s2->d.sprite.coords[3].x = x + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0xaac) / ONE + b;
+         obj_s2->d.sprite.coords[2].x = x + OBJ.triRadius * rsin(OBJ.timer * 8 + 0x556) / ONE + b;
+         obj_s2->d.sprite.coords[3].x = x + OBJ.triRadius * rsin(OBJ.timer * 8 + 0xaac) / ONE + b;
 
-         tmp = OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10)) / ONE + 0x80;
+         tmp = OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10)) / ONE + 0x80;
          obj_s2->d.sprite.coords[0].y = obj_s2->d.sprite.coords[1].y = y + tmp;
          obj_s2->d.sprite.coords[2].y =
-             y + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + 0x80;
+             y + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + 0x80;
          obj_s2->d.sprite.coords[3].y =
-             y + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + 0x80;
+             y + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + 0x80;
 
          AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
@@ -1231,24 +1231,24 @@ void Objf193_DarkStar_FX2(Object *obj) {
          b = a * rcos(OBJ.timer * 0x20 + 0x400) >> 12;
          c = a * rsin(OBJ.timer * 0x20 + 0x400) >> 12;
 
-         tmp = OBJ.todo_x4e * rcos(OBJ.timer * 0x10) / ONE + 0x80;
+         tmp = OBJ.triRadius * rcos(OBJ.timer * 0x10) / ONE + 0x80;
          obj_s2->d.sprite.coords[0].y = obj_s2->d.sprite.coords[1].y = y + tmp;
          obj_s2->d.sprite.coords[2].y =
-             y + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0x556) / ONE + 0x80;
+             y + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0x556) / ONE + 0x80;
          obj_s2->d.sprite.coords[3].y =
-             y + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + 0x80;
+             y + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + 0x80;
 
-         tmp = OBJ.todo_x4e * rsin(OBJ.timer * 8) / ONE + c;
+         tmp = OBJ.triRadius * rsin(OBJ.timer * 8) / ONE + c;
          obj_s2->d.sprite.coords[0].z = obj_s2->d.sprite.coords[1].z = z + tmp;
-         obj_s2->d.sprite.coords[2].z = z + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0x556) / ONE + c;
-         obj_s2->d.sprite.coords[3].z = z + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0xaac) / ONE + c;
+         obj_s2->d.sprite.coords[2].z = z + OBJ.triRadius * rsin(OBJ.timer * 8 + 0x556) / ONE + c;
+         obj_s2->d.sprite.coords[3].z = z + OBJ.triRadius * rsin(OBJ.timer * 8 + 0xaac) / ONE + c;
 
-         tmp = OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10)) / ONE + b;
+         tmp = OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10)) / ONE + b;
          obj_s2->d.sprite.coords[0].x = obj_s2->d.sprite.coords[1].x = x + tmp;
          obj_s2->d.sprite.coords[2].x =
-             x + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + b;
+             x + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + b;
          obj_s2->d.sprite.coords[3].x =
-             x + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + b;
+             x + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + b;
 
          AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
@@ -1267,22 +1267,22 @@ void Objf193_DarkStar_FX2(Object *obj) {
          b = a * rcos(OBJ.timer * 0x20 + 0xc18) >> 12;
          c = a * rsin(OBJ.timer * 0x20 + 0xc18) >> 12;
 
-         tmp = OBJ.todo_x4e * rcos(OBJ.timer * 0x10) / ONE + c;
+         tmp = OBJ.triRadius * rcos(OBJ.timer * 0x10) / ONE + c;
          obj_s2->d.sprite.coords[0].z = obj_s2->d.sprite.coords[1].z = z + tmp;
-         obj_s2->d.sprite.coords[2].z = z + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0x556) / ONE + c;
-         obj_s2->d.sprite.coords[3].z = z + OBJ.todo_x4e * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + c;
+         obj_s2->d.sprite.coords[2].z = z + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0x556) / ONE + c;
+         obj_s2->d.sprite.coords[3].z = z + OBJ.triRadius * rcos(OBJ.timer * 0x10 + 0xaac) / ONE + c;
 
-         tmp = OBJ.todo_x4e * rsin(OBJ.timer * 8) / ONE + 0x80;
+         tmp = OBJ.triRadius * rsin(OBJ.timer * 8) / ONE + 0x80;
          obj_s2->d.sprite.coords[0].y = obj_s2->d.sprite.coords[1].y = y + tmp;
-         obj_s2->d.sprite.coords[2].y = y + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0x556) / ONE + 0x80;
-         obj_s2->d.sprite.coords[3].y = y + OBJ.todo_x4e * rsin(OBJ.timer * 8 + 0xaac) / ONE + 0x80;
+         obj_s2->d.sprite.coords[2].y = y + OBJ.triRadius * rsin(OBJ.timer * 8 + 0x556) / ONE + 0x80;
+         obj_s2->d.sprite.coords[3].y = y + OBJ.triRadius * rsin(OBJ.timer * 8 + 0xaac) / ONE + 0x80;
 
-         tmp = OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10)) / ONE + b;
+         tmp = OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10)) / ONE + b;
          obj_s2->d.sprite.coords[0].x = obj_s2->d.sprite.coords[1].x = x + tmp;
          obj_s2->d.sprite.coords[2].x =
-             x + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + b;
+             x + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0x556) / ONE + b;
          obj_s2->d.sprite.coords[3].x =
-             x + OBJ.todo_x4e * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + b;
+             x + OBJ.triRadius * rsin(rcos(OBJ.timer * 0x10) + 0xaac) / ONE + b;
 
          AddObjPrim4(gGraphicsPtr->ot, obj_s2);
 
@@ -1380,11 +1380,11 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
       obj_s2->functionIndex = OBJF_NOOP;
       obj_s2->d.sprite.semiTrans = 2;
 
-      gGfxSubTextures[GFX_TILED_DIAMONDS_DYN_1][0] = OBJ.todo_x5c % 0x20;
-      gGfxSubTextures[GFX_TILED_DIAMONDS_DYN_1][1] = 0x80 + OBJ.todo_x5c % 0x20;
+      gGfxSubTextures[GFX_TILED_DIAMONDS_DYN_1][0] = OBJ.uvScroll % 0x20;
+      gGfxSubTextures[GFX_TILED_DIAMONDS_DYN_1][1] = 0x80 + OBJ.uvScroll % 0x20;
       gGfxSubTextures[GFX_TILED_DIAMONDS_DYN_1][2] = 0x20;
       gGfxSubTextures[GFX_TILED_DIAMONDS_DYN_1][3] = 0x20;
-      OBJ.todo_x5c++;
+      OBJ.uvScroll++;
 
       // 1 //
       switch (obj->state3) {
@@ -1392,73 +1392,73 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            s_faces_80123a4c[1][0].vx = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[1][0].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[1][2].vx = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[1][2].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[1][0].vx = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[1][0].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[1][2].vx = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[1][2].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 += 0x80;
-            if (OBJ.todo_x24 > 0x400) {
-               OBJ.todo_x24 = 0;
+            OBJ.theta += 0x80;
+            if (OBJ.theta > 0x400) {
+               OBJ.theta = 0;
                obj->state2++;
             }
             break;
 
          case 1:
-            s_faces_80123a4c[2][0].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[2][0].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[2][1].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[2][1].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[2][0].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[2][0].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[2][1].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[2][1].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 += 0x80;
-            if (OBJ.todo_x24 > 0x400) {
-               OBJ.todo_x24 = 0;
+            OBJ.theta += 0x80;
+            if (OBJ.theta > 0x400) {
+               OBJ.theta = 0;
                obj->state2++;
             }
             break;
 
          case 2:
-            s_faces_80123a4c[3][1].vx = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[3][1].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[3][3].vx = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[3][3].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[3][1].vx = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[3][1].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[3][3].vx = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[3][3].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 += 0x80;
-            if (OBJ.todo_x24 > 0x400) {
-               OBJ.todo_x24 = 0;
+            OBJ.theta += 0x80;
+            if (OBJ.theta > 0x400) {
+               OBJ.theta = 0;
                obj->state2++;
             }
             break;
 
          case 3:
-            s_faces_80123a4c[4][2].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[4][2].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[4][3].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[4][3].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[4][2].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[4][2].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[4][3].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[4][3].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            s_faces_80123a4c[5][2].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[5][2].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][3].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[5][3].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[5][2].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[5][2].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][3].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[5][3].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 += 0x80;
-            if (OBJ.todo_x24 > 0x400) {
-               OBJ.todo_x24 = 0;
+            OBJ.theta += 0x80;
+            if (OBJ.theta > 0x400) {
+               OBJ.theta = 0;
                obj->state2++;
             }
             break;
 
          case 4:
-            s_faces_80123a4c[5][0].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][0].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][1].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][1].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[5][0].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][0].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][1].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][1].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 += 0x80;
-            if (OBJ.todo_x24 > 0x400) {
-               OBJ.todo_x24 = 0;
+            OBJ.theta += 0x80;
+            if (OBJ.theta > 0x400) {
+               OBJ.theta = 0;
                obj->state2 = 0;
-               OBJ.todo_x58++;
+               OBJ.openFinished++;
             }
             break;
 
@@ -1472,7 +1472,7 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
          PushMatrix();
          local_40.vx = 0;
          local_40.vz = 0;
-         local_40.vy = rcos(OBJ.todo_x5e * 0x40);
+         local_40.vy = rcos(OBJ.spinTimer * 0x40);
          RotMatrix(&local_40, &matrix);
          matrix.t[0] = 0;
          matrix.t[1] = 0;
@@ -1491,72 +1491,72 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            s_faces_80123a4c[5][0].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][0].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][1].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][1].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[5][0].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][0].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][1].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][1].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 -= 0x80;
-            if (OBJ.todo_x24 < 0) {
-               OBJ.todo_x24 = 0x400;
+            OBJ.theta -= 0x80;
+            if (OBJ.theta < 0) {
+               OBJ.theta = 0x400;
                obj->state2++;
             }
             break;
 
          case 1:
-            s_faces_80123a4c[4][2].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[4][2].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[4][3].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[4][3].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[4][2].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[4][2].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[4][3].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[4][3].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            s_faces_80123a4c[5][2].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[5][2].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[5][3].vz = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[5][3].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[5][2].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[5][2].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[5][3].vz = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[5][3].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 -= 0x80;
-            if (OBJ.todo_x24 < 0) {
-               OBJ.todo_x24 = 0x400;
+            OBJ.theta -= 0x80;
+            if (OBJ.theta < 0) {
+               OBJ.theta = 0x400;
                obj->state2++;
             }
             break;
 
          case 2:
-            s_faces_80123a4c[3][1].vx = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[3][1].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[3][3].vx = 0xa0 - 0x140 * rsin(OBJ.todo_x24) / ONE;
-            s_faces_80123a4c[3][3].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[3][1].vx = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[3][1].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[3][3].vx = 0xa0 - 0x140 * rsin(OBJ.theta) / ONE;
+            s_faces_80123a4c[3][3].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 -= 0x80;
-            if (OBJ.todo_x24 < 0) {
-               OBJ.todo_x24 = 0x400;
+            OBJ.theta -= 0x80;
+            if (OBJ.theta < 0) {
+               OBJ.theta = 0x400;
                obj->state2++;
             }
             break;
 
          case 3:
-            s_faces_80123a4c[2][0].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[2][0].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[2][1].vz = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[2][1].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[2][0].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[2][0].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[2][1].vz = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[2][1].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 -= 0x80;
-            if (OBJ.todo_x24 < 0) {
-               OBJ.todo_x24 = 0x400;
+            OBJ.theta -= 0x80;
+            if (OBJ.theta < 0) {
+               OBJ.theta = 0x400;
                obj->state2++;
             }
             break;
 
          case 4:
-            s_faces_80123a4c[1][0].vx = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[1][0].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[1][2].vx = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
-            s_faces_80123a4c[1][2].vy = 0x140 * rsin(OBJ.todo_x24) / ONE - 0xa0;
+            s_faces_80123a4c[1][0].vx = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[1][0].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[1][2].vx = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
+            s_faces_80123a4c[1][2].vy = 0x140 * rsin(OBJ.theta) / ONE - 0xa0;
 
-            OBJ.todo_x24 -= 0x80;
-            if (OBJ.todo_x24 < 0) {
-               OBJ.todo_x24 = 0x400;
-               OBJ.todo_x5a++;
+            OBJ.theta -= 0x80;
+            if (OBJ.theta < 0) {
+               OBJ.theta = 0x400;
+               OBJ.closeFinished++;
             }
             break;
 
@@ -1568,9 +1568,9 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
 
       case 0:
       case 4:
-         a = 0x400 * (ONE - rsin(OBJ.todo_x24)) / ONE;
-         xOfs = a * rsin(OBJ.todo_x24 * 8) / ONE;
-         zOfs = a * rcos(OBJ.todo_x24 * 8) / ONE;
+         a = 0x400 * (ONE - rsin(OBJ.theta)) / ONE;
+         xOfs = a * rsin(OBJ.theta * 8) / ONE;
+         zOfs = a * rcos(OBJ.theta * 8) / ONE;
          break;
       }
 
@@ -1692,31 +1692,31 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
       // 3 //
       switch (obj->state3) {
       case 0:
-         OBJ.todo_x24 += 0x20;
-         if (OBJ.todo_x24 >= 0x400) {
+         OBJ.theta += 0x20;
+         if (OBJ.theta >= 0x400) {
             obj->state3++;
-            OBJ.todo_x24 = 0;
+            OBJ.theta = 0;
          }
          break;
 
       case 1:
-         if (OBJ.todo_x58 != 0) {
+         if (OBJ.openFinished != 0) {
             obj->state3++;
          }
          break;
 
       case 2:
-         OBJ.todo_x5e++;
-         if (OBJ.todo_x5e == 0x40) {
+         OBJ.spinTimer++;
+         if (OBJ.spinTimer == 0x40) {
             obj->state3++;
-            OBJ.todo_x24 = 0x400;
+            OBJ.theta = 0x400;
          }
          break;
 
       case 3:
-         if (OBJ.todo_x5a != 0) {
+         if (OBJ.closeFinished != 0) {
             obj->state3++;
-            OBJ.todo_x24 = 0x20;
+            OBJ.theta = 0x20;
             obj_s2 = Obj_GetUnused();
             obj_s2->functionIndex = OBJF_ATTACK_INFO_MARKER;
             obj_s2->x1.s.hi = obj->x1.s.hi;
@@ -1727,8 +1727,8 @@ void Objf192_PerfectGuard_FX2(Object *obj) {
          break;
 
       case 4:
-         OBJ.todo_x24--;
-         if (OBJ.todo_x24 <= 0) {
+         OBJ.theta--;
+         if (OBJ.theta <= 0) {
             gSignal3 = 1;
             obj->functionIndex = OBJF_NULL;
          }

@@ -150,21 +150,21 @@ void Objf024_BounceZoom(Object *obj) {
       // ?: no state++
    // fallthrough
    case 1:
-      OBJ.todo_x26 += DEG(8.4375);
+      OBJ.decayAngle += DEG(8.4375);
       if (OBJ.soft) {
-         OBJ.todo_x28 = (rcos(OBJ.todo_x26 & 0xfff) * 5) * 2 >> 12;
+         OBJ.amplitude = (rcos(OBJ.decayAngle & 0xfff) * 5) * 2 >> 12;
       } else {
-         OBJ.todo_x28 = (rcos(OBJ.todo_x26 & 0xfff) * 35) * 2 >> 12;
+         OBJ.amplitude = (rcos(OBJ.decayAngle & 0xfff) * 35) * 2 >> 12;
       }
-      OBJ.todo_x2a += 1000;
+      OBJ.phase += 1000;
       if (OBJ.soft) {
-         tmp = (rcos(OBJ.todo_x2a & 0xfff) * OBJ.todo_x28) >> 12;
+         tmp = (rcos(OBJ.phase & 0xfff) * OBJ.amplitude) >> 12;
          gCameraZoom.vz = tmp + 320;
       } else {
-         tmp = (rcos(OBJ.todo_x2a & 0xfff) * OBJ.todo_x28) >> 12;
+         tmp = (rcos(OBJ.phase & 0xfff) * OBJ.amplitude) >> 12;
          gCameraZoom.vz = tmp + 350;
       }
-      if (OBJ.todo_x26 >= DEG(90)) {
+      if (OBJ.decayAngle >= DEG(90)) {
          gCameraZoom.vz = OBJ.savedZoom;
          obj->functionIndex = OBJF_NULL;
       }
@@ -300,7 +300,7 @@ void Objf026_588_FocusCamera(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      OBJ.todo_x44 = !OBJ.todo_x44;
+      OBJ.wideOcclusionTest = !OBJ.wideOcclusionTest;
       gCameraRotation.vy &= 0xfff;
 
       if (OBJ.zoom == 0) {
@@ -317,13 +317,13 @@ void Objf026_588_FocusCamera(Object *obj) {
          OBJ.dstCamRotY = GetBestViewOfTarget(target->z1.s.hi, target->x1.s.hi, 1);
          break;
       case 1:
-         OBJ.dstCamRotY = GetBestViewOfTargetPlus90(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
+         OBJ.dstCamRotY = GetBestViewOfTargetPlus90(target->z1.s.hi, target->x1.s.hi, OBJ.wideOcclusionTest);
          break;
       case 2:
-         OBJ.dstCamRotY = GetBestViewOfTargetMinus90(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
+         OBJ.dstCamRotY = GetBestViewOfTargetMinus90(target->z1.s.hi, target->x1.s.hi, OBJ.wideOcclusionTest);
          break;
       case 3:
-         OBJ.dstCamRotY = GetBestViewOfTargetPlus180(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
+         OBJ.dstCamRotY = GetBestViewOfTargetPlus180(target->z1.s.hi, target->x1.s.hi, OBJ.wideOcclusionTest);
          break;
       }
 

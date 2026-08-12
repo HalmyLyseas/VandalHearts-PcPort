@@ -340,7 +340,7 @@ void Objf658_Map38_Floodwater(Object *obj) {
       obj->z2.n = CV(0.25);
       OBJ.theta = 0;
       OBJ.timer = 0;
-      OBJ.todo_x30 = 0;
+      OBJ.waveAccum = 0;
       break;
 
    case 2:
@@ -372,10 +372,10 @@ void Objf658_Map38_Floodwater(Object *obj) {
       switch (obj->state2) {
       case 0:
          OBJ.theta += DEG(22.5);
-         OBJ.todo_x30 += 2;
-         r = OBJ.todo_x30 >> 3;
+         OBJ.waveAccum += 2;
+         r = OBJ.waveAccum >> 3;
          if (r >= CV(0.1875)) {
-            OBJ.todo_x30 = 0;
+            OBJ.waveAccum = 0;
             r = CV(0.1875);
             obj->state2++;
          }
@@ -388,19 +388,19 @@ void Objf658_Map38_Floodwater(Object *obj) {
 
       case 2:
          OBJ.theta += DEG(22.5);
-         OBJ.todo_x30 -= 2;
-         r = OBJ.todo_x30 >> 3;
+         OBJ.waveAccum -= 2;
+         r = OBJ.waveAccum >> 3;
          if (r <= 0) {
-            OBJ.todo_x30 = 0;
+            OBJ.waveAccum = 0;
             r = 0;
             obj->state2++;
          }
          break;
 
       default:
-         OBJ.todo_x30 += 1;
+         OBJ.waveAccum += 1;
          r = 0;
-         if (OBJ.todo_x30 >= 32) {
+         if (OBJ.waveAccum >= 32) {
             obj->state++;
          }
          break;

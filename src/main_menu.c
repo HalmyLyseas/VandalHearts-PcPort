@@ -368,7 +368,7 @@ void ResetCardFileListing(void) {
 #undef OBJF
 #define OBJF 341
 void Objf341_342_353_FileSaveMenu(Object *obj) {
-   extern s8 *D_80124EE4[3];
+   extern s8 *gCardSlotCaptions[3];
 
    s32 i;
    s32 tmp; //?
@@ -500,9 +500,9 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
       if (OBJ.error == 0) {
          for (i = 0; i < 3; i++) {
             if (gCardFileListingPtr->slotOccupied[i]) {
-               D_80124EE4[i] = gCardFileListingPtr->captions[i];
+               gCardSlotCaptions[i] = gCardFileListingPtr->captions[i];
             } else {
-               D_80124EE4[i] = sEmptyFileCaption;
+               gCardSlotCaptions[i] = sEmptyFileCaption;
             }
          }
          obj->state = 14;
@@ -749,7 +749,7 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
       case 4:
          ResetCardFileListing();
          for (i = 0; i < 3; i++) {
-            D_80124EE4[i] = sEmptyFileCaption;
+            gCardSlotCaptions[i] = sEmptyFileCaption;
          }
          obj->state2 = 0;
          obj->state++;
@@ -805,7 +805,7 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
                         0);
          DisplayBasicWindow(0x3c);
          for (i = 0; i < 3; i++) {
-            sText_FileSaveCaptions[i] = D_80124EE4[i];
+            sText_FileSaveCaptions[i] = gCardSlotCaptions[i];
          }
          DrawTextWindow(sText_FileSaveCaptions, 3, 0x3d, 0, 54, obj->x1.n, obj->y1.n + 50, 0, 3, 1);
          DisplayBasicWindow(0x3d);
@@ -849,9 +849,9 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
          gCardFileListingPtr->slotOccupied[OBJ.choice - 1] = 1;
          for (i = 0; i < 3; i++) {
             if (gCardFileListingPtr->slotOccupied[i]) {
-               D_80124EE4[i] = gCardFileListingPtr->captions[i];
+               gCardSlotCaptions[i] = gCardFileListingPtr->captions[i];
             } else {
-               D_80124EE4[i] = sEmptyFileCaption;
+               gCardSlotCaptions[i] = sEmptyFileCaption;
             }
          }
          DrawTextWindow(sText_Saving, 1, 0x3c, 0, 0, obj->x1.n - 20, obj->y1.n, 0, 0, 0);
@@ -900,7 +900,7 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
          tmp = OBJ.choice - 1;
          gWindowChoicesTopMargin = tmp * 18 + 9;
          for (i = 0; i < 3; i++) {
-            sText_FileSaveCaptions[i] = D_80124EE4[i];
+            sText_FileSaveCaptions[i] = gCardSlotCaptions[i];
          }
          DrawTextWindow(sText_FileSaveCaptions, 3, 0x3d, 0, 54, obj->x1.n, obj->y1.n + 50, 0, 3, 1);
          DisplayBasicWindow(0x3d);
@@ -1041,7 +1041,7 @@ void Objf341_342_353_FileSaveMenu(Object *obj) {
       gWindowActiveIdx = OBJ.savedWindowId;
       gClearSavedPadState = 0;
       obj->functionIndex = OBJF_NULL;
-      gState.D_8014053E = obj->state3;
+      gState.subObjDone = obj->state3;
       break;
    }
 }
@@ -1573,7 +1573,7 @@ void Objf343_Etc_FileLoadMenu(Object *obj) {
       }
       gWindowActiveIdx = OBJ.savedWindowId;
       gClearSavedPadState = 0;
-      gState.D_8014053E = obj->state3;
+      gState.subObjDone = obj->state3;
       obj->functionIndex = OBJF_NULL;
       break;
    }
@@ -1596,12 +1596,12 @@ void ShowFileLoadScreen_Unused(void) {
    case 1:
       obj = Obj_GetUnused();
       obj->functionIndex = OBJF_FILE_LOAD_MENU_DEFEAT;
-      gState.D_8014053E = 0;
+      gState.subObjDone = 0;
       gState.secondary++;
       break;
 
    case 2:
-      if (gState.D_8014053E != 0) {
+      if (gState.subObjDone != 0) {
          gState.primary = gState.state6;
          gState.secondary = 0;
          gState.state3 = 0;
@@ -1634,7 +1634,7 @@ void State_TitleScreen(void) {
    case 1:
       obj = Obj_GetUnused();
       obj->functionIndex = OBJF_MAIN_MENU;
-      gState.D_8014053E = 0;
+      gState.subObjDone = 0;
       gState.secondary++;
       gState.state3 = 0;
       break;
@@ -2258,12 +2258,12 @@ void State_Title_FileLoadScreen(void) {
    case 1:
       obj = Obj_GetUnused();
       obj->functionIndex = OBJF_FILE_LOAD_MENU;
-      gState.D_8014053E = 0;
+      gState.subObjDone = 0;
       gState.secondary++;
       break;
 
    case 2:
-      if (gState.D_8014053E != 0) {
+      if (gState.subObjDone != 0) {
          gState.primary = STATE_TITLE_SCREEN;
          gState.secondary = 0;
          gState.state3 = 0;

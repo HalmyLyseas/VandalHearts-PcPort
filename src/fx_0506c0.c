@@ -493,23 +493,23 @@ void Objf076_RingBurstOnUnit(Object *obj) {
 
       switch (unitSprite->d.sprite.direction) {
       case ANGLE_WEST:
-         OBJ.todo_x50 = -1;
-         OBJ.todo_x4e = 1;
+         OBJ.dirSign = -1;
+         OBJ.axis = 1;
          obj->x1.n += CV(0.5625);
          break;
       case ANGLE_EAST:
-         OBJ.todo_x50 = 1;
-         OBJ.todo_x4e = 1;
+         OBJ.dirSign = 1;
+         OBJ.axis = 1;
          obj->x1.n -= CV(0.5625);
          break;
       case ANGLE_SOUTH:
-         OBJ.todo_x50 = -1;
-         OBJ.todo_x4e = 0;
+         OBJ.dirSign = -1;
+         OBJ.axis = 0;
          obj->z1.n += CV(0.5625);
          break;
       case ANGLE_NORTH:
-         OBJ.todo_x50 = 1;
-         OBJ.todo_x4e = 0;
+         OBJ.dirSign = 1;
+         OBJ.axis = 0;
          obj->z1.n -= CV(0.5625);
          break;
       }
@@ -523,8 +523,8 @@ void Objf076_RingBurstOnUnit(Object *obj) {
       circle->x1.n = obj->x1.n;
       circle->z1.n = obj->z1.n;
       circle->y1.n = obj->y1.n;
-      circle->d.objf077.todo_x4e = OBJ.todo_x4e;
-      circle->d.objf077.todo_x50 = OBJ.todo_x50;
+      circle->d.objf077.axis = OBJ.axis;
+      circle->d.objf077.dirSign = OBJ.dirSign;
       if (++OBJ.timer == 3) {
          obj->state++;
          OBJ.timer = 0;
@@ -577,13 +577,13 @@ void Objf077_ExpandingRing(Object *obj) {
       ringSprite->d.sprite.coords[2].z = obj->z1.n;
       ringSprite->d.sprite.coords[3].z = obj->z1.n;
 
-      if (OBJ.todo_x4e == 0) {
+      if (OBJ.axis == 0) {
          ringSprite->d.sprite.coords[0].x -= b;
          ringSprite->d.sprite.coords[1].x += b;
          ringSprite->d.sprite.coords[2].x -= b;
          ringSprite->d.sprite.coords[3].x += b;
 
-         ringSprite->d.sprite.coords[0].z += (a * OBJ.todo_x50);
+         ringSprite->d.sprite.coords[0].z += (a * OBJ.dirSign);
          ringSprite->d.sprite.coords[1].z = ringSprite->d.sprite.coords[0].z;
          ringSprite->d.sprite.coords[2].z = ringSprite->d.sprite.coords[0].z;
          ringSprite->d.sprite.coords[3].z = ringSprite->d.sprite.coords[0].z;
@@ -593,7 +593,7 @@ void Objf077_ExpandingRing(Object *obj) {
          ringSprite->d.sprite.coords[2].z -= b;
          ringSprite->d.sprite.coords[3].z += b;
 
-         ringSprite->d.sprite.coords[0].x += (a * OBJ.todo_x50);
+         ringSprite->d.sprite.coords[0].x += (a * OBJ.dirSign);
          ringSprite->d.sprite.coords[1].x = ringSprite->d.sprite.coords[0].x;
          ringSprite->d.sprite.coords[2].x = ringSprite->d.sprite.coords[0].x;
          ringSprite->d.sprite.coords[3].x = ringSprite->d.sprite.coords[0].x;
@@ -826,15 +826,15 @@ void Objf802_ExplosionRingSprite(Object *obj) {
       sprite = OBJ.sprite;
       a = OBJ.theta;
 
-      gQuad_800fe63c[0].vy = -6 - ((OBJ.todo_x28 - 6) * abs(rsin(OBJ.todo_x34)) / ONE);
+      gQuad_800fe63c[0].vy = -6 - ((OBJ.maxHeight - 6) * abs(rsin(OBJ.pulsePhase)) / ONE);
       gQuad_800fe63c[1].vy = gQuad_800fe63c[0].vy;
 
-      gQuad_800fe63c[0].vx = -3 - ((OBJ.todo_x28 / 2 - 3) * abs(rsin(OBJ.todo_x34)) / ONE);
+      gQuad_800fe63c[0].vx = -3 - ((OBJ.maxHeight / 2 - 3) * abs(rsin(OBJ.pulsePhase)) / ONE);
       gQuad_800fe63c[2].vx = gQuad_800fe63c[0].vx;
       gQuad_800fe63c[1].vx = -gQuad_800fe63c[0].vx;
       gQuad_800fe63c[3].vx = -gQuad_800fe63c[0].vx;
 
-      OBJ.todo_x34 += OBJ.todo_x2a;
+      OBJ.pulsePhase += OBJ.pulseSpeed;
 
       sprite->x1.n = obj->x1.n + (OBJ.radius * rcos(a) / ONE);
       sprite->z1.n = obj->z1.n + (OBJ.radius * rsin(a) / ONE);
@@ -905,10 +905,10 @@ void Objf803_LightningRingSprite(Object *obj) {
    case 2:
       sprite = OBJ.sprite;
 
-      gQuad_800fe63c[0].vy = -12 - ((OBJ.todo_x28 - 12) * abs(rsin(OBJ.todo_x34)) / ONE);
+      gQuad_800fe63c[0].vy = -12 - ((OBJ.maxHeight - 12) * abs(rsin(OBJ.pulsePhase)) / ONE);
       gQuad_800fe63c[1].vy = gQuad_800fe63c[0].vy;
 
-      OBJ.todo_x34 += OBJ.todo_x2a;
+      OBJ.pulsePhase += OBJ.pulseSpeed;
 
       sprite->x1.n = obj->x1.n + (OBJ.radius * rcos(OBJ.theta) / ONE);
       sprite->z1.n = obj->z1.n + (OBJ.radius * rsin(OBJ.theta) / ONE);
@@ -970,10 +970,10 @@ void Objf801_FlameRingSprite(Object *obj) {
    case 2:
       sprite = OBJ.sprite;
 
-      gQuad_800fe63c[0].vy = -16 - ((OBJ.todo_x28 - 16) * abs(rsin(OBJ.todo_x34)) / ONE);
+      gQuad_800fe63c[0].vy = -16 - ((OBJ.maxHeight - 16) * abs(rsin(OBJ.pulsePhase)) / ONE);
       gQuad_800fe63c[1].vy = gQuad_800fe63c[0].vy;
 
-      OBJ.todo_x34 += OBJ.todo_x2a;
+      OBJ.pulsePhase += OBJ.pulseSpeed;
 
       sprite->x1.n = obj->x1.n + (OBJ.radius * rcos(OBJ.theta) >> 12);
       sprite->z1.n = obj->z1.n + (OBJ.radius * rsin(OBJ.theta) >> 12);
@@ -998,8 +998,8 @@ void Objf133_FlameRingEmitter(Object *obj) {
    case 0:
       newObj = CreatePositionedObj(obj, OBJF_FLAME_RING_SPRITE);
       newObj->d.objf801.radius = OBJ.radius;
-      newObj->d.objf801.todo_x2a = OBJ.todo_x2a;
-      newObj->d.objf801.todo_x28 = OBJ.todo_x28;
+      newObj->d.objf801.pulseSpeed = OBJ.pulseSpeed;
+      newObj->d.objf801.maxHeight = OBJ.maxHeight;
       newObj->d.objf801.semiTrans = OBJ.semiTrans;
       newObj->d.objf801.clut = OBJ.clut;
       newObj->d.objf801.timer = OBJ.timer;
@@ -1023,8 +1023,8 @@ void Objf141_ExplosionRingEmitter(Object *obj) {
    case 0:
       newObj = CreatePositionedObj(obj, OBJF_EXPLOSION_RING_SPRITE);
       newObj->d.objf802.radius = OBJ.radius;
-      newObj->d.objf802.todo_x2a = OBJ.todo_x2a;
-      newObj->d.objf802.todo_x28 = OBJ.todo_x28;
+      newObj->d.objf802.pulseSpeed = OBJ.pulseSpeed;
+      newObj->d.objf802.maxHeight = OBJ.maxHeight;
       newObj->d.objf802.semiTrans = OBJ.semiTrans;
       newObj->d.objf802.clut = OBJ.clut;
       newObj->d.objf802.timer = OBJ.timer;
@@ -1048,8 +1048,8 @@ void Objf137_LightningRingEmitter(Object *obj) {
    case 0:
       newObj = CreatePositionedObj(obj, OBJF_LIGHTNING_RING_SPRITE);
       newObj->d.objf803.radius = OBJ.radius;
-      newObj->d.objf803.todo_x2a = OBJ.todo_x2a;
-      newObj->d.objf803.todo_x28 = OBJ.todo_x28;
+      newObj->d.objf803.pulseSpeed = OBJ.pulseSpeed;
+      newObj->d.objf803.maxHeight = OBJ.maxHeight;
       newObj->d.objf803.semiTrans = OBJ.semiTrans;
       newObj->d.objf803.clut = OBJ.clut;
       newObj->d.objf803.timer = OBJ.timer;
@@ -1125,8 +1125,8 @@ void Objf132_EngulfUnit(Object *obj) {
       fxObj1->y1.n = unitSprite->y1.n + CV(0.8125);
       fxObj1->mem = 30;
       fxObj1->d.objf133.radius = fxInfo[i].radius;
-      fxObj1->d.objf133.todo_x2a = fxInfo[i].to_x2a;
-      fxObj1->d.objf133.todo_x28 = fxInfo[i].to_x28;
+      fxObj1->d.objf133.pulseSpeed = fxInfo[i].to_x2a;
+      fxObj1->d.objf133.maxHeight = fxInfo[i].to_x28;
       fxObj1->d.objf133.semiTrans = 2;
       fxObj1->d.objf133.clut = OBJ.clut;
       fxObj1->d.objf133.timer = 0;
@@ -1622,20 +1622,20 @@ void Objf130_TorusSweepOnUnit(Object *obj) {
 
       switch (unitSprite->d.sprite.direction) {
       case ANGLE_WEST:
-         OBJ.todo_x50 = -1;
-         OBJ.todo_x4e = 0;
+         OBJ.dirX = -1;
+         OBJ.dirZ = 0;
          break;
       case ANGLE_EAST:
-         OBJ.todo_x50 = 1;
-         OBJ.todo_x4e = 0;
+         OBJ.dirX = 1;
+         OBJ.dirZ = 0;
          break;
       case ANGLE_SOUTH:
-         OBJ.todo_x50 = 0;
-         OBJ.todo_x4e = -1;
+         OBJ.dirX = 0;
+         OBJ.dirZ = -1;
          break;
       case ANGLE_NORTH:
-         OBJ.todo_x50 = 0;
-         OBJ.todo_x4e = 1;
+         OBJ.dirX = 0;
+         OBJ.dirZ = 1;
          break;
       }
 
@@ -1649,19 +1649,19 @@ void Objf130_TorusSweepOnUnit(Object *obj) {
       sprite->d.sprite.clut = CLUT_BLUES;
       sprite->d.sprite.semiTrans = 1;
 
-      switch (OBJ.todo_x50) {
+      switch (OBJ.dirX) {
       case 0:
-         a = (OBJ.todo_x4e == 1) ? DEG(180) : 0;
+         a = (OBJ.dirZ == 1) ? DEG(180) : 0;
          break;
       case 1:
-         a = (OBJ.todo_x50 == 1) ? DEG(180) : 0;
+         a = (OBJ.dirX == 1) ? DEG(180) : 0;
          break;
       default:
          a = 0;
          break;
       }
 
-      for (i = OBJ.todo_x24; i < OBJ.todo_x26; i++) {
+      for (i = OBJ.bandStart; i < OBJ.bandEnd; i++) {
          b = (rsin(i * 401) * 13) >> 8;
          c = (rsin((i + 1) * 401) * 13) >> 8;
          d = (rcos(a + i * 401) * 13) >> 8;
@@ -1669,7 +1669,7 @@ void Objf130_TorusSweepOnUnit(Object *obj) {
 
          for (j = 0; j < 16; j++) {
 
-            switch (OBJ.todo_x50) {
+            switch (OBJ.dirX) {
             case 0:
                sprite->d.sprite.coords[0].x = obj->x1.n + (b * rcos(j * 128) >> 12);
                sprite->d.sprite.coords[0].z = obj->z1.n + d;
@@ -1714,15 +1714,15 @@ void Objf130_TorusSweepOnUnit(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x26++;
-         if (OBJ.todo_x26 == 6) {
+         OBJ.bandEnd++;
+         if (OBJ.bandEnd == 6) {
             obj->state2++;
-            OBJ.todo_x26 = 5;
+            OBJ.bandEnd = 5;
          }
          break;
       case 1:
-         OBJ.todo_x24++;
-         if (OBJ.todo_x24 == 5) {
+         OBJ.bandStart++;
+         if (OBJ.bandStart == 5) {
             obj->functionIndex = OBJF_NULL;
             gSignal3 = 1;
          }
@@ -1983,45 +1983,45 @@ void Objf203_BlockingImpactParticle(Object *obj) {
       switch (OBJ.direction) {
       case ANGLE_WEST:
          obj->x1.n += CV(0.125);
-         OBJ.todo_x4e = rsin(a) / 24;
-         OBJ.todo_x50 = rcos(a) / 24;
-         OBJ.todo_x4c = CV(0.75) - rand() % CV(1.5);
+         OBJ.zOfs = rsin(a) / 24;
+         OBJ.yOfs = rcos(a) / 24;
+         OBJ.xOfs = CV(0.75) - rand() % CV(1.5);
          break;
       case ANGLE_EAST:
          obj->x1.n -= CV(0.125);
-         OBJ.todo_x4e = rsin(a) / 24;
-         OBJ.todo_x50 = rcos(a) / 24;
-         OBJ.todo_x4c = CV(0.75) - rand() % CV(1.5);
+         OBJ.zOfs = rsin(a) / 24;
+         OBJ.yOfs = rcos(a) / 24;
+         OBJ.xOfs = CV(0.75) - rand() % CV(1.5);
          break;
       case ANGLE_SOUTH:
          obj->z1.n += CV(0.125);
-         OBJ.todo_x4c = rsin(a) / 24;
-         OBJ.todo_x50 = rcos(a) / 24;
-         OBJ.todo_x4e = CV(0.75) - rand() % CV(1.5);
+         OBJ.xOfs = rsin(a) / 24;
+         OBJ.yOfs = rcos(a) / 24;
+         OBJ.zOfs = CV(0.75) - rand() % CV(1.5);
          break;
       case ANGLE_NORTH:
          obj->z1.n -= CV(0.125);
-         OBJ.todo_x4c = rsin(a) / 24;
-         OBJ.todo_x50 = rcos(a) / 24;
-         OBJ.todo_x4e = CV(0.75) - rand() % CV(1.5);
+         OBJ.xOfs = rsin(a) / 24;
+         OBJ.yOfs = rcos(a) / 24;
+         OBJ.zOfs = CV(0.75) - rand() % CV(1.5);
          break;
       }
 
-      OBJ.todo_x50 = abs(OBJ.todo_x50) * 3;
+      OBJ.yOfs = abs(OBJ.yOfs) * 3;
       obj->state++;
 
    // fallthrough
    case 1:
       sprite = OBJ.sprite;
-      sprite->x1.n = obj->x1.n + (OBJ.todo_x4c * rsin(OBJ.todo_x28) / ONE);
-      sprite->z1.n = obj->z1.n + (OBJ.todo_x4e * rsin(OBJ.todo_x28) / ONE);
-      sprite->y1.n = obj->y1.n + (OBJ.todo_x50 * rsin(OBJ.todo_x28) / ONE) - (OBJ.todo_x28 / 4);
+      sprite->x1.n = obj->x1.n + (OBJ.xOfs * rsin(OBJ.theta) / ONE);
+      sprite->z1.n = obj->z1.n + (OBJ.zOfs * rsin(OBJ.theta) / ONE);
+      sprite->y1.n = obj->y1.n + (OBJ.yOfs * rsin(OBJ.theta) / ONE) - (OBJ.theta / 4);
 
       UpdateObjAnimation(sprite);
       AddObjPrim6(gGraphicsPtr->ot, sprite, 0);
 
-      OBJ.todo_x28 += 0x4e;
-      if (OBJ.todo_x28 >= DEG(90)) {
+      OBJ.theta += 0x4e;
+      if (OBJ.theta >= DEG(90)) {
          obj->functionIndex = OBJF_NULL;
          sprite->functionIndex = OBJF_NULL;
       }

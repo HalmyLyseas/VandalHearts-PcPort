@@ -200,7 +200,7 @@ void Objf652_Map35_Button(Object *obj) {
    case 5:
       if (OBJ.hitPlayerUnit) {
          obj->state++;
-         OBJ.todo_x5a = 0;
+         OBJ.smokeElapsed = 0;
          PerformAudioCommand(AUDIO_CMD_PLAY_XA(115));
       } else {
          gCameraRotation.vy -= DEG(1.40625);
@@ -211,7 +211,7 @@ void Objf652_Map35_Button(Object *obj) {
             obj->state2 = 0;
             if (OBJ.hitPlayerUnit) {
                obj->state++;
-               OBJ.todo_x5a = 0;
+               OBJ.smokeElapsed = 0;
             } else {
                obj->state += 2;
             }
@@ -221,8 +221,8 @@ void Objf652_Map35_Button(Object *obj) {
       break;
 
    case 6:
-      OBJ.todo_x5a++;
-      if (--OBJ.todo_x54 <= 0 && obj->state2 < 7) {
+      OBJ.smokeElapsed++;
+      if (--OBJ.smokeTimer <= 0 && obj->state2 < 7) {
          for (j = 9; j <= 13; j++) {
             for (i = 7; i <= 8; i++) {
                obj_s0 = Obj_GetUnused();
@@ -236,9 +236,9 @@ void Objf652_Map35_Button(Object *obj) {
                obj_s0->y2.n = rand() % CV(0.25);
             }
          }
-         OBJ.todo_x54 = 16 - (OBJ.todo_x5a >> 4);
-         if (OBJ.todo_x54 < 4) {
-            OBJ.todo_x54 = 4;
+         OBJ.smokeTimer = 16 - (OBJ.smokeElapsed >> 4);
+         if (OBJ.smokeTimer < 4) {
+            OBJ.smokeTimer = 4;
          }
       }
 

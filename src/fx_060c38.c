@@ -49,7 +49,7 @@ void Objf172_HolyPressure_Cube(Object *obj) {
       obj_s4->d.sprite.clut = CLUT_PURPLES;
       obj_s4->d.sprite.gfxIdx = GFX_TILED_TBD_162;
 
-      a = OBJ.todo_x28;
+      a = OBJ.spin;
       for (i = 0; i < 2; i++) {
          switch (obj->state3) {
          case 0:
@@ -103,7 +103,7 @@ void Objf172_HolyPressure_Cube(Object *obj) {
 
       switch (obj->state3) {
       case 0:
-         OBJ.todo_x28 += 0x40;
+         OBJ.spin += 0x40;
          obj->state2 += 0x20;
          if (obj->state2 >= 0x400) {
             obj->state3++;
@@ -112,14 +112,14 @@ void Objf172_HolyPressure_Cube(Object *obj) {
          break;
 
       case 1:
-         OBJ.todo_x28 += 0x40;
+         OBJ.spin += 0x40;
          if (++OBJ.timer == 90) {
             obj->state3++;
          }
          break;
 
       case 2:
-         OBJ.todo_x28 += 0x40;
+         OBJ.spin += 0x40;
          obj->state2 += 0x20;
          if (obj->state2 >= 0x400) {
             obj->functionIndex = OBJF_NULL;
@@ -236,31 +236,31 @@ void Objf167_RainbowSwirl(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      a = OBJ.todo_x58;
-      OBJ.todo_x24 = rand() % 0x1000;
-      OBJ.todo_x26 = rand() % 0x300 + 0x300;
-      OBJ.todo_x28 = rand() % a + a;
-      OBJ.todo_x2a = -0x600;
-      OBJ.todo_x2c = rand() % 0x1000;
-      OBJ.todo_x2e = rand() % 0x300 + 0x300;
-      OBJ.todo_x30 = rand() % a + a;
-      OBJ.todo_x32 = -0x600;
-      OBJ.todo_x34 = rand() % 0x1000;
-      OBJ.todo_x36 = rand() % 0x300 + 0x300;
-      OBJ.todo_x38 = rand() % a + a;
-      OBJ.todo_x3a = -0x600;
-      OBJ.todo_x3c = rand() % 0x1000;
-      OBJ.todo_x3e = rand() % 0x300 + 0x300;
-      OBJ.todo_x40 = rand() % a + a;
-      OBJ.todo_x42 = -0x600;
-      OBJ.todo_x44 = rand() % 0x1000;
-      OBJ.todo_x46 = rand() % 0x300 + 0x300;
-      OBJ.todo_x48 = rand() % a + a;
-      OBJ.todo_x4a = -0x600;
-      OBJ.todo_x4c = rand() % 0x1000;
-      OBJ.todo_x4e = rand() % 0x300 + 0x300;
-      OBJ.todo_x50 = rand() % a + a;
-      OBJ.todo_x52 = -0x600;
+      a = OBJ.spin;
+      OBJ.theta1 = rand() % 0x1000;
+      OBJ.span1 = rand() % 0x300 + 0x300;
+      OBJ.speed1 = rand() % a + a;
+      OBJ.y1 = -0x600;
+      OBJ.theta2 = rand() % 0x1000;
+      OBJ.span2 = rand() % 0x300 + 0x300;
+      OBJ.speed2 = rand() % a + a;
+      OBJ.y2 = -0x600;
+      OBJ.theta3 = rand() % 0x1000;
+      OBJ.span3 = rand() % 0x300 + 0x300;
+      OBJ.speed3 = rand() % a + a;
+      OBJ.y3 = -0x600;
+      OBJ.theta4 = rand() % 0x1000;
+      OBJ.span4 = rand() % 0x300 + 0x300;
+      OBJ.speed4 = rand() % a + a;
+      OBJ.y4 = -0x600;
+      OBJ.theta5 = rand() % 0x1000;
+      OBJ.span5 = rand() % 0x300 + 0x300;
+      OBJ.speed5 = rand() % a + a;
+      OBJ.y5 = -0x600;
+      OBJ.theta6 = rand() % 0x1000;
+      OBJ.span6 = rand() % 0x300 + 0x300;
+      OBJ.speed6 = rand() % a + a;
+      OBJ.y6 = -0x600;
 
       sprite = Obj_GetUnused();
       sprite->functionIndex = OBJF_NOOP;
@@ -273,48 +273,48 @@ void Objf167_RainbowSwirl(Object *obj) {
 
    case 1:
       sprite = OBJ.sprite;
-      sprite->d.sprite.semiTrans = OBJ.todo_x5a;
+      sprite->d.sprite.semiTrans = OBJ.semiTrans;
       sprite->x1.n = obj->x1.n;
       sprite->z1.n = obj->z1.n;
       sprite->y1.n = obj->y1.n;
 
       sum = 0;
-      angle = OBJ.todo_x58;
-      OBJ.todo_x58 += 0x60;
-      sVar2 = OBJ.todo_x54;
-      b = OBJ.todo_x56;
+      angle = OBJ.spin;
+      OBJ.spin += 0x60;
+      sVar2 = OBJ.arcWidth;
+      b = OBJ.radius;
 
       for (i = 0; i < 6; i++) {
          switch (i) {
          case 0:
-            a = OBJ.todo_x2a;
-            c = OBJ.todo_x26 + a;
-            angleOfs = OBJ.todo_x24;
+            a = OBJ.y1;
+            c = OBJ.span1 + a;
+            angleOfs = OBJ.theta1;
             break;
          case 1:
-            a = OBJ.todo_x32;
-            c = OBJ.todo_x2e + a;
-            angleOfs = OBJ.todo_x2c;
+            a = OBJ.y2;
+            c = OBJ.span2 + a;
+            angleOfs = OBJ.theta2;
             break;
          case 2:
-            a = OBJ.todo_x3a;
-            c = OBJ.todo_x36 + a;
-            angleOfs = OBJ.todo_x34;
+            a = OBJ.y3;
+            c = OBJ.span3 + a;
+            angleOfs = OBJ.theta3;
             break;
          case 3:
-            a = OBJ.todo_x42;
-            c = OBJ.todo_x3e + a;
-            angleOfs = OBJ.todo_x3c;
+            a = OBJ.y4;
+            c = OBJ.span4 + a;
+            angleOfs = OBJ.theta4;
             break;
          case 4:
-            a = OBJ.todo_x4a;
-            c = OBJ.todo_x46 + a;
-            angleOfs = OBJ.todo_x44;
+            a = OBJ.y5;
+            c = OBJ.span5 + a;
+            angleOfs = OBJ.theta5;
             break;
          case 5:
-            a = OBJ.todo_x52;
-            c = OBJ.todo_x4e + a;
-            angleOfs = OBJ.todo_x4c;
+            a = OBJ.y6;
+            c = OBJ.span6 + a;
+            angleOfs = OBJ.theta6;
             break;
          }
 
@@ -353,12 +353,12 @@ void Objf167_RainbowSwirl(Object *obj) {
          AddObjPrim3(gGraphicsPtr->ot, sprite);
       }
 
-      OBJ.todo_x2a += OBJ.todo_x28;
-      OBJ.todo_x32 += OBJ.todo_x30;
-      OBJ.todo_x3a += OBJ.todo_x38;
-      OBJ.todo_x42 += OBJ.todo_x40;
-      OBJ.todo_x4a += OBJ.todo_x48;
-      OBJ.todo_x52 += OBJ.todo_x50;
+      OBJ.y1 += OBJ.speed1;
+      OBJ.y2 += OBJ.speed2;
+      OBJ.y3 += OBJ.speed3;
+      OBJ.y4 += OBJ.speed4;
+      OBJ.y5 += OBJ.speed5;
+      OBJ.y6 += OBJ.speed6;
 
       if (sum == 0x3000) {
          obj->functionIndex = OBJF_NULL;
@@ -381,31 +381,31 @@ void Objf168_RainbowStroke_RainbowSwirl(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      a = OBJ.todo_x58;
-      OBJ.todo_x24 = rand() % 0x1000;
-      OBJ.todo_x26 = rand() % 0x300 + 0x300;
-      OBJ.todo_x28 = rand() % a + a;
-      OBJ.todo_x2a = 0x600;
-      OBJ.todo_x2c = rand() % 0x1000;
-      OBJ.todo_x2e = rand() % 0x300 + 0x300;
-      OBJ.todo_x30 = rand() % a + a;
-      OBJ.todo_x32 = 0x600;
-      OBJ.todo_x34 = rand() % 0x1000;
-      OBJ.todo_x36 = rand() % 0x300 + 0x300;
-      OBJ.todo_x38 = rand() % a + a;
-      OBJ.todo_x3a = 0x600;
-      OBJ.todo_x3c = rand() % 0x1000;
-      OBJ.todo_x3e = rand() % 0x300 + 0x300;
-      OBJ.todo_x40 = rand() % a + a;
-      OBJ.todo_x42 = 0x600;
-      OBJ.todo_x44 = rand() % 0x1000;
-      OBJ.todo_x46 = rand() % 0x300 + 0x300;
-      OBJ.todo_x48 = rand() % a + a;
-      OBJ.todo_x4a = 0x600;
-      OBJ.todo_x4c = rand() % 0x1000;
-      OBJ.todo_x4e = rand() % 0x300 + 0x300;
-      OBJ.todo_x50 = rand() % a + a;
-      OBJ.todo_x52 = 0x600;
+      a = OBJ.spin;
+      OBJ.theta1 = rand() % 0x1000;
+      OBJ.span1 = rand() % 0x300 + 0x300;
+      OBJ.speed1 = rand() % a + a;
+      OBJ.y1 = 0x600;
+      OBJ.theta2 = rand() % 0x1000;
+      OBJ.span2 = rand() % 0x300 + 0x300;
+      OBJ.speed2 = rand() % a + a;
+      OBJ.y2 = 0x600;
+      OBJ.theta3 = rand() % 0x1000;
+      OBJ.span3 = rand() % 0x300 + 0x300;
+      OBJ.speed3 = rand() % a + a;
+      OBJ.y3 = 0x600;
+      OBJ.theta4 = rand() % 0x1000;
+      OBJ.span4 = rand() % 0x300 + 0x300;
+      OBJ.speed4 = rand() % a + a;
+      OBJ.y4 = 0x600;
+      OBJ.theta5 = rand() % 0x1000;
+      OBJ.span5 = rand() % 0x300 + 0x300;
+      OBJ.speed5 = rand() % a + a;
+      OBJ.y5 = 0x600;
+      OBJ.theta6 = rand() % 0x1000;
+      OBJ.span6 = rand() % 0x300 + 0x300;
+      OBJ.speed6 = rand() % a + a;
+      OBJ.y6 = 0x600;
 
       sprite = Obj_GetUnused();
       sprite->functionIndex = OBJF_NOOP;
@@ -418,48 +418,48 @@ void Objf168_RainbowStroke_RainbowSwirl(Object *obj) {
 
    case 1:
       sprite = OBJ.sprite;
-      sprite->d.sprite.semiTrans = OBJ.todo_x5a;
+      sprite->d.sprite.semiTrans = OBJ.semiTrans;
       sprite->x1.n = obj->x1.n;
       sprite->z1.n = obj->z1.n;
       sprite->y1.n = obj->y1.n;
 
       sum = 0;
-      angle = OBJ.todo_x58;
-      OBJ.todo_x58 += 0x60;
-      sVar2 = OBJ.todo_x54;
-      b = OBJ.todo_x56;
+      angle = OBJ.spin;
+      OBJ.spin += 0x60;
+      sVar2 = OBJ.arcWidth;
+      b = OBJ.radius;
 
       for (i = 0; i < 6; i++) {
          switch (i) {
          case 0:
-            a = OBJ.todo_x2a;
-            c = OBJ.todo_x26 + a;
-            angleOfs = OBJ.todo_x24;
+            a = OBJ.y1;
+            c = OBJ.span1 + a;
+            angleOfs = OBJ.theta1;
             break;
          case 1:
-            a = OBJ.todo_x32;
-            c = OBJ.todo_x2e + a;
-            angleOfs = OBJ.todo_x2c;
+            a = OBJ.y2;
+            c = OBJ.span2 + a;
+            angleOfs = OBJ.theta2;
             break;
          case 2:
-            a = OBJ.todo_x3a;
-            c = OBJ.todo_x36 + a;
-            angleOfs = OBJ.todo_x34;
+            a = OBJ.y3;
+            c = OBJ.span3 + a;
+            angleOfs = OBJ.theta3;
             break;
          case 3:
-            a = OBJ.todo_x42;
-            c = OBJ.todo_x3e + a;
-            angleOfs = OBJ.todo_x3c;
+            a = OBJ.y4;
+            c = OBJ.span4 + a;
+            angleOfs = OBJ.theta4;
             break;
          case 4:
-            a = OBJ.todo_x4a;
-            c = OBJ.todo_x46 + a;
-            angleOfs = OBJ.todo_x44;
+            a = OBJ.y5;
+            c = OBJ.span5 + a;
+            angleOfs = OBJ.theta5;
             break;
          case 5:
-            a = OBJ.todo_x52;
-            c = OBJ.todo_x4e + a;
-            angleOfs = OBJ.todo_x4c;
+            a = OBJ.y6;
+            c = OBJ.span6 + a;
+            angleOfs = OBJ.theta6;
             break;
          }
 
@@ -498,12 +498,12 @@ void Objf168_RainbowStroke_RainbowSwirl(Object *obj) {
          AddObjPrim3(gGraphicsPtr->ot, sprite);
       }
 
-      OBJ.todo_x2a -= OBJ.todo_x28;
-      OBJ.todo_x32 -= OBJ.todo_x30;
-      OBJ.todo_x3a -= OBJ.todo_x38;
-      OBJ.todo_x42 -= OBJ.todo_x40;
-      OBJ.todo_x4a -= OBJ.todo_x48;
-      OBJ.todo_x52 -= OBJ.todo_x50;
+      OBJ.y1 -= OBJ.speed1;
+      OBJ.y2 -= OBJ.speed2;
+      OBJ.y3 -= OBJ.speed3;
+      OBJ.y4 -= OBJ.speed4;
+      OBJ.y5 -= OBJ.speed5;
+      OBJ.y6 -= OBJ.speed6;
 
       if (sum == 0) {
          obj->functionIndex = OBJF_NULL;
@@ -547,7 +547,7 @@ void Objf169_EvilStream_FX1(Object *obj) {
       sprite->y1.n = obj->y1.n;
       sprite->z1.n = obj->z1.n;
 
-      a = 0x80 * rsin(OBJ.todo_x26) >> 12;
+      a = 0x80 * rsin(OBJ.growPhase) >> 12;
       gQuad_800fe63c[0].vx = -a;
       gQuad_800fe63c[0].vy = -a;
       gQuad_800fe63c[1].vx = a;
@@ -571,7 +571,7 @@ void Objf169_EvilStream_FX1(Object *obj) {
 
       sprite->functionIndex = OBJF_NULL;
 
-      a = 0x48 * rsin(OBJ.todo_x26) >> 12;
+      a = 0x48 * rsin(OBJ.growPhase) >> 12;
       gQuad_800fe63c[0].vx = -a;
       gQuad_800fe63c[0].vy = -a;
       gQuad_800fe63c[1].vx = a;
@@ -607,8 +607,8 @@ void Objf169_EvilStream_FX1(Object *obj) {
       obj->state3++;
       OBJ.fade -= 4;
 
-      OBJ.todo_x26 += 0x20;
-      if (OBJ.todo_x26 > 0x400) {
+      OBJ.growPhase += 0x20;
+      if (OBJ.growPhase > 0x400) {
          obj->state++;
          OBJ.fade = 0x80;
       }
@@ -783,9 +783,9 @@ void Objf171_HomingRay(Object *obj) {
       if (OBJ.clut == CLUT_NULL) {
          OBJ.clut = CLUT_REDS;
       }
-      OBJ.todo_x26 = CV(1.5) - rand() % CV(3.0);
-      OBJ.todo_x28 = CV(1.5) + rand() % CV(1.5);
-      OBJ.todo_x2a = CV(1.5) - rand() % CV(3.0);
+      OBJ.amplitudeX = CV(1.5) - rand() % CV(3.0);
+      OBJ.amplitudeY = CV(1.5) + rand() % CV(1.5);
+      OBJ.amplitudeZ = CV(1.5) - rand() % CV(3.0);
       obj->state++;
       break;
 
@@ -797,20 +797,20 @@ void Objf171_HomingRay(Object *obj) {
          sprite->d.sprite.clut = OBJ.clut;
 
          colorIdx = 0;
-         for (i = OBJ.todo_x36; i < OBJ.todo_x34; i++) {
-            sprite->d.sprite.coords[0].x = obj->x1.n + (OBJ.todo_x26 * rsin((i + 1) * 0x80) >> 11) +
+         for (i = OBJ.tailIdx; i < OBJ.headIdx; i++) {
+            sprite->d.sprite.coords[0].x = obj->x1.n + (OBJ.amplitudeX * rsin((i + 1) * 0x80) >> 11) +
                                            (i + 1) * OBJ.dx * 0x100 / ONE;
-            sprite->d.sprite.coords[0].z = obj->z1.n + (OBJ.todo_x2a * rsin((i + 1) * 0x80) >> 11) +
+            sprite->d.sprite.coords[0].z = obj->z1.n + (OBJ.amplitudeZ * rsin((i + 1) * 0x80) >> 11) +
                                            (i + 1) * OBJ.dz * 0x100 / ONE;
-            sprite->d.sprite.coords[0].y = obj->y1.n + (OBJ.todo_x28 * rsin((i + 1) * 0x80) >> 11) +
+            sprite->d.sprite.coords[0].y = obj->y1.n + (OBJ.amplitudeY * rsin((i + 1) * 0x80) >> 11) +
                                            (i + 1) * OBJ.dy * 0x100 / ONE;
 
             sprite->d.sprite.coords[1].x =
-                obj->x1.n + (OBJ.todo_x26 * rsin(i * 0x80) >> 11) + (i * OBJ.dx * 0x100 / ONE);
+                obj->x1.n + (OBJ.amplitudeX * rsin(i * 0x80) >> 11) + (i * OBJ.dx * 0x100 / ONE);
             sprite->d.sprite.coords[1].z =
-                obj->z1.n + (OBJ.todo_x2a * rsin(i * 0x80) >> 11) + (i * OBJ.dz * 0x100 / ONE);
+                obj->z1.n + (OBJ.amplitudeZ * rsin(i * 0x80) >> 11) + (i * OBJ.dz * 0x100 / ONE);
             sprite->d.sprite.coords[1].y =
-                obj->y1.n + (OBJ.todo_x28 * rsin(i * 0x80) >> 11) + (i * OBJ.dy * 0x100 / ONE);
+                obj->y1.n + (OBJ.amplitudeY * rsin(i * 0x80) >> 11) + (i * OBJ.dy * 0x100 / ONE);
 
             sprite->d.sprite.coords[2].x = sprite->d.sprite.coords[0].x;
             sprite->d.sprite.coords[2].z = sprite->d.sprite.coords[0].z;
@@ -833,13 +833,13 @@ void Objf171_HomingRay(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         if (++OBJ.todo_x34 == 16) {
-            OBJ.todo_x36 = 0;
+         if (++OBJ.headIdx == 16) {
+            OBJ.tailIdx = 0;
             obj->state2++;
          }
          break;
       case 1:
-         if (++OBJ.todo_x36 == 16) {
+         if (++OBJ.tailIdx == 16) {
             obj->functionIndex = OBJF_NULL;
          }
          break;
@@ -932,13 +932,13 @@ void Objf175_RainbowStorm_FX1(Object *obj) {
 
    // fallthrough
    case 1:
-      if (OBJ.todo_x24 < 0x400) {
+      if (OBJ.theta < 0x400) {
          obj_s1 = Obj_GetUnused();
          obj_s1->functionIndex = OBJF_RAINBOW_SWIRL;
-         obj_s1->d.objf167.todo_x56 = 0x300 * (ONE - rsin(OBJ.todo_x24)) / ONE;
-         obj_s1->d.objf167.todo_x54 = 0x60;
-         obj_s1->d.objf167.todo_x58 = 0x20 + 0x28 * rcos(OBJ.todo_x24) / ONE;
-         obj_s1->d.objf167.todo_x5a = 1;
+         obj_s1->d.objf167.radius = 0x300 * (ONE - rsin(OBJ.theta)) / ONE;
+         obj_s1->d.objf167.arcWidth = 0x60;
+         obj_s1->d.objf167.spin = 0x20 + 0x28 * rcos(OBJ.theta) / ONE;
+         obj_s1->d.objf167.semiTrans = 1;
          obj_s1->x1.n = obj->x1.n;
          obj_s1->y1.n = obj->y1.n;
          obj_s1->z1.n = obj->z1.n;
@@ -946,7 +946,7 @@ void Objf175_RainbowStorm_FX1(Object *obj) {
 
       gCameraZoom.vz += 8;
       gCameraRotation.vx -= 2;
-      OBJ.todo_x24 += 0x40;
+      OBJ.theta += 0x40;
 
       switch (obj->state2) {
       case 0:
@@ -958,7 +958,7 @@ void Objf175_RainbowStorm_FX1(Object *obj) {
          }
          break;
       case 1:
-         if (OBJ.todo_x24 > 0xb00) {
+         if (OBJ.theta > 0xb00) {
             gLightColor.r += 8;
             gLightColor.g += 8;
             gLightColor.b += 8;
@@ -966,7 +966,7 @@ void Objf175_RainbowStorm_FX1(Object *obj) {
          break;
       }
 
-      if (OBJ.todo_x24 > 0xe00) {
+      if (OBJ.theta > 0xe00) {
          obj->functionIndex = OBJF_NULL;
          gSignal3 = 1;
          gLightColor.r = 0x80;
@@ -1018,13 +1018,13 @@ void Objf176_RainbowStroke_FX1(Object *obj) {
 
    // fallthrough
    case 1:
-      if (OBJ.todo_x24 < 0x400) {
+      if (OBJ.theta < 0x400) {
          obj_s1 = Obj_GetUnused();
          obj_s1->functionIndex = OBJF_RAINBOW_STROKE_RAINBOW_SWIRL;
-         obj_s1->d.objf168.todo_x56 = 0xe0 * (ONE - rsin(OBJ.todo_x24)) / ONE;
-         obj_s1->d.objf168.todo_x54 = 0x60;
-         obj_s1->d.objf168.todo_x58 = 0x20 + 0x10 * rcos(OBJ.todo_x24) / ONE;
-         obj_s1->d.objf168.todo_x5a = 0;
+         obj_s1->d.objf168.radius = 0xe0 * (ONE - rsin(OBJ.theta)) / ONE;
+         obj_s1->d.objf168.arcWidth = 0x60;
+         obj_s1->d.objf168.spin = 0x20 + 0x10 * rcos(OBJ.theta) / ONE;
+         obj_s1->d.objf168.semiTrans = 0;
          obj_s1->x1.n = obj->x1.n;
          obj_s1->y1.n = obj->y1.n;
          obj_s1->z1.n = obj->z1.n;
@@ -1034,7 +1034,7 @@ void Objf176_RainbowStroke_FX1(Object *obj) {
       gCameraRotation.vx -= 6;
       gCameraRotation.vy -= 12;
 
-      OBJ.todo_x24 += 0x40;
+      OBJ.theta += 0x40;
 
       switch (obj->state2) {
       case 0:
@@ -1046,7 +1046,7 @@ void Objf176_RainbowStroke_FX1(Object *obj) {
          }
          break;
       case 1:
-         if (OBJ.todo_x24 > 0xb00) {
+         if (OBJ.theta > 0xb00) {
             gLightColor.r += 8;
             gLightColor.g += 8;
             gLightColor.b += 8;
@@ -1054,12 +1054,12 @@ void Objf176_RainbowStroke_FX1(Object *obj) {
          break;
       }
 
-      if (OBJ.todo_x24 == 0x1c0) {
+      if (OBJ.theta == 0x1c0) {
          obj_s0 = OBJ.cam;
          obj_s0->functionIndex = OBJF_NULL;
       }
 
-      if (OBJ.todo_x24 > 0xe00) {
+      if (OBJ.theta > 0xe00) {
          obj->functionIndex = OBJF_NULL;
          gLightColor.r = 0x80;
          gLightColor.g = 0x80;
@@ -1210,7 +1210,7 @@ void Objf160_IceStorm_Target(Object *obj) {
          OBJ.timer++;
          if (OBJ.timer == 88) {
             obj->state2++;
-            OBJ.todo_x2c = 0x40;
+            OBJ.unused_0x2C = 0x40;
          }
          break;
       case 2:
@@ -1304,7 +1304,7 @@ void Objf189_IceStorm_FX1(Object *obj) {
       obj_s1->functionIndex = OBJF_ICE_STORM_CAMERA;
       obj_s1->d.objf279.targetSprite = targetSprite;
 
-      OBJ.todo_x24 = 0x280;
+      OBJ.unused_0x24 = 0x280;
       obj->state++;
 
    // fallthrough
@@ -1315,19 +1315,19 @@ void Objf189_IceStorm_FX1(Object *obj) {
       obj_s1->d.sprite.clut = CLUT_BLUES;
       obj_s1->d.sprite.semiTrans = 1;
 
-      OBJ.todo_x5c += 2;
-      a = OBJ.todo_x2c++;
+      OBJ.uvScroll += 2;
+      a = OBJ.spin++;
 
       switch (obj->state2) {
       case 0:
-         b = 0x80 + 0x200 * rcos(OBJ.todo_x26) / ONE;
-         c = 0x600 * rsin(OBJ.todo_x26) / ONE;
-         d = 0x40 + 0x3c0 * (ONE - rcos(OBJ.todo_x26)) / ONE;
+         b = 0x80 + 0x200 * rcos(OBJ.theta1) / ONE;
+         c = 0x600 * rsin(OBJ.theta1) / ONE;
+         d = 0x40 + 0x3c0 * (ONE - rcos(OBJ.theta1)) / ONE;
          d /= 4;
          break;
       case 1:
          b = 0x80;
-         c = 0x400 * (ONE - rsin(OBJ.todo_x28)) / ONE;
+         c = 0x400 * (ONE - rsin(OBJ.theta2)) / ONE;
          d = 0x100;
          break;
       }
@@ -1335,9 +1335,9 @@ void Objf189_IceStorm_FX1(Object *obj) {
       for (i = 0; i < 4; i++) {
          for (j = 0; j < 4; j++) {
             gGfxSubTextures[GFX_TILED_ICE_DYN_1][0] =
-                0x80 + ((i * 4 + j) * 2 + OBJ.todo_x5c) % 0x20;
+                0x80 + ((i * 4 + j) * 2 + OBJ.uvScroll) % 0x20;
             gGfxSubTextures[GFX_TILED_ICE_DYN_1][1] =
-                0x40 + ((i * 4 + j) * 2 + OBJ.todo_x5c) % 0x20;
+                0x40 + ((i * 4 + j) * 2 + OBJ.uvScroll) % 0x20;
             gGfxSubTextures[GFX_TILED_ICE_DYN_1][2] = 2;
             gGfxSubTextures[GFX_TILED_ICE_DYN_1][3] = 31;
 
@@ -1376,16 +1376,16 @@ void Objf189_IceStorm_FX1(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x26 += 0x10;
-         if (OBJ.todo_x26 >= 0x400) {
+         OBJ.theta1 += 0x10;
+         if (OBJ.theta1 >= 0x400) {
             obj->state2++;
          }
          break;
       case 1:
          CreatePositionedObj(obj, OBJF_ICE_STORM_SPLASH);
          CreatePositionedObj(obj, OBJF_ICE_STORM_SPLASH);
-         OBJ.todo_x28 += 0x10;
-         if (OBJ.todo_x28 >= 0x400) {
+         OBJ.theta2 += 0x10;
+         if (OBJ.theta2 >= 0x400) {
             gSignal3 = 1;
             obj->functionIndex = OBJF_NULL;
          }
@@ -1407,11 +1407,11 @@ void Objf155_Spellbind_Glyph(Object *obj) {
    case 0:
       OBJ.idx = OBJ.initialIdx;
       OBJ.theta = OBJ.idx * 0x100;
-      OBJ.todo_x58 = OBJ.idx / 16 * 0x40;
-      OBJ.todo_x5a = 0x400;
-      OBJ.todo_x5c = 0x100;
-      OBJ.todo_x28 = rand() % 12 + 0x89;
-      OBJ.todo_x31 = 1;
+      OBJ.layerY = OBJ.idx / 16 * 0x40;
+      OBJ.yOfs = 0x400;
+      OBJ.ySpeed = 0x100;
+      OBJ.gfxIdx = rand() % 12 + 0x89;
+      OBJ.semiTrans = 1;
       obj->x2.n = obj->x1.n;
       obj->z2.n = obj->z1.n;
       obj->y2.n = obj->y1.n;
@@ -1426,13 +1426,13 @@ void Objf155_Spellbind_Glyph(Object *obj) {
          radius = 0xa0;
          break;
       case 1:
-         radius = 0xa0 + rsin(OBJ.todo_x5e) / 0x40;
-         OBJ.todo_x5e += 0xc0;
+         radius = 0xa0 + rsin(OBJ.wobblePhase) / 0x40;
+         OBJ.wobblePhase += 0xc0;
          break;
       case 2:
-         radius = 0xa0 + rsin(OBJ.todo_x5e) / 0x40;
-         if (OBJ.todo_x5e & 0x800U) {
-            OBJ.todo_x5e += 0x40;
+         radius = 0xa0 + rsin(OBJ.wobblePhase) / 0x40;
+         if (OBJ.wobblePhase & 0x800U) {
+            OBJ.wobblePhase += 0x40;
          }
          break;
       }
@@ -1447,7 +1447,7 @@ void Objf155_Spellbind_Glyph(Object *obj) {
       OBJ.coords[0].z = OBJ.coords[2].z = obj->z2.n + z_1;
       OBJ.coords[1].z = OBJ.coords[3].z = obj->z2.n + z_2;
 
-      y = obj->y2.n + OBJ.todo_x58 + OBJ.todo_x5a;
+      y = obj->y2.n + OBJ.layerY + OBJ.yOfs;
       OBJ.coords[0].y = OBJ.coords[1].y = y + 0x40;
       OBJ.coords[2].y = OBJ.coords[3].y = y - 8;
 
@@ -1455,9 +1455,9 @@ void Objf155_Spellbind_Glyph(Object *obj) {
 
       switch (obj->state3) {
       case 0:
-         OBJ.todo_x5a -= OBJ.todo_x5c;
-         OBJ.todo_x5c += (-OBJ.todo_x5c >> 2);
-         if (OBJ.todo_x5c <= 1) {
+         OBJ.yOfs -= OBJ.ySpeed;
+         OBJ.ySpeed += (-OBJ.ySpeed >> 2);
+         if (OBJ.ySpeed <= 1) {
             obj->state3++;
          }
          break;
@@ -1479,9 +1479,9 @@ void Objf155_Spellbind_Glyph(Object *obj) {
          break;
 
       case 2:
-         OBJ.todo_x5a += OBJ.todo_x5c;
-         OBJ.todo_x5c += (0x100 - OBJ.todo_x5c) >> 2;
-         if (OBJ.todo_x5a >= 0x400) {
+         OBJ.yOfs += OBJ.ySpeed;
+         OBJ.ySpeed += (0x100 - OBJ.ySpeed) >> 2;
+         if (OBJ.yOfs >= 0x400) {
             obj->functionIndex = OBJF_NULL;
             if (OBJ.idx == 10) {
                gSignal3 = 1;
@@ -1543,13 +1543,13 @@ void Objf179_ThunderFlash_Ray(Object *obj) {
       obj->z1.n = obj_s2->z1.n;
       obj->y1.n = obj_s2->y1.n;
 
-      OBJ.todo_x24 = rand() % 0x400 + 0x400;
-      OBJ.todo_x26 = rand() % 0x1000;
-      OBJ.todo_x28 = rand() % 0x1000;
-      OBJ.todo_x2a = rand() % 0x1000;
-      OBJ.todo_x2c = 0x40 - rand() % 0x80;
-      OBJ.todo_x2e = 0x40 - rand() % 0x80;
-      OBJ.todo_x30 = 0x40 - rand() % 0x80;
+      OBJ.maxRadius = rand() % 0x400 + 0x400;
+      OBJ.thetaX = rand() % 0x1000;
+      OBJ.thetaZ = rand() % 0x1000;
+      OBJ.thetaY = rand() % 0x1000;
+      OBJ.thetaXSpeed = 0x40 - rand() % 0x80;
+      OBJ.thetaZSpeed = 0x40 - rand() % 0x80;
+      OBJ.thetaYSpeed = 0x40 - rand() % 0x80;
 
       obj->state++;
 
@@ -1561,45 +1561,45 @@ void Objf179_ThunderFlash_Ray(Object *obj) {
       obj_s2->d.sprite.clut = CLUT_GREENS;
       obj_s2->d.sprite.semiTrans = 1;
 
-      radius = OBJ.todo_x24 * OBJ.todo_x36 / 30;
+      radius = OBJ.maxRadius * OBJ.growth / 30;
       obj_s2->d.sprite.coords[0].x = obj->x1.n;
       obj_s2->d.sprite.coords[0].z = obj->z1.n;
       obj_s2->d.sprite.coords[0].y = obj->y1.n;
       obj_s2->d.sprite.coords[1].x = obj->x1.n;
       obj_s2->d.sprite.coords[1].z = obj->z1.n;
       obj_s2->d.sprite.coords[1].y = obj->y1.n;
-      obj_s2->d.sprite.coords[2].x = obj->x1.n + radius * rcos(OBJ.todo_x26) / ONE;
-      obj_s2->d.sprite.coords[2].z = obj->z1.n + radius * rsin(OBJ.todo_x28) / ONE;
-      obj_s2->d.sprite.coords[2].y = obj->y1.n + radius * rsin(OBJ.todo_x2a) / ONE;
-      obj_s2->d.sprite.coords[3].x = obj->x1.n + radius * rcos(OBJ.todo_x26 + 0x30) / ONE;
-      obj_s2->d.sprite.coords[3].z = obj->z1.n + radius * rsin(OBJ.todo_x28 + 0x30) / ONE;
-      obj_s2->d.sprite.coords[3].y = obj->y1.n + radius * rsin(OBJ.todo_x2a + 0x30) / ONE;
+      obj_s2->d.sprite.coords[2].x = obj->x1.n + radius * rcos(OBJ.thetaX) / ONE;
+      obj_s2->d.sprite.coords[2].z = obj->z1.n + radius * rsin(OBJ.thetaZ) / ONE;
+      obj_s2->d.sprite.coords[2].y = obj->y1.n + radius * rsin(OBJ.thetaY) / ONE;
+      obj_s2->d.sprite.coords[3].x = obj->x1.n + radius * rcos(OBJ.thetaX + 0x30) / ONE;
+      obj_s2->d.sprite.coords[3].z = obj->z1.n + radius * rsin(OBJ.thetaZ + 0x30) / ONE;
+      obj_s2->d.sprite.coords[3].y = obj->y1.n + radius * rsin(OBJ.thetaY + 0x30) / ONE;
 
       AddObjPrim4(gGraphicsPtr->ot, obj_s2);
       obj_s2->functionIndex = OBJF_NULL;
 
-      OBJ.todo_x26 += OBJ.todo_x2c;
-      OBJ.todo_x28 += OBJ.todo_x2e;
-      OBJ.todo_x2a += OBJ.todo_x30;
+      OBJ.thetaX += OBJ.thetaXSpeed;
+      OBJ.thetaZ += OBJ.thetaZSpeed;
+      OBJ.thetaY += OBJ.thetaYSpeed;
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x32++;
-         OBJ.todo_x36++;
-         if (OBJ.todo_x36 == 32) {
+         OBJ.timer++;
+         OBJ.growth++;
+         if (OBJ.growth == 32) {
             obj->state2++;
          }
          break;
       case 1:
-         OBJ.todo_x32++;
-         if (OBJ.todo_x32 == 98) {
+         OBJ.timer++;
+         if (OBJ.timer == 98) {
             obj->state2++;
-            OBJ.todo_x32 = 0;
+            OBJ.timer = 0;
          }
          break;
       case 2:
-         OBJ.todo_x36 -= 2;
-         if (OBJ.todo_x36 == 0) {
+         OBJ.growth -= 2;
+         if (OBJ.growth == 0) {
             obj->functionIndex = OBJF_NULL;
          }
          break;
@@ -1625,7 +1625,7 @@ void Objf178_ThunderFlash_FX1(Object *obj) {
       obj->y1.n = GetTerrainElevation(obj->z1.s.hi, obj->x1.s.hi);
       obj->x1.n = unitSprite->x1.n;
       obj->z1.n = unitSprite->z1.n;
-      OBJ.todo_x24 = 0x380;
+      OBJ.maxRadius = 0x380;
       obj->state++;
 
    // fallthrough
@@ -1635,7 +1635,7 @@ void Objf178_ThunderFlash_FX1(Object *obj) {
          obj_s1->functionIndex = OBJF_THUNDER_FLASH_RAY;
          obj_s1->d.objf179.parent = obj;
       }
-      OBJ.todo_x5e = 0;
+      OBJ.unused_0x5E = 0;
       obj->state++;
 
    // fallthrough
@@ -1658,7 +1658,7 @@ void Objf178_ThunderFlash_FX1(Object *obj) {
       obj_s1->d.sprite.clut = CLUT_BLUES;
       obj_s1->d.sprite.semiTrans = 1;
 
-      a = b = OBJ.todo_x24 * (ONE - rcos(OBJ.todo_x28)) / ONE;
+      a = b = OBJ.maxRadius * (ONE - rcos(OBJ.theta)) / ONE;
       h_2 = 0x800;
       h_1 = 0;
 
@@ -1695,8 +1695,8 @@ void Objf178_ThunderFlash_FX1(Object *obj) {
       gQuadIndex++;
 
       OBJ.fade += 8;
-      OBJ.todo_x28 += 0x40;
-      if (OBJ.todo_x28 == 0x400) {
+      OBJ.theta += 0x40;
+      if (OBJ.theta == 0x400) {
          gSignal3 = 1;
          obj->state++;
       }
@@ -1755,7 +1755,7 @@ void Objf180_SpreadForce_FX1(Object *obj) {
       obj->y1.n = GetTerrainElevation(obj->z1.s.hi, obj->x1.s.hi);
       obj->x1.n = obj_s0->x1.n;
       obj->z1.n = obj_s0->z1.n;
-      OBJ.todo_x24 = 0x280;
+      OBJ.maxRadius = 0x280;
       obj->state++;
 
    // fallthrough
@@ -1764,10 +1764,10 @@ void Objf180_SpreadForce_FX1(Object *obj) {
       if (OBJ.timer % 2 == 0) {
          i = OBJ.timer / 2;
          obj_s1 = CreatePositionedObj(obj, OBJF_RAINBOW_SWIRL);
-         obj_s1->d.objf167.todo_x56 = i * 0x14 + 0x30;
-         obj_s1->d.objf167.todo_x54 = 0x40;
-         obj_s1->d.objf167.todo_x58 = i + 0x20;
-         obj_s1->d.objf167.todo_x5a = 1;
+         obj_s1->d.objf167.radius = i * 0x14 + 0x30;
+         obj_s1->d.objf167.arcWidth = 0x40;
+         obj_s1->d.objf167.spin = i + 0x20;
+         obj_s1->d.objf167.semiTrans = 1;
       }
       if (OBJ.timer < 17) {
          gLightColor.r -= 6;
@@ -1800,14 +1800,14 @@ void Objf180_SpreadForce_FX1(Object *obj) {
       obj_s1->d.sprite.gfxIdx = GFX_COLOR_13;
       obj_s1->d.sprite.clut = CLUT_BLUES;
       obj_s1->d.sprite.semiTrans = 1;
-      a = OBJ.todo_x24 * OBJ.todo_x28 / 0x80;
+      a = OBJ.maxRadius * OBJ.growth / 0x80;
 
       switch (obj->state2) {
       case 0:
          unaff_s0 = 0xcd;
          break;
       case 1:
-         unaff_s0 = OBJ.todo_x2a;
+         unaff_s0 = OBJ.arcStep;
          break;
       }
 
@@ -1837,15 +1837,15 @@ void Objf180_SpreadForce_FX1(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         OBJ.todo_x28 += 4;
-         if (OBJ.todo_x28 == 0x80) {
-            OBJ.todo_x2a = 0xcd;
+         OBJ.growth += 4;
+         if (OBJ.growth == 0x80) {
+            OBJ.arcStep = 0xcd;
             obj->state2++;
          }
          break;
 
       case 1:
-         if (OBJ.todo_x2a <= 0x60) {
+         if (OBJ.arcStep <= 0x60) {
             gLightColor.r += 6;
             gLightColor.g += 6;
             gLightColor.b += 6;
@@ -1874,9 +1874,9 @@ void Objf180_SpreadForce_FX1(Object *obj) {
             OBJ.fade += 8;
          }
 
-         OBJ.todo_x2a -= 6;
-         if (OBJ.todo_x2a <= 0) {
-            OBJ.todo_x2a = 0x80;
+         OBJ.arcStep -= 6;
+         if (OBJ.arcStep <= 0) {
+            OBJ.arcStep = 0x80;
             gSignal3 = 1;
 
             obj_s0 = OBJ.dataStore;
@@ -2002,9 +2002,9 @@ void Objf183_SpikedBall_Unused(Object *obj) {
 
    switch (obj->state) {
    case 0:
-      OBJ.todo_x26 = 0x100 - rand() % 0x200;
-      OBJ.todo_x28 = 0x180 + rand() % 0x180;
-      OBJ.todo_x2a = 0x100 - rand() % 0x200;
+      OBJ.wobbleX = 0x100 - rand() % 0x200;
+      OBJ.wobbleY = 0x180 + rand() % 0x180;
+      OBJ.wobbleZ = 0x100 - rand() % 0x200;
 
       obj_s0 = Obj_GetUnused();
       OBJ.sprite = obj_s0;
@@ -2020,11 +2020,11 @@ void Objf183_SpikedBall_Unused(Object *obj) {
       obj_s0 = OBJ.sprite;
       timer = OBJ.timer;
       obj_s0->x1.n =
-          obj->x1.n + (OBJ.todo_x26 * rsin(timer * 0x20) >> 11) + (timer * OBJ.dx / 0x40);
+          obj->x1.n + (OBJ.wobbleX * rsin(timer * 0x20) >> 11) + (timer * OBJ.dx / 0x40);
       obj_s0->z1.n =
-          obj->z1.n + (OBJ.todo_x2a * rsin(timer * 0x20) >> 11) + (timer * OBJ.dz / 0x40);
+          obj->z1.n + (OBJ.wobbleZ * rsin(timer * 0x20) >> 11) + (timer * OBJ.dz / 0x40);
       obj_s0->y1.n =
-          obj->y1.n + (OBJ.todo_x28 * rsin(timer * 0x20) >> 11) + (timer * OBJ.dy / 0x40);
+          obj->y1.n + (OBJ.wobbleY * rsin(timer * 0x20) >> 11) + (timer * OBJ.dy / 0x40);
       UpdateObjAnimation(obj_s0);
       AddObjPrim6(gGraphicsPtr->ot, obj_s0, 0);
 
@@ -2072,7 +2072,7 @@ void Objf184_Avalanche_FX1(Object *obj) {
       boulder->z1.n = obj->z1.n;
       boulder->y1.n = obj->y1.n + CV(3.0);
       boulder->d.objf211.todo_x24 = 0x180;
-      boulder->d.objf211.todo_x4c = 0;
+      boulder->d.objf211.scale = 0;
       boulder->d.objf211.rotY = 0;
       boulder->d.objf211.rotZ = 0;
       boulder->d.objf211.rotX = 0;
@@ -2120,7 +2120,7 @@ void Objf184_Avalanche_FX1(Object *obj) {
       gCameraRotation.vy += 0x10;
 
       boulder = OBJ.boulder;
-      boulder->d.objf211.todo_x4c = OBJ.timer * 3;
+      boulder->d.objf211.scale = OBJ.timer * 3;
       boulder->d.objf211.rotY += 12;
       boulder->d.objf211.rotZ -= 7;
       boulder->d.objf211.rotX += 3;
@@ -2161,13 +2161,13 @@ void Objf184_Avalanche_FX1(Object *obj) {
 
    case 3:
       boulder = OBJ.boulder;
-      boulder->d.objf211.todo_x4c = 0x10e - OBJ.todo_x26 / 3;
+      boulder->d.objf211.scale = 0x10e - OBJ.rise / 3;
       boulder->d.objf211.rotY += 12;
       boulder->d.objf211.rotZ -= 7;
       boulder->d.objf211.rotX += 3;
       boulder->x1.n = obj->x1.n;
       boulder->z1.n = obj->z1.n;
-      boulder->y1.n = obj->y1.n + CV(3.0) + OBJ.todo_x26 * 0x20;
+      boulder->y1.n = obj->y1.n + CV(3.0) + OBJ.rise * 0x20;
 
       gCameraRotation.vx += (DEG(90) - gCameraRotation.vx) >> 5;
       gCameraRotation.vy += DEG(1.40625);
@@ -2175,15 +2175,15 @@ void Objf184_Avalanche_FX1(Object *obj) {
       gCameraPos.vz = -(boulder->z1.n >> 3);
       gCameraPos.vy = boulder->y1.n >> 3;
 
-      OBJ.todo_x26 += 2;
-      if (OBJ.todo_x26 == 180) {
-         OBJ.todo_x2c = 45;
+      OBJ.rise += 2;
+      if (OBJ.rise == 180) {
+         OBJ.fallTimer = 45;
          obj_a0 = GetUnitSpriteAtPosition(gTargetZ, gTargetX);
          OBJ.dx = obj_a0->x1.n - obj->x1.n;
          OBJ.dz = obj_a0->z1.n - obj->z1.n;
          dy = boulder->y1.n - obj_a0->y1.n;
-         OBJ.todo_x2a = dy;
-         OBJ.todo_x38 = dy;
+         OBJ.dropHeight = dy;
+         OBJ.dropSpan = dy;
          obj->x1.n = obj_a0->x1.n;
          obj->z1.n = obj_a0->z1.n;
          obj->state++;
@@ -2192,15 +2192,15 @@ void Objf184_Avalanche_FX1(Object *obj) {
 
    case 4:
       boulder = OBJ.boulder;
-      boulder->d.objf211.todo_x4c = 0x10e - OBJ.todo_x26 / 3;
+      boulder->d.objf211.scale = 0x10e - OBJ.rise / 3;
       boulder->d.objf211.rotY += 12;
       boulder->d.objf211.rotZ -= 7;
       boulder->d.objf211.rotX += 3;
-      OBJ.todo_x34 = (OBJ.dx * (OBJ.todo_x38 - OBJ.todo_x3a)) / OBJ.todo_x38;
-      OBJ.todo_x36 = (OBJ.dz * (OBJ.todo_x38 - OBJ.todo_x3a)) / OBJ.todo_x38;
-      OBJ.todo_x3a = OBJ.todo_x2a * rcos((0x2d - OBJ.todo_x2c) * 0x1a) / ONE;
-      boulder->y1.n = obj->y1.n + OBJ.todo_x3a;
-      OBJ.todo_x26 -= 4;
+      OBJ.xOfs_unused = (OBJ.dx * (OBJ.dropSpan - OBJ.fallOfs)) / OBJ.dropSpan;
+      OBJ.zOfs_unused = (OBJ.dz * (OBJ.dropSpan - OBJ.fallOfs)) / OBJ.dropSpan;
+      OBJ.fallOfs = OBJ.dropHeight * rcos((0x2d - OBJ.fallTimer) * 0x1a) / ONE;
+      boulder->y1.n = obj->y1.n + OBJ.fallOfs;
+      OBJ.rise -= 4;
       AddObjPrim6(gGraphicsPtr->ot, boulder, 0);
 
       gCameraPos.vx = -(boulder->x1.n >> 3);
@@ -2208,10 +2208,10 @@ void Objf184_Avalanche_FX1(Object *obj) {
       gCameraPos.vy = boulder->y1.n >> 3;
       gCameraRotation.vy += DEG(1.40625);
 
-      OBJ.todo_x2c--;
-      if (OBJ.todo_x2c == -1) {
+      OBJ.fallTimer--;
+      if (OBJ.fallTimer == -1) {
          obj->state++;
-      } else if (OBJ.todo_x2c == 6) {
+      } else if (OBJ.fallTimer == 6) {
          gSignal3 = 1;
       }
       break;
@@ -2432,9 +2432,9 @@ void Objf191_MagicArrow_Arrow(Object *obj) {
       if (OBJ.clut_unused == CLUT_NULL) {
          OBJ.clut_unused = CLUT_REDS;
       }
-      OBJ.todo_x26 = 0x280 - rand() % 0x500;
-      OBJ.todo_x28 = 0x180 + rand() % 0x180;
-      OBJ.todo_x2a = 0x280 - rand() % 0x500;
+      OBJ.wobbleX = 0x280 - rand() % 0x500;
+      OBJ.wobbleY = 0x180 + rand() % 0x180;
+      OBJ.wobbleZ = 0x280 - rand() % 0x500;
       obj->state++;
       break;
 
@@ -2446,18 +2446,18 @@ void Objf191_MagicArrow_Arrow(Object *obj) {
 
       timer = OBJ.timer;
       sprite->d.sprite.coords[0].x =
-          obj->x1.n + (OBJ.todo_x26 * rsin(timer * 0x40) >> 12) + timer * OBJ.dx / 0x20;
+          obj->x1.n + (OBJ.wobbleX * rsin(timer * 0x40) >> 12) + timer * OBJ.dx / 0x20;
       sprite->d.sprite.coords[0].z =
-          obj->z1.n + (OBJ.todo_x2a * rsin(timer * 0x40) >> 12) + timer * OBJ.dz / 0x20;
+          obj->z1.n + (OBJ.wobbleZ * rsin(timer * 0x40) >> 12) + timer * OBJ.dz / 0x20;
       sprite->d.sprite.coords[0].y =
-          obj->y1.n + (OBJ.todo_x28 * rsin(timer * 0x40) >> 12) + timer * OBJ.dy / 0x20;
+          obj->y1.n + (OBJ.wobbleY * rsin(timer * 0x40) >> 12) + timer * OBJ.dy / 0x20;
 
       sprite->d.sprite.coords[1].x =
-          obj->x1.n + (OBJ.todo_x26 * rsin((timer + 2) * 0x40) >> 12) + (timer + 2) * OBJ.dx / 0x20;
+          obj->x1.n + (OBJ.wobbleX * rsin((timer + 2) * 0x40) >> 12) + (timer + 2) * OBJ.dx / 0x20;
       sprite->d.sprite.coords[1].z =
-          obj->z1.n + (OBJ.todo_x2a * rsin((timer + 2) * 0x40) >> 12) + (timer + 2) * OBJ.dz / 0x20;
+          obj->z1.n + (OBJ.wobbleZ * rsin((timer + 2) * 0x40) >> 12) + (timer + 2) * OBJ.dz / 0x20;
       sprite->d.sprite.coords[1].y =
-          obj->y1.n + (OBJ.todo_x28 * rsin((timer + 2) * 0x40) >> 12) + (timer + 2) * OBJ.dy / 0x20;
+          obj->y1.n + (OBJ.wobbleY * rsin((timer + 2) * 0x40) >> 12) + (timer + 2) * OBJ.dy / 0x20;
 
       sprite->d.sprite.coords[2].x = sprite->d.sprite.coords[0].x;
       sprite->d.sprite.coords[2].z = sprite->d.sprite.coords[0].z;
@@ -2481,18 +2481,18 @@ void Objf191_MagicArrow_Arrow(Object *obj) {
             a = timer - (i + 1);
 
             sprite->d.sprite.coords[0].x =
-                obj->x1.n + (OBJ.todo_x26 * rsin(a * 0x40) >> 12) + a * OBJ.dx / 0x20;
+                obj->x1.n + (OBJ.wobbleX * rsin(a * 0x40) >> 12) + a * OBJ.dx / 0x20;
             sprite->d.sprite.coords[0].z =
-                obj->z1.n + (OBJ.todo_x2a * rsin(a * 0x40) >> 12) + a * OBJ.dz / 0x20;
+                obj->z1.n + (OBJ.wobbleZ * rsin(a * 0x40) >> 12) + a * OBJ.dz / 0x20;
             sprite->d.sprite.coords[0].y =
-                obj->y1.n + (OBJ.todo_x28 * rsin(a * 0x40) >> 12) + a * OBJ.dy / 0x20;
+                obj->y1.n + (OBJ.wobbleY * rsin(a * 0x40) >> 12) + a * OBJ.dy / 0x20;
 
             sprite->d.sprite.coords[1].x =
-                obj->x1.n + (OBJ.todo_x26 * rsin((a + 2) * 0x40) >> 12) + (a + 2) * OBJ.dx / 0x20;
+                obj->x1.n + (OBJ.wobbleX * rsin((a + 2) * 0x40) >> 12) + (a + 2) * OBJ.dx / 0x20;
             sprite->d.sprite.coords[1].z =
-                obj->z1.n + (OBJ.todo_x2a * rsin((a + 2) * 0x40) >> 12) + (a + 2) * OBJ.dz / 0x20;
+                obj->z1.n + (OBJ.wobbleZ * rsin((a + 2) * 0x40) >> 12) + (a + 2) * OBJ.dz / 0x20;
             sprite->d.sprite.coords[1].y =
-                obj->y1.n + (OBJ.todo_x28 * rsin((a + 2) * 0x40) >> 12) + (a + 2) * OBJ.dy / 0x20;
+                obj->y1.n + (OBJ.wobbleY * rsin((a + 2) * 0x40) >> 12) + (a + 2) * OBJ.dy / 0x20;
 
             sprite->d.sprite.coords[2].x = sprite->d.sprite.coords[0].x;
             sprite->d.sprite.coords[2].z = sprite->d.sprite.coords[0].z;

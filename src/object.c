@@ -569,8 +569,8 @@ void AddObjPrim6(u32 *ot, Object *obj, s32 useMapElevation) {
       obj->vec.vz = obj->z1.n >> 3;
 
       if (useMapElevation) {
-         if ((obj->x1.s.hi >= D_80122E28) && (obj->x1.s.hi <= gMapSizeX + D_80122E28 - 1) &&
-             (obj->z1.s.hi >= D_80122E2C) && (obj->z1.s.hi <= gMapSizeZ + D_80122E2C - 1)) {
+         if ((obj->x1.s.hi >= gMapViewOriginX) && (obj->x1.s.hi <= gMapSizeX + gMapViewOriginX - 1) &&
+             (obj->z1.s.hi >= gMapViewOriginZ) && (obj->z1.s.hi <= gMapSizeZ + gMapViewOriginZ - 1)) {
             obj->vec.vy = OBJ_TILE_MODEL(obj).vertices[0].vy;
             obj->y1.n = -(obj->vec.vy << 3);
          }
@@ -793,7 +793,7 @@ void RenderUnitSprite(u32 *ot, Object *sprite, s32 useMapElevation) {
    if (IsSpriteOutsideVisibleRange(sprite)) {
 #ifdef PC_DEBUG_SPRITE_LOG
       { extern void PC_DebugSpriteLog(int, int, int, int, int, int, int, int, int, int, int, int);
-        PC_DebugSpriteLog(sprite->x1.s.hi, sprite->z1.s.hi, D_80122E28, D_80122E2C,
+        PC_DebugSpriteLog(sprite->x1.s.hi, sprite->z1.s.hi, gMapViewOriginX, gMapViewOriginZ,
                           gMapSizeX, gMapSizeZ, 1, sprite->d.sprite.gfxIdx,
                           -9999, -9999, -9999, -9999); }
 #endif
@@ -905,7 +905,7 @@ void RenderUnitSprite(u32 *ot, Object *sprite, s32 useMapElevation) {
 
 #ifdef PC_DEBUG_SPRITE_LOG
    { extern void PC_DebugSpriteLog(int, int, int, int, int, int, int, int, int, int, int, int);
-     PC_DebugSpriteLog(sprite->x1.s.hi, sprite->z1.s.hi, D_80122E28, D_80122E2C,
+     PC_DebugSpriteLog(sprite->x1.s.hi, sprite->z1.s.hi, gMapViewOriginX, gMapViewOriginZ,
                        gMapSizeX, gMapSizeZ, 0, sprite->d.sprite.gfxIdx,
                        poly->x0, poly->y0, otz, (int)otIdx); }
 #endif
@@ -1290,8 +1290,8 @@ void RenderUnitHelpers(u32 *ot_unused, Object *unitSprite, u8 team, u8 done, u8 
    s16 spin;
    s16 slot = 0;
 
-   if ((unitSprite->x1.s.hi >= D_80122E28) && (unitSprite->x1.s.hi <= gMapSizeX + D_80122E28 - 1) &&
-       (unitSprite->z1.s.hi >= D_80122E2C) && (unitSprite->z1.s.hi <= gMapSizeZ + D_80122E2C - 1)) {
+   if ((unitSprite->x1.s.hi >= gMapViewOriginX) && (unitSprite->x1.s.hi <= gMapSizeX + gMapViewOriginX - 1) &&
+       (unitSprite->z1.s.hi >= gMapViewOriginZ) && (unitSprite->z1.s.hi <= gMapSizeZ + gMapViewOriginZ - 1)) {
 
       if (poisoned) {
          RenderStatusEffectText(gGraphicsPtr->ot, unitSprite, 0, slot++);

@@ -199,8 +199,8 @@ void UpdateInput(void) {
    }
 }
 
-s32 D_801231D0;
-s32 D_801231D4;
+s32 gCameraEdgeBiasX;
+s32 gCameraEdgeBiasZ;
 s32 D_801231D8; // unused
 
 void CenterCamera(u8 cursor) {
@@ -209,29 +209,29 @@ void CenterCamera(u8 cursor) {
    if ((!gPlayerControlSuppressed && !gIsEnemyTurn && !gMapCursorSuppressed) || cursor) {
 
       if (gMapCursorX > (gMapMaxX - 1) - gMapMarginX) {
-         D_801231D0 = (gMapMaxX - gMapCursorX) - gMapMarginX;
+         gCameraEdgeBiasX = (gMapMaxX - gMapCursorX) - gMapMarginX;
       }
       if (gMapCursorX < gMapMinX + gMapMarginX + 1) {
-         D_801231D0 = (gMapMinX + gMapMarginX) - gMapCursorX;
+         gCameraEdgeBiasX = (gMapMinX + gMapMarginX) - gMapCursorX;
       }
       if (gMapCursorZ > (gMapMaxZ - 1) - gMapMarginZ) {
-         D_801231D4 = (gMapMaxZ - gMapCursorZ) - gMapMarginZ;
+         gCameraEdgeBiasZ = (gMapMaxZ - gMapCursorZ) - gMapMarginZ;
       }
       if (gMapCursorZ < gMapMinZ + gMapMarginZ + 1) {
-         D_801231D4 = (gMapMinZ + gMapMarginZ) - gMapCursorZ;
+         gCameraEdgeBiasZ = (gMapMinZ + gMapMarginZ) - gMapCursorZ;
       }
 
-      dstX = (-D_80122E28 - (gMapSizeX / 2) + D_801231D0) * 32;
-      dstZ = (-D_80122E2C - (gMapSizeZ / 2) + D_801231D4) * 32;
+      dstX = (-gMapViewOriginX - (gMapSizeX / 2) + gCameraEdgeBiasX) * 32;
+      dstZ = (-gMapViewOriginZ - (gMapSizeZ / 2) + gCameraEdgeBiasZ) * 32;
 
       gCameraPos.vx += (dstX - gCameraPos.vx) >> 2;
       gCameraPos.vz += (dstZ - gCameraPos.vz) >> 2;
    } else {
-      D_80122E28 = ((-gMapSizeX / 2) * 32 - gCameraPos.vx) / 32;
-      D_80122E2C = ((-gMapSizeZ / 2) * 32 - gCameraPos.vz) / 32;
+      gMapViewOriginX = ((-gMapSizeX / 2) * 32 - gCameraPos.vx) / 32;
+      gMapViewOriginZ = ((-gMapSizeZ / 2) * 32 - gCameraPos.vz) / 32;
 
-      D_80122E28 = CLAMP(D_80122E28, gMapMinX, (gMapMaxX + 1) - gMapSizeX);
-      D_80122E2C = CLAMP(D_80122E2C, gMapMinZ, (gMapMaxZ + 1) - gMapSizeZ);
+      gMapViewOriginX = CLAMP(gMapViewOriginX, gMapMinX, (gMapMaxX + 1) - gMapSizeX);
+      gMapViewOriginZ = CLAMP(gMapViewOriginZ, gMapMinZ, (gMapMaxZ + 1) - gMapSizeZ);
    }
 }
 
@@ -293,22 +293,22 @@ void UpdatePlayerCamera(void) {
       mapYRotationSpeed = -0x80;
    }
 
-   if (gMapCursorX <= gMapMarginX + D_80122E28) {
-      D_80122E28 = gMapCursorX - gMapMarginX;
+   if (gMapCursorX <= gMapMarginX + gMapViewOriginX) {
+      gMapViewOriginX = gMapCursorX - gMapMarginX;
    }
-   if (gMapCursorZ <= gMapMarginZ + D_80122E2C) {
-      D_80122E2C = gMapCursorZ - gMapMarginZ;
+   if (gMapCursorZ <= gMapMarginZ + gMapViewOriginZ) {
+      gMapViewOriginZ = gMapCursorZ - gMapMarginZ;
    }
    // Odd use of temps here; better match? (tmp = 1 also works)
-   if (gMapCursorX >= (gMapSizeX + D_80122E28) - (tmp = gMapMarginX + 1)) {
-      D_80122E28 = (gMapCursorX - gMapSizeX) + tmp;
+   if (gMapCursorX >= (gMapSizeX + gMapViewOriginX) - (tmp = gMapMarginX + 1)) {
+      gMapViewOriginX = (gMapCursorX - gMapSizeX) + tmp;
    }
-   if (gMapCursorZ >= (gMapSizeZ + D_80122E2C) - (tmp = gMapMarginZ + 1)) {
-      D_80122E2C = (gMapCursorZ - gMapSizeZ) + tmp;
+   if (gMapCursorZ >= (gMapSizeZ + gMapViewOriginZ) - (tmp = gMapMarginZ + 1)) {
+      gMapViewOriginZ = (gMapCursorZ - gMapSizeZ) + tmp;
    }
 
-   D_80122E28 = CLAMP(D_80122E28, gMapMinX, (gMapMaxX + 1) - gMapSizeX);
-   D_80122E2C = CLAMP(D_80122E2C, gMapMinZ, (gMapMaxZ + 1) - gMapSizeZ);
+   gMapViewOriginX = CLAMP(gMapViewOriginX, gMapMinX, (gMapMaxX + 1) - gMapSizeX);
+   gMapViewOriginZ = CLAMP(gMapViewOriginZ, gMapMinZ, (gMapMaxZ + 1) - gMapSizeZ);
 
    RotMatrix(&gCameraRotation, &gCameraMatrix);
    TransMatrix(&gCameraMatrix, &gCameraZoom);
@@ -760,7 +760,7 @@ void Objf587_BattleEnemyEvent(Object *obj) {
             fx->functionIndex = OBJF_MID_BATTLE_TRANSFORMATION;
             fx->x1.n = sprite->x1.n;
             fx->z1.n = sprite->z1.n;
-            gState.D_801405A4 = 0;
+            gState.transformFxDone = 0;
             SetupBattleMsgBox(UNIT_KANE, PORTRAIT_KANE_CURSED, 24);
             obj->state2++;
             OBJ.timer = 200;
@@ -773,7 +773,7 @@ void Objf587_BattleEnemyEvent(Object *obj) {
          }
          if (gState.msgFinished) {
             PerformAudioCommand(AUDIO_CMD_PLAY_SFX(231));
-            gState.D_801405A4 = 1;
+            gState.transformFxDone = 1;
             PerformAudioCommand(AUDIO_CMD_PREPARE_XA(28));
             SetupBattleMsgBox(UNIT_XENO, PORTRAIT_XENO, 25);
             PerformAudioCommand(AUDIO_CMD_PLAY_SEQ(11));
@@ -2921,11 +2921,11 @@ void Objf425_BattleOptions(Object *obj) {
       case 0:
          obj1 = Obj_GetUnused();
          obj1->functionIndex = OBJF_FILE_SAVE_MENU_IBS;
-         gState.D_8014053E = 0;
+         gState.subObjDone = 0;
          obj->state2++;
          break;
       case 1:
-         if (gState.D_8014053E != 0) {
+         if (gState.subObjDone != 0) {
             obj->state = 99;
             obj->state2 = 0;
          }
@@ -2940,11 +2940,11 @@ void Objf425_BattleOptions(Object *obj) {
       case 0:
          obj1 = Obj_GetUnused();
          obj1->functionIndex = OBJF_FILE_LOAD_MENU_IBS;
-         gState.D_8014053E = 0;
+         gState.subObjDone = 0;
          obj->state2++;
          break;
       case 1:
-         if (gState.D_8014053E != 0) {
+         if (gState.subObjDone != 0) {
             obj->state = 99;
             obj->state2 = 0;
          }
@@ -3278,7 +3278,7 @@ void Objf013_BattleMgr(Object *obj) {
          if (gState.mapNum == 8) {
             gPlayerControlSuppressed = 0;
             OBJ.timer = 1;
-            OBJ.todo_x2d = 1;
+            OBJ.followUnit = 1;
             obj->state = 1;
             obj->state2 = 0;
          }
@@ -3317,7 +3317,7 @@ void Objf013_BattleMgr(Object *obj) {
          iUnit++;
          if (iUnit == 40) {
             if (gState.mapNum != 8) {
-               OBJ.todo_x2d = 0;
+               OBJ.followUnit = 0;
                gMapSizeX = s_origMapSizeX_80123228;
                gMapSizeZ = s_origMapSizeZ_8012322c;
                iUnit = 1;
@@ -3330,7 +3330,7 @@ void Objf013_BattleMgr(Object *obj) {
                return;
             } else {
                iUnit = 0;
-               gState.D_80140859 = 1;
+               gState.demoBattleOver = 1;
             }
          }
          if (iUnit == 39) {
@@ -3372,7 +3372,7 @@ void Objf013_BattleMgr(Object *obj) {
       OBJ.unit = unit;
       OBJ.unitSprite = obj1;
       unitSprite = obj1;
-      OBJ.todo_x2d = 1;
+      OBJ.followUnit = 1;
       obj->state++;
       break;
 
@@ -3525,7 +3525,7 @@ void Objf013_BattleMgr(Object *obj) {
       break;
 
    case 8:
-      OBJ.todo_x2d = 0;
+      OBJ.followUnit = 0;
       ClearBlueMovementGrid();
       if (gAiActionType == 0) {
          if (gDir_80123470 == 0xffff) {
@@ -3976,7 +3976,7 @@ void Objf013_BattleMgr(Object *obj) {
        * mirror that exactly (read-0, NOT skip -- the camera still eases toward origin)
        * so the math stays bit-identical to the validated build. Portable replacement
        * for the x86-32 fault decoder. NULL sites #1-3; see exchange/52 Phase 2.3 Step A. */
-      if (OBJ.todo_x2d) {
+      if (OBJ.followUnit) {
          s32 sx = unitSprite ? unitSprite->x1.n : 0;
          s32 sz = unitSprite ? unitSprite->z1.n : 0;
          s32 sy = unitSprite ? unitSprite->y1.n : 0;
@@ -3985,7 +3985,7 @@ void Objf013_BattleMgr(Object *obj) {
          gCameraPos.vy += (((sy + CV(1.0)) >> 3) - gCameraPos.vy) >> 4;
       }
 #else
-      if (OBJ.todo_x2d) {
+      if (OBJ.followUnit) {
          gCameraPos.vx += (-(unitSprite->x1.n >> 3) - gCameraPos.vx) >> 4;
          gCameraPos.vz += (-(unitSprite->z1.n >> 3) - gCameraPos.vz) >> 4;
          gCameraPos.vy += (((unitSprite->y1.n + CV(1.0)) >> 3) - gCameraPos.vy) >> 4;

@@ -308,7 +308,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 0;
+               gState.tavernVisit = 0;
                obj->state = 99;
                obj->state2 = 0;
                break;
@@ -398,7 +398,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 1;
+               gState.tavernVisit = 1;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d05) {
@@ -443,7 +443,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 2;
+               gState.tavernVisit = 2;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -567,7 +567,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 3;
+               gState.tavernVisit = 3;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -600,7 +600,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 4;
+               gState.tavernVisit = 4;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -635,7 +635,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 4;
+               gState.tavernVisit = 4;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -759,7 +759,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 5;
+               gState.tavernVisit = 5;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -832,7 +832,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 6;
+               gState.tavernVisit = 6;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -867,7 +867,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 7;
+               gState.tavernVisit = 7;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -950,7 +950,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 8;
+               gState.tavernVisit = 8;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -992,7 +992,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 8;
+               gState.tavernVisit = 8;
                obj->state = 99;
                obj->state2 = 0;
                break;
@@ -1097,7 +1097,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 8;
+               gState.tavernVisit = 8;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d05) {
@@ -1140,7 +1140,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 9;
+               gState.tavernVisit = 9;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -1175,7 +1175,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 10;
+               gState.tavernVisit = 10;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -1248,7 +1248,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 11;
+               gState.tavernVisit = 11;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
@@ -1281,7 +1281,7 @@ s32 Objf580_Town(Object *obj) {
             if (gWindowChoice.raw == 0x3d03) {
                gWindowActiveIdx = 0;
                gState.state7 = STATE_TAVERN;
-               gState.D_80140530 = 12;
+               gState.tavernVisit = 12;
                obj->state = 99;
                obj->state2 = 0;
             } else if (gWindowChoice.raw == 0x3d04) {
