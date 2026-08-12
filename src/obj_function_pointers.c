@@ -52,8 +52,8 @@ void Objf072_FadeFromWhite(Object *);
 void Objf073_FadeToWhite(Object *);
 void Objf074_FadeInSprite(Object *);
 void Objf075_FadeOutSprite(Object *);
-void Objf076_Circles_TBD(Object *);
-void Objf077_Circle_TBD(Object *);
+void Objf076_RingBurstOnUnit(Object *);
+void Objf077_ExpandingRing(Object *);
 void Objf078_Damage_FX2(Object *);
 void Objf079_Slay_FX3(Object *);
 void Objf080_RomanFire_FX1(Object *);
@@ -93,18 +93,18 @@ void Objf115_Faerie_FX2(Object *);
 void Objf116_Faerie_Sparkle(Object *);
 void Objf117_Faerie_SparkleTrail(Object *);
 void Objf118_Faerie_Target(Object *);
-void Objf119_Fx_TBD(Object *);
+void Objf119_RadialFxSprite(Object *);
 void Objf120_Fx_TBD(Object *);
 void Objf121_Fx_TBD(Object *);
 void Objf122_DarkFire_FX1(Object *);
 void Objf128_ThunderBall_FX2(Object *);
 void Objf129_ThunderBall_FX3(Object *);
-void Objf130_Fx_TBD(Object *);
+void Objf130_TorusSweepOnUnit(Object *);
 void Objf131_SlayUnit(Object *);
-void Objf132_Etc_Fx_TBD(Object *);
-void Objf133_Fx_TBD(Object *);
-void Objf137_Fx_TBD(Object *);
-void Objf141_Fx_TBD(Object *);
+void Objf132_EngulfUnit(Object *);
+void Objf133_FlameRingEmitter(Object *);
+void Objf137_LightningRingEmitter(Object *);
+void Objf141_ExplosionRingEmitter(Object *);
 void Objf144_HolyLightning_FX2(Object *);
 void Objf145_HolyLightning_ElectricOrb(Object *);
 void Objf146_HolyLightning_FX3(Object *);
@@ -570,9 +570,9 @@ void Objf795_EventFade(Object *);
 void Objf796_MainMenu(Object *);
 void Objf797_Map47_Scn14_Dusk(Object *);
 void Objf798_ResetInputState(Object *);
-void Objf801_Fx_TBD(Object *);
-void Objf802_Fx_TBD(Object *);
-void Objf803_Fx_TBD(Object *);
+void Objf801_FlameRingSprite(Object *);
+void Objf802_ExplosionRingSprite(Object *);
+void Objf803_LightningRingSprite(Object *);
 void Objf_Unk_8006183c(Object *);
 void Objf_Unk_80080924(Object *);
 void Objf_Unk_80087b58(Object *);
@@ -657,8 +657,8 @@ ObjFunction gObjFunctionPointers[804] = {
     [73] = Objf073_FadeToWhite,
     [74] = Objf074_FadeInSprite,
     [75] = Objf075_FadeOutSprite,
-    [76] = Objf076_Circles_TBD,
-    [77] = Objf077_Circle_TBD,
+    [76] = Objf076_RingBurstOnUnit,
+    [77] = Objf077_ExpandingRing,
     [78] = Objf078_Damage_FX2,
     [79] = Objf079_Slay_FX3,
     [80] = Objf080_RomanFire_FX1,
@@ -700,7 +700,7 @@ ObjFunction gObjFunctionPointers[804] = {
     [116] = Objf116_Faerie_Sparkle,
     [117] = Objf117_Faerie_SparkleTrail,
     [118] = Objf118_Faerie_Target,
-    [119] = Objf119_Fx_TBD,
+    [119] = Objf119_RadialFxSprite,
     [120] = Objf120_Fx_TBD,
     [121] = Objf121_Fx_TBD,
     [122] = Objf122_DarkFire_FX1,
@@ -711,19 +711,19 @@ ObjFunction gObjFunctionPointers[804] = {
     [127] = (ObjFunction)NULL,
     [128] = Objf128_ThunderBall_FX2,
     [129] = Objf129_ThunderBall_FX3,
-    [130] = Objf130_Fx_TBD,
+    [130] = Objf130_TorusSweepOnUnit,
     [131] = Objf131_SlayUnit,
-    [132] = Objf132_Etc_Fx_TBD,
-    [133] = Objf133_Fx_TBD,
-    [134] = Objf132_Etc_Fx_TBD,
+    [132] = Objf132_EngulfUnit,
+    [133] = Objf133_FlameRingEmitter,
+    [134] = Objf132_EngulfUnit,
     [135] = (ObjFunction)NULL,
-    [136] = Objf132_Etc_Fx_TBD,
-    [137] = Objf137_Fx_TBD,
-    [138] = Objf132_Etc_Fx_TBD,
+    [136] = Objf132_EngulfUnit,
+    [137] = Objf137_LightningRingEmitter,
+    [138] = Objf132_EngulfUnit,
     [139] = (ObjFunction)NULL,
-    [140] = Objf132_Etc_Fx_TBD,
-    [141] = Objf141_Fx_TBD,
-    [142] = Objf132_Etc_Fx_TBD,
+    [140] = Objf132_EngulfUnit,
+    [141] = Objf141_ExplosionRingEmitter,
+    [142] = Objf132_EngulfUnit,
     [143] = (ObjFunction)NULL,
     [144] = Objf144_HolyLightning_FX2,
     [145] = Objf145_HolyLightning_ElectricOrb,
@@ -1380,9 +1380,9 @@ ObjFunction gObjFunctionPointers[804] = {
     [796] = Objf796_MainMenu,
     [797] = Objf797_Map47_Scn14_Dusk,
     [798] = Objf798_ResetInputState,
-    [799] = Objf132_Etc_Fx_TBD,
-    [800] = Objf132_Etc_Fx_TBD,
-    [801] = Objf801_Fx_TBD,
-    [802] = Objf802_Fx_TBD,
-    [803] = Objf803_Fx_TBD,
+    [799] = Objf132_EngulfUnit,
+    [800] = Objf132_EngulfUnit,
+    [801] = Objf801_FlameRingSprite,
+    [802] = Objf802_ExplosionRingSprite,
+    [803] = Objf803_LightningRingSprite,
 };

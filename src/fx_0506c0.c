@@ -1,3 +1,25 @@
+/* Battle unit-hit effects and screen fades (segment 0x506c0).
+ *
+ * Object handlers for what happens ON a unit when spells and attacks land, plus the
+ * whole-screen fades. Groups:
+ *   - Screen fades (Objf070-075): to/from black and white, plus sprite fade in/out and the
+ *     stretch-warp (Objf062) used by teleport-style disappearances.
+ *   - Ring bursts (Objf076/077, Objf130): expanding ring sprites / a swept quad torus drawn
+ *     around the target unit, both signalling completion via gSignal3.
+ *   - Damage/slay presentation (Objf078/079, Objf131, Objf149): flashing unit sprite, the
+ *     slain-unit stretch-and-vanish, and the generic flash used while damage numbers show.
+ *   - The ENGULF family (Objf132_EngulfUnit, one handler for indices 132-142/799/800):
+ *     hide the real sprite, draw two fading overlay copies, surround the unit with an
+ *     elemental ring of particles, pop the damage number, then either restore the sprite
+ *     (spell survived: 132/136/140/799) or stretch-fade it away (slain: 134/138/142/800).
+ *     Elements: flame (132/134), lightning (136/138 and the 799/800 pair), explosion
+ *     (140/142). Spawn sites index it as base + endingFxType. Emitters Objf133/137/141
+ *     spawn 30 orbiting particles each (Objf801/802/803: flame/explosion/lightning anims).
+ *   - Melee impact dressing (Objf201-206, Objf213-215): unit struck, blocking, blocking
+ *     impact particles, blood spurts, dust clouds.
+ *   - Objf119_RadialFxSprite: general orbiting burst particle with a selectable animation
+ *     (impact/explosion/puff/sparkle/flame/lightning/orb), used by other effect drivers.
+ */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -6,7 +28,7 @@
 
 #undef OBJF
 #define OBJF 119
-void Objf119_Fx_TBD(Object *obj) {
+void Objf119_RadialFxSprite(Object *obj) {
    // Spawned by: ?->182->183->119
 
    static s16 impactAnimData[18] = {4, GFX_IMPACT_1, 2, GFX_IMPACT_2, 2, GFX_IMPACT_3,
@@ -459,7 +481,7 @@ void Objf071_FadeToBlack(Object *obj) {
 
 #undef OBJF
 #define OBJF 076
-void Objf076_Circles_TBD(Object *obj) {
+void Objf076_RingBurstOnUnit(Object *obj) {
    Object *unitSprite, *circle;
 
    switch (obj->state) {
@@ -497,7 +519,7 @@ void Objf076_Circles_TBD(Object *obj) {
    // fallthrough
    case 1:
       circle = Obj_GetUnused();
-      circle->functionIndex = OBJF_CIRCLE;
+      circle->functionIndex = OBJF_EXPANDING_RING;
       circle->x1.n = obj->x1.n;
       circle->z1.n = obj->z1.n;
       circle->y1.n = obj->y1.n;
@@ -520,7 +542,7 @@ void Objf076_Circles_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 077
-void Objf077_Circle_TBD(Object *obj) {
+void Objf077_ExpandingRing(Object *obj) {
    Object *ringSprite;
    s16 a, b;
    s16 fade;
@@ -661,6 +683,10 @@ void Objf079_Slay_FX3(Object *obj) {
 
 #undef OBJF
 #define OBJF Unk8006183c
+/* UNREACHABLE: declared but absent from gObjFunctionPointers[], so no functionIndex can
+ * dispatch here -- a retail leftover. Mechanism (for the record): hides the real unit
+ * sprite and redraws it plus an enlarged translucent tinted copy (a selection/charge
+ * aura), until state 99 restores the sprite. Keeps its address name on purpose. */
 void Objf_Unk_8006183c(Object *obj) {
    Object *unitSprite, *fxSprite;
    Quad quad;
@@ -750,7 +776,7 @@ void Objf_Unk_8006183c(Object *obj) {
 
 #undef OBJF
 #define OBJF 802
-void Objf802_Fx_TBD(Object *obj) {
+void Objf802_ExplosionRingSprite(Object *obj) {
    static s16 explosionAnimData[26] = {7, GFX_EXPLOSION_1,  2, GFX_EXPLOSION_2,  2, GFX_EXPLOSION_3,
                                        2, GFX_EXPLOSION_4,  2, GFX_EXPLOSION_5,  2, GFX_EXPLOSION_6,
                                        2, GFX_EXPLOSION_7,  2, GFX_EXPLOSION_8,  2, GFX_EXPLOSION_9,
@@ -837,7 +863,7 @@ static s16 sLightningAnimData_800feafc[20] = {
 
 #undef OBJF
 #define OBJF 803
-void Objf803_Fx_TBD(Object *obj) {
+void Objf803_LightningRingSprite(Object *obj) {
    Object *sprite;
    s32 rnd1, rnd2;
 
@@ -900,7 +926,7 @@ void Objf803_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 801
-void Objf801_Fx_TBD(Object *obj) {
+void Objf801_FlameRingSprite(Object *obj) {
    Object *sprite;
    s32 rnd1, rnd2;
 
@@ -965,12 +991,12 @@ void Objf801_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 133
-void Objf133_Fx_TBD(Object *obj) {
+void Objf133_FlameRingEmitter(Object *obj) {
    Object *newObj;
 
    switch (obj->state) {
    case 0:
-      newObj = CreatePositionedObj(obj, OBJF_FX_TBD_801);
+      newObj = CreatePositionedObj(obj, OBJF_FLAME_RING_SPRITE);
       newObj->d.objf801.radius = OBJ.radius;
       newObj->d.objf801.todo_x2a = OBJ.todo_x2a;
       newObj->d.objf801.todo_x28 = OBJ.todo_x28;
@@ -990,12 +1016,12 @@ void Objf133_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 141
-void Objf141_Fx_TBD(Object *obj) {
+void Objf141_ExplosionRingEmitter(Object *obj) {
    Object *newObj;
 
    switch (obj->state) {
    case 0:
-      newObj = CreatePositionedObj(obj, OBJF_FX_TBD_802);
+      newObj = CreatePositionedObj(obj, OBJF_EXPLOSION_RING_SPRITE);
       newObj->d.objf802.radius = OBJ.radius;
       newObj->d.objf802.todo_x2a = OBJ.todo_x2a;
       newObj->d.objf802.todo_x28 = OBJ.todo_x28;
@@ -1015,12 +1041,12 @@ void Objf141_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 137
-void Objf137_Fx_TBD(Object *obj) {
+void Objf137_LightningRingEmitter(Object *obj) {
    Object *newObj;
 
    switch (obj->state) {
    case 0:
-      newObj = CreatePositionedObj(obj, OBJF_FX_TBD_803);
+      newObj = CreatePositionedObj(obj, OBJF_LIGHTNING_RING_SPRITE);
       newObj->d.objf803.radius = OBJ.radius;
       newObj->d.objf803.todo_x2a = OBJ.todo_x2a;
       newObj->d.objf803.todo_x28 = OBJ.todo_x28;
@@ -1040,13 +1066,17 @@ void Objf137_Fx_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 132
-/* 132, 134, 136, 138, 140, 142, 799, 800 */
-void Objf132_Etc_Fx_TBD(Object *obj) {
+/* One handler for the whole engulf family (table slots 132, 134, 136, 138, 140, 142, 799,
+ * 800 all point here; 135/139 are NULL slots -- the 139 case below is unreachable). See the
+ * file header for the element/outcome mapping. Spawners select a variant as
+ * OBJF_ENGULF_<element>_DAMAGE + endingFxType (e.g. Evil Stream FX2/FX3 spawn the flame pair
+ * with a red palette); no static spawn site for the 799/800 pair has been found. */
+void Objf132_EngulfUnit(Object *obj) {
    static struct {
       s16 clut, objf, radius, to_x28, to_x2a;
-   } fxInfo[3] = {{3, OBJF_FX_TBD_133, 0x70, 0x60, 0x100},
-                  {8, OBJF_FX_TBD_137, 0x80, 0x50, 0x100},
-                  {3, OBJF_FX_TBD_141, 0x70, 0x20, 0xaa}};
+   } fxInfo[3] = {{3, OBJF_FLAME_RING_EMITTER, 0x70, 0x60, 0x100},
+                  {8, OBJF_LIGHTNING_RING_EMITTER, 0x80, 0x50, 0x100},
+                  {3, OBJF_EXPLOSION_RING_EMITTER, 0x70, 0x20, 0xaa}};
 
    Object *unitSprite, *fxObj1, *fxObj2, *dmgObj;
    POLY_FT4 *poly;
@@ -1057,23 +1087,23 @@ void Objf132_Etc_Fx_TBD(Object *obj) {
    case 0:
 
       switch (obj->functionIndex) {
-      case OBJF_FX_TBD_132:
-      case OBJF_FX_TBD_134:
+      case OBJF_ENGULF_FLAME_DAMAGE:
+      case OBJF_ENGULF_FLAME_SLAY:
          i = 0;
          break;
 
-      case OBJF_FX_TBD_138:
-      case OBJF_FX_TBD_136:
-      case OBJF_FX_TBD_799:
-      case OBJF_FX_TBD_800:
+      case OBJF_ENGULF_LIGHTNING_SLAY:
+      case OBJF_ENGULF_LIGHTNING_DAMAGE:
+      case OBJF_ENGULF_LIGHTNING_DAMAGE_B:
+      case OBJF_ENGULF_LIGHTNING_SLAY_B:
          i = 1;
          break;
 
-      case OBJF_FX_TBD_142:
+      case OBJF_ENGULF_EXPLOSION_SLAY:
          i = 2;
          break;
 
-      case OBJF_FX_TBD_141:
+      case OBJF_EXPLOSION_RING_EMITTER:
       default:
          i = 2;
          break;
@@ -1145,8 +1175,8 @@ void Objf132_Etc_Fx_TBD(Object *obj) {
          dmgObj->x1.s.hi = obj->x1.s.hi;
          dmgObj->z1.s.hi = obj->z1.s.hi;
 
-         if (obj->functionIndex == OBJF_FX_TBD_132 || obj->functionIndex == OBJF_FX_TBD_136 ||
-             obj->functionIndex == OBJF_FX_TBD_140 || obj->functionIndex == OBJF_FX_TBD_799) {
+         if (obj->functionIndex == OBJF_ENGULF_FLAME_DAMAGE || obj->functionIndex == OBJF_ENGULF_LIGHTNING_DAMAGE ||
+             obj->functionIndex == OBJF_ENGULF_EXPLOSION_DAMAGE || obj->functionIndex == OBJF_ENGULF_LIGHTNING_DAMAGE_B) {
             unitSprite->d.sprite.hidden = 0;
          }
       } else if (OBJ.phase == 60) {
@@ -1154,8 +1184,8 @@ void Objf132_Etc_Fx_TBD(Object *obj) {
          fxObj2->functionIndex = OBJF_NULL;
          OBJ.phase = 0;
 
-         if (obj->functionIndex == OBJF_FX_TBD_132 || obj->functionIndex == OBJF_FX_TBD_136 ||
-             obj->functionIndex == OBJF_FX_TBD_140 || obj->functionIndex == OBJF_FX_TBD_799) {
+         if (obj->functionIndex == OBJF_ENGULF_FLAME_DAMAGE || obj->functionIndex == OBJF_ENGULF_LIGHTNING_DAMAGE ||
+             obj->functionIndex == OBJF_ENGULF_EXPLOSION_DAMAGE || obj->functionIndex == OBJF_ENGULF_LIGHTNING_DAMAGE_B) {
             obj->functionIndex = OBJF_NULL;
             gSignal3 = 1;
             return;
@@ -1172,15 +1202,15 @@ void Objf132_Etc_Fx_TBD(Object *obj) {
    case 2:
 
       switch (obj->functionIndex) {
-      case OBJF_FX_TBD_138:
+      case OBJF_ENGULF_LIGHTNING_SLAY:
          fadeSpeed = 8;
          stretchSpeed = 0xc0;
          break;
-      case OBJF_FX_TBD_134:
+      case OBJF_ENGULF_FLAME_SLAY:
          fadeSpeed = 12;
          stretchSpeed = 0xe0;
          break;
-      case OBJF_FX_TBD_139:
+      case OBJF_ENGULF_UNUSED_139:
          fadeSpeed = 8;
          stretchSpeed = 0xc0;
          break;
@@ -1575,7 +1605,7 @@ void Objf214_DustCloud(Object *obj) {
 
 #undef OBJF
 #define OBJF 130
-void Objf130_Fx_TBD(Object *obj) {
+void Objf130_TorusSweepOnUnit(Object *obj) {
    Object *sprite, *unitSprite;
    s32 i, j;
    s16 a, b, c, d, e; // TBD

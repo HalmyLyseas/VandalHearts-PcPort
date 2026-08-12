@@ -929,7 +929,7 @@ void Objf220_Explosion_FX2(Object *obj) {
       OBJ.todo_x24 += 0x24;
       if (OBJ.todo_x24 == 0x5e8) {
          obj_s6 = Obj_GetUnused();
-         obj_s6->functionIndex = OBJF_FX_TBD_132 + OBJ.endingFxType;
+         obj_s6->functionIndex = OBJF_ENGULF_FLAME_DAMAGE + OBJ.endingFxType;
          obj_s6->x1.n = obj->x1.n;
          obj_s6->z1.n = obj->z1.n;
       } else if (OBJ.todo_x24 >= 0x800) {
@@ -1120,7 +1120,7 @@ void Objf165_StoneShower_FX2(Object *obj) {
    case 2:
       if (OBJ.timer == 5) {
          endingFx = Obj_GetUnused();
-         endingFx->functionIndex = OBJF_FX_TBD_140 + OBJ.endingFxType;
+         endingFx->functionIndex = OBJF_ENGULF_EXPLOSION_DAMAGE + OBJ.endingFxType;
          endingFx->x1.s.hi = obj->x1.s.hi;
          endingFx->z1.s.hi = obj->z1.s.hi;
       }

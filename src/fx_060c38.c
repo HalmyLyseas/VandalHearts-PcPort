@@ -174,7 +174,7 @@ void Objf148_Fx_TBD(Object *obj) {
       case 1:
          if (--OBJ.timer == -1) {
             obj_v1 = Obj_GetUnused();
-            obj_v1->functionIndex = OBJF_FX_TBD_136 + OBJ.endingFxType;
+            obj_v1->functionIndex = OBJF_ENGULF_LIGHTNING_DAMAGE + OBJ.endingFxType;
             obj_v1->d.objf136.clut = OBJ.clut;
             obj_v1->x1.n = obj->x1.n;
             obj_v1->y1.n = obj->y1.n;
@@ -2014,7 +2014,7 @@ void Objf183_Fx_TBD(Object *obj) {
       OBJ.timer++;
       if (OBJ.timer == 60) {
          obj_s0 = Obj_GetUnused();
-         obj_s0->functionIndex = OBJF_FX_TBD_119;
+         obj_s0->functionIndex = OBJF_RADIAL_FX_SPRITE;
          obj_s0->d.objf119.type = 0;
          obj_s0->d.objf119.boxIdx = 3;
          obj_s0->d.objf119.clut = CLUT_BLUES;
@@ -2281,7 +2281,7 @@ void Objf186_Fx_TBD(Object *obj) {
       obj->z1.n = unitSprite->z1.n;
       obj->y1.n = unitSprite->y1.n;
 
-      fx = CreatePositionedObj(obj, OBJF_FX_TBD_140 + OBJ.fxType);
+      fx = CreatePositionedObj(obj, OBJF_ENGULF_EXPLOSION_DAMAGE + OBJ.fxType);
       fx->d.objf140.clut = CLUT_REDS;
 
       fx = Obj_GetUnused();

@@ -3206,7 +3206,7 @@ void Objf734_Fx_TBD(Object *obj) {
 
    case 3:
       if (obj->state3 % 2) {
-         obj_s1 = CreatePositionedObj(obj, OBJF_FX_TBD_141);
+         obj_s1 = CreatePositionedObj(obj, OBJF_EXPLOSION_RING_EMITTER);
          obj_s1->y1.n += CV(0.5);
          obj_s1->d.objf141.clut = CLUT_REDS;
          obj_s1->d.objf141.semiTrans = 2;

@@ -800,10 +800,10 @@ void Objf307_324_EvilStream_FX2_FX3(Object *obj) {
       obj_s1 = OBJ.targetSprite;
       obj_s1->d.sprite.hidden = 0;
       if (obj->functionIndex == OBJF_EVIL_STREAM_FX3) {
-         obj_s1 = CreatePositionedObj(obj, OBJF_FX_TBD_134);
+         obj_s1 = CreatePositionedObj(obj, OBJF_ENGULF_FLAME_SLAY);
          obj_s1->d.objf134.clut = CLUT_REDS;
       } else { // OBJF_EVIL_STREAM_FX2:
-         obj_s1 = CreatePositionedObj(obj, OBJF_FX_TBD_132);
+         obj_s1 = CreatePositionedObj(obj, OBJF_ENGULF_FLAME_DAMAGE);
          obj_s1->d.objf132.clut = CLUT_REDS;
       }
       obj->functionIndex = OBJF_NULL;

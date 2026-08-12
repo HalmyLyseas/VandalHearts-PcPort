@@ -1515,9 +1515,9 @@ void Objf274_Noop(Object *obj) {}
 void Objf344_345_RomanFire_FX2_FX3(Object *obj) {
    OBJ.clut = CLUT_REDS;
    if (obj->functionIndex == OBJF_ROMAN_FIRE_FX3) {
-      obj->functionIndex = OBJF_FX_TBD_142;
+      obj->functionIndex = OBJF_ENGULF_EXPLOSION_SLAY;
    } else if (obj->functionIndex == OBJF_ROMAN_FIRE_FX2) {
-      obj->functionIndex = OBJF_FX_TBD_140;
+      obj->functionIndex = OBJF_ENGULF_EXPLOSION_DAMAGE;
    } else {
       obj->functionIndex = OBJF_NULL;
       gSignal3 = 1;

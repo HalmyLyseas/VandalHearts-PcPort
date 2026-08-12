@@ -120,7 +120,7 @@ void Objf144_HolyLightning_FX2(Object *obj) {
 
       case 2:
          obj_v1 = Obj_GetUnused();
-         obj_v1->functionIndex = OBJF_FX_TBD_136 + OBJ.endingFxType;
+         obj_v1->functionIndex = OBJF_ENGULF_LIGHTNING_DAMAGE + OBJ.endingFxType;
          obj_v1->d.objf136.clut = CLUT_BLUES;
          obj_v1->x1.n = obj->x1.n;
          obj_v1->y1.n = obj->y1.n;
@@ -858,7 +858,7 @@ void Objf195_RollingThunder_FX2(Object *obj) {
       OBJ.timer++;
       if (OBJ.timer == 191) {
          obj_v1 = Obj_GetUnused();
-         obj_v1->functionIndex = OBJF_FX_TBD_136 + OBJ.endingFxType;
+         obj_v1->functionIndex = OBJF_ENGULF_LIGHTNING_DAMAGE + OBJ.endingFxType;
          obj_v1->d.objf136.clut = CLUT_BLUES;
          obj_v1->x1.n = obj->x1.n;
          obj_v1->y1.n = obj->y1.n;
