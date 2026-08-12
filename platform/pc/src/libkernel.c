@@ -655,8 +655,10 @@ extern const unsigned char pc_kanji_charset2[6270];
 /* Map a full-width Shift-JIS code to its glyph index within charset 2. The
  * BIOS packs the charset compacted (undefined codes skipped), so these anchors
  * were recovered empirically -- see gen_kanji_font.py. Covers every SJIS code
- * Vandal Hearts actually draws (space, period, 0-9, A-Z, a-z); anything else
- * returns -1 (blank), same as the game's own out-of-range guard. */
+ * Vandal Hearts actually draws (space, period, 0-9, A-Z, a-z) PLUS the rest of
+ * kuten row 1, which the langpack subtitle renderer (pc_lang.c AsciiToWideSjis)
+ * relies on for punctuation -- keep the row-1 span when touching this. Anything
+ * else returns -1 (blank), same as the game's own out-of-range guard. */
 static s32 sjis_to_krom_glyph(u32 sjis) {
     /* Kuten row 1 (0x8140-0x817C) is packed LINEARLY in charset 2: the empirically recovered
      * anchors (space=0, period=4, plus=59, minus=60) all satisfy index == sjis - 0x8140, which

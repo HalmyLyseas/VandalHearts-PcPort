@@ -62,9 +62,6 @@ static void glyphRows(char c, unsigned char out[7]) {
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
         {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
         {'?', {0x0E, 0x11, 0x01, 0x06, 0x04, 0, 0x04}},
-        /* Langpack F3 movie subtitles (pilot): the transcripts carry these three. */
-        {'\'', {0x04, 0x04, 0x08, 0, 0, 0, 0}}, {'"', {0x0A, 0x0A, 0x14, 0, 0, 0, 0}},
-        {'!', {0x04, 0x04, 0x04, 0x04, 0x04, 0, 0x04}},
         /* 1.4 F2: PlayStation face-button glyphs (sentinel ASCII -> icon), used by the overlay footers:
          * '$'=Square, '@'=Circle, '^'=Triangle, '~'=Cross. Monochrome outlines (the font is 1-colour). */
         {'$', {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F}},   /* square */
@@ -104,9 +101,6 @@ static void glyphRows(char c, unsigned char out[7]) {
         return;
     }
     if (c == ' ') { for (i = 0; i < 7; i++) out[i] = 0; return; }
-    if (c >= 'a' && c <= 'z') c -= 32;   /* F3 pilot: fold to the uppercase glyphs (the font has no
-                                          * lowercase; real subtitle typography arrives with the
-                                          * langpack glyph-sheet renderer) */
     for (i = 0; i < (int)(sizeof(LETTERS) / sizeof(LETTERS[0])); i++) {
         if (LETTERS[i].c == c) { int j; for (j = 0; j < 7; j++) out[j] = LETTERS[i].r[j]; return; }
     }
@@ -198,8 +192,9 @@ static int ovlTextPx(const char *s, int scale) {   /* rendered width; last cell 
 
 /* --- Langpack F3 movie subtitles: proportional rendering, two font tiers ----------------------
  * PRIMARY = the 16x15 wide font (PC_LangSubtitleGlyph16: pack K_FONT16, then the built-in BIOS
- * charset for ASCII) -- clean letterforms at subtitle sizes; the movie scratch is presented at
- * 2x for native MDEC playback precisely so this font has the pixels to land on. FALLBACK = the
+ * charset for ASCII) -- clean letterforms at subtitle sizes; the native MDEC scratch is upscaled
+ * at present time precisely so this font has the pixels to land on (factor lives in
+ * PC_GpuPresent's movie branch, keyed on cues being loaded). FALLBACK = the
  * 8x9 small font (PC_LangSubtitleGlyph), chosen PER CUE when any wide glyph is missing, so a cue
  * never mixes fonts. Advance is proportional (ink + gap); a line that overflows its cover rect
  * auto-wraps at word boundaries. A codepoint missing from BOTH tiers draws a tofu box (visible,
@@ -774,14 +769,19 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     if (s_ptTime) pt0 = presentNowMs();
 
     /* A movie is playing -> present its decoded frame as a fullscreen overlay (native BGR555, or
-     * HD RGB24). The native MDEC frame is presented at 4x (nearest-neighbour -- movie pixels look
-     * identical) so the wide subtitle font has real pixels to land on AND the native scratch
-     * matches the HD one (1280x960): subtitle metrics are identical on both paths by construction. */
+     * HD RGB24). When this movie has subtitle cues, the native MDEC frame is presented at 4x
+     * (nearest-neighbour -- movie pixels look identical) so the wide subtitle font has real
+     * pixels to land on AND the native scratch matches the HD one (1280x960): subtitle metrics
+     * are identical on both paths by construction. Without cues (no pack / no dev override --
+     * the common case) the frame presents at its own size: the 16x convert+upload cost is only
+     * paid when subtitles actually render. The cue set is fixed at PC_MovieSubsOpen, so the
+     * factor never flips mid-movie. */
+    int msubs = PC_MovieSubsLoaded() ? 4 : 1;
     if ((s_movieOverlay || s_movieOverlayRGB) && s_movieOvW > 0 && s_movieOvH > 0) {
         vram = (unsigned short *)s_movieOverlay;   /* NULL on the RGB path (used only by the BGR555 convert) */
         vramW = s_movieOvW; x = 0; y = 0;
-        if (s_movieOverlay) { w = s_movieOvW * 4; h = s_movieOvH * 4; }
-        else                { w = s_movieOvW;     h = s_movieOvH;     }
+        if (s_movieOverlay) { w = s_movieOvW * msubs; h = s_movieOvH * msubs; }
+        else                { w = s_movieOvW;         h = s_movieOvH;         }
     }
 
     /* Drain the SDL event queue so the process is actually closeable. Initializing
@@ -816,9 +816,10 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         for (py = 0; py < h; py++)
             memcpy(&s_rgbaScratch[(h - 1 - py) * w * 3], &s_movieOverlayRGB[py * w * 3], (size_t)w * 3);
     } else {
-    /* mshift: the native-movie overlay presents at 4x (w/h were scaled above), so the source
-     * sample shifts back -- nearest-neighbour, pixels unchanged. 0 for the normal VRAM present. */
-    int mshift = (s_movieOverlay != NULL) ? 2 : 0;
+    /* mshift: with subtitles, the native-movie overlay presents at 4x (w/h were scaled above),
+     * so the source sample shifts back -- nearest-neighbour, pixels unchanged. 0 for the
+     * cueless movie present and the normal VRAM present. */
+    int mshift = (s_movieOverlay != NULL && msubs == 4) ? 2 : 0;
     for (py = 0; py < h; py++) {
         for (px = 0; px < w; px++) {
             unsigned short c = vram[(y + (py >> mshift)) * vramW + (x + (px >> mshift))];
@@ -844,8 +845,11 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         int nc = PC_MovieSubsActive(cues, 2), ci;
         for (ci = 0; ci < nc; ci++) {
             const PC_MovieCue *c = cues[ci];
+            /* Scale via the rect's far edge, not its width: independent floors would leave the
+             * cover up to 1px short of the burned-in text on frames that are not an exact
+             * multiple of 320x240 (an HD pack video can decode at any size). */
             int sx = c->x * w / 320, sy = c->y * h / 240;
-            int sw = c->w * w / 320, sh = c->h * h / 240;
+            int sw = (c->x + c->w) * w / 320 - sx, sh = (c->y + c->h) * h / 240 - sy;
             ovlFillRect(w, h, sx, sy, sw, sh, 0, 0, 0, 255);
             subsDrawCueText(w, h, sx, sy, sw, sh, c->lineCount, c->lines);
         }

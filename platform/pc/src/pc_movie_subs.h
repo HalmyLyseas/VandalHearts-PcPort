@@ -4,8 +4,8 @@
  * (libcd.c), whose clock IS the STR header frame number (1-based).
  *
  * Cue files are per-movie, keyed by the movie's base LBA (same identity the HD video pack
- * uses), with frame ranges already in the runtime frameNo domain. Pilot loading is explicit:
- * VH_MOVIE_SUBS=<file>; langpack-manifest integration follows once the pilot is validated. */
+ * uses), with frame ranges already in the runtime frameNo domain. Cues normally come from the
+ * language pack's K_CUES section; VH_MOVIE_SUBS=<file-or-dir> is a dev override that wins. */
 #ifndef PC_MOVIE_SUBS_H
 #define PC_MOVIE_SUBS_H
 
@@ -22,6 +22,7 @@ typedef struct PC_MovieCue {
 void PC_MovieSubsOpen(int baseLBA);              /* movie stream started (before frame 1 shows) */
 void PC_MovieSubsClose(void);                    /* movie ended / skipped / aborted */
 void PC_MovieSubsFrame(int frameNo);             /* this frame is becoming current */
+int  PC_MovieSubsLoaded(void);                   /* cues exist for the open movie (fixed at Open) */
 
 /* Language pack K_CUES section (pc_lang.c hands the raw blob over at pack load). Parsed into
  * per-movie cue sets that live for the process; PC_MovieSubsOpen consults them when the

@@ -1,7 +1,8 @@
-/* Movie subtitle cue engine (langpack F3 pilot) -- see pc_movie_subs.h for the model.
+/* Movie subtitle cue engine (langpack F3) -- see pc_movie_subs.h for the model.
  *
- * File format (emitted by exchange tooling from the extractor's JSON; line-based so the
- * parser stays trivial and greppable):
+ * File format (dev override VH_MOVIE_SUBS; line-based so the parser stays trivial and the
+ * files stay hand-editable -- language packs carry the same cues as the binary K_CUES
+ * section built by tools/langpack/lang_build.py):
  *
  *   VHCUES 1
  *   lba 21618                      <- hex, matches hdpacks/videos/<lba>.mp4 naming
@@ -37,8 +38,9 @@ static void subsFree(void) {
 static void subsLoad(const char *path, int baseLBA) {
     FILE *f = fopen(path, "r");
     char line[PC_SUBS_MAX_TEXT + 16];
-    int cap = 0, fileLBA = -1, inCue = 0;
-    PC_MovieCue cur;
+    int cap = 0, count = 0, fileLBA = -1, inCue = 0;
+    PC_MovieCue *cues = NULL;    /* local until the whole file checks out: no partial parse can */
+    PC_MovieCue cur;             /* ever leak into (or out of) the rendering globals            */
     if (!f) { fprintf(stderr, "PC_MovieSubs: cannot open %s\n", path); return; }
     memset(&cur, 0, sizeof(cur));
     while (fgets(line, sizeof(line), f)) {
@@ -46,7 +48,7 @@ static void subsLoad(const char *path, int baseLBA) {
         while (n && (line[n-1] == '\n' || line[n-1] == '\r')) line[--n] = '\0';
         if (strncmp(line, "lba ", 4) == 0) {
             fileLBA = (int)strtol(line + 4, NULL, 16);
-            if (fileLBA != baseLBA) { fclose(f); return; }   /* not this movie's file: stay inert */
+            if (fileLBA != baseLBA) { fclose(f); free(cues); return; }   /* not this movie's file: stay inert */
         } else if (strncmp(line, "cue ", 4) == 0) {
             memset(&cur, 0, sizeof(cur));
             inCue = sscanf(line + 4, "%d %d %d %d %d %d",
@@ -63,19 +65,21 @@ static void subsLoad(const char *path, int baseLBA) {
             }
         } else if (inCue && strcmp(line, "end") == 0) {
             if (cur.lineCount > 0) {
-                if (s_cueCount == cap) {
+                if (count == cap) {
                     int next = cap ? cap * 2 : 48;
-                    PC_MovieCue *grown = (PC_MovieCue *)realloc(s_cues, (size_t)next * sizeof(*s_cues));
+                    PC_MovieCue *grown = (PC_MovieCue *)realloc(cues, (size_t)next * sizeof(*cues));
                     if (!grown) break;
-                    s_cues = grown; cap = next;
+                    cues = grown; cap = next;
                 }
-                s_cues[s_cueCount++] = cur;
+                cues[count++] = cur;
             }
             inCue = 0;
         }
     }
     fclose(f);
-    if (fileLBA != baseLBA) { subsFree(); return; }
+    if (fileLBA != baseLBA) { free(cues); return; }      /* no lba line (typo?): stay inert */
+    s_cues = cues;
+    s_cueCount = count;
     s_cuesOwned = 1;
     s_loadedLBA = baseLBA;
     fprintf(stderr, "PC_MovieSubs: %d cues loaded for movie %x\n", s_cueCount, (unsigned)baseLBA);
@@ -175,6 +179,8 @@ void PC_MovieSubsOpen(int baseLBA) {
 void PC_MovieSubsClose(void) { subsFree(); }
 
 void PC_MovieSubsFrame(int frameNo) { s_curFrame = frameNo; }
+
+int PC_MovieSubsLoaded(void) { return s_cues != NULL; }
 
 int PC_MovieSubsActive(const PC_MovieCue **out, int cap) {
     int i, n = 0;

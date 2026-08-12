@@ -123,10 +123,11 @@ static int LangPackDir(char *out, size_t n) {
         return 0;
     }
     if (!PC_GetDeployDir(deploy, sizeof deploy)) return 0;
-    /* Precision caps make the worst case provably fit the caller's buffer, which is also what
-     * silences MinGW GCC's -Wformat-truncation (it reasons from the format string alone). Deploy
-     * paths near 200 bytes would already have been unusable upstream. */
-    snprintf(out, n, "%.200s/langpacks/%.64s", deploy, lang);
+    /* Precision caps make the worst case (400+11+64+NUL = 476) provably fit the callers'
+     * 512-byte buffers, which is also what silences MinGW GCC's -Wformat-truncation (it
+     * reasons from the format string alone). Sized to the buffers, not below them: a deploy
+     * path that fits in `deploy` must come through untruncated. */
+    snprintf(out, n, "%.400s/langpacks/%.64s", deploy, lang);
     return 1;
 }
 
@@ -582,7 +583,11 @@ const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
     }
     if (cp < 128 && s_subsMap && s_subsGlyphs) {
         unsigned slot = s_subsMap[cp];
-        if ((int)slot < s_subsGlyphN) return s_subsGlyphs[slot];
+        /* Slot 0 is how the game's map spells "unassigned" (text.c mappings[] defaults to 0;
+         * glyph 0 is real art -- a solid block). Returning it would silently draw a filled
+         * rectangle for an unmapped character; fall through to NULL so the renderer's tofu
+         * box stays the one visible signal for "letter not in the font". */
+        if (slot != 0 && (int)slot < s_subsGlyphN) return s_subsGlyphs[slot];
     }
     return NULL;
 }
