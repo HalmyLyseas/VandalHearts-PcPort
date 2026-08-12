@@ -1620,7 +1620,7 @@ void State_TitleScreen(void) {
          LoadFWD();
       }
       Obj_ResetFromIdx10();
-      SwapOutCodeToVram();
+      FetchOverlayCodeFromVram();
       gState.vsyncMode = 0;
       gClearSavedPadState = 1;
       gState.fieldRenderingDisabled = 1;

@@ -1,3 +1,29 @@
+/* Battle front-end and turn driver (segment 0x201b8): the player-facing battle field --
+ * input, cameras, menus, info windows, scripted per-map events -- plus Objf013_BattleMgr,
+ * the object that drives the whole turn loop.
+ *
+ * Field services: UpdateInput (pad edges + DPAD auto-repeat), CenterCamera / UpdateCamera /
+ * UpdatePlayerCamera / UpdateNonPlayerCamera, the item-received dialogs and the spell/item
+ * status windows. Objects: Objf597_BattleIntro (opening swoop + battle conditions),
+ * Objf425_BattleOptions (the idle field cursor -- unit cycling, turn counter, zoom/options,
+ * end turn), Objf003_BattleActions (a selected player unit: move grid, path walk, then the
+ * Attack/Magic/Item/Wait menu; spawns OBJF_TARGETING_ATTACK/_SPELL), Objf030_FieldInfo
+ * (terrain/unit inspection), Objf586_BattleMsgBox with its SetupBattleMsgBox helpers, and
+ * the scripted-event drivers Objf585_BattlePlayerEvent / Objf587_BattleEnemyEvent (per-map
+ * dialogue and reinforcement spawns; win/lose rules live in battle_eval.c).
+ *
+ * Objf013_BattleMgr (~:3200) is the turn state machine: 0 wait for gIsEnemyTurn -> 13
+ * "ENEMY TURN" banner, enemy event, upkeep -> 2..7 per-unit loop (pick the next enemy or
+ * AI ally, spawn OBJF_AI_CHOOSE_ACTION (ai.c), wait on gAiPlanReady, walk the unit to
+ * gX/gZ_801233d8) -> 8..12 dispatch the planned action per gAiActionType (wait/face,
+ * OBJF_UNIT_ATTACKING, OBJF_UNIT_CASTING) -> 99/100 cleanup -> 14 "PLAYER TURN" banner,
+ * ticker, player event, upkeep, camera restore. States 101-105 are the map-40 scripted
+ * spawn; map 8 is the attract-mode demo path; the block after the switch is the enemy-turn
+ * follow camera.
+ *
+ * PC gates here: language packs, the 1.4 five-stop camera elevation, the 1.1 threat
+ * overlay and ally cycle, 1-byte item names, the terrain-text hand-off; two PC_PORT blocks
+ * mirror PSX read-through-NULL behaviour. */
 #include "common.h"
 #include "object.h"
 #include "battle.h"

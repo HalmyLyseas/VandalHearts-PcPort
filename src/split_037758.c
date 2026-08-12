@@ -1,3 +1,21 @@
+/* Two top-level game states and the display-mode reset they share (segment 0x37758).
+ *
+ * State_Movie is the STR playback state, dispatched from main.c. A static 17-entry table
+ * gives each movie its CD sector, frame count, skip policy (1 = START-skippable, 2 = wait
+ * for O/X at the end, 0 = automatic), the gState.secondary to transition to when it ends,
+ * and its XA volume. gState.secondary sequences it: 0/1 set up (24-bit mode, XA
+ * attributes), 10/11 start and pump frames, 12 waits for confirm, 20 and 30/31 chain into
+ * a follow-up movie, 99/100 restore 16-bit mode and pick the next primary state from
+ * gState.movieIdxToPlay (logo -> title, the *BU/EPI chapter movies -> STATE_26 at a
+ * specific scene, 6BU -> the town, END1 -> the ending).
+ *
+ * ClearScreen(is24bit) clears both framebuffers and rebuilds their draw envs at 16bpp or
+ * 24bpp width; State_Movie is its only caller (24-bit on entry, 16-bit on the way out).
+ * The PC port hooks it as the point where a finished movie's held last frame is dropped.
+ *
+ * State_ChapterComplete is the between-chapter still: it loads USEND_n.TIM per
+ * gState.chapterOutro, spawns the fullscreen-image object, and on O sends the player into
+ * the matching chapter movie. */
 #include "common.h"
 #include "state.h"
 #include "object.h"

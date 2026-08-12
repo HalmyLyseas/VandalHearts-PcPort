@@ -1,3 +1,20 @@
+/* Map 17's floodgate and Map 19's paired elevators.
+ *
+ * Map 17: Objf366_Map17_Button (spawned by SetupMapExtras()) waits on gState.mapState --
+ * set by Objf433_EvaluateBattle17 -- runs the shared OBJF_BUTTON_DEPRESS cutaway, then
+ * hands off to Objf365_Map17_Floodgate, which slides the gate tiles' faces open, sprays
+ * Objf296_Map17_SprayParticle and spawns Objf368_Map17_DrainingWater to animate the channel
+ * emptying. Map17_LowerFloodgate() and Map17_RemoveWater() are the instant
+ * "already happened" versions applied when the map is reloaded after the fact.
+ *
+ * Map 19: Objf357_Map19 creates the two OBJF_MAP19_ELEVATOR platforms and, when
+ * Objf435_EvaluateBattle19 sets mapState to 1 or 2 (which side was examined), spawns
+ * Objf355_356_Map19_Elevator -- one handler at both indices, branching on its own
+ * functionIndex to decide which platform rises and which sinks. Objf358_Map19_Elevator is
+ * the per-platform tile-face motion.
+ *
+ * Objf354_Map19_DebugElevators has no spawn site and reads controller 2 -- a developer
+ * toggle kept byte-exact. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

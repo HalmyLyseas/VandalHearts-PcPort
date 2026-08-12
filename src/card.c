@@ -490,7 +490,7 @@ s32 Card_WriteRegularSave(u8 fileIdx) {
 s32 Card_LoadRegularSave(u8 fileIdx) {
    s32 res = Card_ReadRegularSaveIntoBuf(fileIdx);
    if (res == 0) {
-      SwapOutCodeToVram();
+      FetchOverlayCodeFromVram();
       Card_LoadRegularSave_Internal();
    }
    return res;

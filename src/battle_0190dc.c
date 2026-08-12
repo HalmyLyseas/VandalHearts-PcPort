@@ -1,3 +1,25 @@
+/* Battle math and its result windows (segment 0x190dc): every number the battle system
+ * applies or displays is computed here.
+ *
+ * Combat: CalculateAttackDamage folds the 49x49 class-matchup table gAdvantage (defined at
+ * the top of this file), the four adjacent-supporter bonuses, equipment, elevation and
+ * flank/back facing into a resist value, rolls damage, and pays attack XP.
+ * CalculateSpellPowerAndExp is its spell counterpart (branching on SPELL_EX_EFFECT),
+ * CalculateSupportSpellExp pays XP for buff/heal casts, TryInflictingAilment rolls
+ * poison/paralysis against ailmentSusceptibility (it carries a suspected retail precedence
+ * bug -- see its comment).
+ * Progression: CalculateUnitStats derives level (XP vs gExperienceLevels) then stats;
+ * DetermineMaxMpAndStatVariance rolls the 80..119 per-unit variance and the class MP pool;
+ * SyncGainedHp carries current HP across a level-up.
+ * XP arithmetic: XP is a wide value held as 8 big-endian u16 limbs, with
+ * BigIntCompare/Add/Subtract/Divide at the bottom -- every XP award is assembled from
+ * those four.
+ * Presentation: EmbedIntAsSjis / EmbedExp / GetItemNameLength / ShowExpDialog, and the
+ * supporter-marker pair CheckForSupporterBonus / DisplaySupporterBonus.
+ *
+ * Callers are the executors in battle_013b94.c and the AI's scoring in ai.c. PC_FEAT gates
+ * cover the Tactical Monk/Ninja MP parity, trial-map XP scaling, and language-pack-safe
+ * ShowExpDialog layout. */
 #include "common.h"
 #include "object.h"
 #include "battle.h"

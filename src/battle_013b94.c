@@ -1,3 +1,27 @@
+/* Battle action executors (segment 0x13b94): the objects that carry a chosen action from
+ * confirmation through animation, damage, XP and level-up, plus the per-turn upkeep pass.
+ *
+ *   Objf015_TargetingAttack -- the attack-side cursor/confirm step (twin of
+ *     Objf027_TargetingSpell in battle_012dcc.c) and the treasure-chest prompt; spawns
+ *     OBJF_UNIT_ATTACKING / OBJF_OPENING_CHEST and reports via gSignal2 (1 cancel,
+ *     2 commit, 99 executor done).
+ *   Objf021_UnitAttacking -- physical attack: attack camera, facing, supporter markers,
+ *     CalculateAttackDamage (battle_0190dc.c), counterattack, then XP and level-up.
+ *   Objf028_UnitCasting -- spell executor. Collects targets into gTargetCoords, plays the
+ *     cast animation, then dispatches the visuals data-driven out of
+ *     gSpellsEx[gCurrentSpell]: SPELL_EX_OBJF_MAIN at :1162, and per target
+ *     SPELL_EX_OBJF_TARGET/_DEFEAT at :1252+ (handlers live in the fx_* units -- see
+ *     fx_060c38.c). SPELL_EX_EFFECT picks the rule applied.
+ *   Objf567_OpeningChest, Objf007_ApplyPoison -- small one-shot executors.
+ *   Objf592_BattleTurnStart -- start-of-turn upkeep for one team: clear buffs, healing
+ *     circles, paralysis recovery rolls, poison damage, per-map respawns.
+ *   ClearBattlePortraits -- tears down every OBJF_BATTLE_PORTRAIT object.
+ *
+ * Handshakes: gSignal3/gSignal4 are the "step finished" replies from the unit sprite
+ * action and the spawned FX objects; gSignal5 is the camera protocol with
+ * Objf017_AttackCamera / Objf571_LevelUp (battle_011604.c) -- camera raises 1 when in
+ * place, the executor raises 99 to release it, the camera answers 100. Callers are the
+ * player menus (battle_0201b8.c) and the enemy-turn manager Objf013_BattleMgr. */
 #include "common.h"
 #include "object.h"
 #include "battle.h"

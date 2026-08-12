@@ -1,3 +1,28 @@
+/* Unit roster bookkeeping, unit-sprite lookups, number formatting, and the portrait
+ * objects (segment 0x2d078).
+ *
+ * Roster: ClearUnits and CreateUnit with its two entry points -- CreateUnitInNextSlot
+ * takes the first free gUnits slot, CreateUnitInLastSlot forces the top slot
+ * (split_0496f8.c uses it for Leena) -- initialising per-unit variance and boost fields.
+ *
+ * Sprite lookups, used tree-wide: GetUnitSpriteAtPosition (the gMapUnits grid ->
+ * gUnits[].sprite hop nearly every fx_* unit starts from), FindUnitSpriteByNameIdx,
+ * FindUnitSpriteByType (UNREFERENCED in retail), GetUnitSpriteVramRect (source rect for
+ * the sprite-copy effects), and StartUnitSpritesDecoder, which re-arms the shared decoder
+ * object over one strip's packed sheet.
+ *
+ * Four SaveRestore* static pairs (damage, hp percentages, hp triple, screen position) are
+ * a one-slot mailbox: battle_013b94.c and window.c stash values that
+ * Objf032_033_DisplayDamage reads back a frame later. IntToLeftPaddedGlyphs[2] (fixed 3
+ * digits; _2 uses the damage gauge's alternate digit font) and IntToGlyphs render numbers
+ * into glyph strips.
+ *
+ * Handlers: Objf032_033_DisplayDamage (floating damage number + hp bar) and four portrait
+ * objects -- Objf008_BattlePortrait, Objf413_MsgBoxPortrait (mouth/eye overlays with
+ * speaking/blinking sub-machines), Objf447_UnitPortrait with its Objf448 wrapper (448 is
+ * dispatched by nothing in retail), and Objf575_StatusPortrait. All share one idiom:
+ * search gState.portraitsToLoad for the portrait id (slot 0 fallback), take the clut from
+ * gPortraitClutIds, aim GFX_PORTRAIT_A/B_FACE at the right 48x48 cell. */
 #include "common.h"
 #include "object.h"
 #include "state.h"
@@ -106,6 +131,7 @@ Object *FindUnitSpriteByNameIdx(u8 nameIdx) {
    return NULL;
 }
 
+/* UNREFERENCED in retail -- kept byte-exact. */
 Object *FindUnitSpriteByType(u8 unitType) {
    s32 i;
    UnitStatus *pUnit = &gUnits[1];
@@ -786,6 +812,8 @@ void Objf413_MsgBoxPortrait(Object *obj) {
    AddObjPrim_Gui(gGraphicsPtr->ot, blinkSprite);
 }
 
+/* Dispatched by nothing in retail: no enum, no spell/event/scene-loader/map-table entry
+ * (verified against all dispatcher dumps) -- an unused wrapper over Objf447. */
 void Objf448_UnitPortraitWrapper(Object *obj) { Objf447_UnitPortrait(obj); }
 
 #undef OBJF

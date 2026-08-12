@@ -1,3 +1,24 @@
+/* The post-battle results screen and the slain-unit tally that feeds it (segment
+ * 0x38148).
+ *
+ * TallySlainUnit is called from every death path of Objf014_BattleUnit (split_03c94c.c):
+ * party members set a flag in gPartyMemberSlain, everyone else bumps the matching
+ * gSlainUnits count. Both arrays are zeroed per battle by battle_eval.c and mirrored into
+ * the in-battle save by card.c. CommitPartyStatus flushes every live gUnits entry back
+ * into gPartyMembers; the results object runs it first, and Objf424_BattleEnder's debug
+ * skip reuses it.
+ *
+ * Objf594_BattleResults is spawned by battle_eval.c once the victory banner finishes, and
+ * runs three concurrent lanes over the shared s_* statics: obj->state draws the windows;
+ * obj->state2 walks the kill list and then the lost-party list, spawning one Objf593 child
+ * every 10 frames and moving to a fresh row when the first penalty entry appears (a
+ * negative gBattleUnitRewards value, or any lost party member); obj->state3 is the gold
+ * counter, re-rendering the SJIS total whenever a child posts a reward and adding it to
+ * gState.gold at the end. Slots wrap at 8 per row; the grid restarts past 32.
+ *
+ * Objf593_BattleResultsUnit draws one slot: the unit's strip sprite, with GFX_RED_X laid
+ * under it when the entry is a penalty. PC additions: PC_LANGSTR wrappers and the Tactical
+ * per-chapter trial gold penalty (GAP 10). */
 #include "common.h"
 #include "units.h"
 #include "object.h"

@@ -1,3 +1,24 @@
+/* Spell casting effects, part 8 of the FX corpus (segment 0x57370).
+ *
+ * Same dispatch model as fx_060c38.c: nothing here has a static spawn site --
+ * gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT] (battle_013b94.c) selects the
+ * handler, so the suffix records the slot (_FX1 = caster/main, _FX2 = per target,
+ * _FX3 = defeat); sub-objects are named <Spell>_<Thing>.
+ *
+ * Groups:
+ *   Summon crest -- Objf204_SummonCrest is the renderer; Objf207/209/210 are the
+ *     red/blue/green shims that spawn it with a CLUT. Also driven from the
+ *     summon-rune-column cutscene object (Objf323_713, split_09a268.c), the one
+ *     non-gSpellsEx user in the file.
+ *   Holy Lightning (Objf208 + Objf212 casting bolt), Rolling Thunder (Objf197 + Objf198).
+ *   Healing (Objf060, a stub that only raises gSignal3; Objf100 + Objf101 sparkle), Cure
+ *     (Objf104), Poison (Objf102_227 -- one handler in slots 102 and 227 -- with Objf103
+ *     bubbles), Harmful Wave (Objf108 + Objf109 ring), Magic Charge (Objf106 + Objf107
+ *     glyph ring; 106 is Magic Charge's DEFEAT slot in the retail gSpellsEx -- spell 23 =
+ *     330/372/106 -- so it is reachable, not a leftover).
+ *   Stat buffs -- Bless Weapon / Mystic Shield / Mystic Energy (Objf111/112/113) spawn the
+ *     shared Objf110_CastingStatBuff with a per-spell CLUT, which drives Objf681_StatBuffFx
+ *     and Objf733_StatBuffIcon. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

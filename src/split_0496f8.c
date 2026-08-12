@@ -1,3 +1,34 @@
+/* The game's setup layer: boot-time init, per-scene and per-battle asset loading, party
+ * and battle-unit construction, and the field/terrain tables (segment 0x496f8).
+ *
+ * Party: ResetStateForNewGame, SetupParty (starting levels per gInitialLevels),
+ * SetupPartySprites (unit ids remapped for the advancement path taken),
+ * SetDefaultStatsForParty, PopulateUnitSpellList, SetupPartyBattleUnit, SyncPartyUnit,
+ * ClearPortraitSet. Roster: LoadSceneUnitRoster fills gSpriteStripUnitIds and
+ * gCurrentUnitSet from the scene tables that LoadUnits (split_027dd4.c) then loads;
+ * SetupBattleUnit is the 9-argument spawner creating the UnitStatus, its OBJF_BATTLE_UNIT
+ * battler and its sprite; CreateBattleUnitForUnit and SetupBattleUnits wrap it.
+ * Objf424_BattleEnder watches gState.battleEval and runs the outro -- bgm fade, the
+ * victory or defeat object, overlay fetch -- plus a debug START skip.
+ *
+ * Boot and GPU: Initialize (callbacks, pad, card, CD, geometry, both draw/disp envs),
+ * ResetGeomOffset, SetupLight, SetupQuads, SetupSprites, and SetupGfx, which builds
+ * gTPageIds/gClutIds from COL_DAT.DAT and rewrites the gGfx* tables from cell indices to
+ * real ids exactly once. Asset loaders (VRAM destination + CD file): LoadMapTextures,
+ * LoadFWD, LoadPortraits (with LoadProvidedPortraits, advancement-aware), LoadFCOM4XX,
+ * LoadItemIcons.
+ *
+ * Map and field: LoadMap holds the per-mapNum table of dimensions, margins and M_*.PRS
+ * file, unpacks through ProcessMapFileData (split_0a2ce0.c) and calls SetupField. SetupMap
+ * spawns the on-map service objects (cursor, compass, panorama, battle manager, field
+ * info, options, map-object setup) then SetupMapExtras (map_effects_0852e8.c). SetupField
+ * clears gMapUnits, every path grid and gTerrain, installs their border rings (the ring
+ * path_grids.c relies on), then derives each tile's terrain type from its texture index
+ * through a large per-map switch. UpdateElevation / UpdateTileElevation recompute tile
+ * heights from the model's vertex ys, re-run whenever terrain is deformed mid-battle.
+ *
+ * PCDrv_WriteFile is an UNREFERENCED dev-kit host dump. Tactical balance hooks
+ * (GAP 2/3/5/9/11) live here behind PC_FEAT. */
 #include "common.h"
 #include "state.h"
 #include "units.h"
@@ -588,7 +619,7 @@ void Objf424_BattleEnder(Object *obj) {
             case 3:
             case 4:
             case 5:
-               SwapOutCodeToVram();
+               FetchOverlayCodeFromVram();
                gState.primary = STATE_TRIAL_COMPLETE;
                break;
 
@@ -674,7 +705,7 @@ void Objf424_BattleEnder(Object *obj) {
 
             case 26:
                gState.worldMapDestination = 0xf;
-               SwapOutCodeToVram();
+               FetchOverlayCodeFromVram();
                gState.primary = STATE_6;
                gState.worldMapState = 0x2b;
                break;
@@ -716,7 +747,7 @@ void Objf424_BattleEnder(Object *obj) {
 
             case 34:
                gState.worldMapDestination = 0x16;
-               SwapOutCodeToVram();
+               FetchOverlayCodeFromVram();
                gState.primary = STATE_6;
                gState.worldMapState = 0x3d;
                break;
@@ -733,7 +764,7 @@ void Objf424_BattleEnder(Object *obj) {
 
             case 37:
                gState.worldMapDestination = 0x1b;
-               SwapOutCodeToVram();
+               FetchOverlayCodeFromVram();
                gState.primary = STATE_6;
                gState.worldMapState = 0x42;
                break;
@@ -750,7 +781,7 @@ void Objf424_BattleEnder(Object *obj) {
 
             case 40:
                gState.worldMapDestination = 0x1e;
-               SwapOutCodeToVram();
+               FetchOverlayCodeFromVram();
                gState.primary = STATE_6;
                gState.worldMapState = 0x48;
                break;

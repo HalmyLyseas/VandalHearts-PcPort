@@ -1,3 +1,13 @@
+/* Map 27's prison cell doors -- the whole file is one map's puzzle.
+ *
+ * Objf665_Map27_Buttons (spawned by SetupMapExtras()) owns four lever tiles and five cell
+ * doors, paired through buttonDoorIdx; doors 2 and 3 open together. On reload it applies
+ * the already-pressed levers instantly (Map27_DepressButton + Map27_RemoveCellDoor). In
+ * play it scans gState.mapState.bytes[i] -- set by Objf443_EvaluateBattle27 -- then takes
+ * the camera, runs the shared OBJF_BUTTON_DEPRESS cutaway on that lever, pans to the door
+ * and spawns Objf664_Map27_OpenCellDoor, which raises the door's two tiles out of the floor
+ * and retextures them walkable. It then returns to the scan state, so several levers can be
+ * played out one after another over the course of the battle. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

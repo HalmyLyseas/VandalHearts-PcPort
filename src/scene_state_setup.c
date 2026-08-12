@@ -10,7 +10,7 @@ extern s8 gSceneMapNum[96];
 void State_SetupScene(void) {
    s32 i;
 
-   SwapOutCodeToVram();
+   FetchOverlayCodeFromVram();
    Obj_ResetFromIdx10();
 
    if (gState.scene == 1) {

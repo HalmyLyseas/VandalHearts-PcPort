@@ -1,3 +1,20 @@
+/* Map 38's flood -- one map's set piece -- plus the generic splash sprite.
+ *
+ * Objf657_Map38_Floodgate (spawned by SetupMapExtras()) is the driver. On reload it applies
+ * the finished state instantly (DepressButton + Map38_SetWater + Map38_RaiseFloodgate).
+ * Otherwise, once Objf558_EvaluateBattle38 sets mapState, it runs the shared
+ * OBJF_BUTTON_DEPRESS cutaway, then spawns Objf658_Map38_Floodwater and
+ * Objf655_Map38_RaiseFloodgate together. It sweeps the 3x11 channel issuing TA_32 prompts
+ * for each non-CLASS_AIRMAN unit caught there, spawns an Objf654_Map38_WashAwayUnit per
+ * victim, and follows the first one with the camera before easing back.
+ *
+ * Objf655 lifts the three gate tiles' faces, carrying the attached water face along until
+ * level; Map38_RaiseFloodgate()/Map38_SetWater() are the instant equivalents. Objf658
+ * renders the advancing water sheet and emits splashes (it carries a FIXME: fake-matched
+ * do-while). Objf654 hides the real unit sprite and re-renders an accelerating clone until
+ * it passes gMapMaxZ, then marks the vacated tile TA_22.
+ *
+ * Objf659_Splash (OBJF_SPLASH) is the generic animated splash, also used by Map 39. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

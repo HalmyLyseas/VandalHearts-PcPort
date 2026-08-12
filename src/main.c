@@ -68,7 +68,7 @@ void UpdateState(void) {
       FinishLoadingVab();
       LoadSoundSet(2);
       FinishLoadingVab();
-      SwapInCodeFromVram();
+      StashOverlayCodeToVram();
       gState.primary++;
    case STATE_1:
       gState.field_0x96 = 0;
@@ -140,7 +140,7 @@ void UpdateState(void) {
       break;
    case STATE_LOAD_DEBUG_MENU:
       Obj_ResetFromIdx10();
-      SwapOutCodeToVram();
+      FetchOverlayCodeFromVram();
       gState.vsyncMode = 0;
       gClearSavedPadState = 1;
       gState.fieldRenderingDisabled = 1;
@@ -237,7 +237,7 @@ void Objf006_Logo(Object *obj) {
 }
 
 void State_Init(void) {
-   SwapOutCodeToVram();
+   FetchOverlayCodeFromVram();
    LoadPortraits();
    gClearSavedPadState = 0;
    gIsEnemyTurn = 0;

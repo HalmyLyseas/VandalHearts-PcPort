@@ -1,3 +1,19 @@
+/* Map 32 (the rail/mine map): the released ore cars and the scene-63 fly-through.
+ *
+ * Objf650_Map32_CarRelease (spawned by SetupMapExtras()) is the battle handler. It tracks
+ * which of the four cars has been released via gState.mapState, focuses the camera, plays
+ * the matching XA cue, then stages the sweep: with normal field rendering suppressed
+ * (gState.fieldRenderingDisabled) it redraws the doomed stretch under a sliding camera
+ * offset, substituting bare-rail models for the emptied track and re-rendering clones of
+ * the units caught on it. It finishes by rewriting those tiles to bare rail, marking the
+ * crushed units TA_22 and making the strip TERRAIN_NO_ENTRY. Map32_RemoveCar() is the
+ * instant version applied on reload.
+ *
+ * Objf673_Map32_Scn63_Cinematic is the cutscene camera, spawned by the event script: it
+ * flies in along the rails and orbits a moving focus object using Snap/EaseCameraLookAt
+ * (map_effects_0861c8.c), publishing gState.eventCameraRot each frame.
+ *
+ * The rail tile models are #include'd from assets/801009bc.inc pending autogen. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

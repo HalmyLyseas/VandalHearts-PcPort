@@ -1,3 +1,37 @@
+/* The two big per-frame actors of the tactical and cutscene layers, plus the message-box
+ * front end and sprite-motion helpers they share (segment 0x3c94c).
+ *
+ * MsgBox_ShowForSprite / MsgBox_SetPortrait / MsgBox_Close drive the upper (0x41/0x42) and
+ * lower (0x43/0x44) dialogue windows, the tail anchored to a speaking sprite, and the
+ * Objf413 portrait from split_02d078.c.
+ *
+ * Objf014_BattleUnit (~1300 lines) is one object per unit on the map, paired with the
+ * unit's sprite. obj->state selects the action, obj->state2 the step: 0 spawn, 1 idle +
+ * player-controlled movement, 2 move, 5/9/10 struck and blocking, 6 spell casting, 8 melee
+ * and 12 ranged attack, 15 high step, 16 level up, 7/13/17/18/19 the death variants
+ * (TallySlainUnit, blood or rock spurt), 20 defeat speech. It sets the sprite's animIdx
+ * from OBJ.animSet[animIdx + facingFront] and hands off to battle_013b94.c through
+ * gSignal2/3/4.
+ *
+ * Motion helpers: UpdateUnitSpriteOrientation (facing from camera rotation),
+ * UpdateUnitSpriteMovement (walk, or jump-and-crouch on uneven terrain),
+ * UpdateAirmanUnitSpriteMovement (flyers rise, cross, descend),
+ * StepEntitySpriteTowardDest (the event-entity variant). Objf412_EventCamera eases the
+ * camera toward gState.eventCameraRot and gState.focus / eventCameraPan.
+ *
+ * Event entities: SetupEventEntity[_SingleSet] binds one script from
+ * gEvtEntityDataPointers plus two sprite strips to a new Objf409; ReserveSprite MoveImages
+ * one 48x48 cell into a strip slot (both called from events.c). Objf409_EventEntity
+ * (~870 lines) is the EVDATA*.DAT interpreter: state3 is the run state (0 create sprite,
+ * 1 fetch the next s16 opcode/arg pair, 2 execute or block), and the opcodes form one flat
+ * switch -- motion/facing (3-8), waits (1/9/0xa), animation select (2, 0x30), control flow
+ * (0xc relative branch, 0x11/0x12 resume other entities), and a long tail of one-shot
+ * effects: audio, dialogue, camera, terrain (0x52/0x53 spawn the face-elevation objects in
+ * split_0a2ce0.c), and 0x1d, which spawns an object by raw objf index -- the mechanism
+ * behind most per-scene effects in split_09a268.c and the fx_* and map_effects_* units.
+ *
+ * Objf590_BattleTurnTicker closes the file: a per-turn map script live only on the two
+ * timed maps (13, the collapsing bridge; 33, Kira over the lava pit). */
 #include "common.h"
 #include "object.h"
 #include "window.h"
