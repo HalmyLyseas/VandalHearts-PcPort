@@ -99,10 +99,15 @@ job is byte-exact matching, not readability or portability; all port-side change
 ## Stage 1 status (matching decomp)
 
 - **`make check` is byte-exact** (`596bb082a2de5f1fe977dd3d7e160b03`), reproduced from a from-scratch
-  environment. All application code is decompiled and matches: **1184 typed functions across 70
-  `src/*.c` files**. PsyQ SDK library functions are intentionally left as raw asm — Sony's SDK isn't
-  the decomp's target (standard practice).
-- Two small regions of `src/text.c` are byte-exact placeholders rather than proper decompiles
+  environment. All application code is decompiled and matches: **1184 typed functions across 88
+  `src/` files, grouped by domain** — `core/` (main loop, object system, gfx/audio/cd/text),
+  `states/` (menu and setup gamestates), `battle/`, `units/`, `world/` (world map, towns),
+  `events/` (cutscene machinery), `spells/` (one file per spell family), `maps/` (per-map
+  effects + unpacking), `ui/` (windows, status, shops). A file = one contiguous address range
+  of the retail binary; the layout is pinned by `SLUS_004.47.yaml`, so files must never be
+  merged or re-cut without re-proving the match. PsyQ SDK library functions are intentionally
+  left as raw asm — Sony's SDK isn't the decomp's target (standard practice).
+- Two small regions of `src/core/text.c` are byte-exact placeholders rather than proper decompiles
   (`D_800151C8[888]`, `D_80122FB0`..`D_80123090`), both marked `TODO`. Neither is referenced by any
   code yet — **don't delete them as "dead code," they hold specific bytes.**
 
@@ -157,16 +162,16 @@ job is byte-exact matching, not readability or portability; all port-side change
 the gates below, so every port-side edit to shared source must sit behind one:
 
 - `#ifdef PERMUTER` — PC-build behavioural/layout changes (the PC Makefile defines it globally for
-  game source). E.g. `src/text.c`'s `sFontGlyphBitmaps[129][9]` (PC) vs `[128][9]` (matching).
+  game source). E.g. `src/core/text.c`'s `sFontGlyphBitmaps[129][9]` (PC) vs `[128][9]` (matching).
 - `#ifdef PC_PORT` — portability/64-bit correctness guards (per-site NULL-deref guards, etc.).
 - `#ifdef PC_PORT_LP64` — 64-bit-host-only struct-layout fixes (e.g. `Object_719`/`_675` in
   `include/object.h`, where a leading pointer's 4→8-byte growth shifts aliased fields).
 - `#ifdef PC_FEAT` — **(Stage 3)** PC-only gameplay/QoL additions (e.g. the bidirectional ally-cycle
-  in `battle_field.c`). Distinct from `PC_PORT` (correctness) so gameplay changes are greppable alone.
+  in `battle/field.c`). Distinct from `PC_PORT` (correctness) so gameplay changes are greppable alone.
 - `#ifdef PC_DEBUG_*` — per-file debug/instrumentation hooks, keyed to Makefile flags.
 
 `grep -rnE "PERMUTER|PC_PORT|PC_FEAT|PC_DEBUG" src/ include/` finds them all. **History lesson:** an
-*unconditional* `src/text.c` widening once silently broke the match for ~2 days — gate first, then
+*unconditional* `src/core/text.c` widening once silently broke the match for ~2 days — gate first, then
 `make check`.
 
 ## Repo layout

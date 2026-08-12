@@ -23,7 +23,7 @@ not part of this decoder.
 A `.STR` movie is a run of raw 2352-byte CD sectors on the disc, interleaving video and XA-audio
 sectors. Playing one on PC runs end-to-end as follows:
 
-1. **Arm the movie.** The game's `Movie_Start` (`src/cd.c`) seeks to the movie's base LBA and
+1. **Arm the movie.** The game's `Movie_Start` (`src/core/cd.c`) seeks to the movie's base LBA and
    issues `CdRead2(Stream|Speed|RT)`. On PC, `CdRead2` (`platform/pc/src/libcd.c`) treats that RT
    read as the start of a movie: it seeds a demux cursor at the just-seeked LBA, starts the movie's
    XA audio (see [cd-xa.md](cd-xa.md)), and renders frame 1 immediately so the first tick isn't
@@ -117,7 +117,7 @@ own tick-driven completion logic rather than to decode speed. The demux cursor s
 where it left off, rewinding to the movie base only if a smaller frame number is requested (a
 loop/restart).
 
-**Movie skip:** the game's movie loop (`src/movie_state.c`) already honours a per-movie `skip`
+**Movie skip:** the game's movie loop (`src/core/movie_state.c`) already honours a per-movie `skip`
 flag for player-1 START on movies flagged skippable. The port adds a PC-only QoL gate
 (`#ifdef` PC-build) that lets player-1 START skip **any** movie straight to its transition — useful
 for the long story FMVs during debugging. (See the PC-port QoL tracker for the broader set of these

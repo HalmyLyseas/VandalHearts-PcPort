@@ -13,12 +13,12 @@
  *   TEXT   a whole patched on-disc dialogue file, keyed by its ISO LBA.
  *
  * WHY THE DIALOGUE PATH NEEDS NO src/ EDIT. LoadText -> LoadCdFile -> CdRead, and for a text file
- * that is ONE contiguous read of the file's own LBA (cd.c:985 reads gCdFiles[cdf].sectorCt sectors
+ * that is ONE contiguous read of the file's own LBA (core/cd.c:985 reads gCdFiles[cdf].sectorCt sectors
  * from gCdFiles[cdf].startingSector, which is the plain ISO9660 LBA). So substituting the buffer
  * right after the read, keyed by LBA, is indistinguishable from the disc having held our bytes --
  * the game parses them with its own unmodified LoadText.
  *
- * NOT COVERED YET: the 8x9 glyph bitmaps and the ASCII->glyph map are private to src/text.c and need
+ * NOT COVERED YET: the 8x9 glyph bitmaps and the ASCII->glyph map are private to src/core/text.c and need
  * gated hooks. Until then a pack is limited to the glyphs the US font already has.
  */
 #include <dirent.h>          /* pack enumeration for the overlay picklist (portable; MinGW has it) */
@@ -40,7 +40,7 @@ extern signed char gUnitTypeNames[86][11];
 extern signed char gItemNames[139][13];
 extern unsigned char gClassAdvancementNames[18][17];
 /* Pointer tables reconstructed by platform/pc/src/pc_*.c (see those files' own headers). */
-extern unsigned char *gStringTable[101];   /* [100] is the PC sentinel entry (see src/text.c) */
+extern unsigned char *gStringTable[101];   /* [100] is the PC sentinel entry (see src/core/text.c) */
 extern char *gSpellDescriptions[72];
 extern char *gItemDescriptions[101];
 extern char *gItemDescriptions2[101];
@@ -73,7 +73,7 @@ static const struct { void *fixed; size_t bytes; void **ptr; int count; const ch
     { gUnitTypeNames,         sizeof gUnitTypeNames,         NULL, 0, "gUnitTypeNames"         },
     { gItemNames,             sizeof gItemNames,             NULL, 0, "gItemNames"             },
     { gClassAdvancementNames, sizeof gClassAdvancementNames, NULL, 0, "gClassAdvancementNames" },
-    /* terrainText: a function-static in src/battle_field.c, so there is no address to apply at load
+    /* terrainText: a function-static in src/battle/field.c, so there is no address to apply at load
      * time. Its blob is held until that file's PC_FEAT hook hands us the table (see below). */
     { NULL, 0, NULL, 0, "terrainText" },
 };
@@ -98,7 +98,7 @@ static struct {
     int textN;
     unsigned char *terrain;           /* deferred blob for the function-static terrainText */
     unsigned terrainLen;
-    unsigned char *charmap;           /* deferred blob for the static map/bitmaps in text.c */
+    unsigned char *charmap;           /* deferred blob for the static map/bitmaps in core/text.c */
     unsigned charmapLen;
     struct LangLit { unsigned long long hash; char *str; } *lits;   /* K_LITERAL, parsed */
     int litsN;
@@ -318,7 +318,7 @@ const char *PC_LangBootFolder(void) {
     return s_bootFolder;
 }
 
-/* exchange/91: the loaded pack encodes item names as 1-byte/16-char (format 2). supplies.c asks this
+/* exchange/91: the loaded pack encodes item names as 1-byte/16-char (format 2). ui/supplies.c asks this
  * to draw the shop/depot/inventory item lists through the small font instead of the wide SJIS one. */
 int PC_LangItemNames1Byte(void) {
     if (!s_lang.loaded) LangLoad();
@@ -425,7 +425,7 @@ static void LangLoad(void) {
             PC_MovieSubsLoadPack(buf + off, len);
         }
         else if (kind == K_FONT16) PC_LangFont16Load(buf + off, len);   /* pc_lang_font.c */
-        else if (kind == K_CHARMAP) {                /* held until text.c's hand-off (like terrain) */
+        else if (kind == K_CHARMAP) {                /* held until core/text.c's hand-off (like terrain) */
             s_lang.charmap = (unsigned char *)malloc(len);
             if (s_lang.charmap) {
                 memcpy(s_lang.charmap, buf + off, len);
@@ -438,7 +438,7 @@ static void LangLoad(void) {
         off += len;
     }
     s_lang.active = 1;
-    /* format 2 (exchange/91) == 1-byte item names -> supplies.c/window.c/battle_field.c draw the
+    /* format 2 (exchange/91) == 1-byte item names -> ui/supplies.c/ui/window.c/battle/field.c draw the
      * item lists through the small-font path instead of the wide SJIS one. Latched HERE, at load
      * success, and only if the pack's gItemNamesSjis table actually landed: on any earlier bail-out
      * (or a format-2 pack missing the table) gItemNamesSjis still holds retail 2-byte SJIS, and
@@ -517,7 +517,7 @@ const unsigned char *PC_LangCharmapBlob(unsigned *len) {
     return s_lang.charmap;
 }
 
-/* Called once from src/text.c's PC_FEAT hook in GetGlyphIdxForAsciiChar, with the addresses of its
+/* Called once from src/core/text.c's PC_FEAT hook in GetGlyphIdxForAsciiChar, with the addresses of its
  * function-static code->glyph map and the file-static bitmap array -- neither has external linkage,
  * so like terrainText below this hand-off is the only route in. Applies the pack's K_CHARMAP blob:
  * per 11-byte record (code, slot, rows[9]): map[code] = slot, and a non-blank bitmap is written
@@ -583,7 +583,7 @@ const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
     }
     if (cp < 128 && s_subsMap && s_subsGlyphs) {
         unsigned slot = s_subsMap[cp];
-        /* Slot 0 is how the game's map spells "unassigned" (text.c mappings[] defaults to 0;
+        /* Slot 0 is how the game's map spells "unassigned" (core/text.c mappings[] defaults to 0;
          * glyph 0 is real art -- a solid block). Returning it would silently draw a filled
          * rectangle for an unmapped character; fall through to NULL so the renderer's tofu
          * box stays the one visible signal for "letter not in the font". */
@@ -633,7 +633,7 @@ const unsigned char *PC_LangSubtitleGlyph16(unsigned cp) {
     return NULL;
 }
 
-/* Called once from src/battle_field.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
+/* Called once from src/battle/field.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
  * function-static terrainText -- the battle terrain info box, "Plains   0%" and friends. That table
  * has no external linkage, so this hand-off is the only way a pack can reach it. */
 void PC_LangApplyTerrainText(void *table, int bytes) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate platform/pc/src/pc_kanji_font.c -- the glyph bitmaps that the game's
-DrawSjisGlyph() (src/text.c) fetches through Krom2RawAdd().
+DrawSjisGlyph() (src/core/text.c) fetches through Krom2RawAdd().
 
 On real PS1 hardware Krom2RawAdd (BIOS call B(51h)) returns a pointer into the
 BIOS ROM kanji character sets at 0xBFC64000 (psx-spx kernelbios.md). Charset 2

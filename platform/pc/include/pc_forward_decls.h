@@ -24,7 +24,7 @@ u32 *Movie_GetNextFrame(void);
 s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5);
 
 /* Stage 2.3: Krom2RawAdd (BIOS B(51h), implemented in platform/pc/src/libkernel.c) returns a
- * POINTER to a glyph bitmap. src/text.c and src/window.c call it with no declaration in scope --
+ * POINTER to a glyph bitmap. src/core/text.c and src/ui/window.c call it with no declaration in scope --
  * neither includes PsyQ/kernel.h -- so gnu89's implicit rule made it `int Krom2RawAdd()`, i.e. a
  * 32-BIT return. At -m64 the compiler emitted `cltq` after the call, sign-extending a truncated
  * address, and DrawSjisGlyph SIGSEGV'd on the first battle menu. Fixing the header alone was NOT

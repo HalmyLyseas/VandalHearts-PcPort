@@ -1,6 +1,6 @@
 /*
  * PC backend for PsyQ/libspu.h. All of this project's call sites (in
- * src/audio.c) use these for one-time setup/teardown around SPU RAM and
+ * src/core/audio.c) use these for one-time setup/teardown around SPU RAM and
  * IRQ management -- concepts that don't map onto an OpenAL-based backend
  * (OpenAL owns its own buffers; there's no manual SPU RAM heap to
  * allocate, and no hardware IRQ to hook). SpuSetKey(SPU_OFF, SPU_ALLCH)

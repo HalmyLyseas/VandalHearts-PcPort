@@ -12,10 +12,10 @@
  *
  * Two entry points share this one core, matching how the real SDK's
  * high-level RotTrans and SetRotMatrix functions are themselves presumably
- * built on top of the same raw coprocessor opcodes graphics.c calls
+ * built on top of the same raw coprocessor opcodes core/graphics.c calls
  * directly:
  *   - PC_GTE_ functions, called by the gte_ macros in
- *     platform/pc/include/inline_gte.h (graphics.c only -- the one file
+ *     platform/pc/include/inline_gte.h (core/graphics.c only -- the one file
  *     needing real coprocessor-level fidelity).
  *   - The high-level PsyQ/libgte.h SDK wrappers below (RotTrans, SetRotMatrix,
  *     PushMatrix, rcos/rsin, ...), used by the other 37 GTE-touching files,
@@ -82,7 +82,7 @@ static struct {
      * and a single slot silently gets clobbered by the second push instead
      * of erroring, corrupting whichever matrix the first, still-unpopped
      * push was trying to preserve. Found via a real symptom: unit sprites'
-     * computed screen coordinates (RenderUnitSprite, src/object.c) started
+     * computed screen coordinates (RenderUnitSprite, src/core/object.c) started
      * sane but degraded into wild garbage (thousands of pixels off-screen)
      * over successive frames of the same battle scene, despite stable
      * per-call input data -- exactly the signature of a matrix stack losing
@@ -198,7 +198,7 @@ static void TransformOne(short vx, short vy, short vz) {
      * ir1/ir2/dqa to (unsigned short) before the multiply, as this used to do,
      * reinterprets a negative value as a huge positive one (e.g. -166 becomes
      * 65370), producing wildly wrong screen coordinates -- found via a real,
-     * bit-exact-reproduced bug: RenderUnitSprite's (src/object.c) computed
+     * bit-exact-reproduced bug: RenderUnitSprite's (src/core/object.c) computed
      * quad corners matched real hardware whenever every ir1/ir2 for that
      * sprite happened to be positive, and went to tens-of-thousands-off-screen
      * garbage the moment any of them went negative, which is routine (facing
@@ -384,7 +384,7 @@ void PC_GTE_StoreOTZ(void *out) {
      * value range. The PS1 GTE's OTZ register (cop2r7) is a saturated 16-bit unsigned
      * value zero-extended into its full 32-bit register, so real hardware always leaves
      * the upper 16 bits of the destination at zero. Writing only 16 bits here left the
-     * caller's full-width `int otz` variable (src/graphics.c's RenderMapTile and friends)
+     * caller's full-width `int otz` variable (src/core/graphics.c's RenderMapTile and friends)
      * with its upper 16 bits as whatever uninitialized stack garbage preceded the call --
      * usually harmless (otz normally small), but a real, reported SIGSEGV once garbage
      * upper bits made otz large enough to push `ot + OT_SIZE - otz` (AddPrim's target)
@@ -421,7 +421,7 @@ void InitGeom(void) {
      *   $27 DQA  = -4194,  $28 DQB = 0x1400000 (depth-cue interpolation -> IR0)
      * The earlier 0x555/0x400 guess (feedback-16) was exactly 4x too large, so terrain OTZ (via
      * gte_avsz4) came out ~4x inflated (nearest tile ~472 instead of ~118), pushing essentially all
-     * terrain past graphics.c's distance-darkening black threshold (otz>=406) -- the "black terrain"
+     * terrain past core/graphics.c's distance-darkening black threshold (otz>=406) -- the "black terrain"
      * symptom. 0x100 is the ground-truth value; verified by disassembly, matches real hardware. */
     g.zsf3 = 0x0155;
     g.zsf4 = 0x0100;

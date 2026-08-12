@@ -127,7 +127,7 @@ extern PathGridRow *gCrateGrid_Ptr;
 extern u8 gImpededSteps[5][200];
 extern u8 *gImpededStepsQueue[5];
 extern u8 gTravelTerrainCost[14][11]; // [stepping-type][terrain-type]
-/* Indexed `[stepType][diff]` in path_grids.c. The real hardware dimensions are [14][20]; the outer
+/* Indexed `[stepType][diff]` in battle/path_grids.c. The real hardware dimensions are [14][20]; the outer
  * dimension is widened to [20] in the PC build ONLY, for a confirmed reason -- see below. The inner
  * dimension (stride) is NEVER changed: `gTravelAscentCost[stepType][diff]` == base + stepType*20 +
  * diff, so keeping 20 is mandatory for the address math to match.
@@ -138,7 +138,7 @@ extern u8 gTravelTerrainCost[14][11]; // [stepping-type][terrain-type]
  * CAUSE (corrected -- an earlier version blamed steep terrain / the DEATH ANT sand-pyramid; that
  * was a red herring). The probe also fired for a short-range enchanter on FLAT terrain, so it is
  * NOT relief. It is a map-BOUNDARY read: PopulateMovementGrid reads each neighbour's terrain and
- * elevation UNCONDITIONALLY (path_grids.c:1140-1142) and only AFTERWARDS rejects boundary tiles via
+ * elevation UNCONDITIONALLY (battle/path_grids.c:1140-1142) and only AFTERWARDS rejects boundary tiles via
  * `if (gTerrainPtr[...].s.terrain >= 0)`. So when a unit's move-flood reaches the playable-area
  * edge, it reads the off-map/boundary neighbour's elevation (~126 different from real terrain),
  * computes gTravelAscentCost[stepType][126], and then discards the result. Ubiquitous: every map,

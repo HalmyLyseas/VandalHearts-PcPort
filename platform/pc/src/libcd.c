@@ -46,8 +46,8 @@
  * within one game session the way it can be on real hardware), and no
  * separate "resume from pause" bonus (this game's CD access pattern here is
  * plain sequential file loads, not CD-DA/XA playback pause/resume). Only
- * CdRead()/CdReadSync() (used by cd.c's LoadCdFile/ContinueLoadingCdFile
- * for regular file loads) are covered -- audio.c's ExecuteCdControl-driven
+ * CdRead()/CdReadSync() (used by core/cd.c's LoadCdFile/ContinueLoadingCdFile
+ * for regular file loads) are covered -- core/audio.c's ExecuteCdControl-driven
  * CdlSeekL/CdlReadN XA-streaming path is a separate, currently-unexercised
  * command sequence (CdControl() has never recognized those command codes;
  * this predates the timing work and is out of scope for it).
@@ -315,10 +315,10 @@ int CdControl(u_char com, u_char *param, u_char *result) {
              * ADPCM history, so the same-track resume (CdlSeekL/CdlReadN below) continues
              * seamlessly. A genuinely int pause simply drains the queue and goes quiet. */
             s_xaStreaming = 0;
-            /* Movie_Finish (src/cd.c) issues CdlPause at movie end -> stop decoding new movie
+            /* Movie_Finish (src/core/cd.c) issues CdlPause at movie end -> stop decoding new movie
              * frames, but LEAVE the last decoded frame on the overlay so a wait-for-button movie
              * end shows the final image instead of black. The overlay is dropped by ClearScreen
-             * (PERMUTER hook in src/movie_state.c) when the game redraws the next scene. */
+             * (PERMUTER hook in src/core/movie_state.c) when the game redraws the next scene. */
             if (s_movieActive) {
                 /* Pausing a MOVIE (one-shot end or player START-skip) -- not the battle XA-loop's
                  * rapid pause/replay polling (that runs with s_movieActive==0 and must stay a soft
@@ -346,7 +346,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             if (s_movieActive) { s_movieActive = 0; PC_GpuSetMovieOverlay(NULL, 0, 0); MovieHdClose(); PC_MovieSubsClose(); }
             return 1;
         case CdlSetfilter:
-            /* Which interleaved XA file/channel to play (audio.c AudioJob_PrepareXa/PlayXa). */
+            /* Which interleaved XA file/channel to play (core/audio.c AudioJob_PrepareXa/PlayXa). */
             if (param) {
                 CdlFILTER *f = (CdlFILTER *)param;
                 s_xaFile = f->file;
@@ -355,7 +355,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             return 1;
         case CdlSeekL:
         case CdlReadN:
-            /* Honor a location passed directly in the seek/read (audio.c's XA path does
+            /* Honor a location passed directly in the seek/read (core/audio.c's XA path does
              * CdControl(CdlSeekL, &gXaCdlLOC) WITHOUT a preceding CdlSetloc). Was ignored ->
              * XA seeked to a stale s_targetLBA. NULL param = use the last CdlSetloc (file reads). */
             if (param) s_targetLBA = CdPosToLBA((CdlLOC *)param);
@@ -555,7 +555,7 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
     }
 
     /* Language pack (pc_lang.c): a translated on-disc text file is substituted here, keyed by the
-     * read's LBA. cd.c reads a text file whole in one CdRead from gCdFiles[cdf].startingSector --
+     * read's LBA. core/cd.c reads a text file whole in one CdRead from gCdFiles[cdf].startingSector --
      * the plain ISO9660 LBA -- so this is indistinguishable from the disc having held those bytes,
      * and the game parses them with its own unmodified LoadText. No-op without a pack. */
     PC_LangPatchRead(s_targetLBA, sectors, out);
@@ -602,7 +602,7 @@ int CdRead2(int mode) {
      * Stream|RT mode is also what STARTS a movie's interleaved XA-ADPCM audio on real
      * hardware -- and that we CAN do. Previously this was a pure no-op, so movie audio
      * only ever streamed as a side effect of CdControl(CdlSeekL) seeing RT already set
-     * in s_mode. That left the FIRST movie silent: Movie_Start (src/cd.c) seeks (state 2)
+     * in s_mode. That left the FIRST movie silent: Movie_Start (src/core/cd.c) seeks (state 2)
      * BEFORE it calls CdRead2(0x1c0) (state 6) that sets the RT bit, so the boot logo's
      * seek ran with RT clear and never began streaming; every later movie inherited the
      * now-stale RT s_mode and did stream. Hence "logo silent, intro plays." Start the
@@ -616,7 +616,7 @@ int CdRead2(int mode) {
             s_xaCursorLBA = s_targetLBA;
         }
         s_xaStreaming = 1;
-        /* CdRead2(Stream|RT) is issued only by Movie_Start (src/cd.c) -> this also marks the start
+        /* CdRead2(Stream|RT) is issued only by Movie_Start (src/core/cd.c) -> this also marks the start
          * of a .STR movie's VIDEO. Seed the demux cursor at the movie base (the just-seeked LBA)
          * and show frame 1 immediately so the first tick isn't black. */
         s_movieActive   = 1;
@@ -682,13 +682,13 @@ unsigned int DecDCToutCallback(void (*func)()) {
 
 /* Timing-accurate movie skip (2026-07-12, exchange/20-camera-viewport-coordinates.md's "ROOT
  * CAUSE FOUND" section). Real FMV/MDEC decode is still not implemented (see file header) -- but
- * StGetNext() used to always fail immediately, which skipped past cd.c's *own*, already-correct
- * completion-detection logic (Movie_GetNextFrame(), src/cd.c:1316-1321: `if
+ * StGetNext() used to always fail immediately, which skipped past core/cd.c's *own*, already-correct
+ * completion-detection logic (Movie_GetNextFrame(), src/core/cd.c:1316-1321: `if
  * (sMovieSectorHeader->frameCount >= s_totalFrames_80123268) s_movieFinished_8012326c = 1;`)
  * entirely, so movies "finished" almost instantly regardless of their real length -- confirmed
  * via a dense per-tick trace on both platforms: real hardware spends 2556 ticks in STATE_MOVIE
  * (BizHawk capture, frames 1771-4326) vs. our build's 28. Since rand() gets called once per
- * tick throughout (src/engine.c's UpdateEngine()), that gap alone was enough to fully desync the
+ * tick throughout (src/core/engine.c's UpdateEngine()), that gap alone was enough to fully desync the
  * shared RNG stream before any gameplay logic ever runs, on top of the two RNG bugs fixed
  * alongside this investigation.
  *
@@ -699,7 +699,7 @@ unsigned int DecDCToutCallback(void (*func)()) {
  * THREE failed attempts before landing on the correct model -- worth recording all of them,
  * since the eventual fix only makes sense in contrast:
  *   1. A "succeed every Nth call" counter measured only 642 ticks total instead of the targeted
- *      ~2500: cd.c's Movie_GetNextFrame() retries StGetNext() in a tight, un-yielding
+ *      ~2500: core/cd.c's Movie_GetNextFrame() retries StGetNext() in a tight, un-yielding
  *      `while (... != 0) { if (--tries==0) return NULL; }` loop (tries starts at 0x100000), so a
  *      call-counter gets exhausted within a single real tick's near-instant loop, never actually
  *      gating against real elapsed time.
@@ -735,7 +735,7 @@ unsigned int DecDCToutCallback(void (*func)()) {
  *
  * Pacing rate: 4 calls/frame (15fps at this backend's 60Hz tick rate) is psx-spx's cited
  * standard STR rate, and reproduces the measured 2556-tick span closely: this demo's intro
- * chains two movies via src/movie_state.c's case 100 re-entry logic (logo, frameCt=0x8f=143,
+ * chains two movies via src/core/movie_state.c's case 100 re-entry logic (logo, frameCt=0x8f=143,
  * then title, frameCt=0x1db=475 -- 618 frames total), and `(2556 - ~20 known per-movie startup
  * delay ticks) / 618 frames ≈ 4.1 ticks/frame ≈ 14.6fps`, matching 15fps well within measurement
  * tolerance. */
@@ -819,7 +819,7 @@ void StSetStream(unsigned int mode, unsigned int start_frame, unsigned int end_f
     (void)func1;
     (void)func2;
     /* New movie starting -- reset the paced frame counter so frameCount comparisons against
-     * this movie's own s_totalFrames_80123268 (set separately by cd.c's PlayMovie()) start
+     * this movie's own s_totalFrames_80123268 (set separately by core/cd.c's PlayMovie()) start
      * from zero, not wherever a previous chained movie left off. */
     s_movieFrameCounter = 0;
     s_movieCallsSinceFrame = 0;
@@ -827,11 +827,11 @@ void StSetStream(unsigned int mode, unsigned int start_frame, unsigned int end_f
 
 unsigned int StGetNext(unsigned int **addr, unsigned int **header) {
     /* Always succeeds immediately (see the comment above for why) -- only the reported
-     * frameCount is paced, advancing once every CALLS_PER_MOVIE_FRAME calls. cd.c's own
+     * frameCount is paced, advancing once every CALLS_PER_MOVIE_FRAME calls. core/cd.c's own
      * Movie_GetNextFrame() then correctly compares that against the real s_totalFrames_80123268
      * and sets s_movieFinished_8012326c itself, no different from a real MDEC decoder reaching
      * the end of a real stream. addr[0]/addr[1] must match the header's dummy1/dummy2 fields
-     * exactly (src/cd.c:1311's sanity check) or the frame gets silently discarded without
+     * exactly (src/core/cd.c:1311's sanity check) or the frame gets silently discarded without
      * advancing -- keep both zeroed and consistent. */
     s_movieCallsSinceFrame++;
     if (s_movieCallsSinceFrame >= CALLS_PER_MOVIE_FRAME) {

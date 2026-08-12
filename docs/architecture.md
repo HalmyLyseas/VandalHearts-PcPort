@@ -79,7 +79,7 @@ gates. **The matching build defines none of them**, so every gated edit compiles
 
 `grep -rnE "PERMUTER|PC_PORT|PC_DEBUG" src/` finds every one. **After any `src/` edit, re-run
 `make check`** — an ungated change silently breaks byte-identity. History bears this out: an
-unconditional widening of one `src/text.c` array once broke the match for two days before it was
+unconditional widening of one `src/core/text.c` array once broke the match for two days before it was
 caught. See [memory-safety.md](memory-safety.md) for why several of these gates exist (the 64-bit port
 surfaced bugs that were invisible to static review).
 

@@ -8,7 +8,7 @@
  *
  * Single-level this time (unlike gUnitAnimSets' 3-level structure, Bug 12): each entry
  * points directly at a real Quad (`typedef SVECTOR Quad[4]`, 4 vectors of 4 shorts each =
- * 32 bytes), consumed by src/object.c's RenderUnitSprite via RotTransPers4. Confirmed all 19
+ * 32 bytes), consumed by src/core/object.c's RenderUnitSprite via RotTransPers4. Confirmed all 19
  * real pointer values (read directly from SLUS_004.47, address via build/SLUS_004.47.map,
  * ROM offset via the containing subsegment's rom/vram base) fall inside one small, 512-byte
  * contiguous span -- exactly 16 Quads, ending exactly where gSpriteBoxQuads' own array
@@ -18,10 +18,10 @@
  * Deliberately NOT `const` (unlike pc_battle_data.c's and pc_unit_anim_data.c's blobs, which
  * really are read-only -- verified by grepping for any assignment through their target
  * types, finding none). This one's target Quad data is genuine writable RAM on real
- * hardware: src/object.c's AddObjPrim8/RenderUnitSprite temporarily rotate a box's Y
+ * hardware: src/core/object.c's AddObjPrim8/RenderUnitSprite temporarily rotate a box's Y
  * coordinates in place (`(*quadp)[0].vy = -(...)`) then restore them a few lines later, and
  * several other files swap `gSpriteBoxQuads[N]` between multiple Quad sources entirely
- * (src/unit_actor.c, src/spells_fx_common2.c, src/spells_dark_hurricane.c, src/maps_28_31.c) --
+ * (src/units/actor.c, src/spells/fx_common2.c, src/spells/dark_hurricane.c, src/maps/map_28_31.c) --
  * confirmed as a real, reported SIGSEGV (a write-protection fault, not a bad-pointer fault --
  * the address itself was valid) once `const` put this blob in read-only memory, not a
  * hypothetical. */
@@ -61,8 +61,8 @@ static u8 sSpriteBoxQuadBlob[544] = {
 /* boxes 0/7/8/9/11 alias the NAMED live-quad globals (gQuad_800fe53c/63c/65c, graphics.h) --
  * on real hardware gSpriteBoxQuads[N] and gQuad_XXX are the SAME object (same VRAM address). The
  * data generator wrongly split each into a frozen blob copy here PLUS a separate writable global,
- * so per-frame BY-NAME writes (projectile.c RotateProjectile -> the arrow; a dozen fx_*; the
- * unit_actor.c airman shadow) never reached the renderer -- it read the frozen blob copy. Point
+ * so per-frame BY-NAME writes (battle/projectile.c RotateProjectile -> the arrow; a dozen fx_*; the
+ * units/actor.c airman shadow) never reached the renderer -- it read the frozen blob copy. Point
  * these entries at the live globals to restore the single-object hardware behaviour (fixes the
  * flat/un-rotated arrow + many attack effects + flyer shadows). See feedback-25. */
 Quad *gSpriteBoxQuads[19] = {

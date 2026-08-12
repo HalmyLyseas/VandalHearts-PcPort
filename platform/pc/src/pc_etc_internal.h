@@ -5,7 +5,7 @@
 #define PC_ETC_INTERNAL_H
 
 /* ---- pc_battle_speed.c (Stage-3 1.4 F1 battle fast-forward) ---- */
-int  PC_InActiveBattle(void);           /* main.c State_Battle() dispatch set {3,23,27,30,31} */
+int  PC_InActiveBattle(void);           /* core/main.c State_Battle() dispatch set {3,23,27,30,31} */
 int  PC_BattleSpeedGet(void);           /* effective speed: 1 outside battle (OSD + pacing divisor) */
 int  PC_BattleSpeedRaw(void);           /* the raw speed state, for diagnostics labels */
 void PC_BattleSpeedReset(void);         /* per-VSync: back to 1x whenever not in battle */

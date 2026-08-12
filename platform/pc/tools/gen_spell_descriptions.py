@@ -5,7 +5,7 @@ Generate platform/pc/src/pc_spell_descriptions.c -- a reconstruction of the
 
 `gSpellDescriptions` is an array of 72 `s8*` pointers to the spell/item info
 strings ("Healing Magic  Rng:0  Fld:0  MP:2", ...) shown in the bottom window of
-the battle spell/item list (drawn by window.c's DrawText_Internal). Because it
+the battle spell/item list (drawn by ui/window.c's DrawText_Internal). Because it
 is a pointer-containing global, build_data_segment.py can't relocate its bytes
 and zero-fills it (see that file's header) -- so on the PC port every entry was
 NULL and DrawText_Internal drew nothing, leaving the description window blank.

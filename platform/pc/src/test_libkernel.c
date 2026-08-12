@@ -1,5 +1,5 @@
 /* Standalone proof-of-concept: exercises the event system (matching
- * card.c's own OpenEvent/EnableEvent/StartCard/TestEvent flow), the timer,
+ * core/card.c's own OpenEvent/EnableEvent/StartCard/TestEvent flow), the timer,
  * and a real save-file round trip through FileOpen/FileWrite/FileClose/
  * FileOpen/FileRead/FileClose plus firstfile/nextfile directory scanning.
  * Not part of the real game build. */
@@ -9,7 +9,7 @@
 #include "PsyQ/kernel.h"
 #include "PsyQ/sys/file.h"
 
-/* Matching card.c's own approach: these aren't declared in kernel.h
+/* Matching core/card.c's own approach: these aren't declared in kernel.h
  * (neither the real one nor ours) -- forward-declare locally. */
 extern void InitCard(s32);
 extern s32 StartCard(void);
@@ -21,7 +21,7 @@ extern struct DIRENTRY *firstfile(unsigned char *, struct DIRENTRY *);
 extern struct DIRENTRY *nextfile(struct DIRENTRY *);
 
 int main(void) {
-    /* ---- event system, mirroring card.c's StartCard()/init sequence ---- */
+    /* ---- event system, mirroring core/card.c's StartCard()/init sequence ---- */
     s32 evNew = OpenEvent(SwCARD, EvSpNEW, EvMdNOINTR, NULL);
     s32 evError = OpenEvent(SwCARD, EvSpERROR, EvMdNOINTR, NULL);
     EnableEvent(evNew);

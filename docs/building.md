@@ -50,7 +50,7 @@ reproduces the original bytes. **Run it after any change to `src/` or `include/`
 that shifts a struct or array silently breaks the match (see the gating conventions in
 [architecture.md](architecture.md#how-the-port-avoids-breaking-the-match)).
 
-A handful of files need per-file compiler overrides (e.g. `audio.c` builds with `cc1_v257 -O2 -G0`);
+A handful of files need per-file compiler overrides (e.g. `core/audio.c` builds with `cc1_v257 -O2 -G0`);
 these are already in the `Makefile`. Follow that pattern rather than changing global flags.
 
 ---

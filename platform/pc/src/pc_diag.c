@@ -232,9 +232,9 @@ static void LogCameraTraceRow(void) {
                 "camPosX,camPosY,camPosZ,camRotX,camRotY,camZoomZ,"
                 "camObjIdx,camObjFuncIdx,camObjState,targetObjIdx,targetX,targetY,targetZ,"
                 /* 30-fresh-look-deterministic-camera-hypothesis.md: winOrigin[X/Z] is the
-                 * actual render-window origin (gMapViewOriginX/2C, src/battle_field.c:193), the
+                 * actual render-window origin (gMapViewOriginX/2C, src/battle/field.c:193), the
                  * derived quantity the terrain-window + sprite-cull both key off; camDirQuad is
-                 * the yaw quadrant RenderField selects (src/graphics.c:1178). startCur[X/Z/Y]
+                 * the yaw quadrant RenderField selects (src/core/graphics.c:1178). startCur[X/Z/Y]
                  * is gMapCursorStartingPos[mapNum] as read at RUNTIME on this build -- confirms
                  * the (byte-exact-static) table isn't being misread through a port stride/endian
                  * bug. These are what make the pre-AI frame-0 diff decisive. */
@@ -246,7 +246,7 @@ static void LogCameraTraceRow(void) {
                  * at (-32,-32) or already mid-pan. -1 fadeLevel = no active gScreenFade object. */
                 "winOriginX,winOriginZ,camDirQuad,startCurX,startCurZ,startCurY,"
                 /* live map cursor = the AI-turn camera-focus target CenterCamera eases toward
-                 * (battle_field.c:190); pairs with 43-camera-focus-easein-trace.lua's mapCursorX/Z
+                 * (battle/field.c:190); pairs with 43-camera-focus-easein-trace.lua's mapCursorX/Z
                  * so both platforms carry the ease-in target for the iteration-vs-gate diff. */
                 "mapCursorX,mapCursorZ,"
                 "fieldRenderDisabled,fadeLevel\n");
@@ -306,14 +306,14 @@ static void LogCameraTraceRow(void) {
 
 /* AI-decision-chain trace (timing topic, Finding #1: the "unit active -> blue movement overlay"
  * early-gate). The overlay (gShowBlueMovementGrid=1, set in Objf013_BattleMgr state 7.2) can't fire
- * until BattleMgr STATE 6 exits, and state 6 blocks on `gAiPlanReady != 0` (battle_field.c:3202),
+ * until BattleMgr STATE 6 exits, and state 6 blocks on `gAiPlanReady != 0` (battle/field.c:3202),
  * which is set only when the AI-decision object chain finishes (Objf570_AI_ChooseAction -> Objf40x/Objf589,
- * ai.c:278 case 99, via the gAiPlanDone hand-off). On hardware state 6 lasts ~108 frames; on our build
+ * battle/ai.c:278 case 99, via the gAiPlanDone hand-off). On hardware state 6 lasts ~108 frames; on our build
  * ~18 -> the AI chain completes ~6x faster and the overlay shows early (mid camera-pan). This logs the
  * chain's live state so we can see EXACTLY which sub-state exits early. Env-gated (VH_AI_LOG); reads
  * only game RAM (no src/ changes, matching build untouched). Pairs with 43-camera-focus-easein. */
 extern u8 gAiPlanReady; /* BattleMgr state-6 release flag (battle.h) */
-extern u8 gAiPlanDone; /* Objf570 sub-object hand-off flag (ai.c) */
+extern u8 gAiPlanDone; /* Objf570 sub-object hand-off flag (battle/ai.c) */
 extern int g_aiVisitCount[8]; /* cumulative GetRCnt visits per AI range (libkernel.c); for calibration */
 static FILE *s_aiChainFile = NULL;
 
@@ -392,7 +392,7 @@ static void LogRandSeedRow(void) {
 
 /* Camera-matrix / view-Z (OTZ) baseline mirror (exchange/31-camera-matrix-otz-baseline.lua).
  * Writes the exact same columns as the BizHawk baseline so the two CSVs diff directly, to
- * localize why our terrain OTZ (= avg view-Z) runs high enough (>=406) that graphics.c's
+ * localize why our terrain OTZ (= avg view-Z) runs high enough (>=406) that core/graphics.c's
  * distance-darkening saturates terrain to black. Read at the same per-frame point as the
  * BizHawk end-of-frame read, so gCameraMatrix.t[] is equally "post-render stale" on both sides
  * (the reliable comparands are the inputs gCameraRotation/gCameraZoom/gMapScale/enableMapScaling
@@ -434,9 +434,9 @@ static void LogCameraMatrixRow(void) {
 }
 
 /* Terrain OTZ probe (otz-overflow / black-terrain investigation). RenderMapTile /
- * RenderEdgeMapTile (src/graphics.c) call PC_DebugTerrainTile once per drawn tile with the
+ * RenderEdgeMapTile (src/core/graphics.c) call PC_DebugTerrainTile once per drawn tile with the
  * post-clamp otz and the final vertex-0 colour. We accumulate per-frame aggregates (tile count,
- * otz min/max/mean, and how many tiles ended fully black -- graphics.c's distance-darkening
+ * otz min/max/mean, and how many tiles ended fully black -- core/graphics.c's distance-darkening
  * zeroes r0/g0/b0 for otz>=406) and LogTerrainRow() dumps one pose-aligned row per frame. This
  * answers directly whether our terrain otz is really high enough to darken to black at the
  * matched opening pose (camera matrix already confirmed == real hardware). Env-gated
@@ -490,7 +490,7 @@ static void LogTerrainRow(void) {
 }
 
 /* AVSZ sprite-path probe (thread: which routine draws the opening characters?). AddObjPrim4
- * (object.c) uses RotAverage4 => AVSZ otz (= sz3/4-ish), so its sprites interleave with terrain,
+ * (core/object.c) uses RotAverage4 => AVSZ otz (= sz3/4-ish), so its sprites interleave with terrain,
  * unlike the raw-sz3 RenderUnitSprite path. If the demo-opening characters are drawn here, their
  * otz/otIdx will land in the terrain band; if AddObjPrim4 isn't called during the opening, our
  * build is missing the intro path entirely. Env-gated (VH_OBJPRIM4_LOG); the call site is
@@ -512,7 +512,7 @@ void PC_DebugObjPrim4Log(int gfx, int otz, int otIdx, int sx, int sy, int otOfs)
     fflush(s_op4File);
 }
 
-/* Opaque-sprite gfx diagnostic (casting-blob investigation). object.c's AddObjPrim* variants take
+/* Opaque-sprite gfx diagnostic (casting-blob investigation). core/object.c's AddObjPrim* variants take
  * the OPAQUE branch (poly->tpage = gGfxTPageIds[gfx]) when d.sprite.semiTrans==0; the blob is a mesh
  * of those, some resolving to tpage 0x0000 (gGfxTPageIds[gfx]==0 -> samples framebuffer page 0). This
  * logs gfx + resolved tpage + owning effect functionIndex + screen pos, so we can (a) filter by the
@@ -735,7 +735,7 @@ void PC_DiagFps(int mode) {
 }
 
 /* Witness-pass logger (decomp-improvement track): one line per gSpellsEx FX dispatch.
- * Compiled into battle_executors.c only under `make link SPELLFX_LOG=1`; runtime-gated on
+ * Compiled into battle/executors.c only under `make link SPELLFX_LOG=1`; runtime-gated on
  * VH_SPELLFX_LOG. Writes vh_spellfx_log.txt and echoes to stderr. The handler NAME is
  * resolved from the live function pointer via dladdr (the port links -rdynamic), so the
  * log shows exactly which Objf* symbol ran -- a cast-everything Vandalier session then

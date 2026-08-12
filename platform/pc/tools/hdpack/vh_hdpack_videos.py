@@ -16,7 +16,7 @@ the mp4 is ignored (the game plays its own XA), so `-an` may be used to trim siz
 """
 import os, glob, shutil, argparse
 
-# MOV_* enum (include/cd_files.h) index -> movies[].startingSector (src/movie_state.c), by STR name.
+# MOV_* enum (include/cd_files.h) index -> movies[].startingSector (src/core/movie_state.c), by STR name.
 NAME_TO_SECTOR = {
     "LOGO_USA": 0x1fded, "TITLE_WS": 0x20385, "1BU_WS": 0x21618, "EPI1_WS": 0x34172,
     "2BU_WS": 0x27a08, "3BU_WS": 0x2919f, "4BU_WS": 0x2e115, "5BU_WS": 0x30604,

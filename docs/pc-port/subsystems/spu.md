@@ -206,7 +206,7 @@ After this fix: 3–6 kHz band error **+3.99 → −1.01 dB**, mean |error| over
 
 A recurring early misconception was that the battle/loading music is streamed CD audio (XA). It is
 **not**. The score is **SEQ**, synthesised on the SPU from the `SD_SEQ` bank; `PlayBattleBGM`
-(`src/battle_eval.c`) issues `AUDIO_CMD_PLAY_SEQ`. A BizHawk capture of a full demo→menu run settled
+(`src/battle/eval.c`) issues `AUDIO_CMD_PLAY_SEQ`. A BizHawk capture of a full demo→menu run settled
 it on real hardware: across the whole run there are **zero looping XA tracks**, and during
 loading + battle the XA stream is idle except for brief one-shot spell SFX. The music was silent in
 early builds purely because SEQ was unimplemented — no XA fix ever helped.

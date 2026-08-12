@@ -5,10 +5,10 @@
  * the game uses XA for the intro-movie audio and for streamed sound effects -- notably the big
  * elemental spell SFX (Hurricane/Salamander/Avalanche/Plasma-Wave, XA files 17/18/19/22/23/33).
  * It does NOT use XA for background music: the loading/battle BGM is SEQ (sequenced music ->
- * SPU voices; battle_eval.c PlayBattleBGM -> AUDIO_CMD_PLAY_SEQ), a separate subsystem. There
+ * SPU voices; battle/eval.c PlayBattleBGM -> AUDIO_CMD_PLAY_SEQ), a separate subsystem. There
  * are zero looping XA tracks in the game's demo, so this layer only ever streams finite one-shots.
  *
- * The game (src/audio.c) requests XA via PerformAudioCommand(PLAY_XA/PREPARE_XA), which drives a
+ * The game (src/core/audio.c) requests XA via PerformAudioCommand(PLAY_XA/PREPARE_XA), which drives a
  * CdlSetmode(RT)/CdlSetfilter(file,chan)/CdlSeekL state machine. On real hardware the CD
  * controller decodes the interleaved XA-ADPCM sectors and mixes them into the SPU's CD input at
  * a serial volume. Here we mirror that: libcd.c reads raw 2352-byte sectors from the .bin at the

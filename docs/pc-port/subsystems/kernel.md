@@ -25,7 +25,7 @@ On real hardware a BIOS *event* is a slot describing "when interrupt source *cla
 *spec*, do *mode*". Code arms an event with `OpenEvent(class, spec, mode, handler)` + `EnableEvent`,
 then either polls it with `TestEvent` or blocks on `WaitEvent`. Vandal Hearts uses events for exactly
 one thing — memory-card completion — and only ever calls `OpenEvent` / `EnableEvent` / `TestEvent`
-(see [`src/card.c`](../../../src/card.c)); it never calls `DeliverEvent` or `WaitEvent`, so the
+(see [`src/core/card.c`](../../../src/core/card.c)); it never calls `DeliverEvent` or `WaitEvent`, so the
 backend implements only the three functions the game actually uses.
 
 The model in `libkernel.c` is deliberately minimal: a fixed `Event[16]` table (`MAX_EVENTS`), each
@@ -39,7 +39,7 @@ entry holding `{class, spec, enabled, signaled}`.
 
 Nothing is signaled by a real interrupt, so the backend raises events itself through an internal
 `SignalCardEvent(spec)` that marks every `HwCARD`/`SwCARD` slot with a matching `spec`. **Signalling
-is not optional plumbing — it is load-bearing.** `card.c`'s `Card_WaitForSwCardEvent()` /
+is not optional plumbing — it is load-bearing.** `core/card.c`'s `Card_WaitForSwCardEvent()` /
 `Card_WaitForHwCardEvent()` are `while (1) { if (TestEvent(...)) return; }` busy-loops that only exit
 when a card event fires. On hardware the async card BIOS calls (`_card_info`, `_card_clear`,
 `_card_async_load_directory`) complete later and raise a `SwCARD`/`HwCARD` interrupt that signals the
@@ -84,7 +84,7 @@ make the game briefly sprint. After the wait, `VSync()` also pumps the XA-music 
 ## Frame pacing and timing fidelity
 
 The port runs PS1 game logic on a host that is orders of magnitude faster, which distorts one
-specific thing: the enemy-AI turn evaluation. `src/ai.c`'s `IsLagging()` is `GetRCnt(RCntCNT1) > 450`
+specific thing: the enemy-AI turn evaluation. `src/battle/ai.c`'s `IsLagging()` is `GetRCnt(RCntCNT1) > 450`
 — a real-elapsed-CPU-time budget checked from inside seven AI state machines
 (`Objf570/400/401/402/403/404/589_AI_TBD`). On hardware the AI's grid computation is slow enough to
 trip that budget repeatedly, so the work spreads across ~110 vblanks; on a modern host it never
@@ -135,7 +135,7 @@ card-path strings of the form `bu00:BASLUS-00447VH` are mapped to `saves/<name>`
 `device:` prefix (`LocalPath` / `StripDevicePrefix`). `InitCard` `mkdir`s the `saves/` directory;
 `FileOpen/Read/Write/Seek/Close` are thin `fopen`/`fread`/`fwrite`/`fseek` wrappers over a small open
 handle table, and directory enumeration (`firstfile`/`nextfile`) walks `saves/` with `opendir`,
-reporting each entry's real size. `card.c`'s own block/capacity accounting is driven entirely by
+reporting each entry's real size. `core/card.c`'s own block/capacity accounting is driven entirely by
 those real file sizes, so this layer only supplies honest existence/size/read/write — no PS1 card
 filesystem format is emulated. Saving in-game calls `Card_CreateFile` + `Card_WriteFileListing`,
 which writes `saves/BASLUS-00447VH`; loading checksum-verifies and reads it back. Nothing needs to be
@@ -156,7 +156,7 @@ forever. `StartCard` similarly raises `EvSpNEW` ("a card is present").
   (120 bytes at ILP32, 136 at LP64 — it embeds two live runtime pointers, so LP64 opens an 8-byte
   hole plus tail padding). Left naive, a 64-bit build would write a differently-sized blob than a
   32-bit one and the two couldn't share saves. That is **fixed** (`PC_PORT`-gated
-  `Pc_PackInBattleSave`/`Pc_UnpackInBattleSave` in `src/card.c`): the on-disk record is always the
+  `Pc_PackInBattleSave`/`Pc_UnpackInBattleSave` in `src/core/card.c`): the on-disk record is always the
   **fixed 120-byte PSX layout**, packed field-by-field around the pointer hole, with the checksum over
   that fixed size — so **in-battle saves are architecture-agnostic**, cross-loadable between the 32-
   and 64-bit builds (regular saves and the file listing contain no `UnitStatus` and were never
@@ -169,7 +169,7 @@ forever. `StartCard` similarly raises `EvSpNEW` ("a card is present").
 - **`VSync(2)` is 30 FPS on purpose.** Don't "fix" it to 60 — battle logic ticks once per two
   vblanks by design. Convert BizHawk vblank counts by `/2` before comparing battle timing.
 - **`GetRCnt` is shared, and scaling the primitive is a trap.** A single global multiplier on
-  `RCntCNT1` was tried and reverted: `IsLagging()` needs it slowed, but `src/graphics.c`'s
+  `RCntCNT1` was tried and reverted: `IsLagging()` needs it slowed, but `src/core/graphics.c`'s
   incremental sprite decoder gates its per-frame decode budget on the same counter and gets *starved*
   by the same scale (corrupted geometry, infinite demo loop). The per-caller synthetic model exists
   precisely so these two consumers never share a fudge factor.

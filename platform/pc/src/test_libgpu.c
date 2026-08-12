@@ -177,7 +177,7 @@ int main(void) {
             CHECK(t.prect->x == 800 && t.prect->y == 0 && t.prect->w == 2 && t.prect->h == 2,
                   "ReadTIM.prect reflects the TIM's own embedded destCoord/whWord");
             /* Real ReadTIM never uploads to VRAM itself -- the caller does,
-             * exactly like screen_effects.c/dojo.c's real usage. */
+             * exactly like core/screen_effects.c/world/dojo.c's real usage. */
             LoadImage(t.prect, t.paddr);
             {
                 unsigned short px2 = ReadVramPixel(800, 0);

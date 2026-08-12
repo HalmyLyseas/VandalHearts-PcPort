@@ -92,7 +92,7 @@ extern char g_camOsdText[96];
  * present so the label matches the frame being shown (no 1-frame lag). */
 void PC_UpdateCamOsd(void);
 
-/* Debug sprite-pipeline log (feedback-14 follow-up): called from RenderUnitSprite (object.c,
+/* Debug sprite-pipeline log (feedback-14 follow-up): called from RenderUnitSprite (core/object.c,
  * gated by PC_DEBUG_SPRITE_LOG / SPRITE_LOG=1) to record each unit sprite's fate at the
  * matched-pose repro -- tile position, render window, cull result, projected screen coords, and
  * OT index -- so we can tell whether missing units are culled by winOrigin, projected off-screen,

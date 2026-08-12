@@ -78,7 +78,7 @@ int main(void) {
         }
     }
 
-    printf("\n=== NCLIP winding test (via raw gte_* macros, graphics.c's path) ===\n");
+    printf("\n=== NCLIP winding test (via raw gte_* macros, core/graphics.c's path) ===\n");
     InitGeom();
     SetRotMatrix(&id);
     {

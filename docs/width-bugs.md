@@ -61,10 +61,10 @@ headers and backends (~325 replacements). ⚠️ Protect `long long` when doing 
 `(unsigned long long)n*d` is the perspective-collapse overflow fix
 ([subsystems/gte.md](pc-port/subsystems/gte.md)).
 
-**2. Raw union index views past a pointer.** `src/battle_executors.c` did `obj->d.bytes[4] = 1` to set
+**2. Raw union index views past a pointer.** `src/battle/executors.c` did `obj->d.bytes[4] = 1` to set
 the low byte of `Object_017.camSavedX`; `Object_017` begins with `struct Object *sprite`, so at 64-bit
 byte 4 lands *inside* the pointer and corrupts it → SIGSEGV in `Objf017_Camera` at the first attack.
-7 sites. *Fix (battle_executors.c:278):* `LO(obj->d.objf017.camSavedX)` — the exact line the decompiler
+7 sites. *Fix (battle/executors.c:278):* `LO(obj->d.objf017.camSavedX)` — the exact line the decompiler
 had already left commented above it.
 
 **3. Union coords aliasing → white blobs.** An effect (`Objf314_InwardRay`) writes its quad through
@@ -95,7 +95,7 @@ sanitizer (the wrong texture is a valid in-bounds read of a garbage index).
 **3c. The same leading-pointer shift, but a *cross-type reinterpret* — the struct itself was fine.**
 The Chapter-2 Dolf casting cutscene drew its blue **lightning** as a solid garbage **blob** — ~17k
 quads sampling VRAM page 0 (the framebuffer). Same leading-pointer mechanism as #3b, but with a twist
-that makes it a *different* bug to fix. `func_800ABFB8` (the lightning builder, `src/fx_event_scenes.c`)
+that makes it a *different* bug to fix. `func_800ABFB8` (the lightning builder, `src/events/fx_scenes.c`)
 reads `obj->d.sprite.gfxIdx` (offset 0x28) from callers that pass a **non-sprite** object —
 `Objf319_Map67_Scn34_TBD` passes *its own* object, whose struct has a leading pointer at 0x24. It has an
 existing `if (gfxIdx == GFX_NULL) gfxIdx = GFX_LIGHTNING_5` fallback, and at 32-bit offset 0x28 reads a
@@ -106,7 +106,7 @@ test → OOB `gGfxTPageIds[21977]` → `tpage = 0` → the quads sample VRAM pag
 garbage blob. **Crucially, unlike #3b, `Objf319`'s struct is *correct for its own use*** (`OBJ.entitySprite`
 reads fine) — so the #3b-style "realign the struct" fix does *not* apply. The defect is the **cross-type
 reinterpret** in the shared helper, which relies on a union-aliased field reading 0 on PSX. *Fix
-(`PC_PORT`-gated, `fx_event_scenes.c`):* extend the helper's own `GFX_NULL` fallback to treat any
+(`PC_PORT`-gated, `events/fx_scenes.c`):* extend the helper's own `GFX_NULL` fallback to treat any
 **out-of-range** index as `GFX_NULL`, restoring the intended `GFX_LIGHTNING_5`. Found by an every-frame
 VRAM dump → auto-locate the peak-blob frame → a frame-correlated per-quad log of `gfx` + resolved
 `tpage` + owning `functionIndex` (`VH_OPAQUE_GFX_LOG`, all 9 `AddObjPrim*` opaque branches) → filter
@@ -117,20 +117,20 @@ a garbage-indexed texture page).
 `platform/pc/src/libkernel.c:612`) was declared `s32` returning `(s32)(intptr_t)&glyph` — its own
 comment said *"as s32, matching the -m32 pointer width."* Callers dereference it → SIGSEGV in
 `DrawSjisGlyph` on the first battle menu. *Fix:* return `void *` (+ a `(void *)-1` sentinel), no `src/`
-change. **It also needed a forward declaration:** `src/text.c` / `src/window.c` never `#include` the
+change. **It also needed a forward declaration:** `src/core/text.c` / `src/ui/window.c` never `#include` the
 header, so under `-std=gnu89` the function was implicitly `int` and the return was truncated *regardless
 of the header* — fixed via the force-included `pc_forward_decls.h`. (Audit corollary: of ~170
 undeclared-but-called functions, exactly 3 return a pointer; all now declared.)
 
 **5. An out-of-bounds read whose overrun lands differently at 64-bit.** `sText_FileLoadCaptions`
-(`src/main_menu.c:147`) is a 3-entry array read with `i < numChoices` where `numChoices == 4` for the
+(`src/states/main_menu.c:147`) is a 3-entry array read with `i < numChoices` where `numChoices == 4` for the
 file-load menu. At 32-bit the 4th read hit harmless adjacent static data; at 64-bit it reads 8 bytes
 past onto something else → title-screen "Load" SIGSEGV. *Fix:* a `PC_PORT`-gated 4th `""` entry (the
 real array is 4 wide — adjacent `slotOccupied[4]` confirms — so empty draws nothing, matching what
 32-bit did by accident). ⚠️ **This class is not width-dependent *code*** — the index is simply wrong;
 only the *consequence* changes with pointer size. This is the class the ASan sweep exists for.
 
-**6. A truncated struct copy.** `CopyObject` (`src/graphics.c:610`) copied a hard-coded **24 u32 words
+**6. A truncated struct copy.** `CopyObject` (`src/core/graphics.c:610`) copied a hard-coded **24 u32 words
 = 96 bytes = the 32-bit `sizeof(Object)`**. On 64-bit the union's pointers grow, so fields past them —
 notably `Object_Sprite.animYOfs` (0x5A → 0x62) — fall *outside* the copy. Symptom: the **level-up hop**
 (rendered from `CopyObject`'d copies of the unit sprite) played its animation frames (`gfxIdx` at 0x28,
@@ -141,18 +141,18 @@ sanitizer sees a copy that stays in-bounds of its destination.
 **7. Serialized-struct layout drift (save files).** The in-battle save serializes `UnitStatus`, whose
 size is pointer-width-sensitive (120 bytes at ILP32, 136 at LP64 — it embeds two live pointers). Left
 naive, a 64-bit build would write a differently-sized blob and the checksum length would overrun.
-*Fix (`src/card.c:112`):* `Pc_PackInBattleSave`/`Unpack` serialize to a fixed 120-byte PSX on-disk
+*Fix (`src/core/card.c:112`):* `Pc_PackInBattleSave`/`Unpack` serialize to a fixed 120-byte PSX on-disk
 layout, so saves are architecture-agnostic and cross-loadable between the 32- and 64-bit builds. Found
 by `tools/struct_width_diff.sh` (ASan can't see it — it's layout, not an OOB). See
 [subsystems/kernel.md](pc-port/subsystems/kernel.md).
 
 ### Found and fixed proactively during the 2.3 build (the mechanical class)
 
-**8. Hard-coded 32-bit `sizeof(Object)` — the zeroing loops.** Three `object.c` routines
+**8. Hard-coded 32-bit `sizeof(Object)` — the zeroing loops.** Three `core/object.c` routines
 (`Obj_GetUnused` and friends) zeroed the Object with `((u32*)p)[2..23] = 0` ("clear the Object but keep
 the 0x00–0x07 position vector"). *Fix:* a gated `memset(&p->functionIndex, 0, sizeof(*p) - 2*sizeof(u32))`
-each — derived from the struct, so it clears the *grown* struct at 64-bit (`src/object.c:221/267/316`).
-`CopyObject` (#6) is the same class but lives in `graphics.c` and does a *copy*, so the object.c-only
+each — derived from the struct, so it clears the *grown* struct at 64-bit (`src/core/object.c:221/267/316`).
+`CopyObject` (#6) is the same class but lives in `core/graphics.c` and does a *copy*, so the core/object.c-only
 audit missed it — it took a gameplay regression to surface.
 
 **9. The GPU ordering-table link.** `platform/pc/src/libgpu.c` stored a host pointer truncated to 32

@@ -30,8 +30,8 @@ description: How the Vandal Hearts matching-decomp build system works — toolch
    compiler flags, wrong symbol address, an actual mismatch in the decompiled C, etc.).
 
 Per-file overrides exist in the Makefile for a handful of files that need different
-optimization/GP flags than the global defaults (`audio.c` uses `cc1_v257` + `-O2` + `-G0`;
-`glyphs.c`, `supplies.c`, `dojo.c`, `world_map.c` use `-G0`). If you add per-file special
+optimization/GP flags than the global defaults (`core/audio.c` uses `cc1_v257` + `-O2` + `-G0`;
+`core/glyphs.c`, `ui/supplies.c`, `world/dojo.c`, `world/map.c` use `-G0`). If you add per-file special
 casing, follow this pattern rather than changing global flags.
 
 ## Toolchain / dependency inventory
@@ -50,7 +50,7 @@ the `vh/` repo root (where you run `make`).
 | `cc1_v263_decompals`, `cc1_v257_decompals` | old GCC 2.x compiler frontends | **present** — prebuilt `cc1` binaries from `decompals/old-gcc`'s Releases (tag `0.17`: `gcc-2.6.3-psx.tar.gz`, `gcc-2.5.7-psx.tar.gz`; no Docker build needed) under `external/old-gcc/build-gcc-{2.6.3,2.5.7}-psx/`, symlinked into `external/toolchain/bin/` under the exact names the Makefile expects. **Must be on `PATH`** when running `make` — see "Wiring up cc1" below. |
 | `{as,ld,objcopy}` for MIPS r3000 | cross binutils | **done 2026-07-10** — system `mipsel-linux-gnu-binutils` (2.46.1) works; use `make CROSS=mipsel-linux-gnu- ...` instead of editing the Makefile's hardcoded `mips-suse-linux-` prefix. See "Toolchain vendor triple" below. |
 | `python3.11` | required interpreter version (pinned in Makefile) | **not installed** (found 2026-07-10) — only `python3.14` is present, which is what `python-splat64` targets. Use `make PYTHON=python3 ...` rather than editing the Makefile. |
-| `include/PsyQ/*.h` (libgpu.h, libgte.h, libcd.h, libpress.h, …) | headers the app code includes directly | **user-supplied**, gitignored — real Sony PsyQ **v3.3** SDK `INCLUDE/` headers at `vh/include/PsyQ/` (lowercase). Proprietary, never committed. Validate a candidate set by compiling `src/graphics.c` through the full pipeline. A modern hosted header set does NOT work. See "PsyQ SDK headers" below. |
+| `include/PsyQ/*.h` (libgpu.h, libgte.h, libcd.h, libpress.h, …) | headers the app code includes directly | **user-supplied**, gitignored — real Sony PsyQ **v3.3** SDK `INCLUDE/` headers at `vh/include/PsyQ/` (lowercase). Proprietary, never committed. Validate a candidate set by compiling `src/core/graphics.c` through the full pipeline. A modern hosted header set does NOT work. See "PsyQ SDK headers" below. |
 | `SLUS_004.47` (original exe), `LIB34.ZIP` (PsyQ v3.4 lib objects), full ISO | base game files, needed for extraction + asset/audio data | **`SLUS_004.47` done 2026-07-10** — extracted from the user's own CHD via `chdman`+`bchunk`+`7z`, MD5-verified exact match. See "Getting the base game files" below. `LIB34.ZIP` not needed by the current pipeline (see there); disc images + `SLUS_004.47` kept in `external/game/` for later asset/audio extraction if needed. |
 
 Before trusting this table, re-verify — it reflects a single point-in-time check, not a
@@ -88,7 +88,7 @@ time trying to make the modern `gcc` fit into the `CC` variable.
 
 The Makefile references `cc1_v263_decompals` (global default `CC`) and, separately,
 `cc1_v257_decompals` as a **literal hardcoded string** in a target-specific override
-(`build/src/audio.c.s: CC := cc1_v257_decompals`). That second one is NOT parameterized —
+(`build/src/core/audio.c.s: CC := cc1_v257_decompals`). That second one is NOT parameterized —
 passing `make CC=...` on the command line only changes the *global default*, it cannot
 redirect that one target-specific line, since it's a fixed string, not a variable reference.
 So both names must resolve via `PATH` lookup exactly as spelled — there's no way to point
@@ -105,7 +105,7 @@ PATH="$(pwd)/external/toolchain/bin:$PATH" make PYTHON=python3 CROSS=mipsel-linu
 
 Both binaries are 32-bit x86 ELF, statically linked — verified they execute on this x86_64
 host (kernel has ia32 support) and produce real compiler output (tested via direct invocation
-and via a full `cpp -P` → `cc1` pipeline run against `src/graphics.c`, see below).
+and via a full `cpp -P` → `cc1` pipeline run against `src/core/graphics.c`, see below).
 
 ## PsyQ SDK headers (required, user-supplied, never committed)
 
@@ -133,7 +133,7 @@ time-costing false negatives twice (`CdlModeStream` in `libcd.h`, `struct DIRENT
 
 **Validate the header set, don't copy-and-hope:** run the actual pipeline — `cpp -P` (real
 `CPP_FLAGS`, `-nostdinc`) → real `cc1_v263_decompals` → `maspsx` → `mipsel-linux-gnu-as` —
-against `src/graphics.c` (the heaviest GTE/GPU header user). A correct set preprocesses and
+against `src/core/graphics.c` (the heaviest GTE/GPU header user). A correct set preprocesses and
 compiles cleanly (only normal old-C89 implicit-declaration/type warnings, zero parse errors)
 to a valid MIPS-I ELF object. That proves the pipeline works mechanically; byte-exact output
 is only proven by `make check`'s `md5sum`, which additionally needs the base game files.
@@ -192,7 +192,7 @@ fails because it unconditionally runs the still-missing `sortSymbols.py` first �
 
 Top-level `clean` is `rm -rf asm assets build` — and `assets/` holds the 4 hand-generated
 `.inc` files described below, which `splat` does NOT regenerate. After a `make clean`, a
-rebuild fails at `maps_32.c` on the missing `assets/801009bc.inc`. Recovery: re-run
+rebuild fails at `maps/map_32.c` on the missing `assets/801009bc.inc`. Recovery: re-run
 `splat` (for `asm/`), then regenerate the 4 `.inc` files from the verified `SLUS_004.47` with
 the recipe below (field-ordered flat initializers: MapTileModel = 88+18 s16 then 92 u8 per
 struct ×4 at 0x801009bc / ×1 at 0x80100e9c; 100 `(u8 *)0x...` pointers at 0x8010102c;
@@ -201,7 +201,7 @@ byte-exact match from clean.
 
 ### The `assets/*.inc` gap (found and fixed 2026-07-10)
 
-4 files (`maps_32.c`, `maps_35.c`, `text.c` ×2) do
+4 files (`maps/map_32.c`, `maps/map_35.c`, `core/text.c` ×2) do
 `#include "assets/<vram-addr>.inc"` for hand-written C initializer literals of specific data
 (`MapTileModel` struct(s), a `u8 *gStringTable[100]` pointer table, a
 `u8 sFontGlyphBitmaps[128][9]` byte array) that `splat`'s generic `.data`/`.bin` extraction
@@ -209,7 +209,7 @@ doesn't produce — same category of gap as the missing `sortSymbols.py`, bespok
 original author had locally and never committed.
 
 Fixed by: confirming the exact struct layout empirically (traced `SVECTOR`'s definition by
-grepping the *preprocessed* output of `graphics.c`, not by guessing from a header, since
+grepping the *preprocessed* output of `core/graphics.c`, not by guessing from a header, since
 `SVECTOR`/`VECTOR`/`MATRIX`/`CVECTOR` turned out to be defined via `common.h`'s own include
 chain rather than `PsyQ/libgte.h` — `{ s16 vx, vy, vz, pad; }`, no padding), then reading raw
 bytes directly from the verified `SLUS_004.47` at `file_offset = 0x800 + (vram - 0x80010000)`
@@ -287,16 +287,16 @@ loop, repeated until `cmp` reports no differences:
 
 The four mismatches that had to be fixed to reach byte-exact:
 
-1. `text.c` was missing 888 bytes of `.rodata` (a string pool of world-map/job-class names +
+1. `core/text.c` was missing 888 bytes of `.rodata` (a string pool of world-map/job-class names +
    two pointer tables) — caused a uniform 888-byte shift through the entire rest of the file.
    **Placement is order-sensitive**: had to go at the very top of the file (right after
    `#include`s), not the bottom — unreferenced top-level globals get emitted before a later
    function's switch-statement jump table, regardless of which comes first/last textually
    relative to *functions*, but top-level declaration order among *themselves* still matters.
-2. `src/cd.c`'s `Movie_Start`: `CdRead2(CdlModeStream | CdlModeSpeed | CdlModeRT)` computes
+2. `src/core/cd.c`'s `Movie_Start`: `CdRead2(CdlModeStream | CdlModeSpeed | CdlModeRT)` computes
    `0x1e0` from the real, verified PsyQ macros, but the original binary uses `0x1c0` — fixed
    with a literal constant + comment; no clean macro combination produces `0x1c0`.
-3. `text.c` was also missing 232 bytes of `.sdata` (more name strings). **This had to be 29
+3. `core/text.c` was also missing 232 bytes of `.sdata` (more name strings). **This had to be 29
    separate `static u8 D_XXXXXXXX[8]` declarations, not one array** — this Makefile's `-G8`
    only routes objects ≤8 bytes to `.sdata` automatically; anything bigger silently lands in
    `.data` at the wrong address instead. Also must **not** be `const` (`.sdata` is writable
@@ -304,7 +304,7 @@ The four mismatches that had to be fixed to reach byte-exact:
 4. The `assets/*.inc` files from finishing Phase A (see above) were *not* wrong — verified
    clean by the full bisection.
 
-Both `text.c` additions are marked `TODO` in the source — byte-exact but not semantically
+Both `core/text.c` additions are marked `TODO` in the source — byte-exact but not semantically
 decompiled (nothing references them; their true consumer/structure is still unidentified).
 Worth a real decompilation pass later; doesn't block anything else.
 
@@ -319,6 +319,6 @@ Worth a real decompilation pass later; doesn't block anything else.
   difference (binutils version, etc.) before suspecting the underlying source is wrong.
 - `SLUS_004.47`'s correct MD5 is `596bb082a2de5f1fe977dd3d7e160b03` (matches `README.md`) —
   verified 2026-07-10 against the user's own CHD.
-- If `src/text.c`'s two `D_` placeholder blocks (see above) are ever removed/"cleaned up" by
+- If `src/core/text.c`'s two `D_` placeholder blocks (see above) are ever removed/"cleaned up" by
   a future refactor without replacing them with an equivalent byte-exact structure, that will
   reintroduce this exact mismatch — don't delete them as "unused code" without checking.

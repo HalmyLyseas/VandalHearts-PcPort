@@ -1,5 +1,5 @@
 /* Standalone proof-of-concept: reads the real JOU sound set (gCdFiles
- * CDF_SD_JOU_VH/VB in src/cd.c, LBA 0x23b3 / 0x23af) through our own CD
+ * CDF_SD_JOU_VH/VB in src/core/cd.c, LBA 0x23b3 / 0x23af) through our own CD
  * backend, feeds it through SsVabOpenHeadSticky/SsVabTransBodyPartly, and
  * verifies both the VAG decoder's output directly and that OpenAL actually
  * received a correctly-sized buffer. Not part of the real game build. */

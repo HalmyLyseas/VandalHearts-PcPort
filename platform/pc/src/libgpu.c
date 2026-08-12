@@ -44,7 +44,7 @@ static DRAWENV s_drawEnv;
 static DISPENV s_dispEnv;
 static int s_drawModeAbr = 0;   /* last SetDrawMode-configured semi-trans mode */
 static int s_drawModeDither = 0;/* GP0(E1h).9 dither-enable, from DRAWENV.dtd / SetDrawMode / DR_MODE.
-                                 * The game runs the battle field with dtd=0 (game_setup.c:1083) so
+                                 * The game runs the battle field with dtd=0 (states/game_setup.c:1083) so
                                  * terrain/UI must NOT be dithered; only dtd=1 scenes (e.g. some fx) are.
                                  * DuckStation gates dither on this exact bit -- honouring it stops us
                                  * over-dithering (fuzzy walls, fragmented water-tile edges). */
@@ -59,7 +59,7 @@ static int s_drawModeTPage = 0; /* last SetDrawMode-configured tpage -- SPRT/TIL
  * sampling re-arm it with a full-page window (see Map15 ocean, which brackets
  * its 32x32-windowed chunks with a w=0 reset). See psx-spx GPU GP0(E2h):
  *   Texcoord = (Texcoord AND NOT(Mask*8)) OR ((Offset AND Mask)*8)
- * Used e.g. by src/maps_13_15.c Objf299_Map15_Ocean, which tiles a
+ * Used e.g. by src/maps/map_13_15.c Objf299_Map15_Ocean, which tiles a
  * single 32x32 water tile (MoveImage'd to the 576,256 page) across the sea via a
  * 32x32 window -- without this the chunks' 0..255 UVs sampled the mostly-empty
  * page (purple rectangles + noise bands during the sailing intro; bugreport-02). */
@@ -103,7 +103,7 @@ DRAWENV *SetDefDrawEnv(DRAWENV *env, int x, int y, int w, int h) {
      * position -- without it (as this function did before), every
      * primitive draws at its raw, buffer-relative y0 (e.g. 0..240)
      * regardless of which of the two page-flip buffers is current, since
-     * both buffers' clip.y differ (16 vs 272 -- see game_setup.c's
+     * both buffers' clip.y differ (16 vs 272 -- see states/game_setup.c's
      * SetDefDrawEnv calls) but neither's ofs did anything to shift the
      * actual draw position to match. FillQuad/FillRect's clip-clamping
      * then makes this look inconsistent rather than uniformly wrong: one
@@ -127,7 +127,7 @@ DISPENV *GetDispEnv(DISPENV *env) { *env = s_dispEnv; return env; }
 DISPENV *PutDispEnv(DISPENV *env) {
     /* Presenting here (as an earlier version of this function did) doesn't
      * match how every real call site actually uses this API: all three
-     * (engine.c, cd.c, game_setup.c) call PutDispEnv immediately followed
+     * (core/engine.c, core/cd.c, states/game_setup.c) call PutDispEnv immediately followed
      * by DrawOTag -- on real hardware that's fine, since PutDispEnv just
      * arms the CRT's next scanout and the GPU's DMA (kicked off by
      * DrawOTag) finishes well before that scanout actually happens. This
@@ -633,9 +633,9 @@ void SetTile(TILE *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_TILE); }
  * informational) and paddr/caddr, genuine pointers to the pixel/CLUT bytes
  * still sitting in the file buffer. The caller decides whether/where to
  * LoadImage() them -- confirmed by two real, different usage patterns:
- * screen_effects.c's LoadFullscreenImage() calls LoadImage(&timRect,
+ * core/screen_effects.c's LoadFullscreenImage() calls LoadImage(&timRect,
  * tim.paddr) with its OWN hardcoded rect (ignoring the TIM's embedded one),
- * and dojo.c does POINTER ARITHMETIC on tim.paddr (`tim.paddr + 0x1c20`) to
+ * and world/dojo.c does POINTER ARITHMETIC on tim.paddr (`tim.paddr + 0x1c20`) to
  * slice one TIM file into several separate LoadImage() calls. An earlier
  * version of this function uploaded to the TIM's embedded rect internally
  * with its paddr/caddr pointing at dummy zeroed static unsigned int placeholders --
@@ -694,7 +694,7 @@ TIM_IMAGE *ReadTIM(TIM_IMAGE *t) {
     return t;
 }
 
-/* ---- deferred (debug bitmap-font printer, not the game's own text.c) ---- */
+/* ---- deferred (debug bitmap-font printer, not the game's own core/text.c) ---- */
 
 int FntPrint(const char *fmt, ...) { (void)fmt; return 0; }
 unsigned int *FntFlush(int id) { (void)id; return NULL; }

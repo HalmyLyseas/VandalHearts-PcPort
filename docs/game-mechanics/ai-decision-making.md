@@ -1,36 +1,36 @@
 # AI decision-making
 
-How an enemy unit decides what to do on its turn — decoded from `src/ai.c`. The short version: the AI is
+How an enemy unit decides what to do on its turn — decoded from `src/battle/ai.c`. The short version: the AI is
 a **score-maximiser with two independent stages** (pick a spell, *then* pick a target), and the score it
 maximises is **dominated by movement cost**, with the target's tactical value a comparatively small term.
 Several behaviours players read as "smart" or "dumb" fall straight out of these formulas.
 
-Code references point at `src/ai.c` unless noted.
+Code references point at `src/battle/ai.c` unless noted.
 
 ## The two-stage caster decision
 
 A unit that knows spells decides in two **separate** passes. Nothing about the target influences the
 first pass — the AI commits to a spell *before* it looks at who to hit.
 
-### Stage 1 — pick the spell (target-blind) · `ai.c:92–166`
+### Stage 1 — pick the spell (target-blind) · `battle/ai.c:92–166`
 
 From the unit's up-to-two spells (`spells[0]`, `spells[1]`), it selects one `gCurrentSpell` by:
 
 1. **Affordability** — a spell whose `mpCost > mp` is dropped.
 2. **Effect type** — damage vs support routes to different behaviour (offensive / self-heal / group-support).
-3. **A coin flip** — if *both* known spells are damage, the choice is literally `rand() % 2` (`ai.c:144`).
+3. **A coin flip** — if *both* known spells are damage, the choice is literally `rand() % 2` (`battle/ai.c:144`).
 
-> **Retail quirk:** `spellEffectB` is computed from `spells[0]`'s effect, not `spells[1]`'s (`ai.c:104`,
+> **Retail quirk:** `spellEffectB` is computed from `spells[0]`'s effect, not `spells[1]`'s (`battle/ai.c:104`,
 > flagged `//? Why spells[0]?`) — an original-game bug that makes the two-spell choice cruder than
 > intended. We preserve it (byte-exact). Consequence: which spell a two-damage-spell caster uses is
 > effectively random per turn, so its *targeting* can look inconsistent run-to-run.
 
-### Stage 2 — score every target · `func_800569A0`, `ai.c:525`
+### Stage 2 — score every target · `func_800569A0`, `battle/ai.c:525`
 
 For the chosen spell, every unit on the map gets a score in `D_8012F63C[]`, branching on the spell's
 **effect type** (this is **global per effect-type, not per-spell** — all damage spells share one formula):
 
-**Damage spells** (`ai.c:542–549`), scoring an *enemy* of the caster:
+**Damage spells** (`battle/ai.c:542–549`), scoring an *enemy* of the caster:
 ```c
 score  = (casterLevel − targetLevel) * 10        // level gap
        + 280                                      // flat base
@@ -39,7 +39,7 @@ score  = (casterLevel − targetLevel) * 10        // level gap
        − terrainPreference[target tile] / 100;    // terrain
 ```
 
-**Support/heal spells** (`ai.c:582–583`), scoring a wounded *ally* (only if `hpFrac < 7000`, i.e. below
+**Support/heal spells** (`battle/ai.c:582–583`), scoring a wounded *ally* (only if `hpFrac < 7000`, i.e. below
 ~70% health):
 ```c
 score  = 400 − targetHpFrac / 25;                 // the more hurt, the higher
@@ -55,8 +55,8 @@ Note what is — and isn't — in the damage score:
 ## Choosing where to cast, and the movement tax
 
 For an area spell the AI doesn't just target a unit — it picks a **cast position**, summing the per-target
-scores over the spell's field at every *reachable* centre into `D_8017DF50[z][x]` (`ai.c:397–416`). The
-final "cast from here" value is (`func_80056F94`, `ai.c:662`):
+scores over the spell's field at every *reachable* centre into `D_8017DF50[z][x]` (`battle/ai.c:397–416`). The
+final "cast from here" value is (`func_80056F94`, `battle/ai.c:662`):
 ```c
 result = D_8017DF50[target]                        // the cluster's summed target value (~150–500)
        + 10000                                     // large flat base
@@ -84,7 +84,7 @@ behaviour, not a port bug.)
 
 ## Physical attacks use a different scorer
 
-Weapon (melee/ranged) target selection goes through `func_80056C30` (`ai.c:593`, called `ai.c:1132`) — a
+Weapon (melee/ranged) target selection goes through `func_80056C30` (`battle/ai.c:593`, called `battle/ai.c:1132`) — a
 **separate** evaluation using `gAdvantage`, `attackRange`, and the ranged-attack grid. It never touches
 the spell scorer `func_800569A0`. So "which enemy do I hit with my sword" and "who do I nuke" are decided
 by independent code paths.

@@ -29,7 +29,7 @@
 #define PATH_MAX 4096
 #endif
 
-#define ACTIVE_CARD    "BASLUS-00447VH"   /* the game's fixed card file (card.c: "bu00:BASLUS-00447VH") */
+#define ACTIVE_CARD    "BASLUS-00447VH"   /* the game's fixed card file (core/card.c: "bu00:BASLUS-00447VH") */
 #define ARCHIVE_SUBDIR ".archive"         /* dot-prefixed => invisible to the game's firstfile() scan   */
 
 static void activePath(char *out, size_t n)  { snprintf(out, n, "%s/%s", PC_SaveDir(), ACTIVE_CARD); }
@@ -142,7 +142,7 @@ static void formatLabel(const char *file, char *out, size_t cap) {
 
 /* Bytes of CardFileData_Header (card.h) that precede the listing in every card file: magic[2] +
  * type + blockCount + sjisName[64] + padding[28] + clut[32] + icon1[128] + icon2[128] = 384. The game
- * writes the listing at offset + sizeof(header) (card.c: Card_WriteFile FileSeek). No pointers in the
+ * writes the listing at offset + sizeof(header) (core/card.c: Card_WriteFile FileSeek). No pointers in the
  * header, so this size is width-independent. */
 #define CARD_HEADER_SIZE 384
 

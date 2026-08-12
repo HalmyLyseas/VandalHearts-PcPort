@@ -3,7 +3,7 @@
  * pollhost()/PSYQpause() (raw MIPS breakpoint-trap macros on real hardware)
  * are confirmed never called anywhere -- but PCcreat/PClseek/PCwrite/
  * PCclose (real dev-workflow functions: write debug data to the PC the
- * devkit's debug link was connected to) ARE called, by game_setup.c.
+ * devkit's debug link was connected to) ARE called, by states/game_setup.c.
  * Implemented as real local file I/O below -- writing to a real local file
  * is a faithful port of "write to the connected dev PC" instead of a
  * hollow stub, and costs nothing extra to implement for real.

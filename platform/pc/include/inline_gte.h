@@ -2,17 +2,17 @@
  * PC-backend replacement for the project's own include/inline_gte.h.
  *
  * The real include/inline_gte.h is a project header (not under PsyQ/), used
- * only by src/graphics.c, containing raw __asm__ blocks wrapping MIPS COP2
+ * only by src/core/graphics.c, containing raw __asm__ blocks wrapping MIPS COP2
  * (GTE) opcodes directly -- these cannot compile on any non-MIPS target.
- * graphics.c is the one file in the whole project needing genuine
+ * core/graphics.c is the one file in the whole project needing genuine
  * coprocessor-level GTE fidelity (see exchange/02-phase-c-interface-contract.md);
  * every other GTE-touching file goes through the high-level PsyQ/libgte.h API.
  *
  * Same swap mechanism as the PsyQ headers, just extended to this one bare
  * (non-PsyQ) header name: the PC build must list -Iplatform/pc/include
  * BEFORE -Iinclude
- * so graphics.c's `#include "inline_gte.h"` resolves here instead of to the
- * real project header. Zero changes to graphics.c or the real header.
+ * so core/graphics.c's `#include "inline_gte.h"` resolves here instead of to the
+ * real project header. Zero changes to core/graphics.c or the real header.
  *
  * Each macro here calls into the same software GTE core in libgte.c that
  * backs the high-level PsyQ/libgte.h functions (PC_GTE_* below) -- so the

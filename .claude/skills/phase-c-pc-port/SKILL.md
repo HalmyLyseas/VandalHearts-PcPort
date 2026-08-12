@@ -41,12 +41,12 @@ at `platform/pc/include/PsyQ/` instead of the real one. GCC treats a symlink's o
 resolved target) as the "current directory" for that file's further includes, so this correctly
 redirects `common.h`'s (and everything downstream) `PsyQ/` references. **Compile real game source with
 `-Ibuild/include_stage`** (not just `-Iinclude`). A bare, non-`PsyQ/`-prefixed header
-(`graphics.c`'s `#include "inline_gte.h"`) needs the same treatment and requires
+(`core/graphics.c`'s `#include "inline_gte.h"`) needs the same treatment and requires
 `-Iplatform/pc/include` *before* `-Iinclude`.
 
 ## One deliberate matching-build exception
 
-`src/text.c`'s `sFontGlyphBitmaps[128][9]` → `[129][9]`. Already-decompiled game code reads one row
+`src/core/text.c`'s `sFontGlyphBitmaps[128][9]` → `[129][9]`. Already-decompiled game code reads one row
 past the array (`GetGlyphIdxForAsciiChar` maps space to glyph index 128), relying on the original
 linker placing all-zero bytes right after it — a real PS1-era trick, confirmed byte-for-byte. The array
 is `static`, so it can't be padded from `platform/pc/` alone; widening by one always-zero row was the
@@ -90,7 +90,7 @@ port-side edit to shared source sits behind one:
 - **`PC_PORT_LP64`** — 64-bit-host-only struct-layout fixes (e.g. `Object_719`/`_675` in
   `include/object.h`, where a leading pointer's 4→8-byte growth shifts aliased fields).
 - **`PC_FEAT`** — (Stage 3) PC-only gameplay/QoL additions (the bidirectional ally-cycle in
-  `battle_field.c`, the enemy threat overlay, …). Defined for all game source by the PC build only;
+  `battle/field.c`, the enemy threat overlay, …). Defined for all game source by the PC build only;
   distinct from `PC_PORT` so gameplay changes grep separately. Keep the original verbatim in the `#else`.
 - **`PC_DEBUG_*`** — per-file debug/instrumentation hooks, keyed to Makefile flags.
 

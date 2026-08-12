@@ -49,11 +49,11 @@ void PC_SpellListDump(int name, int cls, int lvl, int pathB, int advF, int advS,
 
 void PC_ReturnToTitle(void) {
     /* GAP 8: jump straight to the title menu from anywhere, skipping the intro videos, by replicating
-     * the game-over teardown (battle_eval.c). The title -> New/Load flow re-establishes run state, so
+     * the game-over teardown (battle/eval.c). The title -> New/Load flow re-establishes run state, so
      * leftover party/chapter/objects don't need clearing. Mode stays as-is (toggle editable at title). */
     {
         /* audio.h only carries a commented-out FIXME decl; declare the real signature
-         * (src/audio.c:1346) locally -- an implicit int declaration is UB at LP64. */
+         * (src/core/audio.c:1346) locally -- an implicit int declaration is UB at LP64. */
         extern void PerformAudioCommand(s16 cmd);
         PerformAudioCommand(AUDIO_CMD_STOP_ALL);
     }
@@ -67,11 +67,11 @@ void PC_ReturnToTitle(void) {
 }
 
 /* GAP 4 Layer 2 -- card-header mode marker in the free padding[28] (offset 68 in the header, which is
- * at file offset 0). 'T' = Tactical, 0 = Normal. The game never touches padding (verified in card.c),
+ * at file offset 0). 'T' = Tactical, 0 = Normal. The game never touches padding (verified in core/card.c),
  * so the stamp rides inside the save and stays hardware-valid. */
 #define TAC_MARK 0x54   /* 'T' */
 
-extern CardFileData_Header gCardFileHeader;   /* declared in card.c; defined in generated_data.c */
+extern CardFileData_Header gCardFileHeader;   /* declared in core/card.c; defined in generated_data.c */
 
 static void stampSaveMarker(void) {
     gCardFileHeader.padding[0] = (unsigned char)(gTacticalMode ? TAC_MARK : 0);
@@ -175,7 +175,7 @@ static void addStrPatch(void *addr, const char *s, unsigned int dstWidth) {
     memcpy(p->orig, addr, n);
 }
 
-/* gItemDescriptions is declared in units.h (s8*); gItemDescriptions2 only in supplies.c. Both defined in
+/* gItemDescriptions is declared in units.h (s8*); gItemDescriptions2 only in ui/supplies.c. Both defined in
  * the generated pc_item_descriptions.c with the RETAIL strings; we repoint them in Tactical only. */
 extern u8 *gItemDescriptions2[101];
 
@@ -191,7 +191,7 @@ static void addDescSwap(int id, const char *flavor) {
     addPatch(&gItemDescriptions2[id], sizeof(char *), (unsigned long)(uintptr_t)flavor);
 }
 
-/* bugreport-03: the spell-info bar (window.c:2292) draws gSpellDescriptions[] -- a BAKED string with
+/* bugreport-03: the spell-info bar (ui/window.c:2292) draws gSpellDescriptions[] -- a BAKED string with
  * Rng/Fld/MP hardcoded, NOT read from gSpells. Balance patches change the real gSpells fields (gameplay
  * is correct) but the display string stays stale. Repoint the reworked spells' info line in Tactical. */
 static void addSpellDescSwap(int id, const char *s) {
@@ -267,7 +267,7 @@ static void ensureInit(void) {
     addPatch(&gSpells[32].mpCost,    1, 35);                                           /* MYSTIC_ENERGY mp 35: >half of L32 Huxley's 64 pool -> a 2nd back-to-back cast needs an MP refill item; still castable on acquisition at L25 */
     /* Retail Mystic Energy is single-target, so its per-target hit sound gSpellSounds2[32]==0 -- the
      * cast sound (gSpellSounds[32]==911) fires once and never repeats. Now that it's an AOE ally-group
-     * buff, the per-target loop (battle_executors.c) plays gSpellSounds2 once per ally, so give it a value
+     * buff, the per-target loop (battle/executors.c) plays gSpellSounds2 once per ally, so give it a value
      * -- mirror its own cast sound (911), the same Sounds1==Sounds2 pattern Cure Wide uses. The per-ally
      * visual aura already multi-fires (OBJF_TARGET path); this just makes the sound track it. */
     addPatch(&gSpellSounds2[32], 2, 911);

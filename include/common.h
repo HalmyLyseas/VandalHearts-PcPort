@@ -166,7 +166,7 @@ extern u8 gSignal5;
 extern s8 gText[];
 extern s8 *gTextPointers[101];
 #ifdef PERMUTER
-extern u8 *gStringTable[101]; /* see the definition in src/text.c for why */
+extern u8 *gStringTable[101]; /* see the definition in src/core/text.c for why */
 #else
 extern u8 *gStringTable[100];
 #endif

@@ -10,7 +10,7 @@
  * from any SDK source.
  *
  * Layout confirmed against real data (JOU.VH/JOU.VB, gCdFiles indices
- * CDF_SD_JOU_VH/VB in src/cd.c):
+ * CDF_SD_JOU_VH/VB in src/core/cd.c):
  *   - 32-byte header ("pBAV" magic, numPrograms/numTones/numVAG counts)
  *   - a *fixed* 128-slot program table (2048 bytes) regardless of
  *     numPrograms
@@ -45,15 +45,15 @@
 #include "cd_files.h" /* CdFileInfo, gCdFiles -- see the SsVabTransBodyPartly comment below */
 
 /* SsVabTransBodyPartly's "have I received the whole body" check must match
- * cd.c's OWN completion accounting (gCdLoader.sectorsRead reaching
+ * core/cd.c's OWN completion accounting (gCdLoader.sectorsRead reaching
  * gCdFiles[cdf].sectorCt) exactly -- see that function's comment for why
  * (a real hang was traced to these two notions of "done" disagreeing).
- * gCdFiles is a real project global (src/cd.c), not PsyQ/Sony content --
+ * gCdFiles is a real project global (src/core/cd.c), not PsyQ/Sony content --
  * reaching across from the Audio backend into CD-subsystem state is a
  * deliberate, narrow exception to keep backend layering otherwise clean,
  * justified because it's the only way to match the real protocol's
  * semantics rather than guess at them. gVabLoader is anonymous-struct-typed
- * in cd.c itself; mirrored here field-for-field (matches the same
+ * in core/cd.c itself; mirrored here field-for-field (matches the same
  * "extern struct {...} name;" pattern already used for Kernel's local
  * externs). */
 extern CdFileInfo gCdFiles[712];
@@ -200,11 +200,11 @@ static short s_masterVolL = 0x7f, s_masterVolR = 0x7f;
 static const unsigned char *s_vagSizeTablePtr[MAX_VAB];
 
 /* SsVabTransBodyPartly is called repeatedly, each time with only the
- * latest CD-read chunk (cd.c's ContinueLoadingVab drives this in fixed
+ * latest CD-read chunk (core/cd.c's ContinueLoadingVab drives this in fixed
  * 90-sector/184320-byte chunks, re-using the same buffer address each
  * call) -- not the whole VAB body at once. Real hardware streams the body
  * via SPU DMA across many such partial transfers; the caller's own state
- * machine (gCdLoader/gVabLoader in cd.c) only advances once this function
+ * machine (gCdLoader/gVabLoader in core/cd.c) only advances once this function
  * reports -2 ("need more") vs. completion, so accumulating chunks here
  * and only decoding once the full body has arrived is required for
  * correctness, not just efficiency -- returning "done" after only the
@@ -356,15 +356,15 @@ short SsVabOpenHeadSticky(unsigned char *vabHead, short vabId, unsigned int dumm
     s_vagSizeTablePtr[vabId] = toneTable + nBlocks * TONES_PER_PROGRAM * 32;
 
     /* The real total body size to wait for is gCdFiles[bodyCdf].sectorCt *
-     * 2048 -- cd.c's own gCdLoader completion accounting, NOT the sum of
+     * 2048 -- core/cd.c's own gCdLoader completion accounting, NOT the sum of
      * VAG sizes from the size table. Those can legitimately differ (this
      * VAB's real body occupies more CD sectors than its VAG samples alone
      * need -- likely disc-layout padding), and using the smaller
-     * VAG-sum total made SsVabTransBodyPartly report "done" before cd.c's
+     * VAG-sum total made SsVabTransBodyPartly report "done" before core/cd.c's
      * own gCdLoader had read every sector it expected to, leaving
      * gCdLoader.state permanently stuck (a real hang, not hypothetical --
      * see the SsVabTransBodyPartly comment and exchange/12-...). Matching
-     * cd.c's own notion of "done" exactly is what actually matters here,
+     * core/cd.c's own notion of "done" exactly is what actually matters here,
      * not how many bytes the audio decode itself needs. */
     {
         int total = (int)gCdFiles[gVabLoader.bodyCdf].sectorCt * 2048;

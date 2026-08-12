@@ -17,7 +17,7 @@
  *                                has no CASTING animation) -- preserved as real NULL here too,
  *                                not accidentally computed as a garbage blob offset.
  *       -> u8[]                : the actual animation byte-stream (frame index/delay pairs,
- *                                see src/object.c's UpdateUnitSpriteAnimation for the format)
+ *                                see src/core/object.c's UpdateUnitSpriteAnimation for the format)
  *                                -- self-terminating, so exact per-stream length doesn't need
  *                                to be known in advance; extracting the whole real span as one
  *                                blob and letting the game's own parser find the real
@@ -4096,10 +4096,10 @@ u8 **gUnitAnimSets[301] = {
     (u8 **)sUnitAnimSet_82, /* unit 143, orig 0x800e9464 */
 
     /* --- PERMUTER tail, indices 144..300 (implicit NULL) -----------------------------------
-     * SetupSprites (src/game_setup.c:1073) reads gUnitAnimSets[gSpriteStripUnitIds[i]], and the
+     * SetupSprites (src/states/game_setup.c:1073) reads gUnitAnimSets[gSpriteStripUnitIds[i]], and the
      * index runs well past 143. The decomp author flagged it (`//?: Won't this read out-of-bounds
      * of gUnitAnimSets?`). The TRUE ceiling is ~300, not the 151 first seen: SetupPartySprites
-     * (this file's src, game_setup.c:117-176) adjusts event-sprite IDs 151..274 by `+= adv*6`
+     * (this file's src, states/game_setup.c:117-176) adjusts event-sprite IDs 151..274 by `+= adv*6`
      * (adv <= 4) -> max ~298, and its own comment reserves "IDs 151..300". An earlier fix sized
      * this array to 192 off the first observed index and a ch4 cutscene then overran it at ~199 --
      * the same over-fitting mistake made with gTravelAscentCost. Sized once here to 301.
@@ -4108,7 +4108,7 @@ u8 **gUnitAnimSets[301] = {
      * a pointer -- garbage that happens to be in valid RAM. That is NOT reproducible here, because
      * gUnitAnimSets is reconstructed (this file), not laid out adjacent to our gUnitClutIds. So
      * these entries are NULL: the goal is SAFETY, not faithfulness -- gSpriteStripAnimSets IS
-     * dereferenced (unit_actor.c:142), so a wild pointer is a real hazard, whereas NULL is caught
+     * dereferenced (units/actor.c:142), so a wild pointer is a real hazard, whereas NULL is caught
      * by pc_bootstrap.c's fault handler (-> gfxIdx 0). Believed set-but-unused for rendering:
      * cutscene units get their animset from gEvtEntities (milestone_cutscene_units_fixed), which is
      * why 144..191 being NULL since the earlier fix broke no cutscene sprite through ch1-ch4. If a

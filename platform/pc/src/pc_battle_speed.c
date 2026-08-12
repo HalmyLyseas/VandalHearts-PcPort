@@ -26,7 +26,7 @@
 static int s_battleSpeed = 1;   /* 1..MAX; reset to 1x on leaving battle (see VSync) */
 
 int PC_InActiveBattle(void) {
-    /* Match main.c's State_Battle() dispatch set exactly -- every primary state that runs a real-time
+    /* Match core/main.c's State_Battle() dispatch set exactly -- every primary state that runs a real-time
      * battle tick, so fast-forward covers all battle entry paths. STATE_30 = normal story battle
      * (map-entered), STATE_LOAD_IN_BATTLE_SAVE(23) = loaded in-battle save, STATE_27 = dojo/trial +
      * debug, STATE_3/STATE_31 = other battle sub-entries. (1.4 shipped with only {27,23}, so R2 silently

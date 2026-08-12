@@ -126,7 +126,7 @@ if(VH_HDVIDEO)
 endif()
 
 # ---- source lists -----------------------------------------------------------------------------
-file(GLOB GAME_SRCS CONFIGURE_DEPENDS ${SRC_DIR}/*.c)
+file(GLOB GAME_SRCS CONFIGURE_DEPENDS ${SRC_DIR}/*.c ${SRC_DIR}/*/*.c)
 file(MAKE_DIRECTORY ${GEN_ASSET_DIR}/assets)
 file(MAKE_DIRECTORY ${GEN_DATA_DIR})
 set(PSX_INCLUDE_OUTPUTS
@@ -246,14 +246,14 @@ if(APPLE)
     endforeach()
 endif()
 # Always-on runtime-gated probes (Makefile: UNCONDITIONAL, self-gating at runtime).
-set_property(SOURCE ${SRC_DIR}/window.c ${SRC_DIR}/object.c ${SRC_DIR}/main_menu.c
+set_property(SOURCE ${SRC_DIR}/ui/window.c ${SRC_DIR}/core/object.c ${SRC_DIR}/states/main_menu.c
              APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_UI_LOG)
-# PC_DEBUG_PATH_STEP: diagnostic-only travel-cost/path OOB probe (src/path_grids.c). It root-caused
+# PC_DEBUG_PATH_STEP: diagnostic-only travel-cost/path OOB probe (src/battle/path_grids.c). It root-caused
 # the gTravelAscentCost/DescentCost overrun (now fixed by widening those tables) and the residual
 # reports are the confirmed-benign map-boundary reads -- so it's off by default (pure console noise
 # for players). Re-enable by uncommenting to re-investigate path/travel logic. The probe code stays
 # in-tree, #ifdef-gated; the matching build never defines it (byte-exact unaffected either way).
-# set_property(SOURCE ${SRC_DIR}/path_grids.c APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_PATH_STEP)
+# set_property(SOURCE ${SRC_DIR}/battle/path_grids.c APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_PATH_STEP)
 
 # -- backend files with special profiles --------------------------------------------------------
 foreach(_e libetc pc_diag pc_battle_speed)   # pc_diag/pc_battle_speed: extracted from libetc.c, same profile
@@ -449,7 +449,7 @@ if(UNIX AND NOT APPLE)
 endif()
 if(WIN32)
     # SDL renames main->SDL_main via SDL_main.h wherever SDL.h is included (pc_gpu_window.c); the
-    # real entry point is the game's own main() in src/main.c, so tell SDL to keep its hands off.
+    # real entry point is the game's own main() in src/core/main.c, so tell SDL to keep its hands off.
     target_compile_definitions(vandalhearts_pc PRIVATE SDL_MAIN_HANDLED)
     # Force the CONSOLE subsystem for bring-up/validation: SDL2's cmake target adds -mwindows (GUI),
     # which hides the game's stderr bootstrap/diagnostic prints (disc mount, window open, errors).

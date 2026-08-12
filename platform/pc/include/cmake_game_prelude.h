@@ -7,7 +7,7 @@
  * both. See platform/pc/CMakeLists.txt.
  *
  * `#define asm(x)` neutralises the two `register T v asm("reg")` MIPS register-binding hints
- * (spells_healing.c, map_unpack.c); real `__asm__(...)` inline-asm is untouched. */
+ * (spells/healing.c, maps/unpack.c); real `__asm__(...)` inline-asm is untouched. */
 #ifndef asm
 #define asm(x)
 #endif

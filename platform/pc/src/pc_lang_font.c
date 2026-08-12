@@ -5,14 +5,14 @@
  * of decision D1 (exchange/80): pointer strings carry real UTF-8, and the engine renders any
  * codepoint the pack ships a glyph for -- no index space, no character-count ceiling.
  *
- * WHERE IT HOOKS. src/text.c's DrawText_Internal has exactly one glyph-emitting site; a PC_FEAT-
+ * WHERE IT HOOKS. src/core/text.c's DrawText_Internal has exactly one glyph-emitting site; a PC_FEAT-
  * gated branch there offers each byte to PC_LangUtf8Glyph() first. If the byte starts a valid UTF-8
  * sequence (leads 0xC2..0xF4 -- distinguishable from ASCII, and gated so it can never race the SJIS
  * ranges), we consume the WHOLE sequence and draw one glyph; otherwise we return 0 and the retail
  * path runs untouched. One codepoint = one column, so the game's column/wrap arithmetic is shared,
  * not duplicated.
  *
- * DRAWING. DrawGlyphBitmap() is a verbatim sibling of src/text.c's DrawFontGlyph() -- same 1bpp ->
+ * DRAWING. DrawGlyphBitmap() is a verbatim sibling of src/core/text.c's DrawFontGlyph() -- same 1bpp ->
  * 4bpp expansion (including its s16 arithmetic, so pack glyphs pick up the exact retail colour
  * shades), same 2-word x 9-row LoadImage, same y<247 guard. It takes a bitmap instead of a glyph
  * index, which is the one thing the retail interface cannot do.
@@ -98,7 +98,7 @@ static int Utf8Decode(const unsigned char *p, unsigned *cp) {
     return 0;
 }
 
-/* Verbatim sibling of src/text.c's DrawFontGlyph(), bitmap-in instead of index-in. The s16
+/* Verbatim sibling of src/core/text.c's DrawFontGlyph(), bitmap-in instead of index-in. The s16
  * arithmetic is retail's own (colour shades ride on its sign behaviour) -- do not "fix" it. */
 static void DrawGlyphBitmap(const unsigned char *rows, int x, int y, int color) {
     RECT rect;
@@ -317,11 +317,11 @@ int PC_LangUtf8SeqLen(const unsigned char *p) {
 /* One item name in the small font (format-2 packs: gItemNamesSjis holds plain 1-byte ASCII).
  * Hard-truncate to cap chars and never wrap, so a long name clips at its box edge instead of
  * spilling outside or dropping onto a second line. THE one implementation behind the three gated
- * draw sites (supplies.c confirm boxes, window.c battle item list, battle_field.c unit panel) --
+ * draw sites (ui/supplies.c confirm boxes, ui/window.c battle item list, battle/field.c unit panel) --
  * the per-box caps are the callers' knowledge (feedback-35/36 pixel tuning), the truncate-and-draw
  * behaviour is this function's, so a future tuning pass lands once. */
 extern void DrawText(int x, int y, int maxCharsPerLine, int lineSpacing, int color,
-                     unsigned char *text);                                        /* src/text.c */
+                     unsigned char *text);                                        /* src/core/text.c */
 void PC_LangDrawItemName1Byte(int x, int y, int color, const unsigned char *name, int cap) {
     unsigned char buf[17];
     int i;

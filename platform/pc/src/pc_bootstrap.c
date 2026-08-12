@@ -1,6 +1,6 @@
 /*
  * PC-only startup glue: mounts the disc image and opens the game window
- * before the real game code's own main() (src/main.c) runs. Real hardware
+ * before the real game code's own main() (src/core/main.c) runs. Real hardware
  * never needs an equivalent step -- the disc is physically in the drive
  * and the TV is always displaying VRAM at boot, so there's no PSX API call
  * this could hook into; it has to run before main() via some mechanism
@@ -48,7 +48,7 @@
 #define SCREEN_HEIGHT 240
 
 /* PS1 games are statically linked with no dynamic allocator -- some already-
- * decompiled code (verified byte-exact, e.g. src/cd.c's gSoundSets table)
+ * decompiled code (verified byte-exact, e.g. src/core/cd.c's gSoundSets table)
  * bakes literal fixed RAM addresses straight into C source as scratch
  * buffers (`(void *)0x80140878`), matching the original's real, fixed
  * 2MB memory map. On a 64-bit host those numeric values aren't valid
@@ -69,7 +69,7 @@
 /* Real PS1 Scratchpad RAM (psx-spx iomap.md: "1F800000h 400h Scratchpad (1K Fast RAM)
  * (Data Cache mapped to fixed address)") -- a second, separate fixed-address region from
  * the main 2MB KUSEG RAM above, used by already-decompiled code as fast temp/dictionary
- * space (src/map_unpack.c's UnpackMapFileData: `pCache = (u8 *)0x1f800000;`, indexed up
+ * space (src/maps/unpack.c's UnpackMapFileData: `pCache = (u8 *)0x1f800000;`, indexed up
  * to `cacheOfs & 0x3ff`, i.e. the full real 1KB). Found via a real SIGSEGV once battle-map
  * loading was actually reached (UnpackMapFileData writing through this unmapped address),
  * not a hypothetical -- the original 8-literal audit for PSX_RAM_BASE only covered addresses
@@ -85,7 +85,7 @@
  * it is on a modern OS with virtual memory. This means a transient NULL
  * pointer dereference in already-decompiled game code (confirmed real via a
  * live BizHawk RAM trace against the actual retail game, not a
- * hypothetical: src/battle_field.c's Objf013_BattleMgr reads
+ * hypothetical: src/battle/field.c's Objf013_BattleMgr reads
  * `unitSprite->x1.n` while `unitSprite` is genuinely 0x00000000 for a few
  * frames right after the demo battle's manager object is created, before a
  * later state assigns it a real value -- see

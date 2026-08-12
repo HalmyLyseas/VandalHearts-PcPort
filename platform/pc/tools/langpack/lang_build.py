@@ -64,7 +64,7 @@ TABLES = [
     (7, "gUnitTypeNames",         0x800eb050, "fixed",  86, 11, b"\x00"),
     (8, "gItemNames",             0x800eb404, "fixed", 139, 13, b"\x00"),
     (9, "gClassAdvancementNames", 0x801f6a34, "fixed",  18, 17, b"\x00"),
-    # Function-static in battle_field.c: the runtime applies it through a PC_FEAT hook rather than
+    # Function-static in battle/field.c: the runtime applies it through a PC_FEAT hook rather than
     # by symbol, but the pack format treats it like any other fixed table.
     (10, "terrainText",           0x800f29f4, "fixed",  10, 12, b"\x00"),
 ]
@@ -85,7 +85,7 @@ def enc_plain(s):
 
 def drawn_chars(s):
     """Yield the characters the game actually DRAWS, consuming control codes exactly as the
-    message-box parser does (src/text.c Objf351_MsgBoxText, cases '$' and '#'):
+    message-box parser does (src/core/text.c Objf351_MsgBoxText, cases '$' and '#'):
       $W $F $P $O eat their operand letter; $S $T eat the letter then the digits after it;
       #<digits> is a string-table insertion (eaten); the first '#' of '##' is eaten, the second
       draws. A '$'/'#' before an UNRECOGNISED byte is consumed alone, so that byte draws -- which
@@ -233,7 +233,7 @@ def load_packart(d, errors):
 # --- 1-byte pack codes for fixed-width tables (decision D2, exchange/80) -----------------------
 # Fixed records keep byte = char = column: a non-ASCII character there gets a FREE 1-BYTE CODE
 # assigned by the builder, the retail map is rewritten so that code names a FREE GLYPH SLOT, and
-# the synthesised bitmap is written into that slot (all via the K_CHARMAP section + text.c's
+# the synthesised bitmap is written into that slot (all via the K_CHARMAP section + core/text.c's
 # hand-off hook). Provenance of the pools:
 #   codes: printable ASCII whose retail map entry is 0 (renders blank), minus '#'/'$' (parser
 #          markup) and minus any character that actually appears in retail text -- a code that
@@ -252,7 +252,7 @@ RETAIL_MAP = [
     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 0, 0, 0, 0, 0]
 
 # Fixed tables that carry 1-byte pack codes. Since the F_WD sheet patch (Path 1b), this includes
-# the strip-path names: the same K_CHARMAP records feed BOTH stores (bitmaps via the text.c
+# the strip-path names: the same K_CHARMAP records feed BOTH stores (bitmaps via the core/text.c
 # hand-off, sheet cells via the LoadImage-side stamp).
 CHARMAP_TABLES = {"gSpellNames", "gClassAdvancementNames", "terrainText",
                   "gCharacterNames", "gUnitTypeNames", "gItemNames"}
@@ -405,7 +405,7 @@ class CharmapAssign:
         #   slot 1   = GLYPH_BG, the window background tile in the F_WD sheet (assigning it
         #              tiled every window in the game with a letter)
         #   slot 128 = where the retail map sends NUL and space; it has to stay blank
-        # The upper bound tracks src/text.c's PC-side sFontGlyphBitmaps[156] and DrawFontGlyph's
+        # The upper bound tracks src/core/text.c's PC-side sFontGlyphBitmaps[156] and DrawFontGlyph's
         # matching index guard -- raise both together or glyphs simply do not draw.
         self.slots = list(range(111, 128)) + list(range(129, 156))
         # PUNCTUATION GLYPHS. The base game draws no glyph for some printable ASCII (RETAIL_MAP==0 --
@@ -658,7 +658,7 @@ def dialogue_bytes_safe(raw):
 
 def gtext_occupancy(plain):
     """Exact bytes LoadText writes into gText[10928] for a decoded dialogue file -- simulated the way
-    the game does it (src/text.c LoadText/CopySjisString/DecodeLineOfText), because reconstructing it
+    the game does it (src/core/text.c LoadText/CopySjisString/DecodeLineOfText), because reconstructing it
     from the working set's entries silently under-counts:
       * every CONTENT line costs len + 1 -- DecodeLineOfText appends '\\n' and CopySjisString copies
         it (the '\\n' is not a byte-pair lead, so it is one byte);

@@ -14,7 +14,7 @@ planned `PC_LANGSTR("...")` hook needs no explicit id in the C either.
 WHAT IS SKIPPED, and why:
   * `#N`-only templates ("#63\\n#64\\n#65") -- pure menu LAYOUT. The words come from gStringTable,
     which is already exported; there is nothing here to translate. Counted, not emitted.
-  * debug_menu.c -- reachable only in debug mode, not player-facing.
+  * states/debug_menu.c -- reachable only in debug mode, not player-facing.
 
 LIMITS COME FROM THE CALL SITE: the 3rd argument of DrawText is the column budget, read per site. A
 literal drawn at several sites takes the tightest one.
@@ -33,20 +33,20 @@ def read_source_stripped(path):
 
 DRAW = re.compile(r'\b(DrawText_Internal|DrawText|DrawSjisText|StringToGlyphs)\s*\(([^;]*?)\)\s*;', re.S)
 TEMPLATE = re.compile(r'(?:"(?:#\d+|\\n)*"\s*)+$')
-SKIP_FILES = {"debug_menu.c"}
+SKIP_FILES = {"states/debug_menu.c"}
 
 # Literals proven UNREACHABLE, excluded so they cannot confuse a translator. Keyed by content hash
 # (line numbers churn, content does not). Each needs a proof, not a hunch -- a merely *suspicious*
 # string stays in the working set, which is why the japanese_leftovers bucket still exists below.
 DEAD = {
     "literal:d47bbbda49d83b01":
-        "the Japanese main menu (始めから / ロード) in main.c's Objf582_MainMenu_Jpn. "
+        "the Japanese main menu (始めから / ロード) in core/main.c's Objf582_MainMenu_Jpn. "
         "OBJF_MAIN_MENU_JPN = 582 is declared in object.h and sits in the dispatch table at "
-        "obj_function_pointers.c:1166, but NOTHING in src/ ever assigns it to obj->functionIndex -- "
+        "core/obj_function_pointers.c:1166, but NOTHING in src/ ever assigns it to obj->functionIndex -- "
         "so the function is never entered in the US build.",
     "literal:40feee2af0415efa":
         "sPartyNames[0], the katakana 'dummy' slot. Index 0 is the party list's NULL TERMINATOR, "
-        "not a character: supplies.c writes gCurrentParty[j] = 0 to end the list and every consumer "
+        "not a character: ui/supplies.c writes gCurrentParty[j] = 0 to end the list and every consumer "
         "loops `while (gCurrentParty[i] != 0)`, so slot 0 is never dereferenced as a name.",
 }
 
@@ -56,7 +56,7 @@ DEAD = {
 NOTES = {
     # the item-pickup line's leading phrase
     "literal:f22b155f50c44ff6":
-        ("⚠ SENTENCE ASSEMBLED BY PIXEL POSITION, not concatenation: battle_field.c draws this "
+        ("⚠ SENTENCE ASSEMBLED BY PIXEL POSITION, not concatenation: battle/field.c draws this "
          "leading phrase at x=16, the item name at x=80 and the trailing mark at x=80+len*8. A "
          "longer translation will overlap the item name -- this site needs its x positions moved, "
          "not just its text replaced."),
@@ -66,7 +66,7 @@ NOTES = {
          "positioned independently."),
     # the after-battle experience popup's leading phrase
     "literal:a06b1d432c61c1d6":
-        ("⚠ the PREFIX of the after-battle experience popup: ShowExpDialog (battle_math.c) draws "
+        ("⚠ the PREFIX of the after-battle experience popup: ShowExpDialog (battle/math.c) draws "
          "this phrase, then the number, then the second line. Keep it short -- it shares a "
          "20-column line with the number, which is placed right after whatever you write here."),
 }
@@ -78,11 +78,11 @@ NOTES = {
 # {content hash: what it is} of the composed literal, so a removed or changed wrap fails the export
 # PRECISELY (the hash is the literal's identity, so no retail bytes are spelled out here).
 WRAPPED_LITERAL_FILES = {
-    "battle_math.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
-    "battle_field.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
-    # the save-slot caption labels, recomposed at display time with the numbers (main_menu.c
+    "battle/math.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
+    "battle/field.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
+    # the save-slot caption labels, recomposed at display time with the numbers (states/main_menu.c
     # TranslateCaption; the caption is stored English in the save and translated only for display)
-    "main_menu.c": {"66eb39dcbe1a877b": "save-slot caption: the chapter label ('Chap.')",
+    "states/main_menu.c": {"66eb39dcbe1a877b": "save-slot caption: the chapter label ('Chap.')",
                     "21c52824b66774d1": "save-slot caption: the section label ('Sct.')",
                     "af64014c86022b6b": "save-slot caption: the level label ('L')"},
 }
@@ -116,7 +116,7 @@ def scan_wrapped(srcdir):
 # (DrawTextWindow, and the load-menu DrawText calls), so a pack can replace it once it is exported.
 # Curated by (file, symbol); a rename or removal fails the self-check below.
 CHAR_ARRAY_LITERALS = {
-    "main_menu.c": ["sEmptyFileCaption"],
+    "states/main_menu.c": ["sEmptyFileCaption"],
 }
 
 
@@ -197,10 +197,10 @@ def decode(raw):
 # data tables; the self-check below fails the export if one of these disappears or grows.
 ARRAY_SOURCES = {
     # file            array prefix or exact name      why it is reachable
-    "main_menu.c":   ("sText_",
+    "states/main_menu.c":   ("sText_",
                       "every one is passed to DrawTextWindow, whose two DrawText calls are wrapped"),
-    "supplies.c":    ("sPartyNames",
-                      "read into the party-list buffer at supplies.c:590, which is wrapped"),
+    "ui/supplies.c":    ("sPartyNames",
+                      "read into the party-list buffer at ui/supplies.c:590, which is wrapped"),
 }
 # Arrays that are defined but never drawn -- excluded WITH a reason, never on a hunch.
 ARRAY_DEAD = {

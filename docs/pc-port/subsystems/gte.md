@@ -28,10 +28,10 @@ and signatures the byte-exact decompile already recovered — no text from Sony'
     `RotTransPers4` / `RotAverage4` (a quad's four corners plus an averaged OTZ).
   - Scalar math: `VectorNormalS`, `SquareRoot0/12`, `csqrt`, `rcos`, `rsin`, `ratan2`.
 - [`platform/pc/include/inline_gte.h`](../../../platform/pc/include/inline_gte.h) — the raw COP2
-  macro set, used only by `src/graphics.c` (the one file needing genuine coprocessor fidelity). It
+  macro set, used only by `src/core/graphics.c` (the one file needing genuine coprocessor fidelity). It
   shadows the project's own MIPS-asm `include/inline_gte.h`: the PC build lists
-  `-Iplatform/pc/include` before `-Iinclude`, so `graphics.c`'s `#include "inline_gte.h"` resolves
-  here instead, with **zero changes** to `graphics.c` or the real header. Each macro is a thin call
+  `-Iplatform/pc/include` before `-Iinclude`, so `core/graphics.c`'s `#include "inline_gte.h"` resolves
+  here instead, with **zero changes** to `core/graphics.c` or the real header. Each macro is a thin call
   into a `PC_GTE_*` function: `gte_ldv0/ldv3/ldrgb/ldopv1/ldopv2` (load), `gte_rtps/rtpt` (project),
   `gte_nclip` (back-face cross product), `gte_avsz4` (OTZ from the SZ FIFO), `gte_op0` (outer
   product), `gte_nccs` (normal-colour-col lighting), and the `gte_st*` stores.
@@ -95,7 +95,7 @@ straight out of the byte-exact `SLUS_004.47`. The values now in `libgte.c` are t
 Why this is a load-bearing lesson: the earlier values were **guessed** from the psx-spx "normally
 1/3, 1/4" note as `ZSF3=0x555 / ZSF4=0x400` — exactly **4× too large**. With `ZSF4` 4× inflated,
 terrain OTZ (via `gte_avsz4`) came out ~4× deep — the nearest tile projected to OTZ ~472 instead of
-~118 — pushing essentially all terrain past `graphics.c`'s distance-darkening black threshold
+~118 — pushing essentially all terrain past `core/graphics.c`'s distance-darkening black threshold
 (`otz >= 406`). That was the notorious "black terrain" symptom. `0x100` is the disassembled
 ground-truth value, and terrain renders correctly with it. The rule the project follows: when a
 PsyQ constant or behaviour is unknown, disassemble it from our own binary rather than approximate —
@@ -149,7 +149,7 @@ correct. The sibling routines match: real `RotTransPers4` (`0x800d0428`) and `Ro
   nested pushes — a per-frame camera push with per-object pushes inside it — corrupting sprite
   coordinates over successive frames. 16 is a generous scene-graph bound, not a hardware number.
 - **Two entry paths, one core.** The `gte_*` macros and the SDK wrappers both mutate the same `g`
-  state; keep any new opcode consistent across both so `graphics.c` and the other 37 files stay in
+  state; keep any new opcode consistent across both so `core/graphics.c` and the other 37 files stay in
   sync.
 
 ## SDK routines, verified against the binary

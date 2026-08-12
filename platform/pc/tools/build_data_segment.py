@@ -84,7 +84,7 @@ SIZE_OVERRIDES = {
     # additional_VRAM: originally sized from `additional_VRAM_END` (0x801e4690 to 0x801f7000
     # in build/SLUS_004.47.map), giving 0x12970 (76144) bytes -- but this project's OWN earlier
     # investigation (see the old version of this comment) had *already found and documented*
-    # that real usage via SwapInCodeFromVram/SwapOutCodeToVram (unit_load.c) extends to
+    # that real usage via SwapInCodeFromVram/SwapOutCodeToVram (units/load.c) extends to
     # +0x14700 (83712), a LARGER number than the linker-derived size actually applied here --
     # an oversight, not a re-derivation. Confirmed as a real, live bug via a `gdb` hardware
     # watchpoint (2026-07-11): `SwapOutCodeToVram`'s last `StoreImage` call
@@ -134,7 +134,7 @@ MANUALLY_DEFINED = {'gBattleEnemyUnitInitialStates', 'gBattlePartyUnitInitialSta
                      # NOTE: gTextPointers (0x8012be9c) is runtime-filled (.bss, all-NULL in ROM) -- NOT here.
                      'gItemDescriptions', 'gItemDescriptions2',
                      # Stage-3 1.3 Tactical Mode flag -- defined in platform/pc/src/pc_balance.c, referenced
-                     # by the gated src/ hooks (game_setup.c etc.); not a ROM data symbol.
+                     # by the gated src/ hooks (states/game_setup.c etc.); not a ROM data symbol.
                      'gTacticalMode'}
 
 
@@ -225,7 +225,7 @@ def find_undefined_symbols():
         objs = OBJ_FILES_ENV
     else:
         # Makefile layout: game objs by glob, backend objs by fixed name.
-        objs = glob.glob(f'{BUILD_DIR}/src/*.o') + [
+        objs = glob.glob(f'{BUILD_DIR}/src/*.o') + glob.glob(f'{BUILD_DIR}/src/*/*.o') + [
             f'{BUILD_DIR}/{o}' for o in
             ('libetc.o', 'libcd.o', 'libsnd.o', 'libspu.o', 'libkernel.o',
              'libgte.o', 'libgpu.o', 'pc_gpu_window.o', 'libsn.o')]
@@ -256,7 +256,7 @@ def find_undefined_symbols():
 
 
 def find_declarations(syms):
-    files = glob.glob('../../include/*.h') + glob.glob('../../src/*.c')
+    files = glob.glob('../../include/*.h') + glob.glob('../../src/*.c') + glob.glob('../../src/*/*.c')
     text_cache = {f: strip_comments(open(f, encoding='latin1').read()) for f in files}
     simple_re_t = r'extern\s+[^;{{]*\b({sym})\b[^;{{]*;'
     anon_re_t = r'extern\s+(?:struct|union)\s*\{{[^}}]*\}}\s*({sym})\s*(\[[^\]]*\])?\s*;'
@@ -303,7 +303,7 @@ def extract_base_type(decl_text):
 
 
 def find_struct_pointer_fields(type_names):
-    files = glob.glob('../../include/*.h') + glob.glob('../../src/*.c')
+    files = glob.glob('../../include/*.h') + glob.glob('../../src/*.c') + glob.glob('../../src/*/*.c')
     text_cache = {f: strip_comments(open(f, encoding='latin1').read()) for f in files}
     pointer_types = set()
     for t in type_names:
@@ -484,7 +484,7 @@ def generate(results, sizes, unresolved_by_probe):
         '#include <string.h>',
     ]
     out += [f'#include "{h}"' for h in headers]
-    out.append('#include "PsyQ/kernel.h" /* struct DIRENTRY -- only ever included by src/card.c, not by any header */')
+    out.append('#include "PsyQ/kernel.h" /* struct DIRENTRY -- only ever included by src/core/card.c, not by any header */')
     out.append(LOCAL_TYPEDEFS)
 
     stats = {'safe_extracted': 0, 'safe_unresolved': 0, 'flagged': 0}

@@ -136,7 +136,7 @@ couldn't be read by the other — and **ASAN cannot see this** (it's a layout di
 out-of-bounds access). It was caught by diffing `sizeof` between the 32- and 64-bit builds
 (`tools/struct_width_diff.sh`) rather than by a sanitizer, and **fixed**: the in-battle save is now
 serialized to a fixed 120-byte PSX on-disk layout (`PC_PORT`-gated `Pc_PackInBattleSave` /
-`Pc_UnpackInBattleSave` in `src/card.c`), so saves are architecture-agnostic and cross-loadable
+`Pc_UnpackInBattleSave` in `src/core/card.c`), so saves are architecture-agnostic and cross-loadable
 between build widths. The `sizeof`-diff method stays in the toolkit for the *next* such struct. See
 [pc-port/subsystems/kernel.md](pc-port/subsystems/kernel.md) for the save-format detail.
 

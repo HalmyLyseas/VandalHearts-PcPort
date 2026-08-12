@@ -189,8 +189,8 @@ typedef struct {
  * which TERMINATES the whole walk and silently drops every primitive after it in the chain.
  *
  * That is exactly what happened when the token bridge first landed: `addPrim` below was left as
- * a raw setaddr/getaddr pair while `AddPrim` was converted, so engine.c's compass
- * (ot[OT_SIZE-5]) and screen_effects.c's overlays poisoned the tail of the walk -- killing the
+ * a raw setaddr/getaddr pair while `AddPrim` was converted, so core/engine.c's compass
+ * (ot[OT_SIZE-5]) and core/screen_effects.c's overlays poisoned the tail of the walk -- killing the
  * compass, the logo and every textbox, while 3D geometry (earlier buckets, walked first) looked
  * perfect. Kept only for raw tag inspection; `nextPrim`/`isendprim` are likewise token-domain. */
 #define setaddr(p, _addr) (((P_TAG *)(p))->tag = (u32)(size_t)(_addr))
@@ -214,7 +214,7 @@ typedef struct {
  *
  * BUT: not all game code builds a primitive via our SetPolyF4/SetPolyFT4/
  * etc setters (which are the only place that writes our PC_GPU_PRIM_* tag).
- * AddObjPrim_Gui and friends (object.c, used across 10 files -- the
+ * AddObjPrim_Gui and friends (core/object.c, used across 10 files -- the
  * primary way most sprites in this game actually get drawn) set `.code`
  * directly to the real hardware GP0 command byte instead:
  * `poly->code = GPU_CODE_POLY_FT4` (0x2c, optionally |GPU_CODE_SEMI_TRANS

@@ -68,7 +68,7 @@ has no I/O latency to hide) and only *paces when completion is reported* (see
 | `CdlPause` | `0x09` | Soft-pause: stop feeding new sectors but keep the OpenAL source, its queued audio, and the ADPCM history, so a same-track resume is seamless. A movie pause additionally flushes. |
 | `CdlReset` | `0x0a` | Hard stop: tear down the XA stream and any movie overlay. |
 
-Regular file loads (`cd.c`'s `LoadCdFile`/`ContinueLoadingCdFile`) go through `CdRead(sectors, buf,
+Regular file loads (`core/cd.c`'s `LoadCdFile`/`ContinueLoadingCdFile`) go through `CdRead(sectors, buf,
 mode)` → `CdReadSync`. `CdRead` reads the requested run of sectors straight out of the `.bin` at the
 `CdlSetloc` target (copying only the 2048 data bytes of each raw sector into `buf`), then schedules a
 completion time. `CdReadSync` returns a positive "sectors remaining" estimate while that time is in
@@ -110,7 +110,7 @@ object loop during a loading screen, so a realistically slower load lets nothing
 
 ## XA audio streaming
 
-CD-XA carries **interleaved ADPCM audio** in the sector stream. The game (`src/audio.c`) requests it
+CD-XA carries **interleaved ADPCM audio** in the sector stream. The game (`src/core/audio.c`) requests it
 via `PerformAudioCommand(PLAY_XA/PREPARE_XA)`, which drives a `CdlSetmode(RT)` →
 `CdlSetfilter(file,chan)` → `CdlSeekL` → `CdlReadN` sequence. On hardware the CD controller decodes
 the matching sectors and mixes them into the SPU's CD input; the PC backend reproduces that with a
@@ -133,7 +133,7 @@ software decoder feeding OpenAL:
 tracks** in the game, so this layer only ever streams finite one-shots.
 
 > **The game's background music is SEQ, not XA.** The loading/battle BGM is sequenced music
-> (`battle_eval.c` `PlayBattleBGM` → `AUDIO_CMD_PLAY_SEQ` → SPU voices), an entirely separate
+> (`battle/eval.c` `PlayBattleBGM` → `AUDIO_CMD_PLAY_SEQ` → SPU voices), an entirely separate
 > subsystem. If music is silent, it is never an XA problem. See [spu.md](spu.md).
 
 Movie (STR) playback shares this machinery: `CdRead2(Stream|RT)` (issued by `Movie_Start`) starts a

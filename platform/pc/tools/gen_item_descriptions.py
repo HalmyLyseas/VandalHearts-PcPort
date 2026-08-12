@@ -6,9 +6,9 @@ pointer tables.
 
 Both are arrays of 101 `s8*` pointers to item/equipment info strings
 ("LIGHT SWORD  AT+4", "Restores some HP  Rng:1  Fld:0", ...). gItemDescriptions
-is the single-line form drawn in the party/overworld item window (window.c:2078,
+is the single-line form drawn in the party/overworld item window (ui/window.c:2078,
 DrawText_Internal); gItemDescriptions2 is the shop form with an embedded '\n'
-(supplies.c, DrawText). Being pointer-containing globals, build_data_segment.py
+(ui/supplies.c, DrawText). Being pointer-containing globals, build_data_segment.py
 can't relocate their bytes and zero-fills them (see that file's header), so on
 the PC port every entry was NULL and the description window rendered blank.
 

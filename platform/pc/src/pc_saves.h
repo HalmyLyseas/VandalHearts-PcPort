@@ -1,7 +1,7 @@
 /*
  * Stage-3 (1.2b) save management -- file-level card archiving.
  *
- * Vandal Hearts uses ONE memory-card file, "BASLUS-00447VH" (card.c), holding all 3 in-game slots.
+ * Vandal Hearts uses ONE memory-card file, "BASLUS-00447VH" (core/card.c), holding all 3 in-game slots.
  * To beat the 3-slot limit *without* diverging the save format (each archive stays a byte-identical,
  * real-hardware-valid card), this backend keeps whole-card snapshots in a hidden "<saves>/.archive/"
  * folder -- dot-prefixed so the game's own firstfile("bu00:*") enumeration skips it.

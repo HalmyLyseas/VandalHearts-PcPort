@@ -34,7 +34,7 @@ TABLES = [
     ("gUnitTypeNames",     0x800eb050, "fixed",   86, 11, "class name (status panel)"),
     ("gItemNames",         0x800eb404, "fixed",  139, 13, "item name, equip/status panel"),
     ("gClassAdvancementNames", 0x801f6a34, "fixed", 18, 17, "class name in the dojo"),
-    # A FUNCTION-STATIC in battle_field.c (Objf030_FieldInfo) -- no external linkage, so unlike every
+    # A FUNCTION-STATIC in battle/field.c (Objf030_FieldInfo) -- no external linkage, so unlike every
     # other table the runtime cannot reach it without a PC_FEAT hook in that file. Exported here all
     # the same: it is real on-screen text. ⚠️ Its column alignment is literal spaces inside the string
     # ("Plains   0%" vs "Thicket 15%") so the % figures line up -- never trim or normalise it.
@@ -138,8 +138,8 @@ def export(disc, outdir):
             # does NOT clip -- unlike the message-box path. So exceeding it costs extra ROWS, and the
             # risk is overflowing the window vertically, not losing characters.
             COLS = {"gStringTable":       (20, "20 cols at all 74 call sites"),
-                    "gSpellDescriptions": (35, "window.c:2292, a 288x36 bar"),
-                    "gItemDescriptions":  (35, "window.c:2105, same bar"),
+                    "gSpellDescriptions": (35, "ui/window.c:2292, a 288x36 bar"),
+                    "gItemDescriptions":  (35, "ui/window.c:2105, same bar"),
                     "gItemDescriptions2": (29, "29-35 depending on screen; 29 is the safe minimum")}
             cols, where = COLS.get(name, (None, "not yet traced"))
             limit = {"kind": "wrapping", "max_cols": cols, "wraps": True,
@@ -157,7 +157,7 @@ def export(disc, outdir):
 # Dialogue: the on-disc text files. Stored BITWISE-INVERTED with CRLF lines (DecodeLineOfText reads
 # ~src[0]); LoadText then walks them as <=100 entries, a blank line toggling entry start/end and
 # "END" terminating. Budgets differ by RENDER PATH, traced in src/:
-#   * SHOP_T  -> DrawText(gTextPointers) in supplies.c (65 sites) -> 30 cols, WRAPS
+#   * SHOP_T  -> DrawText(gTextPointers) in ui/supplies.c (65 sites) -> 30 cols, WRAPS
 #   * all others -> the message box -> 26 cols, HARD CLIP (tail silently lost)
 import re as _re
 
@@ -167,20 +167,20 @@ TEXT_RX = _re.compile(r"(B_TXT\d+|EVENT\d+|SIBAI[\w]*|EVDEMO\d+|TOWN_T|SHOP_T|SA
 # reaches DOES NOT EXIST for translation purposes -- no PAL/JP consideration, no "might be used".
 # These six are the only text files still carrying Japanese, and they are exactly the six absent from
 # gEvtTextFiles[95] (the event -> text-file map, 0x80102c18). Their only references anywhere in src/
-# are the gCdFiles[] disc table entries in cd.c, which merely record every file's LBA -- NO LoadText
+# are the gCdFiles[] disc table entries in core/cd.c, which merely record every file's LBA -- NO LoadText
 # call names them. Unreachable on both counts, so they are dropped rather than handed to a translator.
 DEAD_FILES = {"SIBAI5", "SIBAI7", "SIBAIA", "SIBAIE", "SIBAIF", "EVDEMO7"}
 def _budget(stem):
     if stem == "SHOP_T":
         return {"max_cols": 30, "wraps": True,
-                "note": "drawn by DrawText in supplies.c -- wraps, text is not lost"}
+                "note": "drawn by DrawText in ui/supplies.c -- wraps, text is not lost"}
     return {"max_cols": 26, "wraps": False,
             "note": "drawn by the message box -- HARD CLIP past 26 columns, tail is lost"}
 
 
 # ENTRY-LEVEL exception. Budgets are per FILE except here: entry 1 of every battle file is the
 # victory/defeat condition panel, and it does NOT go through the message box at all --
-# battle_field.c draws it with DrawText at 40 columns (line 340) and 34 columns (line 2784), which
+# battle/field.c draws it with DrawText at 40 columns (line 340) and 34 columns (line 2784), which
 # WRAPS. Charging it the message box's 26-column hard clip flagged 41 lines of Konami's own shipped
 # text, and the disc is the oracle: a rule that fails retail is our rule being wrong. Budget is the
 # tighter of the two real call sites.
@@ -204,7 +204,7 @@ NOT_MSGBOX = {
 def _entry_budget(stem, n):
     if stem.startswith("B_TXT") and n == 1:
         return {"max_cols": 34, "wraps": True,
-                "note": "battle condition panel -- drawn by DrawText (battle_field.c), wraps; "
+                "note": "battle condition panel -- drawn by DrawText (battle/field.c), wraps; "
                         "the narrower of its two call sites (34 and 40 columns)"}
     return None
 
@@ -212,7 +212,7 @@ def _entry_budget(stem, n):
 def walk_dialogue(lines):
     """THE ONE definition of the on-disc dialogue format. `lines` is a decoded file (the '\\r\\n'-split
     inverse-obfuscated bytes). Yields (entry_n, line_idx, arr_idx, raw_line) for every CONTENT line,
-    walking EXACTLY as the game's LoadText does (src/text.c) so export and build share one walker and
+    walking EXACTLY as the game's LoadText does (src/core/text.c) so export and build share one walker and
     cannot drift:
 
       A blank line CLOSES the current entry and OPENS the next one, both at once. LoadText does not

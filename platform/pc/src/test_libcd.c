@@ -1,6 +1,6 @@
 /* Standalone proof-of-concept: reads a real known game file (SIBAI1_1.DAT,
- * gCdFiles[CDF_SIBAI1_1_DAT] = {0x27e8, 0x01, ...} in src/cd.c) through the
- * exact CdControl(CdlSetloc)+CdRead flow cd.c itself uses, and verifies the
+ * gCdFiles[CDF_SIBAI1_1_DAT] = {0x27e8, 0x01, ...} in src/core/cd.c) through the
+ * exact CdControl(CdlSetloc)+CdRead flow core/cd.c itself uses, and verifies the
  * bytes match the independently-extracted reference exactly. Not part of
  * the real game build. */
 #include <stdio.h>
@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* Exactly the flow ContinueLoadingCdFile() in src/cd.c uses. */
+    /* Exactly the flow ContinueLoadingCdFile() in src/core/cd.c uses. */
     CdlLOC loc;
     CdIntToPos(0x27e8, &loc); /* gCdFiles[CDF_SIBAI1_1_DAT].startingSector */
     printf("MSF for LBA 0x27e8: %02x:%02x:%02x (BCD)\n", loc.minute, loc.second, loc.sector);

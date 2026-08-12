@@ -11,7 +11,7 @@
  *
  * Clean-room reimplementation: struct layouts and function signatures are
  * functional facts (already known precisely from the Phase B byte-exact
- * decompile of src/text.c, which reconstructed MATRIX/VECTOR/SVECTOR from real
+ * decompile of src/core/text.c, which reconstructed MATRIX/VECTOR/SVECTOR from real
  * data) -- no text from Sony's original header. Behavior is implemented against
  * the public Nocash PSX Specifications hardware reference (psx-spx), not
  * against any Sony documentation.

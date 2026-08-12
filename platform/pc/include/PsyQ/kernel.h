@@ -36,7 +36,7 @@ struct DIRENTRY {
     char system[4];
 };
 
-/* s32/u32 (not int) to exactly match card.c's own local `extern s32
+/* s32/u32 (not int) to exactly match core/card.c's own local `extern s32
  * TestEvent(s32);` declaration -- s32 is `int` in this project's
  * types.h, not `int` (which is 64-bit on this target), so a `int`
  * signature here would conflict. Relies on include/common.h always
@@ -50,7 +50,7 @@ u32 ResetRCnt(s32 which);
 /* BIOS Kanji-ROM raw font data lookup. Not declared in any real header
  * either (same "undeclared anywhere, relies on old GCC's implicit-
  * declaration leniency" pattern as OpenEvent/GetRCnt above) -- signature
- * inferred from its 2 call sites (text.c, window.c), both of which cast
+ * inferred from its 2 call sites (core/text.c, ui/window.c), both of which cast
  * the result to a pointer and compare it against -1 on failure. The US
  * release ships no Kanji ROM data, so real hardware would also always
  * fail this lookup -- returning -1 unconditionally is the *correct*
@@ -59,7 +59,7 @@ u32 ResetRCnt(s32 which);
  * -m32 pointer width"), which silently TRUNCATED the glyph address under -m64: both callers do
  * `u8 *p = Krom2RawAdd(sjis)` and then dereference, so the 64-bit build SIGSEGV'd in
  * DrawSjisGlyph the first time a battle menu was drawn. `void *` keeps both call sites
- * (src/text.c cast, src/window.c direct assign) and their `== -1` sentinel test working
+ * (src/core/text.c cast, src/ui/window.c direct assign) and their `== -1` sentinel test working
  * unchanged at either width. */
 void *Krom2RawAdd(s32 sjisCode);
 

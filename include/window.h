@@ -24,9 +24,9 @@ extern u16 gWindowChoiceHeight, gWindowChoicesCount, gWindowChoicesTopMargin;
 extern s16 gWindowActiveIdx;
 extern u8 gHighlightedChoice;
 /* The [16] bound is too small: these are indexed by raw windowId. DrawWindow -- the only writer
- * (window.c:747/750/753/754) -- is called with ids 52..67, and the `usingMultipleTPages` path also
+ * (ui/window.c:747/750/753/754) -- is called with ids 52..67, and the `usingMultipleTPages` path also
  * writes windowId + 1, so the real maximum index is 68. DisplayCustomWindowWithSetChoice reads
- * back with the same windowId (window.c:1256/1257). Found by the AddressSanitizer sweep
+ * back with the same windowId (ui/window.c:1256/1257). Found by the AddressSanitizer sweep
  * (`make asan32`), which flagged all six accesses during a chapter-1 battle.
  *
  * On real hardware the overrun is harmless, which is why it was never noticed: gWindowDisplayX is
@@ -45,7 +45,7 @@ extern u8 gHighlightedChoice;
  *
  * PERMUTER-gated, not PC_PORT: the data-segment generator's sizeof() probe compiles with
  * -DPERMUTER only and must agree with the game code about array sizes. Same as gClutIds in
- * graphics.h and sFontGlyphBitmaps in src/text.c. The matching build keeps [16]. */
+ * graphics.h and sFontGlyphBitmaps in src/core/text.c. The matching build keeps [16]. */
 #ifdef PERMUTER
 extern s16 gWindowDisplayX[70];
 extern s16 gWindowDisplayY[70];

@@ -412,7 +412,7 @@ typedef enum ObjFunctionIdx {
 /* ---- PC_PORT (Stage 2.3): 64-bit coords-alias padding ---------------------------------------
  * Several union members in Object_DataStore DELIBERATELY alias Object_Sprite's `coords[4]` at
  * 0x3C: an effect writes its vertices through its own struct, and the shared renderer
- * (AddObjPrim2/4/5 in object.c) reads them back as `obj->d.sprite.coords`. That alias holds only
+ * (AddObjPrim2/4/5 in core/object.c) reads them back as `obj->d.sprite.coords`. That alias holds only
  * while every one of those structs puts coords at the same offset.
  *
  * Object_Sprite has `void *animData` at 0x38, immediately before coords. On a 64-bit host that

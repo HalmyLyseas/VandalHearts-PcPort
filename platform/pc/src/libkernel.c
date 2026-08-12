@@ -1,11 +1,11 @@
 /*
  * PC backend for PsyQ/kernel.h -- the BIOS event/timer API, plus the
- * memory-card file-I/O functions card.c declares locally (not via any
+ * memory-card file-I/O functions core/card.c declares locally (not via any
  * header, matching how the original relies on old-GCC implicit
  * declaration -- see the Kernel step file for the full story).
  *
  * Memory card: "bu00:FILENAME" paths map onto real local files under the
- * saves/ folder (resolved by SaveDir(), next to the exe/AppImage) -- card.c's
+ * saves/ folder (resolved by SaveDir(), next to the exe/AppImage) -- core/card.c's
  * own block/capacity accounting (BYTES_PER_BLOCK,
  * TOTAL_BLOCKS) is driven entirely by real file sizes via firstfile/
  * nextfile, so this layer only needs honest file existence/size/read/
@@ -106,12 +106,12 @@ static void SignalCardEvent(s32 spec) {
  * same day) does NOT work: RCntCNT1 is a shared hardware resource with (at
  * least) two independent real call sites with different thresholds and
  * different tolerances for being scaled --
- *   - src/ai.c's IsLagging() (GetRCnt(RCntCNT1) > 450) -- the enemy AI
+ *   - src/battle/ai.c's IsLagging() (GetRCnt(RCntCNT1) > 450) -- the enemy AI
  *     turn-evaluation throttle this was calibrated against (7x, from
  *     exchange/demoDrift/). Needs slowing down: on real hardware this trips
  *     often enough to spread AI work across ~112 frames; on a modern host
  *     it almost never trips, collapsing the same work into ~16 frames.
- *   - src/graphics.c's incremental unit-sprite decompressor (case 1 of the
+ *   - src/core/graphics.c's incremental unit-sprite decompressor (case 1 of the
  *     sprite-cache decode state machine, ~line 90): gates decode work off
  *     entirely once GetRCnt(RCntCNT1) > 470 while gIsEnemyTurn is set, and
  *     separately bounds each decode burst to a ~256-tick window
@@ -142,12 +142,12 @@ static void SignalCardEvent(s32 spec) {
 static struct timespec s_rcntStart[2];
 
 /* ---- AI throttle decoupling (2026-07-12, Option B revised) -----------
- * IsLagging() (src/ai.c:300, GetRCnt(RCntCNT1) > 450) is checked from
+ * IsLagging() (src/battle/ai.c:300, GetRCnt(RCntCNT1) > 450) is checked from
  * inside 7 enemy/ally turn-evaluation state machines (Objf570/400/401/
  * 402/403/404/589_AI_TBD) -- confirmed by grep to be IsLagging()'s only
  * callers, and to be the only functions with direct
  * `GetRCnt(RCntCNT1) > 450` checks too. Tracing the actual per-frame call
- * order in src/engine.c's UpdateEngine() showed RCntCNT1 is a genuine
+ * order in src/core/engine.c's UpdateEngine() showed RCntCNT1 is a genuine
  * whole-frame-elapsed clock (ResetRCnt happens once, at the END of each
  * frame, after Obj_Execute() and DecodeUnitSprites() both already ran) --
  * so a synthetic model that tried to faithfully reconstruct "real elapsed
@@ -163,8 +163,8 @@ static struct timespec s_rcntStart[2];
  * gets a separate synthetic counter that advances by a fixed amount per
  * *checkpoint visit* (not per unit of real time) -- immune to host speed
  * by construction, same as ctr-native's approach, just keyed to call
- * count instead of vblank count. Every other caller (src/graphics.c's
- * sprite decoder, src/engine.c's debug FntPrint) falls through to the
+ * count instead of vblank count. Every other caller (src/core/graphics.c's
+ * sprite decoder, src/core/engine.c's debug FntPrint) falls through to the
  * original, untouched, unscaled wall-clock path below -- so this cannot
  * repeat the 2026-07-12 regression where a global scale starved the
  * decoder (exchange/videos/analysis_newExtract_02).
@@ -187,11 +187,11 @@ static struct timespec s_rcntStart[2];
  * measured via full-demo BizHawk-vs-gdb comparison -- a single constant
  * can't track that different checkpoints gate genuinely different amounts
  * of real work. Replaced with real per-checkpoint costs derived from the
- * project's own byte-exact MIPS assembly (build/src/ai.c.s and
- * build/src/path_grids.c.s, the actual old-GCC output verified byte-exact
+ * project's own byte-exact MIPS assembly (build/src/battle/ai.c.s and
+ * build/src/battle/path_grids.c.s, the actual old-GCC output verified byte-exact
  * against the original binary in stage 1 -- not a reconstruction).
  *
- * Of the ~35 IsLagging()/GetRCnt() call sites in ai.c, ~24 go through
+ * Of the ~35 IsLagging()/GetRCnt() call sites in battle/ai.c, ~24 go through
  * IsLagging() (straight-line case-boundary checks -- confirmed via
  * objdump that IsLagging() is a real non-inlined function, so they all
  * share ONE return address from GetRCnt's perspective and get a single
@@ -206,10 +206,10 @@ static struct timespec s_rcntStart[2];
  *  - Case-boundary (shared bucket, ~24 sites via IsLagging()): 25,
  *    representative of the measured range (10-45 instrs across all of
  *    them) for simple straight-line state-transition bodies.
- *  - Objf400 case 2 (ai.c:402): 15 -- per-tile checkpoint, but the two
+ *  - Objf400 case 2 (battle/ai.c:402): 15 -- per-tile checkpoint, but the two
  *    branches (array lookup+assign vs. nothing) differ negligibly, so a
  *    flat weight is accurate, not just convenient.
- *  - Objf400 case 1 (ai.c:376): NOT given its own weight -- it goes
+ *  - Objf400 case 1 (battle/ai.c:376): NOT given its own weight -- it goes
  *    through IsLagging() (confirmed via objdump: `call IsLagging` at
  *    this exact line), so it shares the case-boundary bucket above.
  *    Deliberately deferred: unlike the A/B pairs below, this checkpoint
@@ -218,7 +218,7 @@ static struct timespec s_rcntStart[2];
  *    branch-dependent per visit -- approximating it as case-boundary-cost
  *    undercounts when the expensive branch is taken, but avoids a worse
  *    guess. Revisit if validation shows this cycle-type is still off.
- *  - Objf401 (ai.c:639): 41 (ClearGrid) + 816 (AccumulateProximityGrid, its actual
+ *  - Objf401 (battle/ai.c:639): 41 (ClearGrid) + 816 (AccumulateProximityGrid, its actual
  *    measured size -- much larger than the other helpers) + ~10 call
  *    overhead = 867. Fires only for team-differing units, bounded by
  *    UNIT_CT (~40), so the "how many skipped" variance is small in
@@ -284,7 +284,7 @@ typedef struct {
     unsigned int size;
 } AddrRange;
 
-/* Sizes taken from `nm -S build/src/ai.o` against the current src/ai.c --
+/* Sizes taken from `nm -S build/src/ai.o` against the current src/battle/ai.c --
  * stable across relinks (only the absolute base address, read here via
  * &Func at runtime, depends on final link layout), but WILL go stale if
  * any of these 8 functions' compiled code changes size. Regenerate via:
@@ -377,7 +377,7 @@ static double s_aiSyntheticTicks[2];
  * OFF BY DEFAULT. The honest wall-clock counter below is the calibrated behaviour and stays
  * the default so the AI/timing work (exchange/42) is untouched.
  *
- * The problem this exists for: src/graphics.c's incremental sprite decoder gates itself with
+ * The problem this exists for: src/core/graphics.c's incremental sprite decoder gates itself with
  * `if (!gIsEnemyTurn || GetRCnt(RCntCNT1) <= 470)`. RCnt1 is the HBlank counter and 470 ticks
  * at RCNT1_HZ is ~30 ms, so on real hardware -- where a frame IS 16.7 ms -- the gate can never
  * trip: the counter only reaches ~262 by end of frame. The game code is written assuming that.
@@ -394,7 +394,7 @@ static double s_aiSyntheticTicks[2];
  * The fix, when enabled: scale elapsed time by (nominal frame / PREVIOUS frame duration), so the
  * counter sweeps the same 0..~262 range per frame regardless of how long the frame really took --
  * i.e. frame-relative, which is what RCnt1 physically is on hardware (a position within the
- * frame). ResetRCnt(RCntCNT1) is called exactly once per frame (src/engine.c:76), so the gap
+ * frame). ResetRCnt(RCntCNT1) is called exactly once per frame (src/core/engine.c:76), so the gap
  * between consecutive resets IS the previous frame duration: this is self-tuning, with no
  * host-specific factor to guess.
  *
@@ -526,7 +526,7 @@ const char *PC_SaveDir(void) { return SaveDir(); }
 void _bu_init(void) {}
 
 /* On real hardware these three kick off ASYNC memory-card BIOS operations whose completion fires a
- * card interrupt that signals a SwCARD/HwCARD event; card.c's Card_CheckState() then blocks in
+ * card interrupt that signals a SwCARD/HwCARD event; core/card.c's Card_CheckState() then blocks in
  * Card_WaitForSw/HwCardEvent() (a while(1) polling TestEvent) until one arrives. Our virtual card
  * is synchronous and always present, so we signal the I/O-complete event (EvSpIOE) right here --
  * WITHOUT it the wait-loops spin forever and the game FREEZES the instant New Game / Load Game
@@ -673,7 +673,7 @@ static s32 sjis_to_krom_glyph(u32 sjis) {
 }
 
 /* Emulates BIOS call B(51h) Krom2RawAdd: returns a pointer to the 30-byte glyph bitmap for a
- * Shift-JIS code, or -1 on error -- exactly what src/text.c's DrawSjisGlyph() expects. Without
+ * Shift-JIS code, or -1 on error -- exactly what src/core/text.c's DrawSjisGlyph() expects. Without
  * this every DrawSjisText() (TURN counter, PLAYER/ENEMY TURN banner, item names, gold, party
  * lists) rendered nothing on the PC port.
  *
@@ -681,7 +681,7 @@ static s32 sjis_to_krom_glyph(u32 sjis) {
  * address to 32 bits under -m64. Both callers immediately dereference it
  * (`u8 *p = Krom2RawAdd(...)`), so the 64-bit build crashed in DrawSjisGlyph the first time a
  * battle menu was drawn. Returning `void *` is correct at both widths and needs no src/ change:
- * the cast in text.c and the implicit assign in window.c both still work, as does their
+ * the cast in core/text.c and the implicit assign in ui/window.c both still work, as does their
  * `== -1` sentinel test. */
 void *Krom2RawAdd(s32 sjisCode) {
     s32 idx;
@@ -704,7 +704,7 @@ void *Krom2RawAdd(s32 sjisCode) {
  * (psx-spx kernelbios.md, "A(2Fh) - rand()"). Confirmed as the actual root
  * cause of the demo battle (gState.mapNum==8) running ~9-10x too fast: real
  * gameplay logic reads rand() to intentionally randomize battle-unit team
- * assignments per-demo (src/game_setup.c's SetupBattleUnit), so if this
+ * assignments per-demo (src/states/game_setup.c's SetupBattleUnit), so if this
  * doesn't reproduce the BIOS's exact sequence, every unit's team ends up
  * wrong and the AI never finds a valid attack target. Linking against the
  * host's glibc rand() (the default before this fix) is deterministic too,

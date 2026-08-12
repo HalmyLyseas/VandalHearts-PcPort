@@ -32,9 +32,9 @@ typedef struct {
     unsigned short pad;
 } CdlFILTER;
 
-/* STR (streaming movie) sector header -- referenced by cd.c's deferred
+/* STR (streaming movie) sector header -- referenced by core/cd.c's deferred
  * Movie_* / MDEC playback path (see the DecDCT* deferral note above); the
- * struct itself is still needed just for cd.c to compile and pack/unpack
+ * struct itself is still needed just for core/cd.c to compile and pack/unpack
  * frame headers, even though frame decode isn't implemented. */
 typedef struct {
     u_short id;
@@ -88,7 +88,7 @@ void DecDCTout(unsigned int *buf, int size);
  * declared in any real header either (same "undeclared, relies on old
  * GCC's implicit-declaration leniency" pattern already found for Kernel's
  * GetRCnt/OpenEvent) -- signature inferred from its call sites
- * (cd.c passes NULL or a function pointer, matching the
+ * (core/cd.c passes NULL or a function pointer, matching the
  * CdReadyCallback/DrawSyncCallback callback-setter convention). */
 unsigned int DecDCToutCallback(void (*func)());
 void StSetRing(unsigned int *ring_addr, unsigned int ring_size);

@@ -9,7 +9,7 @@ import sys
 def main():
     src_dir, output = sys.argv[1:3]
     declarations = {}
-    for path in glob.glob(os.path.join(src_dir, "*.c")):
+    for path in glob.glob(os.path.join(src_dir, "*.c")) + glob.glob(os.path.join(src_dir, "*", "*.c")):
         with open(path, encoding="utf-8", errors="replace") as source:
             text = source.read()
         for match in re.finditer(r"(?m)^void\s+([A-Za-z_]\w*)\s*\(", text):

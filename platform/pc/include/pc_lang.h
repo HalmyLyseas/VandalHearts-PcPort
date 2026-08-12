@@ -27,28 +27,28 @@
  * ---------------------------------------------------------------------------------------------
  *
  * ⚠ ONE UNAVOIDABLE DUPLICATION. Gated hooks inside the decompiled `src/` declare the function they
- * call with an inline `extern` inside their own #ifdef -- the house style (see src/ai.c,
- * src/graphics.c, src/main_menu.c), and deliberate: `src/` must not include port headers, so this
+ * call with an inline `extern` inside their own #ifdef -- the house style (see src/battle/ai.c,
+ * src/core/graphics.c, src/states/main_menu.c), and deliberate: `src/` must not include port headers, so this
  * file is NOT staged into the game-source include path. When a signature here changes, the matching
  * inline declaration in `src/` must change with it. platform/pc/ TUs have NO such excuse: they
  * #include this header (libcd.c, libetc.c, libgpu.c, libkernel.c, pc_balance.c, pc_hdpack.c,
  * pc_overlay.c do), and a new port-side caller must too -- an inline extern there just trades a
  * compile-time signature check for a runtime surprise. Current gated src/ callers:
  *
- *   src/battle_field.c  PC_LangApplyTerrainText()
- *   src/text.c           PC_LangUtf8Glyph(), PC_LangUtf8SeqLen()   (DrawText_Internal + msgbox)
- *   src/text.c           PC_LangApplyCharmap()       (GetGlyphIdxForAsciiChar's hand-off)
+ *   src/battle/field.c  PC_LangApplyTerrainText()
+ *   src/core/text.c           PC_LangUtf8Glyph(), PC_LangUtf8SeqLen()   (DrawText_Internal + msgbox)
+ *   src/core/text.c           PC_LangApplyCharmap()       (GetGlyphIdxForAsciiChar's hand-off)
  *   7 game files         PC_LangStr()                (via each file's PC_LANGSTR macro block)
- *   src/supplies.c       PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (format-2 item lists)
- *   src/window.c         PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (battle item list)
- *   src/battle_field.c  PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (unit item panel)
+ *   src/ui/supplies.c       PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (format-2 item lists)
+ *   src/ui/window.c         PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (battle item list)
+ *   src/battle/field.c  PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (unit item panel)
  */
 
 #include <stddef.h>
 
-/* Glyph-slot capacity of the small font. MUST equal src/text.c's PERMUTER-widened
+/* Glyph-slot capacity of the small font. MUST equal src/core/text.c's PERMUTER-widened
  * sFontGlyphBitmaps row count ([156][9]) and lang_build.py's slot pool bound -- raise all
- * together (text.c cannot include this header, so its copy is tracked by comment there). */
+ * together (core/text.c cannot include this header, so its copy is tracked by comment there). */
 #define PC_LANG_GLYPH_SLOTS 156
 
 /* Load the pack (once) and apply everything addressable by symbol: the fixed and pointer text
@@ -57,17 +57,17 @@
 void PC_LangBoot(void);
 
 /* Called from CdRead (libcd.c) right after a read completes. A translated on-disc text file is
- * substituted here, keyed by the read's LBA: cd.c reads a text file whole in one CdRead from
+ * substituted here, keyed by the read's LBA: core/cd.c reads a text file whole in one CdRead from
  * gCdFiles[cdf].startingSector -- the plain ISO9660 LBA -- so the swap is indistinguishable from the
  * disc having held those bytes, and the game parses them with its own unmodified LoadText. */
 void PC_LangPatchRead(int lba, int sectors, unsigned char *out);
 
-/* Called once from src/battle_field.c's PC_FEAT hook with the address of its function-static
+/* Called once from src/battle/field.c's PC_FEAT hook with the address of its function-static
  * terrainText (the battle terrain info box). That table has no external linkage, so this hand-off is
  * the only way a pack can reach it; its blob is held from load time until this call arrives. */
 void PC_LangApplyTerrainText(void *table, int bytes);
 
-/* Called once from src/text.c's PC_FEAT hook in GetGlyphIdxForAsciiChar with its static code->glyph
+/* Called once from src/core/text.c's PC_FEAT hook in GetGlyphIdxForAsciiChar with its static code->glyph
  * map and the static glyph-bitmap array (neither externally linkable). Applies the pack's K_CHARMAP
  * records: code -> slot assignments, plus pack bitmaps written into free slots (all-zero rows =
  * map-only, for the mixed-case remap onto the existing lowercase art). */
@@ -79,7 +79,7 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
  * MSB left), sorted by codepoint. Called by pc_lang.c while parsing strings.bin. */
 void PC_LangFontLoad(const unsigned char *p, unsigned len);
 
-/* The gated emit-site hook (src/text.c, DrawText_Internal). If *pp starts a valid UTF-8 sequence
+/* The gated emit-site hook (src/core/text.c, DrawText_Internal). If *pp starts a valid UTF-8 sequence
  * and a pack font is loaded: consume the WHOLE sequence, draw one glyph (blank if the codepoint has
  * none) at the given position, and return 1 -- the caller then advances its column exactly as for
  * one retail character. Returns 0 untouched for plain ASCII / no pack, and the retail path runs. */

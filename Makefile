@@ -3,7 +3,7 @@ BASENAME        := SLUS_004.47
 TOOLS_DIR       := tools
 
 ASM_DIRS        := asm asm/data
-C_DIRS          := src
+C_DIRS          := src src/core src/states src/battle src/units src/world src/events src/spells src/maps src/ui
 BIN_DIRS        := assets
 
 TARGET          := build/$(BASENAME)
@@ -45,22 +45,22 @@ LD_FLAGS        := --cref -Map build/$(BASENAME).map -T $(BASENAME).ld -T undefi
 
 MASPSX          := $(PYTHON) $(TOOLS_DIR)/maspsx/maspsx.py --expand-div --aspsx-version=2.21 --use-comm-section
 
-build/src/audio.c.s: CC := cc1_v257_decompals
-build/src/audio.c.s: OPT_FLAGS := -O2
-build/src/audio.c.s: GP_OPT := -G0
-build/src/audio.c.o: GP_OPT := -G0
+build/src/core/audio.c.s: CC := cc1_v257_decompals
+build/src/core/audio.c.s: OPT_FLAGS := -O2
+build/src/core/audio.c.s: GP_OPT := -G0
+build/src/core/audio.c.o: GP_OPT := -G0
 
-build/src/glyphs.c.s: GP_OPT := -G0
-build/src/glyphs.c.o: GP_OPT := -G0
+build/src/core/glyphs.c.s: GP_OPT := -G0
+build/src/core/glyphs.c.o: GP_OPT := -G0
 
 #build/src/temp_sdata.c.s: GP_OPT := -G16
 
-build/src/supplies.c.s: GP_OPT := -G0
-build/src/supplies.c.o: GP_OPT := -G0
-build/src/dojo.c.s: GP_OPT := -G0
-build/src/dojo.c.o: GP_OPT := -G0
-build/src/world_map.c.s: GP_OPT := -G0
-build/src/world_map.c.o: GP_OPT := -G0
+build/src/ui/supplies.c.s: GP_OPT := -G0
+build/src/ui/supplies.c.o: GP_OPT := -G0
+build/src/world/dojo.c.s: GP_OPT := -G0
+build/src/world/dojo.c.o: GP_OPT := -G0
+build/src/world/map.c.s: GP_OPT := -G0
+build/src/world/map.c.o: GP_OPT := -G0
 
 default: check
 

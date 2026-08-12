@@ -146,7 +146,7 @@ command and, like on hardware, ignores the offset and clip (absolute VRAM rect).
 `LoadImage`/`StoreImage`/`MoveImage` are straight VRAM blits. `ReadTIM` parses a
 TIM header and hands back pointers *into the file buffer* (it does not upload —
 the caller decides where to `LoadImage`), matching the real API's two usage
-patterns in the game (`LoadFullscreenImage` with its own rect, and `dojo.c`
+patterns in the game (`LoadFullscreenImage` with its own rect, and `world/dojo.c`
 slicing one TIM with pointer arithmetic).
 
 ### Presentation
@@ -247,7 +247,7 @@ after any change here.
 
 - **Two primitive-tag conventions coexist.** `SetPolyF4`/`SetPolyFT4`/… write our
   own discriminators (`PC_GPU_PRIM_*`, 1–5) into the `code` byte. But
-  `AddObjPrim_Gui` and friends (`object.c`, the primary way most sprites get
+  `AddObjPrim_Gui` and friends (`core/object.c`, the primary way most sprites get
   drawn, used across 10 files) instead write the **real hardware GP0 command
   byte** directly — `poly->code = GPU_CODE_POLY_FT4` (`0x2c`, optionally
   `| GPU_CODE_SEMI_TRANS` = `0x02`). `PC_GPU_PRIM_TYPE`/`PC_GPU_IS_SEMI` recognise

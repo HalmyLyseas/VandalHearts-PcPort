@@ -3,7 +3,7 @@
  * Clean-room: the real header's underlying FREAD/FWRITE/FCREAT bit values
  * aren't reproduced anywhere in this project's tree (not needed -- these
  * flags are never serialized or compared against a hardcoded value, only
- * used symbolically by card.c), so this defines its own consistent bit
+ * used symbolically by core/card.c), so this defines its own consistent bit
  * assignment rather than guessing Sony's.
  */
 #ifndef PLATFORM_PC_PSYQ_SYS_FILE_H
