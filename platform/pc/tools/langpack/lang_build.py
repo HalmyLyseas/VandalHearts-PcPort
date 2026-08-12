@@ -758,8 +758,26 @@ def check_pack_name(lang):
                          f"lowercase [a-z0-9._-] only (e.g. en-fix, fr-fantrad, pt-br-fantrad)")
 
 
-# F3 movie subtitles: mirror platform/pc/src/pc_movie_subs.h -- the engine's hard limits.
+# F3 movie subtitles: mirror the engine's hard limits. Every constant here has a runtime twin
+# that silently degrades (not errors) when exceeded, so the builder is the enforcement point:
+#   CUE_MAX_LINES/CUE_MAX_TEXT   platform/pc/src/pc_movie_subs.h  PC_SUBS_MAX_LINES/_TEXT
+#   CUE_MAX_MOVIES/CUE_MAX_PER   pc_movie_subs.c PACK_MAX_MOVIES / the 512-cue loader cap
+#                                (an oversize set is dropped as "malformed" at pack load)
+#   CUE_MAX_CPS                  pc_gpu_window.c SUBS_MAX_CPS (decoded codepoints per cue,
+#                                all lines together; past it, text is silently not drawn)
+#   CUE_MAX_ACTIVE               pc_gpu_window.c asks PC_MovieSubsActive for at most 2 cues
+#                                per frame (band + card); a third overlap is silently dropped
 CUE_MAX_LINES, CUE_MAX_TEXT = 4, 160
+CUE_MAX_MOVIES, CUE_MAX_PER = 32, 512
+CUE_MAX_CPS, CUE_MAX_ACTIVE = 192, 2
+
+# Mirror of the runtime's AsciiToWideSjis (platform/pc/src/pc_lang.c): the ASCII the wide
+# 16x15 tier can serve from the built-in BIOS charset. Any other ASCII would make the runtime
+# silently demote the WHOLE cue to the small 8x9 font (per-cue fallback), so reject it here.
+CUE_WIDE_ASCII = set(
+    " \n0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    ",.:;?!'\"()+-/")
 
 
 def build_cues(work, exe, errors, art_small, charmap, cue_font, art_big, krom, cue_font16):
@@ -828,7 +846,7 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font, art_big, krom, c
         except (KeyError, ValueError):
             errors.append(f"cues/{fn}: missing or non-hex baseLBA")
             continue
-        recs = []
+        recs, spans = [], []
         for i, c in enumerate(doc.get("cues", [])):
             text = c.get("text") or ""
             if not text:
@@ -837,13 +855,23 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font, art_big, krom, c
             out = []
             for ch in text:
                 cp = ord(ch)
-                if cp < 0x80 or rows16_for(cp) is not None:
-                    if cp >= 0x80:
-                        rows_for(cp)                     # register the 8x9 fallback too, if any
+                if cp < 0x80:
+                    if ch not in CUE_WIDE_ASCII:
+                        errors.append(f"{ctx}: {ch!r} is ASCII the wide subtitle font cannot "
+                                      f"serve (supported: letters, digits, ,.:;?!'\"()+-/ and "
+                                      f"space) -- it would demote the whole cue to the small "
+                                      f"font at runtime")
+                        out = None
+                        break
+                    out.append(ch)
+                    continue
+                if rows16_for(cp) is not None:
+                    rows_for(cp)                         # register the 8x9 fallback too, if any
                     out.append(ch)
                     continue
                 folded = ch.upper()
-                if folded != ch and all(ord(u) < 0x80 or rows16_for(ord(u)) is not None
+                if folded != ch and all((ord(u) < 0x80 and u in CUE_WIDE_ASCII)
+                                        or (ord(u) >= 0x80 and rows16_for(ord(u)) is not None)
                                         for u in folded):
                     for u in folded:
                         if ord(u) >= 0x80:
@@ -865,6 +893,11 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font, art_big, krom, c
             if any(len(b) >= CUE_MAX_TEXT for b in enc):
                 errors.append(f"{ctx}: a line exceeds {CUE_MAX_TEXT - 1} UTF-8 bytes")
                 continue
+            ncps = sum(len(l) for l in lines)
+            if ncps > CUE_MAX_CPS:
+                errors.append(f"{ctx}: {ncps} characters across its lines, the renderer draws "
+                              f"at most {CUE_MAX_CPS} per cue -- split it into two cues")
+                continue
             try:
                 s, e = int(c["startFrame"]), int(c["endFrame"])
                 x, y, w, h = (int(v) for v in c["rect"])
@@ -879,10 +912,33 @@ def build_cues(work, exe, errors, art_small, charmap, cue_font, art_big, krom, c
             for b in enc:
                 rec += struct.pack("<B", len(b)) + b
             recs.append(rec)
+            spans.append((s, e, i))
+        if len(recs) > CUE_MAX_PER:
+            errors.append(f"cues/{fn}: {len(recs)} cues, the pack loader holds {CUE_MAX_PER} "
+                          f"per movie")
+            continue
+        # No frame may have more than CUE_MAX_ACTIVE cues live at once: the renderer only asks
+        # for that many, so a third simultaneous cue would leave its English visible. Sweep the
+        # inclusive [s,e] ranges; ends leave at e+1 before same-frame starts enter.
+        events = sorted([(s, 1, i) for s, e, i in spans] + [(e + 1, -1, i) for s, e, i in spans])
+        depth, bad = 0, None
+        for frame, delta, i in events:
+            depth += delta
+            if depth > CUE_MAX_ACTIVE and bad is None:
+                bad = (frame, i)
+        if bad is not None:
+            errors.append(f"cues/{fn}: more than {CUE_MAX_ACTIVE} cues overlap at frame "
+                          f"{bad[0]} (cue {bad[1]} makes {CUE_MAX_ACTIVE + 1}) -- the renderer "
+                          f"draws at most {CUE_MAX_ACTIVE} at once")
+            continue
         if recs:
             movies.append((lba, recs))
             total += len(recs)
     if not movies:
+        return None, 0, 0
+    if len(movies) > CUE_MAX_MOVIES:
+        errors.append(f"cues/: {len(movies)} movies with cues, the pack loader holds "
+                      f"{CUE_MAX_MOVIES}")
         return None, 0, 0
     blob = struct.pack("<I", len(movies))
     for lba, recs in movies:
