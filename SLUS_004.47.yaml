@@ -88,7 +88,10 @@ segments:
       - [0x0052f8, .rodata, spells_dagger_storm]  # 0x80014af8
       - [0x005324, .rodata, spells_life_orb]            # 0x80014b24
       - [0x005338, .rodata, spells_healing_circle]            # 0x80014b38
-      - [0x005384, .rodata, fx_07851c]            # 0x80014b84
+      - [0x005384, .rodata, spells_dark_hurricane]  # 0x80014b84
+      - [0x0053dc, .rodata, spells_avalanche]     # 0x80014bdc
+      - [0x0053f8, rodata]                        # 0x80014bf8 4-byte jumptable .align pad lost when the TU was split
+      - [0x0053fc, .rodata, spells_salamander]    # 0x80014bfc
       - [0x005410, .rodata, spells_fx_common2]            # 0x80014c10
       - [0x005430, .rodata, maps_common]   # 0x80014c30
       - [0x005454, .rodata, maps_13_15]   # 0x80014c54
@@ -160,7 +163,11 @@ segments:
       - [0x0743fc, c, spells_life_orb]                  # 0x80083bfc Objf327_HealingCircle_FX2 ...
       - [0x0761b8, c, spells_evil_stream]         # 0x800859b8 EvilStream_RenderSkull ...
       - [0x076e14, c, spells_healing_circle]                  # 0x80086614 Objf330_MagicRestoration_FX1 ...
-      - [0x07851c, c, fx_07851c]                  # 0x80087d1c Objf284_Fx_TBD ...
+      - [0x07851c, c, spells_dark_hurricane]      # 0x80087d1c Objf284_ConvergingSparkle_Unused ...
+      - [0x07ad50, c, spells_dynamo_hum]          # 0x8008a550 Objf395_DynamoHum_ElectricOrb ...
+      - [0x07c4a8, c, spells_avalanche]           # 0x8008bca8 Noop_8008bca8 ...
+      - [0x07d028, c, battle_item_reveal]         # 0x8008c828 Objf292_BlueItemSparkle ...
+      - [0x07e27c, c, spells_salamander]          # 0x8008da7c Objf332_RollingFire_FX1 ...
       - [0x080b4c, c, spells_healing_items]                  # 0x8009034c Objf306_791_792_793_Healing_FX2 ...
       - [0x0810b4, c, maps_ambience]              # 0x800908b4 Objf289_ChimneySmokeRing ...
       - [0x081d2c, c, spells_fx_common2]          # 0x8009152c Objf763_BoulderRubble ...
@@ -225,7 +232,11 @@ segments:
       - [0x0efb44, .data, spells_dark_fire]              # 0x800ff344
       - [0x0efd20, .data, spells_dagger_storm]    # 0x800ff520
       - [0x0efdd0, .data, spells_healing_circle]              # 0x800ff5d0
-      - [0x0efdf8, .data, fx_07851c]              # 0x800ff5f8
+      - [0x0efdf8, .data, spells_dark_hurricane]    # 0x800ff5f8
+      - [0x0efed4, .data, spells_dynamo_hum]      # 0x800ff6d4
+      - [0x0eff64, .data, spells_avalanche]       # 0x800ff764
+      - [0x0eff94, .data, battle_item_reveal]     # 0x800ff794
+      - [0x0f005c, .data, spells_salamander]      # 0x800ff85c
       - [0x0f00cc, .data, spells_healing_items]              # 0x800ff8cc
       - [0x0f00f4, .data, maps_ambience]          # 0x800ff8f4
       - [0x0f012c, .data, spells_fx_common2]      # 0x800ff92c
@@ -266,7 +277,7 @@ segments:
       - [0x113740, .sdata, spells_lightning]             # 0x80122f40
       - [0x113748, .sdata, spells_faerie]             # 0x80122f48
       - [0x113758, .sdata, spells_healing_circle]             # 0x80122f58
-      - [0x11375c, .sdata, fx_07851c]             # 0x80122f5c
+      - [0x11375c, .sdata, spells_dynamo_hum]     # 0x80122f5c
       - [0x11377c, .sdata, maps_ambience]             # 0x80122f7c
       - [0x113780, .sdata, spells_fx_common2]     # 0x80122f80
       - [0x11378c, .sdata, maps_13_15]    # 0x80122f8c
