@@ -11,8 +11,8 @@ s32 State_Town(void);
 void Town_HandleCancel(Object *);
 void Town_HandleShopOrDojo(Object *);
 s32 Objf580_Town(Object *);
-void func_801F5540(Object *);
-void func_801F56A4(Object *);
+void Town_PlayNpcDialogue(Object *);
+void Town_PlayStateDialogue(Object *);
 
 s16 gTownPortraitSets[10][13] = {
     {PORTRAIT_DOJO_MASTER, PORTRAIT_594, PORTRAIT_DIEGO_HAPPY, PORTRAIT_590, PORTRAIT_591,
@@ -220,7 +220,7 @@ s32 Objf580_Town(Object *obj) {
 
    // fallthrough
    case 3:
-      func_801F56A4(obj);
+      Town_PlayStateDialogue(obj);
       break;
 
    case 4:
@@ -285,7 +285,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -330,7 +330,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -375,7 +375,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -420,7 +420,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -498,7 +498,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -544,7 +544,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -772,7 +772,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -809,7 +809,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -969,7 +969,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -1022,7 +1022,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -1074,7 +1074,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -1117,7 +1117,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -1188,7 +1188,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -1225,7 +1225,7 @@ s32 Objf580_Town(Object *obj) {
             break;
 
          case 2:
-            func_801F5540(obj);
+            Town_PlayNpcDialogue(obj);
             break;
          }
 
@@ -1331,7 +1331,7 @@ s32 Objf580_Town(Object *obj) {
    }
 }
 
-void func_801F5540(Object *town) {
+void Town_PlayNpcDialogue(Object *town) {
    switch (town->state3) {
    case 0:
       SlideWindowTo(0x3d, -200, 10);
@@ -1374,7 +1374,7 @@ void func_801F5540(Object *town) {
    }
 }
 
-void func_801F56A4(Object *town) {
+void Town_PlayStateDialogue(Object *town) {
    switch (gState.townState) {
    case 0:
 
