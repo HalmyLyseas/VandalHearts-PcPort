@@ -1,5 +1,5 @@
 /* Spell casting effects, part 6 (segment 0x70604): Dark Fire, Roman Fire, Mood Ring and
- * Dagger Storm, dispatched via gSpellsEx (see fx_060c38.c), plus shared explosion sprites.
+ * Dagger Storm, dispatched via gSpellsEx (see spells_casting_main.c), plus shared explosion sprites.
  * Cut content herein (no spell/event/code dispatch): Objf082/083 (orbiting ember pair,
  * homing explosion spark) and Objf321 (expanding explosion ring -- its only spawner,
  * Objf734 in split_09a268.c, is itself unreachable). Objf_Unk_80080924 and the two

@@ -3,7 +3,7 @@
  *
  * Roster: ClearUnits and CreateUnit with its two entry points -- CreateUnitInNextSlot
  * takes the first free gUnits slot, CreateUnitInLastSlot forces the top slot
- * (split_0496f8.c uses it for Leena) -- initialising per-unit variance and boost fields.
+ * (game_setup.c uses it for Leena) -- initialising per-unit variance and boost fields.
  *
  * Sprite lookups, used tree-wide: GetUnitSpriteAtPosition (the gMapUnits grid ->
  * gUnits[].sprite hop nearly every fx_* unit starts from), FindUnitSpriteByNameIdx,
@@ -12,7 +12,7 @@
  * object over one strip's packed sheet.
  *
  * Four SaveRestore* static pairs (damage, hp percentages, hp triple, screen position) are
- * a one-slot mailbox: battle_013b94.c and window.c stash values that
+ * a one-slot mailbox: battle_executors.c and window.c stash values that
  * Objf032_033_DisplayDamage reads back a frame later. IntToLeftPaddedGlyphs[2] (fixed 3
  * digits; _2 uses the damage gauge's alternate digit font) and IntToGlyphs render numbers
  * into glyph strips.

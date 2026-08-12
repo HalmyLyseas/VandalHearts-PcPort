@@ -2,8 +2,8 @@
  *
  * State_Battle is the in-battle state driver called from main.c: loads the map's text,
  * units, portraits, textures and BGM, sets up field and map, restores a deferred in-battle
- * save when there is one, then spawns the battle-ender object (Objf424, split_0496f8.c)
- * and this map's evaluator before handing control to the intro (battle_0201b8.c).
+ * save when there is one, then spawns the battle-ender object (Objf424, game_setup.c)
+ * and this map's evaluator before handing control to the intro (battle_field.c).
  * PlayBattleBGM / PlayCurrentBattleBGM pick the track, incl. the map 28 / map 40 overrides.
  *
  * gBattleEvaluator[mapNum] maps each battle to one Objf4xx_EvaluateMapNN_<objective>
@@ -17,7 +17,7 @@
  *
  * Objf420_BattleVictory / Objf423_BattleDefeat (one handler, two slots) play the YOU WIN /
  * YOU LOSE letter sprites with Objf446_BattleVictoryParticle, then hand off to the results
- * screen (OBJF_BATTLE_RESULTS, split_038148.c) or raise gSignal2 for the defeat path.
+ * screen (OBJF_BATTLE_RESULTS, battle_results.c) or raise gSignal2 for the defeat path.
  * FindUnitByNameIdx / CountUnitsOfType / CountUnitsOfTeam are the shared board queries.
  * PC_FEAT gates cover the Tactical trial XP/gold scaling. */
 #include "common.h"
@@ -178,7 +178,7 @@ s32 State_Battle(void) {
 #ifdef PC_FEAT
          /* GAP 9: trial attack-XP scales with the chapter (retail trial expScalingLevel is a flat 10,
           * and trial enemies carry expMulti 0 -> attacks paid nothing). Pairs with the expMulti set in
-          * the trial spawn hook (split_0496f8.c). */
+          * the trial spawn hook (game_setup.c). */
          if (gTacticalMode && gState.mapNum <= 5) {
             gState.expScalingLevel = TrialExpScalingLevel(gState.chapter);
          }

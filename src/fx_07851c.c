@@ -1,7 +1,7 @@
 /* Spell casting effects, part 7 (segment 0x7851c): the multi-object "creature and weather"
  * spells -- Dark Hurricane, Dynamo Hum, Salamander, Rolling Fire, Roman Fire, Wyrmfang and
  * Avalanche chains -- plus Flame Breath (monster melee), the casting-pose FX, the treasure/
- * item-reveal cluster and Map32's smokestacks. Dispatched via gSpellsEx (see fx_060c38.c);
+ * item-reveal cluster and Map32's smokestacks. Dispatched via gSpellsEx (see spells_casting_main.c);
  * drivers own the gSignal3 completion handshake, children do not.
  *
  * This file carries the largest block of cut content in the corpus, all verified against

@@ -90,7 +90,7 @@ typedef struct {
  * Fix: serialize through the PSX layout explicitly instead of blitting the host struct. The card
  * image stays byte-identical to what real hardware writes, so saves remain interchangeable
  * between the 32- and 64-bit builds. battler/sprite are stored as zero: they are re-assigned
- * during battle setup (src/split_0496f8.c) and restoring a stale address would be meaningless on
+ * during battle setup (src/game_setup.c) and restoring a stale address would be meaningless on
  * hardware too. */
 #define PSX_UNITSTATUS_SIZE 120
 #define PSX_UNITSTATUS_TAIL_OFF 12 /* PSX offsetof(UnitStatus, experience) */

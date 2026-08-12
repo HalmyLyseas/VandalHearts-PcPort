@@ -117,7 +117,7 @@ own tick-driven completion logic rather than to decode speed. The demux cursor s
 where it left off, rewinding to the movie base only if a smaller frame number is requested (a
 loop/restart).
 
-**Movie skip:** the game's movie loop (`src/split_037758.c`) already honours a per-movie `skip`
+**Movie skip:** the game's movie loop (`src/movie_state.c`) already honours a per-movie `skip`
 flag for player-1 START on movies flagged skippable. The port adds a PC-only QoL gate
 (`#ifdef` PC-build) that lets player-1 START skip **any** movie straight to its transition — useful
 for the long story FMVs during debugging. (See the PC-port QoL tracker for the broader set of these

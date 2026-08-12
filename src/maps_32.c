@@ -11,7 +11,7 @@
  *
  * Objf673_Map32_Scn63_Cinematic is the cutscene camera, spawned by the event script: it
  * flies in along the rails and orbits a moving focus object using Snap/EaseCameraLookAt
- * (map_effects_0861c8.c), publishing gState.eventCameraRot each frame.
+ * (maps_13_15.c), publishing gState.eventCameraRot each frame.
  *
  * The rail tile models are #include'd from assets/801009bc.inc pending autogen. */
 #include "common.h"

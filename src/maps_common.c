@@ -1,6 +1,6 @@
 /* Entry point and shared geometry toolkit for the map_effects_*.c corpus.
  *
- * SetupMapExtras() is the hub: called once per field/battle init from split_0496f8.c, right
+ * SetupMapExtras() is the hub: called once per field/battle init from game_setup.c, right
  * after the OBJF_SETUP_MAP_OBJECTS pass over setup_map_objects.c's per-map chest/scenery
  * tables. It switches on gState.mapNum and spawns that map's scripted-scenery driver
  * (drawbridges, buttons, floodgates, the sand pit, the lava-pit platform, the car release,

@@ -267,7 +267,7 @@ static void ensureInit(void) {
     addPatch(&gSpells[32].mpCost,    1, 35);                                           /* MYSTIC_ENERGY mp 35: >half of L32 Huxley's 64 pool -> a 2nd back-to-back cast needs an MP refill item; still castable on acquisition at L25 */
     /* Retail Mystic Energy is single-target, so its per-target hit sound gSpellSounds2[32]==0 -- the
      * cast sound (gSpellSounds[32]==911) fires once and never repeats. Now that it's an AOE ally-group
-     * buff, the per-target loop (battle_013b94.c) plays gSpellSounds2 once per ally, so give it a value
+     * buff, the per-target loop (battle_executors.c) plays gSpellSounds2 once per ally, so give it a value
      * -- mirror its own cast sound (911), the same Sounds1==Sounds2 pattern Cure Wide uses. The per-ally
      * visual aura already multi-fires (OBJF_TARGET path); this just makes the sound track it. */
     addPatch(&gSpellSounds2[32], 2, 911);

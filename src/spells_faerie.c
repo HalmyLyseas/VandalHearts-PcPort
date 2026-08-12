@@ -6,7 +6,7 @@
  * every few, planting Objf118_Faerie_Target on arrival, then raising gSignal3 when it
  * withdraws) and Objf211_Avalanche_Boulder (an 11x9 vertex shell rotated per frame and
  * drawn as textured quads with per-face directional shading). Both are dispatched
- * data-driven through gSpellsEx -- see fx_060c38.c for the model.
+ * data-driven through gSpellsEx -- see spells_casting_main.c for the model.
  *
  * Data: the block at 0x800ff18c holds shared sprite animation tables -- impact, smoke,
  * salamander, flame, two explosions, faerie and two sparkle loops. Only the faerie and

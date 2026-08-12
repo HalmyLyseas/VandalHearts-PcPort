@@ -232,7 +232,7 @@ static void LogCameraTraceRow(void) {
                 "camPosX,camPosY,camPosZ,camRotX,camRotY,camZoomZ,"
                 "camObjIdx,camObjFuncIdx,camObjState,targetObjIdx,targetX,targetY,targetZ,"
                 /* 30-fresh-look-deterministic-camera-hypothesis.md: winOrigin[X/Z] is the
-                 * actual render-window origin (gMapViewOriginX/2C, src/battle_0201b8.c:193), the
+                 * actual render-window origin (gMapViewOriginX/2C, src/battle_field.c:193), the
                  * derived quantity the terrain-window + sprite-cull both key off; camDirQuad is
                  * the yaw quadrant RenderField selects (src/graphics.c:1178). startCur[X/Z/Y]
                  * is gMapCursorStartingPos[mapNum] as read at RUNTIME on this build -- confirms
@@ -246,7 +246,7 @@ static void LogCameraTraceRow(void) {
                  * at (-32,-32) or already mid-pan. -1 fadeLevel = no active gScreenFade object. */
                 "winOriginX,winOriginZ,camDirQuad,startCurX,startCurZ,startCurY,"
                 /* live map cursor = the AI-turn camera-focus target CenterCamera eases toward
-                 * (battle_0201b8.c:190); pairs with 43-camera-focus-easein-trace.lua's mapCursorX/Z
+                 * (battle_field.c:190); pairs with 43-camera-focus-easein-trace.lua's mapCursorX/Z
                  * so both platforms carry the ease-in target for the iteration-vs-gate diff. */
                 "mapCursorX,mapCursorZ,"
                 "fieldRenderDisabled,fadeLevel\n");
@@ -306,7 +306,7 @@ static void LogCameraTraceRow(void) {
 
 /* AI-decision-chain trace (timing topic, Finding #1: the "unit active -> blue movement overlay"
  * early-gate). The overlay (gShowBlueMovementGrid=1, set in Objf013_BattleMgr state 7.2) can't fire
- * until BattleMgr STATE 6 exits, and state 6 blocks on `gAiPlanReady != 0` (battle_0201b8.c:3202),
+ * until BattleMgr STATE 6 exits, and state 6 blocks on `gAiPlanReady != 0` (battle_field.c:3202),
  * which is set only when the AI-decision object chain finishes (Objf570_AI_ChooseAction -> Objf40x/Objf589,
  * ai.c:278 case 99, via the gAiPlanDone hand-off). On hardware state 6 lasts ~108 frames; on our build
  * ~18 -> the AI chain completes ~6x faster and the overlay shows early (mid camera-pan). This logs the
@@ -735,7 +735,7 @@ void PC_DiagFps(int mode) {
 }
 
 /* Witness-pass logger (decomp-improvement track): one line per gSpellsEx FX dispatch.
- * Compiled into battle_013b94.c only under `make link SPELLFX_LOG=1`; runtime-gated on
+ * Compiled into battle_executors.c only under `make link SPELLFX_LOG=1`; runtime-gated on
  * VH_SPELLFX_LOG. Writes vh_spellfx_log.txt and echoes to stderr. The handler NAME is
  * resolved from the live function pointer via dladdr (the port links -rdynamic), so the
  * log shows exactly which Objf* symbol ran -- a cast-everything Vandalier session then

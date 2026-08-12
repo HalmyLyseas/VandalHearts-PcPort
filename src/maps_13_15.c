@@ -1,7 +1,7 @@
 /* Map 13's bridge demolition and Map 15's pirate-ship boarding battle.
  *
  * Map 13: Map13_RemoveBridgeSection/Map13_ExplodeBridgeTile edit the tile models and throw
- * OBJF_EXPLODING_TILE debris (Objf653, map_effects_091040.c). Objf361_..._Scene and
+ * OBJF_EXPLODING_TILE debris (Objf653, maps_33.c). Objf361_..._Scene and
  * Objf288_..._Battle are the two drivers SetupMapExtras() picks between via InEventScene();
  * Objf085_Map13_ExplosionPillar is their stacked vertical burst of OBJF_EXPLOSION sprites.
  *

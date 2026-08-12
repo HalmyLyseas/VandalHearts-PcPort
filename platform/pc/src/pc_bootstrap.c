@@ -69,7 +69,7 @@
 /* Real PS1 Scratchpad RAM (psx-spx iomap.md: "1F800000h 400h Scratchpad (1K Fast RAM)
  * (Data Cache mapped to fixed address)") -- a second, separate fixed-address region from
  * the main 2MB KUSEG RAM above, used by already-decompiled code as fast temp/dictionary
- * space (src/split_0a2ce0.c's UnpackMapFileData: `pCache = (u8 *)0x1f800000;`, indexed up
+ * space (src/map_unpack.c's UnpackMapFileData: `pCache = (u8 *)0x1f800000;`, indexed up
  * to `cacheOfs & 0x3ff`, i.e. the full real 1KB). Found via a real SIGSEGV once battle-map
  * loading was actually reached (UnpackMapFileData writing through this unmapped address),
  * not a hypothetical -- the original 8-literal audit for PSX_RAM_BASE only covered addresses
@@ -85,7 +85,7 @@
  * it is on a modern OS with virtual memory. This means a transient NULL
  * pointer dereference in already-decompiled game code (confirmed real via a
  * live BizHawk RAM trace against the actual retail game, not a
- * hypothetical: src/battle_0201b8.c's Objf013_BattleMgr reads
+ * hypothetical: src/battle_field.c's Objf013_BattleMgr reads
  * `unitSprite->x1.n` while `unitSprite` is genuinely 0x00000000 for a few
  * frames right after the demo battle's manager object is created, before a
  * later state assigns it a real value -- see

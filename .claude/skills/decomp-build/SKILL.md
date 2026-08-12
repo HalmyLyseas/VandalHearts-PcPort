@@ -192,7 +192,7 @@ fails because it unconditionally runs the still-missing `sortSymbols.py` first �
 
 Top-level `clean` is `rm -rf asm assets build` — and `assets/` holds the 4 hand-generated
 `.inc` files described below, which `splat` does NOT regenerate. After a `make clean`, a
-rebuild fails at `map_effects_08f524.c` on the missing `assets/801009bc.inc`. Recovery: re-run
+rebuild fails at `maps_32.c` on the missing `assets/801009bc.inc`. Recovery: re-run
 `splat` (for `asm/`), then regenerate the 4 `.inc` files from the verified `SLUS_004.47` with
 the recipe below (field-ordered flat initializers: MapTileModel = 88+18 s16 then 92 u8 per
 struct ×4 at 0x801009bc / ×1 at 0x80100e9c; 100 `(u8 *)0x...` pointers at 0x8010102c;
@@ -201,7 +201,7 @@ byte-exact match from clean.
 
 ### The `assets/*.inc` gap (found and fixed 2026-07-10)
 
-4 files (`map_effects_08f524.c`, `map_effects_092320.c`, `text.c` ×2) do
+4 files (`maps_32.c`, `maps_35.c`, `text.c` ×2) do
 `#include "assets/<vram-addr>.inc"` for hand-written C initializer literals of specific data
 (`MapTileModel` struct(s), a `u8 *gStringTable[100]` pointer table, a
 `u8 sFontGlyphBitmaps[128][9]` byte array) that `splat`'s generic `.data`/`.bin` extraction

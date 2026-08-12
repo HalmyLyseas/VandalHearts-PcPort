@@ -90,7 +90,7 @@ port-side edit to shared source sits behind one:
 - **`PC_PORT_LP64`** — 64-bit-host-only struct-layout fixes (e.g. `Object_719`/`_675` in
   `include/object.h`, where a leading pointer's 4→8-byte growth shifts aliased fields).
 - **`PC_FEAT`** — (Stage 3) PC-only gameplay/QoL additions (the bidirectional ally-cycle in
-  `battle_0201b8.c`, the enemy threat overlay, …). Defined for all game source by the PC build only;
+  `battle_field.c`, the enemy threat overlay, …). Defined for all game source by the PC build only;
   distinct from `PC_PORT` so gameplay changes grep separately. Keep the original verbatim in the `#else`.
 - **`PC_DEBUG_*`** — per-file debug/instrumentation hooks, keyed to Makefile flags.
 

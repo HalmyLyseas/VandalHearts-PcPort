@@ -139,7 +139,7 @@ Enemy spells reach **further** than player ones: EVIL_STREAM (62) `rng 9`, ROLLI
 ## How a unit gets its spells
 
 `unit.spells[i] = gSpellLists[partyIdx][path][i]`, then gated by level:
-`gSpellLevelRequirement[spellId]` (`PopulateUnitSpellList`, `src/split_0496f8.c:243-266`). Lists are
+`gSpellLevelRequirement[spellId]` (`PopulateUnitSpellList`, `src/game_setup.c:243-266`). Lists are
 **per party member × promotion path**, not per class — `path A` = specialist (Sorcerer/Archbishop),
 `path B` = Monk/Ninja. A promotion into the B path replaces the origin's endgame spells rather than
 adding to them (the B list from L12 on is identical for all four casters).

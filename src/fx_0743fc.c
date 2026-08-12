@@ -1,6 +1,6 @@
 /* Spell casting effects, part 4 (segment 0x743fc): support/child FX for Healing Circle,
  * the magic-restoration family, Life Orb and Evil Stream -- cylinder rendering, rays,
- * bubble swirls and per-target sprite fades. Dispatched via gSpellsEx (see fx_060c38.c).
+ * bubble swirls and per-target sprite fades. Dispatched via gSpellsEx (see spells_casting_main.c).
  * Objf325/326 are cut content (no spell, event, or code dispatches them): a CLUT-cycling
  * fade tick and a rising red-sparkle pillar built from Evil Stream's exact asset set. */
 #include "common.h"

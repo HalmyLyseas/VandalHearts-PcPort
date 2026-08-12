@@ -56,7 +56,7 @@ DEAD = {
 NOTES = {
     # the item-pickup line's leading phrase
     "literal:f22b155f50c44ff6":
-        ("⚠ SENTENCE ASSEMBLED BY PIXEL POSITION, not concatenation: battle_0201b8.c draws this "
+        ("⚠ SENTENCE ASSEMBLED BY PIXEL POSITION, not concatenation: battle_field.c draws this "
          "leading phrase at x=16, the item name at x=80 and the trailing mark at x=80+len*8. A "
          "longer translation will overlap the item name -- this site needs its x positions moved, "
          "not just its text replaced."),
@@ -66,7 +66,7 @@ NOTES = {
          "positioned independently."),
     # the after-battle experience popup's leading phrase
     "literal:a06b1d432c61c1d6":
-        ("⚠ the PREFIX of the after-battle experience popup: ShowExpDialog (battle_0190dc.c) draws "
+        ("⚠ the PREFIX of the after-battle experience popup: ShowExpDialog (battle_math.c) draws "
          "this phrase, then the number, then the second line. Keep it short -- it shares a "
          "20-column line with the number, which is placed right after whatever you write here."),
 }
@@ -78,8 +78,8 @@ NOTES = {
 # {content hash: what it is} of the composed literal, so a removed or changed wrap fails the export
 # PRECISELY (the hash is the literal's identity, so no retail bytes are spelled out here).
 WRAPPED_LITERAL_FILES = {
-    "battle_0190dc.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
-    "battle_0201b8.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
+    "battle_math.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
+    "battle_field.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
     # the save-slot caption labels, recomposed at display time with the numbers (main_menu.c
     # TranslateCaption; the caption is stored English in the save and translated only for display)
     "main_menu.c": {"66eb39dcbe1a877b": "save-slot caption: the chapter label ('Chap.')",

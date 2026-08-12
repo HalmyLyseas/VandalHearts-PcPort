@@ -1,7 +1,7 @@
 /* Path/range grid floods -- the tactical layer's spatial queries.
  *
  * Storage: gPathGrid0..6 + gPathGrid10 (u8[30][65], accessed via the &grid[1] *_Ptr
- * aliases; a 0xff border ring is installed by split_0496f8.c and ClearGrid only clears
+ * aliases; a 0xff border ring is installed by game_setup.c and ClearGrid only clears
  * inside gMapMin/Max). One u8 per cell serves four value flavours:
  *   breadcrumbs (PATH_STEP_SOUTH/WEST/NORTH/EAST; INVALID marks the origin)  --
  *     PopulateMovementGrid, walked back by PlotPathBackToUnit;

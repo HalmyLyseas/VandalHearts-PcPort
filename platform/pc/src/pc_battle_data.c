@@ -4,7 +4,7 @@
  * gBattlePartyUnitInitialStates[50] (declared extern in include/battle.h). Both were left
  * zero-initialized by platform/pc/tools/build_data_segment.py (a raw pointer VALUE copied
  * from the original binary would be a MIPS virtual address, meaningless in our own process) --
- * SetupBattleUnits (src/split_0496f8.c) dereferences gBattleEnemyUnitInitialStates[gState.mapNum]
+ * SetupBattleUnits (src/game_setup.c) dereferences gBattleEnemyUnitInitialStates[gState.mapNum]
  * unconditionally, so every NULL entry was a guaranteed crash the first time any battle state
  * was reached (see exchange/12-phase-c-bootstrap.md Bug 11 for the full derivation).
  *
@@ -19,7 +19,7 @@
  * into the correspondingly-offset position within our own local copy: (target_vram - blob_base)
  * gives the same relative offset in our copy that the original pointer had into the original
  * blob, so BattleEnemyUnitInitialState's own stripIdx==0 / BattlePartyUnitInitialState's own
- * partyIdx==UNIT_INVALID(0xff) terminator conventions -- read entirely by src/split_0496f8.c,
+ * partyIdx==UNIT_INVALID(0xff) terminator conventions -- read entirely by src/game_setup.c,
  * completely unaware any of this happened -- land at exactly the same relative positions as
  * the original game intended, including at least one confirmed real case (map indices sharing
  * one all-zero sentinel pointer whose single terminator byte deliberately aliases the start

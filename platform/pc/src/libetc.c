@@ -158,7 +158,7 @@ static unsigned int pc_pad_read(void) {
  * so it works in every context (battle, world map, movies) with zero src/ changes.
  *
  * Contract -- MUST be idempotent across repeated same-frame calls: the game reads PadRead(0) twice
- * per battle frame (gPadState battle_0201b8:125, gPad2State :149) and busy-waits on it in engine.c.
+ * per battle frame (gPadState battle_field:125, gPad2State :149) and busy-waits on it in engine.c.
  * So no stateful multi-frame buffering of edges; only a chord *latch* (fires once per press, stable
  * when re-read), stateless SELECT masking, and the release-tracked swallow mask below.
  *

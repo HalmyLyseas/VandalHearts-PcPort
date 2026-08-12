@@ -35,13 +35,13 @@
  * pc_overlay.c do), and a new port-side caller must too -- an inline extern there just trades a
  * compile-time signature check for a runtime surprise. Current gated src/ callers:
  *
- *   src/battle_0201b8.c  PC_LangApplyTerrainText()
+ *   src/battle_field.c  PC_LangApplyTerrainText()
  *   src/text.c           PC_LangUtf8Glyph(), PC_LangUtf8SeqLen()   (DrawText_Internal + msgbox)
  *   src/text.c           PC_LangApplyCharmap()       (GetGlyphIdxForAsciiChar's hand-off)
  *   7 game files         PC_LangStr()                (via each file's PC_LANGSTR macro block)
  *   src/supplies.c       PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (format-2 item lists)
  *   src/window.c         PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (battle item list)
- *   src/battle_0201b8.c  PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (unit item panel)
+ *   src/battle_field.c  PC_LangItemNames1Byte(), PC_LangDrawItemName1Byte()  (unit item panel)
  */
 
 #include <stddef.h>
@@ -62,7 +62,7 @@ void PC_LangBoot(void);
  * disc having held those bytes, and the game parses them with its own unmodified LoadText. */
 void PC_LangPatchRead(int lba, int sectors, unsigned char *out);
 
-/* Called once from src/battle_0201b8.c's PC_FEAT hook with the address of its function-static
+/* Called once from src/battle_field.c's PC_FEAT hook with the address of its function-static
  * terrainText (the battle terrain info box). That table has no external linkage, so this hand-off is
  * the only way a pack can reach it; its blob is held from load time until this call arrives. */
 void PC_LangApplyTerrainText(void *table, int bytes);

@@ -2,7 +2,7 @@
  * pointer tables. The PC data generator flagged these pointer-containing globals "needs manual
  * review" and left them NULL, so cutscene unit sprites resolved animData=NULL -> gfxIdx=0 ->
  * wrong (blank) texture -> INVISIBLE (battle path worked via gUnitAnimSets in pc_unit_anim_data.c).
- * gAnimSet_80101fc0 is intentionally NOT here -- it is already real-defined in src/split_0a2ce0.c.
+ * gAnimSet_80101fc0 is intentionally NOT here -- it is already real-defined in src/map_unpack.c.
  * Raw anim bytes captured verbatim from the byte-exact SLUS_004.47 .data; tables rebuilt to index
  * into it. Stage-2 (PC port) data only; not in the matching build. */
 #include "common.h"

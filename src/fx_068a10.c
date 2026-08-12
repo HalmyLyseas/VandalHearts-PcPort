@@ -1,6 +1,6 @@
 /* Spell casting effects, part 3 (segment 0x68a10): Holy Lightning, Thunder Ball,
  * Rolling Thunder, Dark Star and Perfect Guard, dispatched via gSpellsEx (model described
- * in fx_060c38.c's header).
+ * in spells_casting_main.c's header).
  *
  * Cut content in this file (in gObjFunctionPointers but referenced by no spell's gSpellsEx
  * triple, no event script on the retail disc, and no code path): the quick thunder-strike

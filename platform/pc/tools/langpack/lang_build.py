@@ -64,7 +64,7 @@ TABLES = [
     (7, "gUnitTypeNames",         0x800eb050, "fixed",  86, 11, b"\x00"),
     (8, "gItemNames",             0x800eb404, "fixed", 139, 13, b"\x00"),
     (9, "gClassAdvancementNames", 0x801f6a34, "fixed",  18, 17, b"\x00"),
-    # Function-static in battle_0201b8.c: the runtime applies it through a PC_FEAT hook rather than
+    # Function-static in battle_field.c: the runtime applies it through a PC_FEAT hook rather than
     # by symbol, but the pack format treats it like any other fixed table.
     (10, "terrainText",           0x800f29f4, "fixed",  10, 12, b"\x00"),
 ]

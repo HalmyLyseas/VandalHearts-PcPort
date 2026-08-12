@@ -1,7 +1,7 @@
 # Combat mechanics
 
 How damage, defence, evasion, magic and status are actually computed — decoded from
-`src/battle_0190dc.c` (`CalculateDamage`) and `src/battle_013b94.c`. The recurring theme: the values
+`src/battle_math.c` (`CalculateDamage`) and `src/battle_executors.c`. The recurring theme: the values
 the player sees are often not the values the game uses.
 
 ## Physical damage
@@ -28,7 +28,7 @@ if (damage ≤ 0) damage = 100                                       // 1% chip 
 ### Why the class attack/defense stats are cosmetic
 `atkVar10000` and `defVar10000` look like the unit's attack and defense — but they are **pure per-unit
 random rolls**: `(rand() % 40 + 80) × 15 + 8500` ⇒ ~9500–10475, with **no class, level or equipment
-input** (`src/battle_0190dc.c:891-910`). Attacker's `atkVar` and defender's `defVar` roll from the same
+input** (`src/battle_math.c:891-910`). Attacker's `atkVar` and defender's `defVar` roll from the same
 distribution, so they **largely cancel**, leaving:
 
 > **damage ≈ `100000 / resist`.**
@@ -50,7 +50,7 @@ draw the status screen (`src/window.c`).
 
 ### `gAdvantage` — the physical type-matchup table
 `resist` starts from `gAdvantage[attacker.advantage][defender.advantage]` — a 49×49 table
-(`src/battle_0190dc.c:467`). Player classes occupy advantage indices 28–48; enemies 0–27. It is the
+(`src/battle_math.c:467`). Player classes occupy advantage indices 28–48; enemies 0–27. It is the
 **physical** matchup only (magic uses a fixed base, below), and it is also the AI's target-preference
 term (`src/ai.c:510`). A class's `advantage` row/column is the main thing that makes it tanky or fragile
 against a given opponent.
@@ -72,7 +72,7 @@ Armored line is tough "because of its HP bar" — its real durability is its `gA
 
 ## Evasion (called "block")
 
-Before damage lands, a dodge roll (`src/battle_0190dc.c:556-570`):
+Before damage lands, a dodge roll (`src/battle_math.c:556-570`):
 
 ```c
 rnd         = rand() & 0x7fff                              // 0..32767
@@ -88,13 +88,13 @@ agility→evasion system *would* have produced (mages/priests/monks highest at 1
 5%) — see the "cut agility system" note in [classes.md](classes.md).
 
 `PERFECT_GUARD` / `IRONBOOT` set `aglBoosted`, a one-shot flag that makes the **next** incoming attack
-deal 0 damage and then clears (`src/battle_0190dc.c:572-575`) — a guaranteed negation, unrelated to the
+deal 0 damage and then clears (`src/battle_math.c:572-575`) — a guaranteed negation, unrelated to the
 agility stat.
 
 ## Magic — a separate chain
 
 Magic does **not** use `gAdvantage`. It starts from a fixed base and applies the target's
-`magicSusceptibility` (`src/battle_0190dc.c:750`):
+`magicSusceptibility` (`src/battle_math.c:750`):
 
 ```
 resist   = 10 − (spell.power − target.level)·2
@@ -116,7 +116,7 @@ class in the game *and* the most magic-vulnerable at the same time.
 ## Status ailments
 
 `ailmentSusceptibility` gates whether a status effect (poison/paralyze/…) lands
-(`src/battle_0190dc.c:661`): **1 = fully immune** (chance forced to 0), 2 = half chance, 3 = normal. The
+(`src/battle_math.c:661`): **1 = fully immune** (chance forced to 0), 2 = half chance, 3 = normal. The
 Monk/Ninja and Healer lines are the only ailment-immune classes.
 
 ## Situational modifiers (all fold into `resist`)
@@ -131,9 +131,9 @@ Monk/Ninja and Healer lines are the only ailment-immune classes.
 ## Experience & levelling
 
 Level is **derived from `experience`** (a `BigInt`) via `gExperienceLevels`
-(`src/battle_0190dc.c:913`) — not stored directly, which is why searching for a `.level` write misses
+(`src/battle_math.c:913`) — not stored directly, which is why searching for a `.level` write misses
 the scaling logic. EXP is granted by `BigIntAdd(unit.experience, gState.experience)` at two sites, each
-already guarded by a hard cap `if (unit.level < 50)` (`src/battle_013b94.c:648` combat, `:1429`
+already guarded by a hard cap `if (unit.level < 50)` (`src/battle_executors.c:648` combat, `:1429`
 spell-cast). Support-spell casts grant `(exp-to-next-level)/3` each (`CalculateSupportSpellExp`), which
 is the basis of the infinite-EXP exploit.
 

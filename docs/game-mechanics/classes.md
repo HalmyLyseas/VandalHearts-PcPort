@@ -50,7 +50,7 @@ balance surface.
 
 ## Archetype stat tables — mostly cosmetic
 
-Indexed by `CLASS_*` (`src/battle_0190dc.c:175-303`). **Attack, Defense, MaxHp and Agility are all
+Indexed by `CLASS_*` (`src/battle_math.c:175-303`). **Attack, Defense, MaxHp and Agility are all
 display-only** — none appears in any damage formula (see [combat-mechanics.md](combat-mechanics.md)).
 They are shown here for completeness, struck through where cosmetic; **do not balance against them.**
 
@@ -69,7 +69,7 @@ Stat growth is linear in level: `stat = (base + (base/3)·(level−2) + (base/3)
 (`var100 = 80..119`, rolled per unit) — but since the stats it grows are cosmetic, only the
 `gClassBlockChance` and MP columns carry into play.
 
-`gClassMpMultiplier`: maxMp = `mult × level`, capped 99 (`battle_0190dc.c:882`). **MAGE = 2, PRIEST = 2,
+`gClassMpMultiplier`: maxMp = `mult × level`, capped 99 (`battle_math.c:882`). **MAGE = 2, PRIEST = 2,
 MONK = 1.** There is one extra term, easy to miss: **CLASS_MONK (Monk *and* Ninja) also adds
 `advLevelFirst`** — the level at which the unit first promoted (`:884`). So the Monk isn't flatly at
 half rate: `1 × level + advLevelFirst` *starts* at parity right after promotion (e.g. promote at 10,
@@ -147,7 +147,7 @@ gains no MOVE on promotion** (5→5) while paying more to climb than its Duelist
 ## Historical note: agility is a cut mechanic
 
 An agility-driven combat system was designed and then abandoned. `agiVar10000` is computed exactly like
-`atkVar10000`/`defVar10000` but is **read nowhere** (`src/battle_0190dc.c`); `unit.agility` is read once,
+`atkVar10000`/`defVar10000` but is **read nowhere** (`src/battle_math.c`); `unit.agility` is read once,
 only to draw the status screen; and `gClassBlockChance` looks like the hand-authored static stand-in for
 the evasion an agility system would have produced (its per-class values track `gClassBaseAgility`
 closely). The Monk/Ninja line is statted as *the agile class* (highest `BaseAgility`) in a game where

@@ -317,7 +317,7 @@ int PC_LangUtf8SeqLen(const unsigned char *p) {
 /* One item name in the small font (format-2 packs: gItemNamesSjis holds plain 1-byte ASCII).
  * Hard-truncate to cap chars and never wrap, so a long name clips at its box edge instead of
  * spilling outside or dropping onto a second line. THE one implementation behind the three gated
- * draw sites (supplies.c confirm boxes, window.c battle item list, battle_0201b8.c unit panel) --
+ * draw sites (supplies.c confirm boxes, window.c battle item list, battle_field.c unit panel) --
  * the per-box caps are the callers' knowledge (feedback-35/36 pixel tuning), the truncate-and-draw
  * behaviour is this function's, so a future tuning pass lands once. */
 extern void DrawText(int x, int y, int maxCharsPerLine, int lineSpacing, int color,

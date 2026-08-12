@@ -34,7 +34,7 @@ TABLES = [
     ("gUnitTypeNames",     0x800eb050, "fixed",   86, 11, "class name (status panel)"),
     ("gItemNames",         0x800eb404, "fixed",  139, 13, "item name, equip/status panel"),
     ("gClassAdvancementNames", 0x801f6a34, "fixed", 18, 17, "class name in the dojo"),
-    # A FUNCTION-STATIC in battle_0201b8.c (Objf030_FieldInfo) -- no external linkage, so unlike every
+    # A FUNCTION-STATIC in battle_field.c (Objf030_FieldInfo) -- no external linkage, so unlike every
     # other table the runtime cannot reach it without a PC_FEAT hook in that file. Exported here all
     # the same: it is real on-screen text. ⚠️ Its column alignment is literal spaces inside the string
     # ("Plains   0%" vs "Thicket 15%") so the % figures line up -- never trim or normalise it.
@@ -180,7 +180,7 @@ def _budget(stem):
 
 # ENTRY-LEVEL exception. Budgets are per FILE except here: entry 1 of every battle file is the
 # victory/defeat condition panel, and it does NOT go through the message box at all --
-# battle_0201b8.c draws it with DrawText at 40 columns (line 340) and 34 columns (line 2784), which
+# battle_field.c draws it with DrawText at 40 columns (line 340) and 34 columns (line 2784), which
 # WRAPS. Charging it the message box's 26-column hard clip flagged 41 lines of Konami's own shipped
 # text, and the disc is the oracle: a rule that fails retail is our rule being wrong. Budget is the
 # tighter of the two real call sites.
@@ -204,7 +204,7 @@ NOT_MSGBOX = {
 def _entry_budget(stem, n):
     if stem.startswith("B_TXT") and n == 1:
         return {"max_cols": 34, "wraps": True,
-                "note": "battle condition panel -- drawn by DrawText (battle_0201b8.c), wraps; "
+                "note": "battle condition panel -- drawn by DrawText (battle_field.c), wraps; "
                         "the narrower of its two call sites (34 and 40 columns)"}
     return None
 

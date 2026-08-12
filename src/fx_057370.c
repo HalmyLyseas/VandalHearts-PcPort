@@ -1,7 +1,7 @@
 /* Spell casting effects, part 8 of the FX corpus (segment 0x57370).
  *
- * Same dispatch model as fx_060c38.c: nothing here has a static spawn site --
- * gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT] (battle_013b94.c) selects the
+ * Same dispatch model as spells_casting_main.c: nothing here has a static spawn site --
+ * gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT] (battle_executors.c) selects the
  * handler, so the suffix records the slot (_FX1 = caster/main, _FX2 = per target,
  * _FX3 = defeat); sub-objects are named <Spell>_<Thing>.
  *

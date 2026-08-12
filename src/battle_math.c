@@ -17,7 +17,7 @@
  * Presentation: EmbedIntAsSjis / EmbedExp / GetItemNameLength / ShowExpDialog, and the
  * supporter-marker pair CheckForSupporterBonus / DisplaySupporterBonus.
  *
- * Callers are the executors in battle_013b94.c and the AI's scoring in ai.c. PC_FEAT gates
+ * Callers are the executors in battle_executors.c and the AI's scoring in ai.c. PC_FEAT gates
  * cover the Tactical Monk/Ninja MP parity, trial-map XP scaling, and language-pack-safe
  * ShowExpDialog layout. */
 #include "common.h"

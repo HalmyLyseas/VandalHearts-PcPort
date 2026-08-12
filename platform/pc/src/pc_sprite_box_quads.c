@@ -21,7 +21,7 @@
  * hardware: src/object.c's AddObjPrim8/RenderUnitSprite temporarily rotate a box's Y
  * coordinates in place (`(*quadp)[0].vy = -(...)`) then restore them a few lines later, and
  * several other files swap `gSpriteBoxQuads[N]` between multiple Quad sources entirely
- * (src/split_03c94c.c, src/fx_080b4c.c, src/fx_07851c.c, src/map_effects_08e744.c) --
+ * (src/split_03c94c.c, src/fx_080b4c.c, src/fx_07851c.c, src/maps_28_31.c) --
  * confirmed as a real, reported SIGSEGV (a write-protection fault, not a bad-pointer fault --
  * the address itself was valid) once `const` put this blob in read-only memory, not a
  * hypothetical. */

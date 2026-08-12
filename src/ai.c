@@ -1,6 +1,6 @@
 /* Enemy/ally battle AI (segment 0x560f8 region).
  *
- * Flow: the battle manager (battle_0201b8.c, enemy-turn state 5) spawns
+ * Flow: the battle manager (battle_field.c, enemy-turn state 5) spawns
  * Objf570_AI_ChooseAction on the acting unit's tile. 570 picks a plan from the unit's
  * spells, MP, class and HP (plus per-map specials: map 21 = retreat-only, Leena/map 26 =
  * escape-point movement) and spawns one planner:

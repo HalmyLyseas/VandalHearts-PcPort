@@ -2,7 +2,7 @@
  *
  * Mostly _FX1 handlers: the "main" casting visual each spell plays at the caster/target,
  * dispatched data-driven through gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT]
- * (see battle_013b94.c) -- there is deliberately no static spawn site for these. The
+ * (see battle_executors.c) -- there is deliberately no static spawn site for these. The
  * retail gSpellsEx data is the authoritative handler->spell map and was used to verify
  * every name in this file. Sub-objects (rays, rocks, glyphs, swirl strokes) are spawned
  * by their _FX1 driver and named <Spell>_<Thing>.

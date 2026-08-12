@@ -318,7 +318,7 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             /* Movie_Finish (src/cd.c) issues CdlPause at movie end -> stop decoding new movie
              * frames, but LEAVE the last decoded frame on the overlay so a wait-for-button movie
              * end shows the final image instead of black. The overlay is dropped by ClearScreen
-             * (PERMUTER hook in src/split_037758.c) when the game redraws the next scene. */
+             * (PERMUTER hook in src/movie_state.c) when the game redraws the next scene. */
             if (s_movieActive) {
                 /* Pausing a MOVIE (one-shot end or player START-skip) -- not the battle XA-loop's
                  * rapid pause/replay polling (that runs with s_movieActive==0 and must stay a soft
@@ -735,7 +735,7 @@ unsigned int DecDCToutCallback(void (*func)()) {
  *
  * Pacing rate: 4 calls/frame (15fps at this backend's 60Hz tick rate) is psx-spx's cited
  * standard STR rate, and reproduces the measured 2556-tick span closely: this demo's intro
- * chains two movies via src/split_037758.c's case 100 re-entry logic (logo, frameCt=0x8f=143,
+ * chains two movies via src/movie_state.c's case 100 re-entry logic (logo, frameCt=0x8f=143,
  * then title, frameCt=0x1db=475 -- 618 frames total), and `(2556 - ~20 known per-movie startup
  * delay ticks) / 618 frames ≈ 4.1 ticks/frame ≈ 14.6fps`, matching 15fps well within measurement
  * tolerance. */

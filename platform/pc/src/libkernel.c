@@ -704,7 +704,7 @@ void *Krom2RawAdd(s32 sjisCode) {
  * (psx-spx kernelbios.md, "A(2Fh) - rand()"). Confirmed as the actual root
  * cause of the demo battle (gState.mapNum==8) running ~9-10x too fast: real
  * gameplay logic reads rand() to intentionally randomize battle-unit team
- * assignments per-demo (src/split_0496f8.c's SetupBattleUnit), so if this
+ * assignments per-demo (src/game_setup.c's SetupBattleUnit), so if this
  * doesn't reproduce the BIOS's exact sequence, every unit's team ends up
  * wrong and the AI never finds a valid attack target. Linking against the
  * host's glibc rand() (the default before this fix) is deterministic too,

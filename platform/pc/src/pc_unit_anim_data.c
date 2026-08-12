@@ -4096,10 +4096,10 @@ u8 **gUnitAnimSets[301] = {
     (u8 **)sUnitAnimSet_82, /* unit 143, orig 0x800e9464 */
 
     /* --- PERMUTER tail, indices 144..300 (implicit NULL) -----------------------------------
-     * SetupSprites (src/split_0496f8.c:1073) reads gUnitAnimSets[gSpriteStripUnitIds[i]], and the
+     * SetupSprites (src/game_setup.c:1073) reads gUnitAnimSets[gSpriteStripUnitIds[i]], and the
      * index runs well past 143. The decomp author flagged it (`//?: Won't this read out-of-bounds
      * of gUnitAnimSets?`). The TRUE ceiling is ~300, not the 151 first seen: SetupPartySprites
-     * (this file's src, split_0496f8.c:117-176) adjusts event-sprite IDs 151..274 by `+= adv*6`
+     * (this file's src, game_setup.c:117-176) adjusts event-sprite IDs 151..274 by `+= adv*6`
      * (adv <= 4) -> max ~298, and its own comment reserves "IDs 151..300". An earlier fix sized
      * this array to 192 off the first observed index and a ch4 cutscene then overran it at ~199 --
      * the same over-fitting mistake made with gTravelAscentCost. Sized once here to 301.

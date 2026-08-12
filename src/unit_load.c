@@ -4,7 +4,7 @@
  * LoadUnits walks the 144 UNIT_xx.DAT files (each supplying 6 consecutive sub-unit ids)
  * and, for every id present in gCurrentUnitSet, uploads that unit's 0x3000-byte sprite
  * strip to its VRAM slot and copies the still-packed sheet into gUnitDataPtr for the
- * decoder in split_02d078.c. Equipment icons live in the gaps between the strips, so the
+ * decoder in unit_roster.c. Equipment icons live in the gaps between the strips, so the
  * load is bracketed by SaveItemIcons/RestoreItemIcons -- whose VRAM stride constant is
  * read THROUGH the defeat-speech table (*(s16 *)&sUnitsWithDefeatSpeech[8], a retail data
  * overlap reproduced literally; editing that table changes the stride).

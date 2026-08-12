@@ -61,10 +61,10 @@ headers and backends (~325 replacements). ⚠️ Protect `long long` when doing 
 `(unsigned long long)n*d` is the perspective-collapse overflow fix
 ([subsystems/gte.md](pc-port/subsystems/gte.md)).
 
-**2. Raw union index views past a pointer.** `src/battle_013b94.c` did `obj->d.bytes[4] = 1` to set
+**2. Raw union index views past a pointer.** `src/battle_executors.c` did `obj->d.bytes[4] = 1` to set
 the low byte of `Object_017.camSavedX`; `Object_017` begins with `struct Object *sprite`, so at 64-bit
 byte 4 lands *inside* the pointer and corrupts it → SIGSEGV in `Objf017_Camera` at the first attack.
-7 sites. *Fix (battle_013b94.c:278):* `LO(obj->d.objf017.camSavedX)` — the exact line the decompiler
+7 sites. *Fix (battle_executors.c:278):* `LO(obj->d.objf017.camSavedX)` — the exact line the decompiler
 had already left commented above it.
 
 **3. Union coords aliasing → white blobs.** An effect (`Objf314_InwardRay`) writes its quad through

@@ -5,7 +5,7 @@
  * SetupPartySprites (unit ids remapped for the advancement path taken),
  * SetDefaultStatsForParty, PopulateUnitSpellList, SetupPartyBattleUnit, SyncPartyUnit,
  * ClearPortraitSet. Roster: LoadSceneUnitRoster fills gSpriteStripUnitIds and
- * gCurrentUnitSet from the scene tables that LoadUnits (split_027dd4.c) then loads;
+ * gCurrentUnitSet from the scene tables that LoadUnits (unit_load.c) then loads;
  * SetupBattleUnit is the 9-argument spawner creating the UnitStatus, its OBJF_BATTLE_UNIT
  * battler and its sprite; CreateBattleUnitForUnit and SetupBattleUnits wrap it.
  * Objf424_BattleEnder watches gState.battleEval and runs the outro -- bgm fade, the
@@ -19,9 +19,9 @@
  * LoadItemIcons.
  *
  * Map and field: LoadMap holds the per-mapNum table of dimensions, margins and M_*.PRS
- * file, unpacks through ProcessMapFileData (split_0a2ce0.c) and calls SetupField. SetupMap
+ * file, unpacks through ProcessMapFileData (map_unpack.c) and calls SetupField. SetupMap
  * spawns the on-map service objects (cursor, compass, panorama, battle manager, field
- * info, options, map-object setup) then SetupMapExtras (map_effects_0852e8.c). SetupField
+ * info, options, map-object setup) then SetupMapExtras (maps_common.c). SetupField
  * clears gMapUnits, every path grid and gTerrain, installs their border rings (the ring
  * path_grids.c relies on), then derives each tile's terrain type from its texture index
  * through a large per-map switch. UpdateElevation / UpdateTileElevation recompute tile
@@ -399,7 +399,7 @@ void SetupPartyBattleUnit(u8 partyIdx, u8 z, u8 x, u8 direction) {
       if (unit->class == CLASS_MONK
 #ifdef PC_FEAT
           /* GAP 5 (Tactical): drop the Monk/Ninja +advLevelFirst MP bonus for exact caster parity --
-           * one of THREE sites that add it (also battle_0190dc.c + SyncPartyUnit below). */
+           * one of THREE sites that add it (also battle_math.c + SyncPartyUnit below). */
           && !gTacticalMode
 #endif
          ) {
@@ -476,7 +476,7 @@ void SyncPartyUnit(u8 partyIdx) {
    if (unit->class == CLASS_MONK
 #ifdef PC_FEAT
        /* GAP 5 (Tactical): drop the Monk/Ninja +advLevelFirst MP bonus for exact caster parity (the
-        * 3rd of the three sites; see battle_0190dc.c and the battle-unit setup above). */
+        * 3rd of the three sites; see battle_math.c and the battle-unit setup above). */
        && !gTacticalMode
 #endif
       ) {

@@ -7,7 +7,7 @@
  * literals). The dictionary is a 1KB ring in scratchpad RAM at 0x1f800000 (primed with a
  * write cursor at 990), which the PC port replaces with a static buffer.
  * ProcessMapFileData reads the 4-byte length header and unpacks into gMapDataPtr; LoadMap
- * (split_0496f8.c) is the only caller.
+ * (game_setup.c) is the only caller.
  *
  * LoadEventData carves the freshly loaded EVDATA*.DAT out of gEvtEntityData: the leading
  * s16 is the entity count, and each entity's script is a run of s16 (opcode, argument)

@@ -7,7 +7,7 @@ with class stats, the number the shop shows you is not the number combat uses.
 ## How equipment enters combat
 
 Through `resist`, not through any attack/defense stat — and **only for player units** (both terms are
-gated on `team == TEAM_PLAYER`, `src/battle_0190dc.c:479-484`):
+gated on `team == TEAM_PLAYER`, `src/battle_math.c:479-484`):
 
 ```c
 if (attacker.team == TEAM_PLAYER) resist −= gItemEquipmentPower[attacker.weapon];  // → more damage

@@ -842,7 +842,7 @@ u8 GetGlyphIdxForAsciiChar(u8 asc) {
 
 #ifdef PC_FEAT
    /* Language packs (platform/pc/src/pc_lang.c): both the code->glyph map above and the glyph
-    * bitmaps are function/file-STATIC, so -- like battle_0201b8.c's terrainText -- they are handed
+    * bitmaps are function/file-STATIC, so -- like battle_field.c's terrainText -- they are handed
     * to the language layer once, on first use. A pack's charmap section can then assign free byte
     * codes to free glyph slots (writing pack bitmaps into them) and remap existing codes (the
     * mixed-case option reuses the lowercase art already present at indices 13-38). Every consumer

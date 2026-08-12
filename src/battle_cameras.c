@@ -4,7 +4,7 @@
  *
  * Cameras: Objf017_AttackCamera is the attack close-up -- swoop onto the actor (zoom 250,
  * pitch 33.75deg), hold while the strike plays (gSignal5 handshake with the action
- * executor in battle_013b94.c), then restore the saved camera. Objf026_588_FocusCamera is
+ * executor in battle_executors.c), then restore the saved camera. Objf026_588_FocusCamera is
  * the general-purpose focus/follow camera used by spell FX and events: callers hand it a
  * target sprite, a vantage type (0-3 -> the GetBestViewOfTarget* variants in graphics.c)
  * and an optional zoom; the 588 table slot is the same handler with a wider default zoom
@@ -291,7 +291,7 @@ void Objf026_588_FocusCamera(Object *obj) {
     * target is read-only here (only target->{x1,z1,y1} are read), so redirect NULL to a
     * zero Object -- every field then reads 0, bit-identical to the handler's per-read
     * zeroing (read-0, NOT skip: the camera still eases toward origin). NULL sites:
-    * battle_011604.c:296/328/329/333. See exchange/56. */
+    * battle_cameras.c:296/328/329/333. See exchange/56. */
    {
       static const Object s_nullObj = {0};
       if (target == NULL) target = (Object *)&s_nullObj;

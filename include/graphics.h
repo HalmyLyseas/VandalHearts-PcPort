@@ -707,10 +707,10 @@ extern s16 gSpriteStripTPageIds[50];
 extern s16 gSpriteStripUnitIds[23];
 extern s16 gSceneSpriteStripUnitIds[105][20];
 extern u8 **gSpriteStripAnimSets[25];
-/* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites (src/split_0496f8.c:1073) indexes
+/* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites (src/game_setup.c:1073) indexes
  * this with gSpriteStripUnitIds[i], and the decomp already carried a `//?: Won't this read
  * out-of-bounds of gUnitAnimSets?` comment at that line. The true index ceiling is ~300, not the
- * 151 first observed: SetupPartySprites (split_0496f8.c:117-176) shows event-sprite IDs run 151..274
+ * 151 first observed: SetupPartySprites (game_setup.c:117-176) shows event-sprite IDs run 151..274
  * and then get `+= adv*6` (adv up to 4) -> max ~298, and the comment there says "IDs 151..300 are
  * reserved for main party event sprites". An earlier fix sized this to [192] off the first observed
  * index (151) and a ch4 cutscene then overran it at ~199 -- the same "widen on an observed value"
@@ -754,7 +754,7 @@ extern s16 gTPageIds[128];
 // are used in a completely unrelated manner: {@addr 800c471c}
 //
 // CONFIRMED 2026-07-21, and the "?" can be resolved: the original really does write 128 entries
-// and really does overrun. SetupGfx (src/split_0496f8.c:1712) runs `for i<8 { for k<16 }` = 128
+// and really does overrun. SetupGfx (src/game_setup.c:1712) runs `for i<8 { for k<16 }` = 128
 // s16 writes from 0x80140054, i.e. through 0x80140153 -- straight over `s_cdSyncStatus`
 // (0x8014014c, an s32) and the 4-byte gap before gPortraitOverlayOffsets (0x80140154). It is a
 // genuine out-of-bounds write in the retail game, benign only by luck: src/audio.c always does

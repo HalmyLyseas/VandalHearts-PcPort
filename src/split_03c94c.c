@@ -3,14 +3,14 @@
  *
  * MsgBox_ShowForSprite / MsgBox_SetPortrait / MsgBox_Close drive the upper (0x41/0x42) and
  * lower (0x43/0x44) dialogue windows, the tail anchored to a speaking sprite, and the
- * Objf413 portrait from split_02d078.c.
+ * Objf413 portrait from unit_roster.c.
  *
  * Objf014_BattleUnit (~1300 lines) is one object per unit on the map, paired with the
  * unit's sprite. obj->state selects the action, obj->state2 the step: 0 spawn, 1 idle +
  * player-controlled movement, 2 move, 5/9/10 struck and blocking, 6 spell casting, 8 melee
  * and 12 ranged attack, 15 high step, 16 level up, 7/13/17/18/19 the death variants
  * (TallySlainUnit, blood or rock spurt), 20 defeat speech. It sets the sprite's animIdx
- * from OBJ.animSet[animIdx + facingFront] and hands off to battle_013b94.c through
+ * from OBJ.animSet[animIdx + facingFront] and hands off to battle_executors.c through
  * gSignal2/3/4.
  *
  * Motion helpers: UpdateUnitSpriteOrientation (facing from camera rotation),
@@ -27,7 +27,7 @@
  * switch -- motion/facing (3-8), waits (1/9/0xa), animation select (2, 0x30), control flow
  * (0xc relative branch, 0x11/0x12 resume other entities), and a long tail of one-shot
  * effects: audio, dialogue, camera, terrain (0x52/0x53 spawn the face-elevation objects in
- * split_0a2ce0.c), and 0x1d, which spawns an object by raw objf index -- the mechanism
+ * map_unpack.c), and 0x1d, which spawns an object by raw objf index -- the mechanism
  * behind most per-scene effects in split_09a268.c and the fx_* and map_effects_* units.
  *
  * Objf590_BattleTurnTicker closes the file: a per-turn map script live only on the two

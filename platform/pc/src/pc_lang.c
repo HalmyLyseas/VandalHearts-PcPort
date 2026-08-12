@@ -73,7 +73,7 @@ static const struct { void *fixed; size_t bytes; void **ptr; int count; const ch
     { gUnitTypeNames,         sizeof gUnitTypeNames,         NULL, 0, "gUnitTypeNames"         },
     { gItemNames,             sizeof gItemNames,             NULL, 0, "gItemNames"             },
     { gClassAdvancementNames, sizeof gClassAdvancementNames, NULL, 0, "gClassAdvancementNames" },
-    /* terrainText: a function-static in src/battle_0201b8.c, so there is no address to apply at load
+    /* terrainText: a function-static in src/battle_field.c, so there is no address to apply at load
      * time. Its blob is held until that file's PC_FEAT hook hands us the table (see below). */
     { NULL, 0, NULL, 0, "terrainText" },
 };
@@ -438,7 +438,7 @@ static void LangLoad(void) {
         off += len;
     }
     s_lang.active = 1;
-    /* format 2 (exchange/91) == 1-byte item names -> supplies.c/window.c/battle_0201b8.c draw the
+    /* format 2 (exchange/91) == 1-byte item names -> supplies.c/window.c/battle_field.c draw the
      * item lists through the small-font path instead of the wide SJIS one. Latched HERE, at load
      * success, and only if the pack's gItemNamesSjis table actually landed: on any earlier bail-out
      * (or a format-2 pack missing the table) gItemNamesSjis still holds retail 2-byte SJIS, and
@@ -633,7 +633,7 @@ const unsigned char *PC_LangSubtitleGlyph16(unsigned cp) {
     return NULL;
 }
 
-/* Called once from src/battle_0201b8.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
+/* Called once from src/battle_field.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
  * function-static terrainText -- the battle terrain info box, "Plains   0%" and friends. That table
  * has no external linkage, so this hand-off is the only way a pack can reach it. */
 void PC_LangApplyTerrainText(void *table, int bytes) {

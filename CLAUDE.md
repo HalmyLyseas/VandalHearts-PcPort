@@ -162,7 +162,7 @@ the gates below, so every port-side edit to shared source must sit behind one:
 - `#ifdef PC_PORT_LP64` — 64-bit-host-only struct-layout fixes (e.g. `Object_719`/`_675` in
   `include/object.h`, where a leading pointer's 4→8-byte growth shifts aliased fields).
 - `#ifdef PC_FEAT` — **(Stage 3)** PC-only gameplay/QoL additions (e.g. the bidirectional ally-cycle
-  in `battle_0201b8.c`). Distinct from `PC_PORT` (correctness) so gameplay changes are greppable alone.
+  in `battle_field.c`). Distinct from `PC_PORT` (correctness) so gameplay changes are greppable alone.
 - `#ifdef PC_DEBUG_*` — per-file debug/instrumentation hooks, keyed to Makefile flags.
 
 `grep -rnE "PERMUTER|PC_PORT|PC_FEAT|PC_DEBUG" src/ include/` finds them all. **History lesson:** an

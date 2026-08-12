@@ -1,6 +1,6 @@
 /* Spell casting effects, part 2 (segment 0x5cbc4): Fire Gem, Delta Mirage, Explosion and
  * Stone Shower drivers with their sub-objects and drawing helpers. Dispatched data-driven
- * via gSpellsEx (see fx_060c38.c's header for the model). DrawLightningBoltSegment renders
+ * via gSpellsEx (see spells_casting_main.c's header for the model). DrawLightningBoltSegment renders
  * one jagged segment of Objf147_LightningBolt's sky bolt; DrawDeltaMirageTriangle renders
  * the spell's rotating three-edged figure with its mask effect. */
 #include "common.h"
