@@ -1,3 +1,24 @@
+/* Path/range grid floods -- the tactical layer's spatial queries.
+ *
+ * Storage: gPathGrid0..6 + gPathGrid10 (u8[30][65], accessed via the &grid[1] *_Ptr
+ * aliases; a 0xff border ring is installed by split_0496f8.c and ClearGrid only clears
+ * inside gMapMin/Max). One u8 per cell serves four value flavours:
+ *   breadcrumbs (PATH_STEP_SOUTH/WEST/NORTH/EAST; INVALID marks the origin)  --
+ *     PopulateMovementGrid, walked back by PlotPathBackToUnit;
+ *   ascending accumulated move cost (1-based)  -- PopulateMoveCostGrid;
+ *   descending remaining range (a distance potential field)  --
+ *     PopulateReachGradientGrid[From], AccumulateProximityGrid, PopulateCastingGrid;
+ *   flat coverage masks  -- MarkSpellFieldCoverage, Populate{Ranged,Melee}AttackGrid.
+ *
+ * Grid roles across the codebase: 0 = red attack range + general scratch; 1 = yellow
+ * target/AoE display; 2 = AI path breadcrumbs / player remaining-move cost; 3 = AI
+ * multi-turn reach horizon; 4 = AI reachable-this-turn mask; 5 = AI per-candidate
+ * casting/attack scratch; 6 = AI scoring field (AoE coverage, enemy proximity via
+ * AccumulateProximityGrid's max-accumulator, escape gradient); 10 = the blue movement
+ * grid the player sees. The movement cost model (gTravelTerrainCost + ascent/descent by
+ * the mover's step profile, own team passable, enemies block, CLASS_AIRMAN remaps enemy
+ * tiles to obstacles for the flood) is shared by every flood through the rotating
+ * gImpededStepsQueue bucket queue. */
 #include "common.h"
 #include "battle.h"
 #include "units.h"
@@ -61,14 +82,14 @@ static void PcTravelDiffProbe(const char *fn, s32 stepType, s32 diff) {
       two = i;                                                                                     \
    } while (0)*/
 
-void func_8002ADCC(s16, s16, s32, s32);
+void MarkSpellFieldCoverage(s16, s16, s32, s32);
 void ApplyAirmanAdjustments(u8);
 void RevertAirmanAdjustments(void);
-void func_8002C108(s16, s16, s16, s32 *, s16, s16);
-void func_8002C1A0(s16, s16, s32, s32);
-void func_8002C1D8(s16, s16, s32, s32, s16, s16);
-u8 func_8002CEE4(s16, s16, s16, s32 *, s16);
-void func_8002CF88(s16, s16, s32, s32, s32);
+void QueueImpededCostStep(s16, s16, s16, s32 *, s16, s16);
+void PopulateReachGradientGrid(s16, s16, s32, s32);
+void PopulateReachGradientGridFrom(s16, s16, s32, s32, s16, s16);
+u8 QueueImpededGradientStep(s16, s16, s16, s32 *, s16);
+void AccumulateProximityGrid(s16, s16, s32, s32, s32);
 void PopulateBlueMovementGrid(s16, s16, s32);
 void PopulateMovementGrid(s16, s16, s32, s32);
 void QueueImpededStep(s32, s32, s32, s32 *, s16, u8);
@@ -81,7 +102,7 @@ void ClearBlueMovementGrid(void);
 void PopulateRangedAttackGrid(s16, s16, s32, s32);
 void NoopForever_8002f9b0(void);
 
-void func_8002ADCC(s16 z, s16 x, s32 fieldSize, s32 gridNum) {
+void MarkSpellFieldCoverage(s16 z, s16 x, s32 fieldSize, s32 gridNum) {
    PathGridRow *pGrid;
    s32 pushIdx;
    s32 popIdx;
@@ -224,7 +245,7 @@ void RevertAirmanAdjustments(void) {
    }
 }
 
-void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
+void PopulateMoveCostGrid(s16 z, s16 x, s32 range, s32 gridNum) {
    u8 queueOfs;
    PathGridRow *pGrid;
    u8 buffer[600];
@@ -273,7 +294,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
    queueOfs = 0;
    unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
    stepType = unit->step;
-   PC_PATH_STEP_PROBE("func_8002B3A8", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
+   PC_PATH_STEP_PROBE("PopulateMoveCostGrid", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
    team = gMapUnitsPtr[z][x].s.team;
 
    for (i = 0; i < 5; i++) {
@@ -313,7 +334,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateMoveCostGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -329,14 +350,14 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
                      buffer[pushIdx++] = x;
                   }
                } else {
-                  func_8002C108(z - 1, x, rem, &count, terrainCost + elevationCost, range);
+                  QueueImpededCostStep(z - 1, x, rem, &count, terrainCost + elevationCost, range);
                }
             }
          }
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateMoveCostGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -352,14 +373,14 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
                      buffer[pushIdx++] = x;
                   }
                } else {
-                  func_8002C108(z + 1, x, rem, &count, terrainCost + elevationCost, range);
+                  QueueImpededCostStep(z + 1, x, rem, &count, terrainCost + elevationCost, range);
                }
             }
          }
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateMoveCostGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -375,14 +396,14 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
                      buffer[pushIdx++] = x - 1;
                   }
                } else {
-                  func_8002C108(z, x - 1, rem, &count, terrainCost + elevationCost, range);
+                  QueueImpededCostStep(z, x - 1, rem, &count, terrainCost + elevationCost, range);
                }
             }
          }
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002B3A8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateMoveCostGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -398,7 +419,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
                      buffer[pushIdx++] = x + 1;
                   }
                } else {
-                  func_8002C108(z, x + 1, rem, &count, terrainCost + elevationCost, range);
+                  QueueImpededCostStep(z, x + 1, rem, &count, terrainCost + elevationCost, range);
                }
             }
          }
@@ -465,7 +486,7 @@ void func_8002B3A8(s16 z, s16 x, s32 range, s32 gridNum) {
    }
 }
 
-void func_8002C108(s16 z, s16 x, s16 rem, s32 *pCount, s16 cost, s16 range) {
+void QueueImpededCostStep(s16 z, s16 x, s16 rem, s32 *pCount, s16 cost, s16 range) {
    s32 i;
    u8 *p;
 
@@ -484,11 +505,11 @@ void func_8002C108(s16 z, s16 x, s16 rem, s32 *pCount, s16 cost, s16 range) {
    }
 }
 
-void func_8002C1A0(s16 z, s16 x, s32 range, s32 gridNum) {
-   func_8002C1D8(z, x, range, gridNum, 100, 100);
+void PopulateReachGradientGrid(s16 z, s16 x, s32 range, s32 gridNum) {
+   PopulateReachGradientGridFrom(z, x, range, gridNum, 100, 100);
 }
 
-void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
+void PopulateReachGradientGridFrom(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
    PathGridRow *pGrid;
    s32 i, j;
    s32 pushIdx;
@@ -538,12 +559,12 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
    if (xx == 100 && zz == 100) {
       unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
       stepType = unit->step;
-      PC_PATH_STEP_PROBE("func_8002C1D8", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
+      PC_PATH_STEP_PROBE("PopulateReachGradientGridFrom", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
       team = gMapUnitsPtr[z][x].s.team;
    } else {
       unit = &gUnits[gMapUnitsPtr[zz][xx].s.unitIdx];
       stepType = unit->step;
-      PC_PATH_STEP_PROBE("func_8002C1D8", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
+      PC_PATH_STEP_PROBE("PopulateReachGradientGridFrom", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
       team = gMapUnitsPtr[zz][xx].s.team;
    }
 
@@ -580,7 +601,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
       if (z != PATH_STEP_INVALID) {
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateReachGradientGridFrom", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -596,14 +617,14 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
                      buffer[pushIdx++] = x;
                   }
                } else {
-                  func_8002CEE4(z - 1, x, rem, &pendingCount, terrainCost + elevationCost);
+                  QueueImpededGradientStep(z - 1, x, rem, &pendingCount, terrainCost + elevationCost);
                }
             }
          }
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateReachGradientGridFrom", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -619,14 +640,14 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
                      buffer[pushIdx++] = x;
                   }
                } else {
-                  func_8002CEE4(z + 1, x, rem, &pendingCount, terrainCost + elevationCost);
+                  QueueImpededGradientStep(z + 1, x, rem, &pendingCount, terrainCost + elevationCost);
                }
             }
          }
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateReachGradientGridFrom", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -642,14 +663,14 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
                      buffer[pushIdx++] = x - 1;
                   }
                } else {
-                  func_8002CEE4(z, x - 1, rem, &pendingCount, terrainCost + elevationCost);
+                  QueueImpededGradientStep(z, x - 1, rem, &pendingCount, terrainCost + elevationCost);
                }
             }
          }
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002C1D8", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("PopulateReachGradientGridFrom", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -665,7 +686,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
                      buffer[pushIdx++] = x + 1;
                   }
                } else {
-                  func_8002CEE4(z, x + 1, rem, &pendingCount, terrainCost + elevationCost);
+                  QueueImpededGradientStep(z, x + 1, rem, &pendingCount, terrainCost + elevationCost);
                }
             }
          }
@@ -732,7 +753,7 @@ void func_8002C1D8(s16 z, s16 x, s32 range, s32 gridNum, s16 zz, s16 xx) {
    }
 }
 
-u8 func_8002CEE4(s16 z, s16 x, s16 rem, s32 *pCount, s16 cost) {
+u8 QueueImpededGradientStep(s16 z, s16 x, s16 rem, s32 *pCount, s16 cost) {
    s32 i;
    u8 *p;
 
@@ -754,7 +775,7 @@ u8 func_8002CEE4(s16 z, s16 x, s16 rem, s32 *pCount, s16 cost) {
    }
 }
 
-void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
+void AccumulateProximityGrid(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
    s32 i, j;
    s32 pushIdx;
    s32 popIdx;
@@ -828,7 +849,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
    queueOfs = 0;
    unit = &gUnits[gMapUnitsPtr[z][x].s.unitIdx];
    stepType = unit->step;
-   PC_PATH_STEP_PROBE("func_8002CF88", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
+   PC_PATH_STEP_PROBE("AccumulateProximityGrid", z, x, gMapUnitsPtr[z][x].s.unitIdx, stepType);
 
    team = gMapUnitsPtr[z][x].s.team;
 
@@ -864,7 +885,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
       if (z != PATH_STEP_INVALID) {
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z - 1][x].s.terrain];
          diff = gTerrainPtr[z - 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("AccumulateProximityGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -885,7 +906,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
                      buffer[pushIdx++] = x;
                   }
                } else {
-                  b = func_8002CEE4(z - 1, x, rem, &pendingCount, terrainCost + elevationCost);
+                  b = QueueImpededGradientStep(z - 1, x, rem, &pendingCount, terrainCost + elevationCost);
                   if (pGrid2[z - 1][x] < b) {
                      pGrid2[z - 1][x] = b;
                   }
@@ -895,7 +916,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z + 1][x].s.terrain];
          diff = gTerrainPtr[z + 1][x].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("AccumulateProximityGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -916,7 +937,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
                      buffer[pushIdx++] = x;
                   }
                } else {
-                  b = func_8002CEE4(z + 1, x, rem, &pendingCount, terrainCost + elevationCost);
+                  b = QueueImpededGradientStep(z + 1, x, rem, &pendingCount, terrainCost + elevationCost);
                   if (pGrid2[z + 1][x] < b) {
                      pGrid2[z + 1][x] = b;
                   }
@@ -926,7 +947,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x - 1].s.terrain];
          diff = gTerrainPtr[z][x - 1].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("AccumulateProximityGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -947,7 +968,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
                      buffer[pushIdx++] = x - 1;
                   }
                } else {
-                  b = func_8002CEE4(z, x - 1, rem, &pendingCount, terrainCost + elevationCost);
+                  b = QueueImpededGradientStep(z, x - 1, rem, &pendingCount, terrainCost + elevationCost);
                   if (pGrid2[z][x - 1] < b) {
                      pGrid2[z][x - 1] = b;
                   }
@@ -957,7 +978,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
 
          terrainCost = gTravelTerrainCost[stepType][gTerrainPtr[z][x + 1].s.terrain];
          diff = gTerrainPtr[z][x + 1].s.elevation - gTerrainPtr[z][x].s.elevation;
-         PC_TRAVEL_DIFF_PROBE("func_8002CF88", stepType, diff);
+         PC_TRAVEL_DIFF_PROBE("AccumulateProximityGrid", stepType, diff);
          if (diff < 0) {
             elevationCost = gTravelDescentCost[stepType][-diff];
          } else {
@@ -978,7 +999,7 @@ void func_8002CF88(s16 z, s16 x, s32 range, s32 gridNum1, s32 gridNum2) {
                      buffer[pushIdx++] = x + 1;
                   }
                } else {
-                  b = func_8002CEE4(z, x + 1, rem, &pendingCount, terrainCost + elevationCost);
+                  b = QueueImpededGradientStep(z, x + 1, rem, &pendingCount, terrainCost + elevationCost);
                   if (pGrid2[z][x + 1] < b) {
                      pGrid2[z][x + 1] = b;
                   }

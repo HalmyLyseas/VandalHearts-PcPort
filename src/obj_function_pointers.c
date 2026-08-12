@@ -13,7 +13,7 @@ void Objf013_BattleMgr(Object *);
 void Objf014_BattleUnit(Object *);
 void Objf015_TargetingAttack(Object *);
 void Objf016_ChooseDoneDirection(Object *);
-void Objf017_Camera_TBD(Object *);
+void Objf017_AttackCamera(Object *);
 void Objf019_Compass(Object *);
 void Objf020_PushedBoulder(Object *);
 void Objf021_UnitAttacking(Object *);
@@ -21,7 +21,7 @@ void Objf022_029_Projectile(Object *);
 void Objf023_Camera_RangedTarget(Object *);
 void Objf024_BounceZoom(Object *);
 void Objf025_OverheadMapView(Object *);
-void Objf026_588_Camera_TBD(Object *);
+void Objf026_588_FocusCamera(Object *);
 void Objf027_TargetingSpell(Object *);
 void Objf028_UnitCasting(Object *);
 void Objf030_FieldInfo(Object *);
@@ -598,7 +598,7 @@ ObjFunction gObjFunctionPointers[804] = {
     [14] = Objf014_BattleUnit,
     [15] = Objf015_TargetingAttack,
     [16] = Objf016_ChooseDoneDirection,
-    [17] = Objf017_Camera_TBD,
+    [17] = Objf017_AttackCamera,
     [18] = (ObjFunction)NULL,
     [19] = Objf019_Compass,
     [20] = Objf020_PushedBoulder,
@@ -607,7 +607,7 @@ ObjFunction gObjFunctionPointers[804] = {
     [23] = Objf023_Camera_RangedTarget,
     [24] = Objf024_BounceZoom,
     [25] = Objf025_OverheadMapView,
-    [26] = Objf026_588_Camera_TBD,
+    [26] = Objf026_588_FocusCamera,
     [27] = Objf027_TargetingSpell,
     [28] = Objf028_UnitCasting,
     [29] = Objf022_029_Projectile,
@@ -1169,7 +1169,7 @@ ObjFunction gObjFunctionPointers[804] = {
     [585] = Objf585_BattlePlayerEvent,
     [586] = Objf586_BattleMsgBox,
     [587] = Objf587_BattleEnemyEvent,
-    [588] = Objf026_588_Camera_TBD,
+    [588] = Objf026_588_FocusCamera,
     [589] = Objf589_AI_MoveToEscapePoint,
     [590] = Objf590_BattleTurnTicker,
     [591] = Objf591_MapObject_Boulder,

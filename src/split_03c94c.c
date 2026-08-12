@@ -1686,7 +1686,7 @@ void Objf412_EventCamera(Object *obj) {
    }
 }
 
-void func_8004FDB0(Object *sprite, Object *entity) {
+void StepEntitySpriteTowardDest(Object *sprite, Object *entity) {
    // TBD: Is this y coord used as state anywhere else?
    switch (HI(sprite->d.sprite.coords[0].y)) {
    case 0:
@@ -2107,14 +2107,14 @@ void Objf409_EventEntity(Object *obj) {
       case 0x20:
          MsgBox_SetText(1, argument, 0x100);
          gState.msgBoxFinished = 0;
-         gState.field_0x31d = 0;
+         gState.msgBoxPagePaused = 0;
          obj->state3 = 1;
          goto HandleRunState1;
 
       case 0x21:
          MsgBox_SetText(2, argument, 0x100);
          gState.msgBoxFinished = 0;
-         gState.field_0x31d = 0;
+         gState.msgBoxPagePaused = 0;
          obj->state3 = 1;
          goto HandleRunState1;
 
@@ -2127,8 +2127,8 @@ void Objf409_EventEntity(Object *obj) {
          break;
 
       case 0x23:
-         if (gState.field_0x31d != 0) {
-            gState.field_0x31d = 0;
+         if (gState.msgBoxPagePaused != 0) {
+            gState.msgBoxPagePaused = 0;
             obj->state3 = 1;
             goto HandleRunState1;
          }
@@ -2657,7 +2657,7 @@ void Objf409_EventEntity(Object *obj) {
       case 0x7a:
          MsgBox_SetText2(1, argument, 0x100);
          gState.msgBoxFinished = 0;
-         gState.field_0x31d = 0;
+         gState.msgBoxPagePaused = 0;
          obj->state3 = 1;
          goto HandleRunState1;
       } // switch (command) (via runState:2)
@@ -2666,7 +2666,7 @@ void Objf409_EventEntity(Object *obj) {
    } // switch (runState)
 
    // UpdateSprite_80051464:
-   func_8004FDB0(sprite, obj);
+   StepEntitySpriteTowardDest(sprite, obj);
    UpdateUnitSpriteOrientation(sprite);
    if (!OBJ.usingAltAnimSet) {
       animSet = OBJ.baseAnimSet;

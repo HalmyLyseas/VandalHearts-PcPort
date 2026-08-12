@@ -387,7 +387,7 @@ void Objf362_DrawbridgeButton(Object *obj) {
       OBJ.timer = 64;
       OBJ.dstCamPosY = -(s_tileModels_80124314[0].vertices[12].vy << 3);
       gCameraRotation.vy &= 0xfff;
-      OBJ.dstCamRotY = func_800A96A8(gCameraRotation.vy, DEG(315));
+      OBJ.dstCamRotY = ShortestTurnAngle(gCameraRotation.vy, DEG(315));
       obj->state++;
       break;
 

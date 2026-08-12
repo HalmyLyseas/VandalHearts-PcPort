@@ -1597,7 +1597,7 @@ void Objf586_BattleMsgBox(Object *obj) {
    case 0:
       sprite = FindUnitSpriteByNameIdx(OBJ.nameIdx);
       camObj = Obj_GetUnused();
-      camObj->functionIndex = OBJF_CAMERA_TBD_588;
+      camObj->functionIndex = OBJF_FOCUS_CAMERA_WIDE;
       camObj->d.objf588.target = sprite;
       OBJ.timer = 20;
       obj->state++;
@@ -1837,7 +1837,7 @@ void Objf003_BattleActions(Object *obj) {
              gBlueMovementGridPtr[gMapCursorZ][gMapCursorX] != PATH_STEP_INVALID &&
              gBlueMovementGridPtr[gMapCursorZ][gMapCursorX] != PATH_STEP_UNSET &&
              gMapUnitsPtr[gMapCursorZ][gMapCursorX].raw == 0) {
-            func_8002B3A8(obj->z1.s.hi, obj->x1.s.hi, OBJ.range, 2);
+            PopulateMoveCostGrid(obj->z1.s.hi, obj->x1.s.hi, OBJ.range, 2);
             OBJ.remainingRange = OBJ.range - gPathGrid2_Ptr[gMapCursorZ][gMapCursorX];
             obj->x3.s.hi = gMapCursorX;
             obj->z3.s.hi = gMapCursorZ;

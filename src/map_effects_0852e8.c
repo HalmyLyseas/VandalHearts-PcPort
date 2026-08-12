@@ -238,7 +238,8 @@ void PositionCamera(s16 x, s16 y, s16 z) {
 }
 
 s32 func_80095128(s32 param_1, s16 x, s16 y, s16 z) {
-   // Unused?
+   /* UNREFERENCED, and the computed vector is discarded -- an emptied helper that now
+    * just returns its first argument. Keeps its address name. */
    SVECTOR vec;
 
    vec.vx = -(x >> 3) + 448;
@@ -400,7 +401,7 @@ void Objf399_Map11(Object *obj) {
    case 2:
       OBJ.dstRotY = GetBestViewOfTarget(11, 1, 1);
       gCameraRotation.vy &= 0xfff;
-      OBJ.dstRotY = func_800A96A8(gCameraRotation.vy, DEG(135));
+      OBJ.dstRotY = ShortestTurnAngle(gCameraRotation.vy, DEG(135));
       obj->state++;
 
    // fallthrough
@@ -439,7 +440,7 @@ void Objf399_Map11(Object *obj) {
    case 6:
       if (gState.mapState.s.field_0x0 == 3) {
          gCameraRotation.vy &= 0xfff;
-         OBJ.camera.rotY = func_800A96A8(gCameraRotation.vy, OBJ.camera.rotY);
+         OBJ.camera.rotY = ShortestTurnAngle(gCameraRotation.vy, OBJ.camera.rotY);
          obj->state3 = 32;
          obj->state++;
       }

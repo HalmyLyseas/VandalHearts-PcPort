@@ -276,7 +276,7 @@ void Objf578_Dojo(Object *obj) {
 
       case 1:
          if (--OBJ.timer == 0) {
-            func_8004404C(0);
+            ShowTownMsgBoxDual(0);
             OBJ.timer = 20;
             obj->state2++;
          }
@@ -300,13 +300,13 @@ void Objf578_Dojo(Object *obj) {
             obj->state = 99;
             obj->state2 = 0;
          } else {
-            func_80044364(0, 0);
+            SetTownMsgBoxText(0, 0);
             obj->state2++;
          }
          break;
 
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state++;
             obj->state2 = 0;
          }
@@ -371,12 +371,12 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(1, 0);
+         SetTownMsgBoxText(1, 0);
          obj->state2++;
 
       // fallthrough
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             DrawWindow(0x37, 128, 90, 88, 108, 400, 101, WBS_CROSSED, 5);
             DrawText(136, 101, 10, 2, 0, "#77");
             DisplayCustomWindowWithSetChoice(0x37, 2, 1, 30, 0, 0, gState.choices[0]);
@@ -434,7 +434,7 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(obj->state - 2, 0);
+         SetTownMsgBoxText(obj->state - 2, 0);
          obj->state2++;
          break;
 
@@ -452,12 +452,12 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(6, 0);
+         SetTownMsgBoxText(6, 0);
          obj->state2++;
          break;
 
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state = 3;
             obj->state2 = 2;
          }
@@ -471,12 +471,12 @@ void Objf578_Dojo(Object *obj) {
       switch (obj->state2) {
       case 0:
          SlideWindowTo(0x36, 110, 110);
-         func_80044364(17, 0);
+         SetTownMsgBoxText(17, 0);
          obj->state2++;
          break;
 
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state = 2;
             obj->state2 = 1;
          }
@@ -489,12 +489,12 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(7, 0);
+         SetTownMsgBoxText(7, 0);
          obj->state2++;
 
       // fallthrough
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state2++;
          }
          break;
@@ -596,7 +596,7 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(15, 0);
+         SetTownMsgBoxText(15, 0);
          obj->state2++;
          break;
 
@@ -614,12 +614,12 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(13, 0);
+         SetTownMsgBoxText(13, 0);
          obj->state2++;
          break;
 
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             gWindowActiveIdx = 0x38;
             obj->state = 11;
             obj->state2 = 1;
@@ -633,7 +633,7 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(14, 0);
+         SetTownMsgBoxText(14, 0);
          obj->state2++;
          break;
 
@@ -673,12 +673,12 @@ void Objf578_Dojo(Object *obj) {
 
       // fallthrough
       case 1:
-         func_80044364(8, 0);
+         SetTownMsgBoxText(8, 0);
          obj->state2++;
          break;
 
       case 2:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             gWindowActiveIdx = 0x40;
             obj->state2++;
          }
@@ -689,7 +689,7 @@ void Objf578_Dojo(Object *obj) {
             gWindowActiveIdx = 0;
             CloseWindow(0x40);
             SlideWindowTo(0x38, 8, 90);
-            func_80044364(7, 0);
+            SetTownMsgBoxText(7, 0);
             obj->state2++;
          }
          if (gWindowChoice.raw == 0x4002) {
@@ -708,7 +708,7 @@ void Objf578_Dojo(Object *obj) {
          break;
 
       case 4:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state = 11;
             obj->state2 = 1;
             gWindowActiveIdx = 0x38;
@@ -716,12 +716,12 @@ void Objf578_Dojo(Object *obj) {
          break;
 
       case 5:
-         func_80044364(9, 0);
+         SetTownMsgBoxText(9, 0);
          obj->state2++;
 
       // fallthrough
       case 6:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state2++;
          }
          break;
@@ -773,7 +773,7 @@ void Objf578_Dojo(Object *obj) {
 
             gStringTable[0] = gStringTable[14 + gPartyClassAdvancements[OBJ.partyIdx - 1][i][j]];
             CloseWindow(0x39);
-            func_80044364(10, 0);
+            SetTownMsgBoxText(10, 0);
             obj->state2++;
          }
 
@@ -836,12 +836,12 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(11, 0);
+         SetTownMsgBoxText(11, 0);
          obj->state2++;
          break;
 
       case 1:
-         if (func_80037C28()) {
+         if (ConsumeMsgBoxPagePause()) {
             obj->state2++;
          }
          break;
@@ -852,7 +852,7 @@ void Objf578_Dojo(Object *obj) {
                 gPartyMembers[OBJ.partyIdx].advChosePathB && OBJ.partyIdx != UNIT_ASH) {
                gState.depot[gPartyMembers[OBJ.partyIdx].weapon]++;
                gPartyMembers[OBJ.partyIdx].weapon = gPartyClassPathB1StartingWeapons[OBJ.partyIdx];
-               func_80044364(12, 0);
+               SetTownMsgBoxText(12, 0);
                SyncPartyUnit(OBJ.partyIdx);
                obj->state2++;
             } else if (s_dojoVandalierUnlocked) {
@@ -861,7 +861,7 @@ void Objf578_Dojo(Object *obj) {
                gPartyMembers[UNIT_ASH].weapon = ITEM_V_HEART_2;
                gPartyMembers[UNIT_ASH].helmet = ITEM_V_HELM;
                gPartyMembers[UNIT_ASH].armor = ITEM_V_ARMOR;
-               func_80044364(12, 0);
+               SetTownMsgBoxText(12, 0);
                SyncPartyUnit(UNIT_ASH);
                obj->state2++;
             } else {
@@ -890,7 +890,7 @@ void Objf578_Dojo(Object *obj) {
 
       switch (obj->state2) {
       case 0:
-         func_80044364(18, 0);
+         SetTownMsgBoxText(18, 0);
          obj->state2++;
          break;
 
@@ -914,7 +914,7 @@ void Objf578_Dojo(Object *obj) {
             obj->state2 = 0;
          }
          if (gWindowChoice.raw == 0x3b01) {
-            func_80044364(19, 0);
+            SetTownMsgBoxText(19, 0);
             obj->state2++;
          }
          break;
@@ -955,7 +955,7 @@ void Objf578_Dojo(Object *obj) {
          CloseWindow(0x36);
          if (gState.primary == STATE_TRIAL_COMPLETE) {
             if (!PlayerHasItem(ITEM_NOVA_P_ + Dojo_GetTrialNum() - 1)) {
-               func_80044364(21, 0);
+               SetTownMsgBoxText(21, 0);
             } else {
                if (gPartyMembers[UNIT_ASH].items[0] == (ITEM_NOVA_KEY + Dojo_GetTrialNum() - 1)) {
                   gPartyMembers[UNIT_ASH].items[0] = ITEM_NULL;
@@ -963,19 +963,19 @@ void Objf578_Dojo(Object *obj) {
                           (ITEM_NOVA_KEY + Dojo_GetTrialNum() - 1)) {
                   gPartyMembers[UNIT_ASH].items[1] = ITEM_NULL;
                }
-               func_80044364(22, 0);
+               SetTownMsgBoxText(22, 0);
             }
             obj->state2++;
          } else {
             if (obj->state == 100) {
-               func_80044364(20, 0);
+               SetTownMsgBoxText(20, 0);
                obj->state2++;
             } else {
                if (Dojo_GetTrialNum() != 0) {
                   obj->state = 50;
                   obj->state2 = 0;
                } else {
-                  func_80044364(16, 0);
+                  SetTownMsgBoxText(16, 0);
                   obj->state2++;
                }
             }
@@ -991,7 +991,7 @@ void Objf578_Dojo(Object *obj) {
 
       case 2:
          if (--OBJ.timer == 0) {
-            func_80044134(0);
+            HideTownMsgBox(0);
             FadeOutScreen(2, 6);
             OBJ.timer = 50;
             obj->state2++;

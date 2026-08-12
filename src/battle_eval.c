@@ -165,7 +165,7 @@ s32 State_Battle(void) {
          if (gState.useDefaultUnits) {
             SetDefaultStatsForParty();
          }
-         func_8005AA7C();
+         LoadSceneUnitRoster();
          if (gState.primary < STATE_30) {
             SetupSprites();
          }

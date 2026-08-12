@@ -40,11 +40,11 @@ void Objf673_Map32_Scn63_Cinematic(Object *obj) {
       focus->z1.n = obj->z2.n;
       focus->y1.n = obj->y2.n;
       gState.focus = focus;
-      func_800985F0(obj);
+      SnapCameraLookAt(obj);
       break;
 
    case 1:
-      func_800986F0(obj);
+      EaseCameraLookAt(obj);
       focus->x1.n = obj->x2.n;
       focus->z1.n = obj->z2.n;
       focus->y1.n = obj->y2.n;
@@ -54,7 +54,7 @@ void Objf673_Map32_Scn63_Cinematic(Object *obj) {
    case 2:
       obj->x1.n -= CV(0.5);
       obj->y1.n += CV(0.0625);
-      func_800986F0(obj);
+      EaseCameraLookAt(obj);
       focus->x1.n = obj->x2.n;
       focus->z1.n = obj->z2.n;
       focus->y1.n = obj->y2.n;
@@ -100,7 +100,7 @@ void Objf673_Map32_Scn63_Cinematic(Object *obj) {
          break;
       }
 
-      func_800986F0((Object *)obj);
+      EaseCameraLookAt((Object *)obj);
       focus->x1.n = obj->x2.n;
       focus->z1.n = obj->z2.n;
       focus->y1.n = obj->y2.n;
@@ -206,7 +206,7 @@ void Objf650_Map32_CarRelease(Object *obj) {
          obj->y1.n = CV(4.0);
 
          obj_s0 = Obj_GetUnused();
-         obj_s0->functionIndex = OBJF_CAMERA_TBD_026;
+         obj_s0->functionIndex = OBJF_FOCUS_CAMERA;
          obj_s0->d.objf026.target = obj;
          obj_s0->d.objf026.zoom = 384;
 
@@ -361,7 +361,7 @@ void Objf650_Map32_CarRelease(Object *obj) {
                OBJ.timer = 0;
                obj->state3++;
                obj_s0 = Obj_GetUnused();
-               obj_s0->functionIndex = OBJF_CAMERA_TBD_026;
+               obj_s0->functionIndex = OBJF_FOCUS_CAMERA;
                obj_s0->d.objf026.target = obj;
                obj_s0->d.objf026.zoom = 384;
                PerformAudioCommand(0x1000 + audioCommands[OBJ.carIdx]); // Prepare XA

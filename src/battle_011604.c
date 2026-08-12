@@ -1,3 +1,14 @@
+/* Battle presentation objects (segment 0x11604): the level-up jingle/stats object, the
+ * impact bounce-zoom, the two battle cameras, the event zoom, the end-of-move direction
+ * chooser and its direction-arrow renderer.
+ *
+ * Cameras: Objf017_AttackCamera is the attack close-up -- swoop onto the actor (zoom 250,
+ * pitch 33.75deg), hold while the strike plays (gSignal5 handshake with the action
+ * executor in battle_013b94.c), then restore the saved camera. Objf026_588_FocusCamera is
+ * the general-purpose focus/follow camera used by spell FX and events: callers hand it a
+ * target sprite, a vantage type (0-3 -> the GetBestViewOfTarget* variants in graphics.c)
+ * and an optional zoom; the 588 table slot is the same handler with a wider default zoom
+ * (350). */
 #include "common.h"
 #include "object.h"
 #include "audio.h"
@@ -24,7 +35,7 @@ void Objf571_LevelUp(Object *obj) {
       gSignal5 = 0;
 
       gCameraRotation.vy &= 0xfff;
-      OBJ.dstRotY = func_800C4150(sprite->z1.s.hi, sprite->x1.s.hi, 1);
+      OBJ.dstRotY = GetBestViewOfTargetPlus90(sprite->z1.s.hi, sprite->x1.s.hi, 1);
       OBJ.camSavedX = gCameraPos.vx;
       OBJ.camSavedZ = gCameraPos.vz;
       OBJ.camSavedY = gCameraPos.vy;
@@ -162,7 +173,7 @@ void Objf024_BounceZoom(Object *obj) {
 
 #undef OBJF
 #define OBJF 017
-void Objf017_Camera_TBD(Object *obj) {
+void Objf017_AttackCamera(Object *obj) {
    Object *sprite;
    s16 diff;
 
@@ -176,10 +187,10 @@ void Objf017_Camera_TBD(Object *obj) {
       // ?: LO byte of camSavedX doubles as a caller-set arg for specifying melee/ranged
       if (LO(OBJ.camSavedX) != 0) {
          // ?: melee
-         OBJ.dstCamRotY = func_800C4150(sprite->z1.s.hi, sprite->x1.s.hi, 0);
+         OBJ.dstCamRotY = GetBestViewOfTargetPlus90(sprite->z1.s.hi, sprite->x1.s.hi, 0);
       } else {
          // ?: ranged
-         OBJ.dstCamRotY = func_800C3F50(sprite->z1.s.hi, sprite->x1.s.hi, 1);
+         OBJ.dstCamRotY = GetBestViewOfTargetMinus90(sprite->z1.s.hi, sprite->x1.s.hi, 1);
       }
       OBJ.camSavedX = gCameraPos.vx;
       OBJ.camSavedZ = gCameraPos.vz;
@@ -268,7 +279,7 @@ void Objf017_Camera_TBD(Object *obj) {
 
 #undef OBJF
 #define OBJF 026
-void Objf026_588_Camera_TBD(Object *obj) {
+void Objf026_588_FocusCamera(Object *obj) {
    Object *target;
    s16 diff;
 
@@ -294,7 +305,7 @@ void Objf026_588_Camera_TBD(Object *obj) {
 
       if (OBJ.zoom == 0) {
          OBJ.dstZoom = 250;
-         if (obj->functionIndex == OBJF_CAMERA_TBD_588) {
+         if (obj->functionIndex == OBJF_FOCUS_CAMERA_WIDE) {
             OBJ.dstZoom = 350;
          }
       } else {
@@ -306,13 +317,13 @@ void Objf026_588_Camera_TBD(Object *obj) {
          OBJ.dstCamRotY = GetBestViewOfTarget(target->z1.s.hi, target->x1.s.hi, 1);
          break;
       case 1:
-         OBJ.dstCamRotY = func_800C4150(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
+         OBJ.dstCamRotY = GetBestViewOfTargetPlus90(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
          break;
       case 2:
-         OBJ.dstCamRotY = func_800C3F50(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
+         OBJ.dstCamRotY = GetBestViewOfTargetMinus90(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
          break;
       case 3:
-         OBJ.dstCamRotY = func_800C3D50(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
+         OBJ.dstCamRotY = GetBestViewOfTargetPlus180(target->z1.s.hi, target->x1.s.hi, OBJ.todo_x44);
          break;
       }
 
@@ -328,7 +339,7 @@ void Objf026_588_Camera_TBD(Object *obj) {
       OBJ.timer = 35;
       OBJ.savedGeomOfsY = gGeomOffsetY;
       OBJ.geomOfsY = gGeomOffsetY;
-      if (obj->functionIndex == OBJF_CAMERA_TBD_588) {
+      if (obj->functionIndex == OBJF_FOCUS_CAMERA_WIDE) {
          OBJ.dstGeomOfsY = gGeomOffsetY;
       } else {
          OBJ.dstGeomOfsY = 150;
@@ -340,7 +351,7 @@ void Objf026_588_Camera_TBD(Object *obj) {
       if (--OBJ.timer != 0) {
          gCameraPos.vx += (-(target->x1.n >> 3) - gCameraPos.vx) >> 2;
          gCameraPos.vz += (-(target->z1.n >> 3) - gCameraPos.vz) >> 2;
-         if (obj->functionIndex == OBJF_CAMERA_TBD_588) {
+         if (obj->functionIndex == OBJF_FOCUS_CAMERA_WIDE) {
             gCameraPos.vy += (((target->y1.n + CV(0.5)) >> 3) - gCameraPos.vy) >> 2;
          } else {
             gCameraPos.vy += ((target->y1.n >> 3) - gCameraPos.vy) >> 2;

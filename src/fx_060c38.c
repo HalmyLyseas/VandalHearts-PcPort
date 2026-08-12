@@ -874,7 +874,7 @@ void Objf151_FireGem_FX1(Object *obj) {
       }
 
       obj_s0 = Obj_GetUnused();
-      obj_s0->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s0->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s0->d.objf026.target = targetSprite;
 
       obj->state++;
@@ -1001,7 +1001,7 @@ void Objf176_RainbowStroke_FX1(Object *obj) {
       obj->z1.n = obj_s0->z1.n;
 
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s1->d.objf026.target = obj_s0;
       obj_s1->d.objf026.type = 2;
       OBJ.cam = obj_s1;
@@ -1093,7 +1093,7 @@ void Objf177_HolyPressure_FX1(Object *obj) {
       p = (BVectorXZ *)gTargetCoords;
       obj_s2 = GetUnitSpriteAtPosition(p->z, p->x);
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s1->d.objf026.target = obj_s2;
       obj_s1->d.objf026.type = 2;
 
@@ -1508,7 +1508,7 @@ void Objf181_Spellbind_FX1(Object *obj) {
       obj->z1.n = targetSprite->z1.n;
 
       obj_v1 = Obj_GetUnused();
-      obj_v1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_v1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_v1->d.objf026.target = targetSprite;
 
       obj->state++;
@@ -1936,7 +1936,7 @@ void Objf182_SpikedBallToss_Unused(Object *obj) {
    case 0:
       unitSprite = GetUnitSpriteAtPosition(gTargetZ, gTargetX);
       obj_s0 = Obj_GetUnused();
-      obj_s0->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s0->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s0->d.objf026.target = unitSprite;
       obj_s0->d.objf026.type = 2;
       OBJ.cam = obj_s0;
@@ -1961,7 +1961,7 @@ void Objf182_SpikedBallToss_Unused(Object *obj) {
       OBJ.theta += 0x20;
 
       obj_s0 = OBJ.cam;
-      if (obj_s0->functionIndex == OBJF_CAMERA_TBD_026) {
+      if (obj_s0->functionIndex == OBJF_FOCUS_CAMERA) {
          obj_s0->d.objf026.zoom = gCameraZoom.vz;
       }
 
@@ -1978,7 +1978,7 @@ void Objf182_SpikedBallToss_Unused(Object *obj) {
       }
 
       obj_s0 = OBJ.cam;
-      if (obj_s0->functionIndex == OBJF_CAMERA_TBD_026) {
+      if (obj_s0->functionIndex == OBJF_FOCUS_CAMERA) {
          obj_s0->d.objf026.zoom = gCameraZoom.vz;
       }
 
@@ -2131,7 +2131,7 @@ void Objf184_Avalanche_FX1(Object *obj) {
       OBJ.timer++;
       if (OBJ.timer == 80) {
          obj_a0 = Obj_GetUnused();
-         obj_a0->functionIndex = OBJF_CAMERA_TBD_026;
+         obj_a0->functionIndex = OBJF_FOCUS_CAMERA;
          obj_a0->d.objf026.target = boulder;
          obj_a0->d.objf026.type = 3;
          OBJ.cam = obj_a0;
@@ -2152,7 +2152,7 @@ void Objf184_Avalanche_FX1(Object *obj) {
 
          obj->state++;
          obj_a0 = OBJ.cam;
-         if (obj_a0->functionIndex == OBJF_CAMERA_TBD_026) {
+         if (obj_a0->functionIndex == OBJF_FOCUS_CAMERA) {
             obj_a0->functionIndex = OBJF_NULL;
          }
       }

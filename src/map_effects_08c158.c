@@ -17,7 +17,7 @@ void Objf346_ButtonDepress(Object *obj) {
    case 0:
       OBJ.dstCamRotY = GetBestViewOfTarget(obj->z1.s.hi, obj->x1.s.hi, 1);
       gCameraRotation.vy &= 0xfff;
-      OBJ.dstCamRotY = func_800A96A8(gCameraRotation.vy, DEG(135));
+      OBJ.dstCamRotY = ShortestTurnAngle(gCameraRotation.vy, DEG(135));
       obj->state2 = 48;
       obj->y1.n = GetTerrainElevation(obj->z1.s.hi, obj->x1.s.hi);
       PerformAudioCommand(AUDIO_CMD_PREPARE_XA(33));
@@ -103,7 +103,7 @@ void Objf347_Map26(Object *obj) {
    case 4:
       if (gState.mapState.s.field_0x0 == 3) {
          gCameraRotation.vy &= 0xfff;
-         OBJ.camera.posX = func_800A96A8(gCameraRotation.vy, OBJ.camera.posX);
+         OBJ.camera.posX = ShortestTurnAngle(gCameraRotation.vy, OBJ.camera.posX);
          obj->state3 = 32;
          obj->state++;
       }
@@ -166,7 +166,7 @@ void Objf352_Map29(Object *obj) {
    case 4:
       if (gState.mapState.s.field_0x0 == 3) {
          gCameraRotation.vy &= 0xfff;
-         OBJ.camera.posX = func_800A96A8(gCameraRotation.vy, OBJ.camera.posX);
+         OBJ.camera.posX = ShortestTurnAngle(gCameraRotation.vy, OBJ.camera.posX);
          obj->state3 = 32;
          obj->state++;
       }

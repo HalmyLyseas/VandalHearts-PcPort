@@ -126,7 +126,7 @@ void Objf122_DarkFire_FX1(Object *obj) {
       OBJ.target = target;
 
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s1->d.objf026.target = target;
 
       obj_s1 = Obj_GetUnused();
@@ -525,7 +525,7 @@ void Objf080_RomanFire_FX1(Object *obj) {
       OBJ.target = target;
 
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s1->d.objf026.target = target;
       obj_s1->d.objf026.type = 0;
       obj_s1->d.objf026.zoom = gCameraZoom.vz;
@@ -559,7 +559,7 @@ void Objf080_RomanFire_FX1(Object *obj) {
    case 3:
       if (obj->state2 == 1) {
          obj_s1 = OBJ.cam;
-         if (obj_s1->functionIndex == OBJF_CAMERA_TBD_026) {
+         if (obj_s1->functionIndex == OBJF_FOCUS_CAMERA) {
             obj_s1->functionIndex = OBJF_NULL;
             obj->state2 = 0;
          }
@@ -681,7 +681,7 @@ void Objf094_MoodRing_FX1(Object *obj) {
       unitSprite = GetUnitSpriteAtPosition(obj->z1.s.hi, obj->x1.s.hi);
 
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s1->d.objf026.target = unitSprite;
       obj_s1->d.objf026.type = 0;
       obj_s1->d.objf026.zoom = 0x200;
@@ -754,7 +754,7 @@ void MoodRing_RenderRing(Object *obj, s16 halfSize, s16 theta, s16 clut) {
    }
 
    a = abs(halfSize) * 362 >> 8;
-   func_800A9E78(&vector, a, theta, DEG(45));
+   SphericalToVector(&vector, a, theta, DEG(45));
 
    bottom = Obj_GetUnused();
    bottom->functionIndex = OBJF_NOOP;
@@ -964,7 +964,7 @@ void Objf090_DaggerStorm_FX2(Object *obj) {
             dagger->d.objf091.todo_x24 = a;
             dagger->d.objf091.todo_x26 = b;
             dagger->d.objf091.todo_x28 = c;
-            func_800A9E78(&svector, OBJ.todo_x28, OBJ.todo_x24, OBJ.todo_x26);
+            SphericalToVector(&svector, OBJ.todo_x28, OBJ.todo_x24, OBJ.todo_x26);
             dagger->x1.n = obj->x1.n + svector.vx;
             dagger->y1.n = obj->y1.n + svector.vy;
             dagger->z1.n = obj->z1.n + svector.vz;
@@ -989,15 +989,15 @@ void Objf090_DaggerStorm_FX2(Object *obj) {
             dagger->d.objf091.positions[1].y = 0;
             dagger->d.objf091.positions[1].x = 0;
             dagger->d.objf091.positions[1].z = 0;
-            func_800A9E78(&svector, OBJ.todo_x28, OBJ.todo_x24, OBJ.todo_x26 + 0x40);
+            SphericalToVector(&svector, OBJ.todo_x28, OBJ.todo_x24, OBJ.todo_x26 + 0x40);
             dagger->d.objf091.positions[3].y = obj->y1.n + svector.vy - dagger->y1.n;
             dagger->d.objf091.positions[3].x = obj->x1.n + svector.vx - dagger->x1.n;
             dagger->d.objf091.positions[3].z = obj->z1.n + svector.vz - dagger->z1.n;
-            func_800A9E78(&svector, OBJ.todo_x28 + 0xa0, OBJ.todo_x24, OBJ.todo_x26);
+            SphericalToVector(&svector, OBJ.todo_x28 + 0xa0, OBJ.todo_x24, OBJ.todo_x26);
             dagger->d.objf091.positions[0].y = obj->y1.n + svector.vy - dagger->y1.n;
             dagger->d.objf091.positions[0].x = obj->x1.n + svector.vx - dagger->x1.n;
             dagger->d.objf091.positions[0].z = obj->z1.n + svector.vz - dagger->z1.n;
-            func_800A9E78(&svector, OBJ.todo_x28 + 0xa0, OBJ.todo_x24, OBJ.todo_x26 + 0x40);
+            SphericalToVector(&svector, OBJ.todo_x28 + 0xa0, OBJ.todo_x24, OBJ.todo_x26 + 0x40);
             dagger->d.objf091.positions[2].y = obj->y1.n + svector.vy - dagger->y1.n;
             dagger->d.objf091.positions[2].x = obj->x1.n + svector.vx - dagger->x1.n;
             dagger->d.objf091.positions[2].z = obj->z1.n + svector.vz - dagger->z1.n;

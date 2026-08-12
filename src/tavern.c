@@ -1,3 +1,19 @@
+/* Tavern town location (SAKABA): gossip NPCs + one scripted scene per chapter.
+ * No unit/roster logic lives here.
+ *
+ * Entry: main.c STATE_TAVERN -> State_Tavern() picks the background by townState and
+ * spawns Objf576_Tavern, a per-chapter state machine indexed by gState.D_80140530
+ * (the tavern visit number 0..12): state2 0 opens the Talk/Leave menu, 1-3 run the
+ * gossip loop (choice -> Tavern_StartQueuedGossip -> Tavern_FinishGossip; needSpeak[]
+ * tracks which of the four NPCs still has news), and once all have spoken state2 4
+ * plays the chapter's scripted scene; leaving advances gState.townState -- the tavern
+ * visit is what moves the plot between battles.
+ *
+ * The first helpers (ShowTownMsgBoxDual/Solo, HideTownMsgBox, SetTownMsgBoxText,
+ * SetupTownMsgBox) are the SHARED town-dialogue window kit, also used by town.c and
+ * dojo.c: windows 0x41/0x42 = upper box, 0x43/0x44 = lower box, slid on/off screen
+ * rather than closed; SetTownMsgBoxText's layout arg selects MsgBox type 3..6 (upper /
+ * lower / centered solo / upper-alt). Tavern_* helpers are local to this file. */
 #include "common.h"
 #include "state.h"
 #include "units.h"
@@ -77,7 +93,7 @@ void State_Tavern(void) {
    }
 }
 
-void func_8004404C(u8 lower) {
+void ShowTownMsgBoxDual(u8 lower) {
    if (lower == 0) {
       if (gState.primary != STATE_7) {
          SlideWindowTo(0x41, 4, 10);
@@ -92,7 +108,7 @@ void func_8004404C(u8 lower) {
    }
 }
 
-void func_800440DC(u8 lower) {
+void ShowTownMsgBoxSolo(u8 lower) {
    if (lower == 0) {
       SlideWindowTo(0x41, 4, 75);
       SlideWindowTo(0x42, 252, 75);
@@ -102,7 +118,7 @@ void func_800440DC(u8 lower) {
    }
 }
 
-void func_80044134(u8 lower) {
+void HideTownMsgBox(u8 lower) {
    if (lower == 0) {
       SlideWindowTo(0x41, 4, -90);
       SlideWindowTo(0x42, 252, -90);
@@ -175,13 +191,13 @@ void SetupTownMsgBox(s16 portraitId, u8 lower) {
    obj1->d.objf413.anchor = obj2;
 }
 
-void func_80044364(s16 textPtrIdx, s8 param_2) {
+void SetTownMsgBoxText(s16 textPtrIdx, s8 param_2) {
    gState.msgBoxFinished = 0;
-   gState.field_0x31d = 0;
+   gState.msgBoxPagePaused = 0;
    MsgBox_SetText(param_2 + 3, textPtrIdx, 0x80);
 }
 
-void func_800443A8(void) {
+void Tavern_OpenMenu(void) {
    DrawWindow(0x38, 0, 200, 104, 54, 366, 93, WBS_CROSSED, 2);
    DrawText(12, 211, 20, 3, 0, "#79\n#80");
    DisplayBasicWindow(0x38);
@@ -189,28 +205,28 @@ void func_800443A8(void) {
    gWindowActiveIdx = 0x38;
 }
 
-void func_80044440(void) {
+void Tavern_ReopenMenu(void) {
    SlideWindowTo(0x38, 116, 93);
    gWindowActiveIdx = 0x38;
 }
 
-void func_80044474(void) {
+void Tavern_HideMenus(void) {
    SlideWindowTo(0x38, -180, 20);
    SlideWindowTo(0x39, 124, 266);
 }
 
-void func_800444AC(Object *tavernObj) {
+void Tavern_FinishGossip(Object *tavernObj) {
    if (gState.msgBoxFinished) {
-      func_80044134(0);
+      HideTownMsgBox(0);
       SlideWindowTo(0x38, 116, 93);
       gWindowActiveIdx = 0x38;
       tavernObj->state2 = 1;
    }
 }
 
-void func_8004450C(Object *tavernObj) {
+void Tavern_StartQueuedGossip(Object *tavernObj) {
    if (--tavernObj->d.objf576.timer == 0) {
-      func_80044364(tavernObj->d.objf576.textPtrIdx, 2);
+      SetTownMsgBoxText(tavernObj->d.objf576.textPtrIdx, 2);
       tavernObj->state3++;
    }
 }
@@ -261,7 +277,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
 
             for (i = 0; i < 4; i++) {
                OBJ.needSpeak[i] = 1;
@@ -290,8 +306,8 @@ s32 Objf576_Tavern(Object *obj) {
                   obj->state2 = 4;
                   obj->state3 = 0;
                } else {
-                  func_80044474();
-                  func_800440DC(0);
+                  Tavern_HideMenus();
+                  ShowTownMsgBoxSolo(0);
                   SetupTownMsgBox(PORTRAIT_DIEGO, 0);
                   OBJ.textPtrIdx = 4;
                   gWindowActiveIdx = 0;
@@ -303,37 +319,37 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_590, 0);
                OBJ.needSpeak[0] = 0;
                OBJ.textPtrIdx = 0;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_591, 0);
                OBJ.needSpeak[1] = 0;
                OBJ.textPtrIdx = 1;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_592, 0);
                OBJ.needSpeak[2] = 0;
                OBJ.textPtrIdx = 2;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_593, 0);
                OBJ.needSpeak[3] = 0;
                OBJ.textPtrIdx = 3;
@@ -345,10 +361,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -358,8 +374,8 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_595, 0);
                obj->state3++;
                break;
@@ -370,17 +386,17 @@ s32 Objf576_Tavern(Object *obj) {
                   LoadSeqSet(0x10);
                   FinishLoadingSeq();
                   PerformAudioCommand(AUDIO_CMD_PLAY_SEQ(29));
-                  func_80044364(5, 2);
+                  SetTownMsgBoxText(5, 2);
                   obj->state3++;
                }
                break;
 
             case 2:
                if (gState.msgBoxFinished) {
-                  func_8004404C(0);
-                  func_8004404C(1);
+                  ShowTownMsgBoxDual(0);
+                  ShowTownMsgBoxDual(1);
                   SetupTownMsgBox(PORTRAIT_ASH_ANGRY, 1);
-                  func_80044364(6, 1);
+                  SetTownMsgBoxText(6, 1);
                   obj->state3++;
                }
                break;
@@ -388,14 +404,14 @@ s32 Objf576_Tavern(Object *obj) {
             case 3:
                if (gState.msgBoxFinished) {
                   SetupTownMsgBox(PORTRAIT_CLINT, 1);
-                  func_80044364(7, 1);
+                  SetTownMsgBoxText(7, 1);
                   obj->state3++;
                }
                break;
 
             case 4:
                if (gState.msgBoxFinished) {
-                  func_80044364(8, 3);
+                  SetTownMsgBoxText(8, 3);
                   obj->state3++;
                }
                break;
@@ -403,14 +419,14 @@ s32 Objf576_Tavern(Object *obj) {
             case 5:
                if (gState.msgBoxFinished) {
                   SetupTownMsgBox(PORTRAIT_DIEGO, 1);
-                  func_80044364(9, 1);
+                  SetTownMsgBoxText(9, 1);
                   obj->state3++;
                }
                break;
 
             case 6:
                if (gState.msgBoxFinished) {
-                  func_80044364(10, 0);
+                  SetTownMsgBoxText(10, 0);
                   obj->state3++;
                }
                break;
@@ -418,7 +434,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 7:
                if (gState.msgBoxFinished) {
                   SetupTownMsgBox(PORTRAIT_CLINT_UPSET, 1);
-                  func_80044364(0xb, 1);
+                  SetTownMsgBoxText(0xb, 1);
                   obj->state3++;
                }
                break;
@@ -426,7 +442,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 8:
                if (gState.msgBoxFinished) {
                   SetupTownMsgBox(PORTRAIT_ASH, 1);
-                  func_80044364(0xc, 1);
+                  SetTownMsgBoxText(0xc, 1);
                   obj->state3++;
                }
                break;
@@ -448,7 +464,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -472,34 +488,34 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_590, 0);
                OBJ.textPtrIdx = 0xd;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_596, 0);
                OBJ.textPtrIdx = 0xe;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_597, 0);
                OBJ.textPtrIdx = 0xf;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_598, 0);
                OBJ.textPtrIdx = 0x10;
                obj->state2++;
@@ -510,10 +526,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -526,7 +542,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
 
             for (i = 0; i < 3; i++) {
                OBJ.needSpeak[i] = 1;
@@ -555,8 +571,8 @@ s32 Objf576_Tavern(Object *obj) {
                   obj->state2 = 4;
                   obj->state3 = 0;
                } else {
-                  func_80044474();
-                  func_800440DC(0);
+                  Tavern_HideMenus();
+                  ShowTownMsgBoxSolo(0);
                   SetupTownMsgBox(PORTRAIT_CLINT, 0);
                   OBJ.textPtrIdx = 0x14;
                   gWindowActiveIdx = 0;
@@ -568,29 +584,29 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_599, 0);
                OBJ.needSpeak[0] = 0;
                OBJ.textPtrIdx = 0x11;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_600, 0);
                OBJ.needSpeak[1] = 0;
                OBJ.textPtrIdx = 0x12;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_601, 0);
                OBJ.needSpeak[2] = 0;
                OBJ.textPtrIdx = 0x13;
@@ -602,10 +618,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -615,39 +631,39 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_599, 0);
                obj->state3++;
                break;
 
             case 1:
                if (--OBJ.timer == 0) {
-                  func_80044364(0x15, 2);
+                  SetTownMsgBoxText(0x15, 2);
                   obj->state3++;
                }
                break;
 
             case 2:
                if (gState.msgBoxFinished) {
-                  func_8004404C(0);
-                  func_8004404C(1);
+                  ShowTownMsgBoxDual(0);
+                  ShowTownMsgBoxDual(1);
                   SetupTownMsgBox(PORTRAIT_ASH, 1);
-                  func_80044364(0x16, 1);
+                  SetTownMsgBoxText(0x16, 1);
                   obj->state3++;
                }
                break;
 
             case 3:
                if (gState.msgBoxFinished) {
-                  func_80044364(0x17, 0);
+                  SetTownMsgBoxText(0x17, 0);
                   obj->state3++;
                }
                break;
 
             case 4:
                if (gState.msgBoxFinished) {
-                  func_80044364(0x18, 1);
+                  SetTownMsgBoxText(0x18, 1);
                   obj->state3++;
                }
                break;
@@ -669,7 +685,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -693,34 +709,34 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_599, 0);
                OBJ.textPtrIdx = 0x19;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_602, 0);
                OBJ.textPtrIdx = 0x1a;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_601, 0);
                OBJ.textPtrIdx = 0x1b;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_687, 0);
                OBJ.textPtrIdx = 0x3d;
                obj->state2++;
@@ -736,10 +752,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -750,7 +766,7 @@ s32 Objf576_Tavern(Object *obj) {
             switch (obj->state3) {
             case 0:
                if (--OBJ.timer == 0) {
-                  func_80044364(0x3b, 2);
+                  SetTownMsgBoxText(0x3b, 2);
                   obj->state3++;
                }
                break;
@@ -768,7 +784,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 2:
                if (PressedCircleOrX()) {
                   CloseWindow(0x3c);
-                  func_80044134(0);
+                  HideTownMsgBox(0);
                   SlideWindowTo(0x38, 116, 93);
                   gWindowActiveIdx = 0x38;
                   obj->state2 = 1;
@@ -785,7 +801,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -809,34 +825,34 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_605, 0);
                OBJ.textPtrIdx = 0x1c;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_607, 0);
                OBJ.textPtrIdx = 0x1d;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_606, 0);
                OBJ.textPtrIdx = 0x1e;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                OBJ.textPtrIdx = 0x41;
                obj->state2++;
 
@@ -857,10 +873,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -871,7 +887,7 @@ s32 Objf576_Tavern(Object *obj) {
             switch (obj->state3) {
             case 0:
                if (--OBJ.timer == 0) {
-                  func_80044364(0x3f, 2);
+                  SetTownMsgBoxText(0x3f, 2);
                   obj->state3++;
                }
                break;
@@ -889,7 +905,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 2:
                if (PressedCircleOrX()) {
                   CloseWindow(0x3c);
-                  func_80044134(0);
+                  HideTownMsgBox(0);
                   SlideWindowTo(0x38, 116, 93);
                   gWindowActiveIdx = 0x38;
                   obj->state2 = 1;
@@ -906,7 +922,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
 
             for (i = 0; i < 4; i++) {
                OBJ.needSpeak[i] = 1;
@@ -935,8 +951,8 @@ s32 Objf576_Tavern(Object *obj) {
                   obj->state = 99;
                   obj->state2 = 0;
                } else {
-                  func_80044474();
-                  func_800440DC(0);
+                  Tavern_HideMenus();
+                  ShowTownMsgBoxSolo(0);
                   SetupTownMsgBox(PORTRAIT_ASH, 0);
                   OBJ.textPtrIdx = 0x25;
                   gWindowActiveIdx = 0;
@@ -948,8 +964,8 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
@@ -958,24 +974,24 @@ s32 Objf576_Tavern(Object *obj) {
                obj->state3 = 0;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_610, 0);
                OBJ.needSpeak[1] = 0;
                OBJ.textPtrIdx = 0x22;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_611, 0);
                OBJ.needSpeak[2] = 0;
                OBJ.textPtrIdx = 0x23;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_612, 0);
                OBJ.needSpeak[3] = 0;
                OBJ.textPtrIdx = 0x24;
@@ -987,10 +1003,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1000,40 +1016,40 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_609, 0);
                obj->state3++;
                break;
 
             case 1:
                if (--OBJ.timer == 0) {
-                  func_80044364(0x1f, 2);
+                  SetTownMsgBoxText(0x1f, 2);
                   obj->state3++;
                }
                break;
 
             case 2:
                if (gState.msgBoxFinished) {
-                  func_8004404C(0);
-                  func_8004404C(1);
+                  ShowTownMsgBoxDual(0);
+                  ShowTownMsgBoxDual(1);
                   SetupTownMsgBox(PORTRAIT_ASH, 1);
-                  func_80044364(0x20, 1);
+                  SetTownMsgBoxText(0x20, 1);
                   obj->state3++;
                }
                break;
 
             case 3:
                if (gState.msgBoxFinished) {
-                  func_80044364(0x21, 0);
+                  SetTownMsgBoxText(0x21, 0);
                   obj->state3++;
                }
                break;
 
             case 4:
                if (gState.msgBoxFinished) {
-                  func_80044134(0);
-                  func_80044134(1);
+                  HideTownMsgBox(0);
+                  HideTownMsgBox(1);
                   SlideWindowTo(0x38, 116, 93);
                   gWindowActiveIdx = 0x38;
                   obj->state2 = 1;
@@ -1050,7 +1066,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1074,27 +1090,27 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_614, 0);
                OBJ.textPtrIdx = 0x26;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_615, 0);
                OBJ.textPtrIdx = 0x27;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_616, 0);
                OBJ.textPtrIdx = 0x28;
                obj->state2++;
@@ -1105,10 +1121,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1121,7 +1137,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1145,27 +1161,27 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_618, 0);
                OBJ.textPtrIdx = 0x29;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_619, 0);
                OBJ.textPtrIdx = 0x2a;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_620, 0);
                OBJ.textPtrIdx = 0x2b;
                obj->state2++;
@@ -1176,10 +1192,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1192,7 +1208,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1216,34 +1232,34 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_622, 0);
                OBJ.textPtrIdx = 0x2c;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_623, 0);
                OBJ.textPtrIdx = 0x2d;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_624, 0);
                OBJ.textPtrIdx = 0x2e;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_689, 0);
                OBJ.textPtrIdx = 0x45;
                obj->state2++;
@@ -1263,10 +1279,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1277,7 +1293,7 @@ s32 Objf576_Tavern(Object *obj) {
             switch (obj->state3) {
             case 0:
                if (--OBJ.timer == 0) {
-                  func_80044364(0x43, 2);
+                  SetTownMsgBoxText(0x43, 2);
                   obj->state3++;
                }
                break;
@@ -1295,7 +1311,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 2:
                if (PressedCircleOrX()) {
                   CloseWindow(0x3c);
-                  func_80044134(0);
+                  HideTownMsgBox(0);
                   SlideWindowTo(0x38, 116, 93);
                   gWindowActiveIdx = 0x38;
                   obj->state2 = 1;
@@ -1312,7 +1328,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1336,27 +1352,27 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_626, 0);
                OBJ.textPtrIdx = 0x2f;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_627, 0);
                OBJ.textPtrIdx = 0x30;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_628, 0);
                OBJ.textPtrIdx = 0x31;
                obj->state2++;
@@ -1367,10 +1383,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1383,7 +1399,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1407,27 +1423,27 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_630, 0);
                OBJ.textPtrIdx = 0x32;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_631, 0);
                OBJ.textPtrIdx = 0x33;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_632, 0);
                OBJ.textPtrIdx = 0x34;
                obj->state2++;
@@ -1438,10 +1454,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1454,7 +1470,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1478,34 +1494,34 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_630, 0);
                OBJ.textPtrIdx = 0x35;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_633, 0);
                OBJ.textPtrIdx = 0x36;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_634, 0);
                OBJ.textPtrIdx = 0x37;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_690, 0);
                OBJ.textPtrIdx = 0x46;
                obj->state2++;
@@ -1516,10 +1532,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1532,7 +1548,7 @@ s32 Objf576_Tavern(Object *obj) {
 
          switch (obj->state2) {
          case 0:
-            func_800443A8();
+            Tavern_OpenMenu();
             obj->state2++;
             break;
 
@@ -1556,34 +1572,34 @@ s32 Objf576_Tavern(Object *obj) {
          case 2:
             OBJ.timer = 30;
             if (gWindowChoice.raw == 0x39ff || gWindowChoice.raw == 0x3905) {
-               func_80044474();
-               func_80044440();
+               Tavern_HideMenus();
+               Tavern_ReopenMenu();
                obj->state2--;
             }
             if (gWindowChoice.raw == 0x3901) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_635, 0);
                OBJ.textPtrIdx = 0x38;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3902) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_636, 0);
                OBJ.textPtrIdx = 0x39;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3903) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_637, 0);
                OBJ.textPtrIdx = 0x3a;
                obj->state2++;
             }
             if (gWindowChoice.raw == 0x3904) {
-               func_80044474();
-               func_800440DC(0);
+               Tavern_HideMenus();
+               ShowTownMsgBoxSolo(0);
                SetupTownMsgBox(PORTRAIT_639, 0);
                OBJ.textPtrIdx = 0x4a;
                obj->state2++;
@@ -1604,10 +1620,10 @@ s32 Objf576_Tavern(Object *obj) {
 
             switch (obj->state3) {
             case 0:
-               func_8004450C(obj);
+               Tavern_StartQueuedGossip(obj);
                break;
             case 1:
-               func_800444AC(obj);
+               Tavern_FinishGossip(obj);
                break;
             }
 
@@ -1618,7 +1634,7 @@ s32 Objf576_Tavern(Object *obj) {
             switch (obj->state3) {
             case 0:
                if (--OBJ.timer == 0) {
-                  func_80044364(0x48, 2);
+                  SetTownMsgBoxText(0x48, 2);
                   obj->state3++;
                }
                break;
@@ -1636,7 +1652,7 @@ s32 Objf576_Tavern(Object *obj) {
             case 2:
                if (PressedCircleOrX()) {
                   CloseWindow(0x3c);
-                  func_80044134(0);
+                  HideTownMsgBox(0);
                   SlideWindowTo(0x38, 116, 93);
                   gWindowActiveIdx = 0x38;
                   obj->state2 = 1;

@@ -8,7 +8,7 @@
 #include "audio.h"
 
 //...
-void func_800985F0(Object *obj);
+void SnapCameraLookAt(Object *obj);
 //...
 
 // The tile models so far are just boxes; that should be ok to embed, but anything more complex
@@ -930,13 +930,13 @@ void Objf089_Map15_Scn17_Cinematic(Object *obj) {
          obj->state2++;
          break;
       case 1:
-         func_800985F0(obj);
+         SnapCameraLookAt(obj);
          if (++obj->state3 >= 48) {
             obj->state2++;
          }
          break;
       case 2:
-         func_800985F0(obj);
+         SnapCameraLookAt(obj);
          break;
       }
 
@@ -1444,7 +1444,7 @@ void Objf755_Map15_PirateStandIn(void) {
    // Spawned by EVDATA17.DAT as stand-ins for pirate sprites
 }
 
-void func_800985F0(Object *obj) {
+void SnapCameraLookAt(Object *obj) {
    s32 dx, dy, dz;
    s32 dist;
    s16 zoom;
@@ -1462,7 +1462,7 @@ void func_800985F0(Object *obj) {
    gCameraZoom.vz = zoom;
 }
 
-void func_800986F0(Object *obj) {
+void EaseCameraLookAt(Object *obj) {
    s32 dx, dy, dz;
    s32 dist;
    s16 zoom;

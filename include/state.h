@@ -145,7 +145,7 @@ typedef struct State {
    s16 eventCameraHeight;
    struct Object *focus;
    u8 msgBoxFinished;
-   u8 field_0x31d;
+   u8 msgBoxPagePaused;
    u8 field_0x31e;
    u8 field_0x31f;
    s8 **currentTextPointers;

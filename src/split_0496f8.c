@@ -26,7 +26,7 @@ void PopulateUnitSpellList(UnitStatus *);
 void SetupPartyBattleUnit(u8, u8, u8, u8);
 void SyncPartyUnit(u8);
 void Objf424_BattleEnder(Object *);
-void func_8005AA7C(void);
+void LoadSceneUnitRoster(void);
 void SetupBattleUnit(s16, u8, u8, s8, u8, u8, u8, u8, u8);
 void CreateBattleUnitForUnit(UnitStatus *);
 void SetupBattleUnits(void);
@@ -816,7 +816,7 @@ void Objf424_BattleEnder(Object *obj) {
    }
 }
 
-void func_8005AA7C(void) {
+void LoadSceneUnitRoster(void) {
    s32 i;
 
    for (i = 0; i < ARRAY_COUNT(gSpriteStripUnitIds); i++) {

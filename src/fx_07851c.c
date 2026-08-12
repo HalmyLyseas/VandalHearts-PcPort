@@ -1594,7 +1594,7 @@ void Objf339_349_Rubble(Object *obj) {
          }
          rnd2 = 0x100 + (0x20 * rsin(rand() % DEG(360)) >> 12);
          rnd3 = 0x180 + (0x80 * rsin(rand() % DEG(360)) >> 12);
-         func_800A9E78(&vector, rnd2, rnd3, rnd1);
+         SphericalToVector(&vector, rnd2, rnd3, rnd1);
          obj->x2.n = obj->x1.n + vector.vx;
          obj->z2.n = obj->z1.n + vector.vz;
          obj->y2.n = obj->y1.n + vector.vy;
@@ -1619,7 +1619,7 @@ void Objf339_349_Rubble(Object *obj) {
          }
          rnd2 = 0x20 + (0x20 * rsin(rand() % DEG(360)) >> 12);
          rnd3 = 0x300 + (0x80 * rsin(rand() % DEG(360)) >> 12);
-         func_800A9E78(&vector, rnd2, rnd3, rnd1);
+         SphericalToVector(&vector, rnd2, rnd3, rnd1);
          obj->x2.n = obj->x1.n + vector.vx;
          obj->z2.n = obj->z1.n + vector.vz;
          obj->y2.n = obj->y1.n + vector.vy;
@@ -2143,7 +2143,7 @@ void Objf385_RevealMimic(Object *obj) {
    case 1:
       for (i = 0; i < 3; i++) {
          smoke = CreatePositionedObj(obj, OBJF_SMOKE);
-         func_800A9E78(&vector, rand() % obj->state2 + obj->state2, rand() % DEG(45),
+         SphericalToVector(&vector, rand() % obj->state2 + obj->state2, rand() % DEG(45),
                        rand() % DEG(360));
          smoke->x2.n = vector.vx;
          smoke->z2.n = vector.vz;

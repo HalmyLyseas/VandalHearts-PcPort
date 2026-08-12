@@ -123,7 +123,7 @@ void Objf652_Map35_Button(Object *obj) {
          obj->z1.n = CV(8.0);
          obj->y1.n = CV(3.5);
          obj_s0 = Obj_GetUnused();
-         obj_s0->functionIndex = OBJF_CAMERA_TBD_026;
+         obj_s0->functionIndex = OBJF_FOCUS_CAMERA;
          obj_s0->d.objf026.target = obj;
          obj_s0->d.objf026.zoom = 512;
          obj->state3 = 0;

@@ -247,9 +247,11 @@ s32 PressedCircleOrX_2(void) {
    }
 }
 
-s32 func_80037C28(void) {
-   if (gState.field_0x31d != 0) {
-      gState.field_0x31d = 0;
+/* Test-and-clear of gState.msgBoxPagePaused, which text.c raises when the message box
+ * fills a page or finishes -- the dojo/town/tavern state machines advance on it. */
+s32 ConsumeMsgBoxPagePause(void) {
+   if (gState.msgBoxPagePaused != 0) {
+      gState.msgBoxPagePaused = 0;
       return 1;
    } else {
       return 0;

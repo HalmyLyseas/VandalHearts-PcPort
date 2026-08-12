@@ -1,7 +1,7 @@
 /* Shared FX helpers + event-scene special effects (segment 0x9a268).
  *
  * The first ~260 lines are a toolbox used across the fx_* / map_effects_* units: object
- * spawn and unit-snap helpers (SnapToUnit, CreatePositionedObj, func_800A9E78), tree-wide
+ * spawn and unit-snap helpers (SnapToUnit, CreatePositionedObj, SphericalToVector), tree-wide
  * render primitives (RenderMaskEffect, RenderSphere, RenderLightningBolt), the camera-zoom
  * service object (Objf277_Zoom, spawned on every map by SetupMapExtras; its set/stop API
  * SetCameraZoomTarget_Unused/StopCameraZoom_Unused is dead in retail), the screen dim/undim
@@ -116,7 +116,7 @@ Object *SnapToUnit(Object *obj) {
    return unitSprite;
 }
 
-SVECTOR *func_800A9E78(SVECTOR *vec, s32 param_2, s32 theta1, s32 theta2) {
+SVECTOR *SphericalToVector(SVECTOR *vec, s32 param_2, s32 theta1, s32 theta2) {
    s32 r;
    SVECTOR local_20;
 
@@ -362,10 +362,10 @@ void Objf393_Map44_Scn00_ExplosionRays(Object *obj) {
       ct = obj->state3 / 16 + 8;
 
       for (i = 0; i < ct; i++) {
-         func_800A9E78(&local_58, tmp_0x80, theta1 + DEG(2.8125), theta2);
-         func_800A9E78(&local_50, tmp_0x80, theta1, theta2);
-         func_800A9E78(&local_48, tmp_0x800, theta1 + DEG(2.8125), theta2);
-         func_800A9E78(&local_40, tmp_0x800, theta1, theta2);
+         SphericalToVector(&local_58, tmp_0x80, theta1 + DEG(2.8125), theta2);
+         SphericalToVector(&local_50, tmp_0x80, theta1, theta2);
+         SphericalToVector(&local_48, tmp_0x800, theta1 + DEG(2.8125), theta2);
+         SphericalToVector(&local_40, tmp_0x800, theta1, theta2);
 
          sprite->d.sprite.coords[0].x = obj->x1.n + local_58.vx;
          sprite->d.sprite.coords[0].z = obj->z1.n + local_58.vz;
@@ -868,7 +868,7 @@ void Objf099_StreakParticle(Object *obj) {
 
    // fallthrough
    case 1:
-      func_800A9E78(&svec, OBJ.todo_x28, OBJ.theta1, OBJ.theta2);
+      SphericalToVector(&svec, OBJ.todo_x28, OBJ.theta1, OBJ.theta2);
       obj->x1.n += svec.vx;
       obj->z1.n += svec.vz;
       obj->y1.n += svec.vy;
@@ -2184,7 +2184,7 @@ void Objf698_Map61_Scn83_EleniSparkleRings(Object *obj) {
       }
 
       for (i = 0; i < 16; i++) {
-         func_800A9E78(&svector, iVar6, iVar3 * rsin(theta) >> 12, theta);
+         SphericalToVector(&svector, iVar6, iVar3 * rsin(theta) >> 12, theta);
          sparkleSprite->d.sprite.clut = CLUT_REDS;
          sparkleSprite->x1.n = obj->x1.n + svector.vx;
          sparkleSprite->z1.n = obj->z1.n + svector.vz;
@@ -2206,7 +2206,7 @@ void Objf698_Map61_Scn83_EleniSparkleRings(Object *obj) {
          }
          AddObjPrim6(gGraphicsPtr->ot, sparkleSprite, 0);
 
-         func_800A9E78(&svector, iVar6, -(iVar3 * rsin(theta) >> 12), theta);
+         SphericalToVector(&svector, iVar6, -(iVar3 * rsin(theta) >> 12), theta);
          sparkleSprite->d.sprite.clut = CLUT_BLUES;
          sparkleSprite->x1.n = obj->x1.n + svector.vx;
          sparkleSprite->z1.n = obj->z1.n + svector.vz;

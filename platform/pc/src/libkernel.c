@@ -218,7 +218,7 @@ static struct timespec s_rcntStart[2];
  *    branch-dependent per visit -- approximating it as case-boundary-cost
  *    undercounts when the expensive branch is taken, but avoids a worse
  *    guess. Revisit if validation shows this cycle-type is still off.
- *  - Objf401 (ai.c:639): 41 (ClearGrid) + 816 (func_8002CF88, its actual
+ *  - Objf401 (ai.c:639): 41 (ClearGrid) + 816 (AccumulateProximityGrid, its actual
  *    measured size -- much larger than the other helpers) + ~10 call
  *    overhead = 867. Fires only for team-differing units, bounded by
  *    UNIT_CT (~40), so the "how many skipped" variance is small in

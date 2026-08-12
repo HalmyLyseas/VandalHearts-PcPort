@@ -1640,7 +1640,7 @@ s32 GetBestViewOfTarget(s8 z, s8 x, s32 param_3) {
       dir = DIR_NORTH;
    }
 
-   obstructionCt = func_800C4350(z, x, cameraAngle, dir, param_3);
+   obstructionCt = CountViewObstructions(z, x, cameraAngle, dir, param_3);
    bestObstructionCt = obstructionCt;
 
    if (obstructionCt == 0) {
@@ -1649,21 +1649,21 @@ s32 GetBestViewOfTarget(s8 z, s8 x, s32 param_3) {
       bestAngle = cameraAngle;
 
       angleToCheck = (cameraAngle + DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle - DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle + DEG(180)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
@@ -1675,7 +1675,10 @@ s32 GetBestViewOfTarget(s8 z, s8 x, s32 param_3) {
    return result + DEG(45);
 }
 
-s32 func_800C3D50(s8 z, s8 x, s32 param_3) {
+/* GetBestViewOfTarget variant starting the obstruction search from the OPPOSITE yaw
+ * (camera + 180deg); the battle camera (battle_011604.c) picks among the three offset
+ * variants for shot variety. */
+s32 GetBestViewOfTargetPlus180(s8 z, s8 x, s32 param_3) {
    s16 angleToCheck;
    s16 cameraAngle;
    s16 obstructionCt;
@@ -1699,7 +1702,7 @@ s32 func_800C3D50(s8 z, s8 x, s32 param_3) {
       dir = DIR_NORTH;
    }
 
-   obstructionCt = func_800C4350(z, x, cameraAngle, dir, param_3);
+   obstructionCt = CountViewObstructions(z, x, cameraAngle, dir, param_3);
    bestObstructionCt = obstructionCt;
 
    if (obstructionCt == 0) {
@@ -1708,21 +1711,21 @@ s32 func_800C3D50(s8 z, s8 x, s32 param_3) {
       bestAngle = cameraAngle;
 
       angleToCheck = (cameraAngle + DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle - DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle + DEG(180)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
@@ -1734,7 +1737,7 @@ s32 func_800C3D50(s8 z, s8 x, s32 param_3) {
    return result + DEG(45);
 }
 
-s32 func_800C3F50(s8 z, s8 x, s32 param_3) {
+s32 GetBestViewOfTargetMinus90(s8 z, s8 x, s32 param_3) {
    s16 angleToCheck;
    s16 cameraAngle;
    s16 obstructionCt;
@@ -1758,7 +1761,7 @@ s32 func_800C3F50(s8 z, s8 x, s32 param_3) {
       dir = DIR_NORTH;
    }
 
-   obstructionCt = func_800C4350(z, x, cameraAngle, dir, param_3);
+   obstructionCt = CountViewObstructions(z, x, cameraAngle, dir, param_3);
    bestObstructionCt = obstructionCt;
 
    if (obstructionCt == 0) {
@@ -1767,21 +1770,21 @@ s32 func_800C3F50(s8 z, s8 x, s32 param_3) {
       bestAngle = cameraAngle;
 
       angleToCheck = (cameraAngle + DEG(180)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle - DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle + DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
@@ -1793,7 +1796,7 @@ s32 func_800C3F50(s8 z, s8 x, s32 param_3) {
    return result + DEG(45);
 }
 
-s32 func_800C4150(s8 z, s8 x, s32 param_3) {
+s32 GetBestViewOfTargetPlus90(s8 z, s8 x, s32 param_3) {
    s16 angleToCheck;
    s16 cameraAngle;
    s16 obstructionCt;
@@ -1817,7 +1820,7 @@ s32 func_800C4150(s8 z, s8 x, s32 param_3) {
       dir = DIR_NORTH;
    }
 
-   obstructionCt = func_800C4350(z, x, cameraAngle, dir, param_3);
+   obstructionCt = CountViewObstructions(z, x, cameraAngle, dir, param_3);
    bestObstructionCt = obstructionCt;
 
    if (obstructionCt == 0) {
@@ -1826,21 +1829,21 @@ s32 func_800C4150(s8 z, s8 x, s32 param_3) {
       bestAngle = cameraAngle;
 
       angleToCheck = (cameraAngle - DEG(180)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle + DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
       }
 
       angleToCheck = (cameraAngle - DEG(90)) & 0xfff;
-      obstructionCt = func_800C4350(z, x, angleToCheck, dir, param_3);
+      obstructionCt = CountViewObstructions(z, x, angleToCheck, dir, param_3);
       if (bestObstructionCt > obstructionCt) {
          bestAngle = angleToCheck;
          bestObstructionCt = obstructionCt;
@@ -1964,7 +1967,11 @@ static s8 D_80106E44[] = {
 static s8 *D_80106EBC[] = {D_801069F0, D_801068F8, D_80106A6C, D_80106974, D_80106BDC, D_80106AE4,
                            D_80106C58, D_80106B60, D_80106DC8, D_80106CD0, D_80106E44, D_80106D4C};
 
-s32 func_800C4350(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
+/* Counts map tiles that block the camera's view of tile (z,x) at the given yaw, walking
+ * an offset table selected by the elevation relation to the target and facing
+ * (D_80106EBC; D_80106894 is the alternate table when param_5 is set). Backs all four
+ * GetBestViewOfTarget* pickers. */
+s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
    s32 result;
    s16 angleDir;
    s8 x_t4, z_t3, y_t2;
@@ -2035,4 +2042,5 @@ s32 func_800C4350(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
    return result;
 }
 
+/* UNREFERENCED empty stub -- kept for byte/ordering exactness. */
 void Noop_800c4658(void) {}

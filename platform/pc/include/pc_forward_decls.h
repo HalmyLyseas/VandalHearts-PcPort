@@ -21,7 +21,7 @@
 #include "types.h"
 
 u32 *Movie_GetNextFrame(void);
-s32 func_800C4350(s8 z, s8 x, s32 angle, u8 dir, s32 param_5);
+s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5);
 
 /* Stage 2.3: Krom2RawAdd (BIOS B(51h), implemented in platform/pc/src/libkernel.c) returns a
  * POINTER to a glyph bitmap. src/text.c and src/window.c call it with no declaration in scope --

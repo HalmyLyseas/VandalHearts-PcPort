@@ -46,7 +46,7 @@ static FILE *s_camTraceFile = NULL;
 static s32 FindCameraObjIdx(s16 *outFuncIdx) {
     for (s32 i = 0; i < OBJ_DATA_CT; i++) {
         s16 f = gObjectArray[i].functionIndex;
-        if (f == OBJF_CAMERA_TBD_017 || f == OBJF_CAMERA_TBD_026 || f == OBJF_CAMERA_TBD_588) {
+        if (f == OBJF_ATTACK_CAMERA || f == OBJF_FOCUS_CAMERA || f == OBJF_FOCUS_CAMERA_WIDE) {
             *outFuncIdx = f;
             return i;
         }
@@ -269,7 +269,7 @@ static void LogCameraTraceRow(void) {
     if (camObjIdx >= 0) {
         Object *camObj = &gObjectArray[camObjIdx];
         camObjState = camObj->state;
-        struct Object *target = (camObjFuncIdx == OBJF_CAMERA_TBD_017)
+        struct Object *target = (camObjFuncIdx == OBJF_ATTACK_CAMERA)
                                      ? camObj->d.objf017.sprite
                                      : camObj->d.objf026.target;
         targetObjIdx = ObjPtrToIdx(target);

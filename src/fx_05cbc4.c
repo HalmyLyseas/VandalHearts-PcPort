@@ -488,7 +488,7 @@ void Objf156_DeltaMirage_FX1(Object *obj) {
       OBJ.todo_x24 = gCameraRotation.vy - 0x656;
 
       obj_v1 = Obj_GetUnused();
-      obj_v1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_v1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_v1->d.objf026.target = unitSprite;
 
       obj->state++;
@@ -662,7 +662,7 @@ void Objf158_Explosion_FX1(Object *obj) {
       unitSprite->d.sprite.hidden = 1;
 
       obj_s0 = Obj_GetUnused();
-      obj_s0->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s0->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s0->d.objf026.target = unitSprite;
       obj_s0->d.objf026.type = 3;
 

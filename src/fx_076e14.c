@@ -56,7 +56,7 @@ void Objf330_MagicRestoration_FX1(Object *obj) {
             obj->state2 = 0;
             obj->state++;
          } else {
-            cam = CreatePositionedObj(obj, OBJF_CAMERA_TBD_026);
+            cam = CreatePositionedObj(obj, OBJF_FOCUS_CAMERA);
             cam->d.objf026.target = obj_s6;
             obj->x1.n = obj_s6->x1.n;
             obj->y2.n = obj->y1.n = obj_s6->y1.n;

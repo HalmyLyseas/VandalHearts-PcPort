@@ -409,7 +409,7 @@ void Objf400_AI_BuildSpellValueGrid(Object *obj) {
                   continue;
                }
 
-               func_8002ADCC(targetUnit->sprite->z1.s.hi, targetUnit->sprite->x1.s.hi,
+               MarkSpellFieldCoverage(targetUnit->sprite->z1.s.hi, targetUnit->sprite->x1.s.hi,
                              gSpells[gCurrentSpell].fieldSize, 6);
             }
          }
@@ -732,7 +732,7 @@ void Objf401_AI_BuildEnemyProximityGrid(Object *obj) {
          sprite2 = unit2->sprite;
 
          if (unit2->idx != 0 && unit1->team != unit2->team) {
-            func_8002CF88(sprite2->z1.s.hi, sprite2->x1.s.hi, 0xff, 0, 6);
+            AccumulateProximityGrid(sprite2->z1.s.hi, sprite2->x1.s.hi, 0xff, 0, 6);
             ClearGrid(0);
             if (GetRCnt(RCntCNT1) > 450) {
                OBJ.unitIter = i;
@@ -820,7 +820,7 @@ void Objf402_AI_PlanSpellCast(Object *obj) {
          i = 0xff;
       }
 
-      func_8002B3A8(sprite->z1.s.hi, sprite->x1.s.hi, i, 3);
+      PopulateMoveCostGrid(sprite->z1.s.hi, sprite->x1.s.hi, i, 3);
       obj->state++;
 
    // fallthrough
@@ -829,7 +829,7 @@ void Objf402_AI_PlanSpellCast(Object *obj) {
          return;
       }
 
-      func_8002B3A8(sprite->z1.s.hi, sprite->x1.s.hi, unit->travelRange, 4);
+      PopulateMoveCostGrid(sprite->z1.s.hi, sprite->x1.s.hi, unit->travelRange, 4);
       obj->state++;
 
    // fallthrough
@@ -1084,7 +1084,7 @@ void Objf403_AI_PlanAttack(Object *obj) {
          i = 0xff;
       }
 
-      func_8002B3A8(sprite->z1.s.hi, sprite->x1.s.hi, i, 3);
+      PopulateMoveCostGrid(sprite->z1.s.hi, sprite->x1.s.hi, i, 3);
       obj->state++;
 
    // fallthrough
@@ -1093,7 +1093,7 @@ void Objf403_AI_PlanAttack(Object *obj) {
          return;
       }
 
-      func_8002B3A8(sprite->z1.s.hi, sprite->x1.s.hi, unit1->travelRange, 4);
+      PopulateMoveCostGrid(sprite->z1.s.hi, sprite->x1.s.hi, unit1->travelRange, 4);
       obj->state++;
 
    // fallthrough
@@ -1288,7 +1288,7 @@ void Objf404_AI_PlanRetreat(Object *obj) {
          return;
       }
 
-      func_8002B3A8(sprite->z1.s.hi, sprite->x1.s.hi, unit->travelRange, 4);
+      PopulateMoveCostGrid(sprite->z1.s.hi, sprite->x1.s.hi, unit->travelRange, 4);
       obj->state++;
 
    // fallthrough
@@ -1415,8 +1415,8 @@ void Objf589_AI_MoveToEscapePoint(Object *obj) {
          return;
       }
 
-      func_8002B3A8(sprite->z1.s.hi, sprite->x1.s.hi, unit->travelRange, 4);
-      func_8002C1A0(sprite->z1.s.hi, sprite->x1.s.hi, 0xfe, 6);
+      PopulateMoveCostGrid(sprite->z1.s.hi, sprite->x1.s.hi, unit->travelRange, 4);
+      PopulateReachGradientGrid(sprite->z1.s.hi, sprite->x1.s.hi, 0xfe, 6);
       obj->state++;
 
    // fallthrough
@@ -1460,7 +1460,7 @@ void Objf589_AI_MoveToEscapePoint(Object *obj) {
          }
       }
 
-      func_8002C1D8(iz, ix, 0xfe, 6, sprite->z1.s.hi, sprite->x1.s.hi);
+      PopulateReachGradientGridFrom(iz, ix, 0xfe, 6, sprite->z1.s.hi, sprite->x1.s.hi);
       obj->state++;
       break;
 

@@ -695,7 +695,7 @@ void Objf656_Map39(Object *obj) {
          UpdateAreaElevation(19, 0, 24, 5);
          obj->state3 = 0;
          obj->state++;
-         OBJ.camera.rotY = func_800A96A8(gCameraRotation.vy, OBJ.camera.rotY);
+         OBJ.camera.rotY = ShortestTurnAngle(gCameraRotation.vy, OBJ.camera.rotY);
       }
       gCameraRotation.vy -= DEG(0.52734375);
       break;

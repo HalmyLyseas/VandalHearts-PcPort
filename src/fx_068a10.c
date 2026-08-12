@@ -75,7 +75,7 @@ void Objf144_HolyLightning_FX2(Object *obj) {
 
          for (i = 0; i < OBJ_DATA_CT; i++) {
             obj_v1 = &gObjectArray[i];
-            if (obj_v1->functionIndex == OBJF_CAMERA_TBD_026) {
+            if (obj_v1->functionIndex == OBJF_FOCUS_CAMERA) {
                obj_v1->functionIndex = OBJF_NULL;
             }
          }
@@ -118,7 +118,7 @@ void Objf144_HolyLightning_FX2(Object *obj) {
          if (OBJ.timer == 10) {
             targetSprite = OBJ.unitSprite;
             obj_v1 = Obj_GetUnused();
-            obj_v1->functionIndex = OBJF_CAMERA_TBD_026;
+            obj_v1->functionIndex = OBJF_FOCUS_CAMERA;
             obj_v1->d.objf026.target = targetSprite;
          } else if (OBJ.timer == 0) {
             obj_v1 = OBJ.targetFlashingFx;
@@ -646,7 +646,7 @@ void Objf222_EnergyBallLob_Unused(Object *obj) {
       OBJ.fx = obj_s1;
 
       obj_s1 = Obj_GetUnused();
-      obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+      obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
       obj_s1->d.objf026.target = obj_s2;
       obj_s1->d.objf026.type = 2;
       OBJ.cam = obj_s1;
@@ -659,12 +659,12 @@ void Objf222_EnergyBallLob_Unused(Object *obj) {
       obj_s2 = obj_s0->d.objf223.orbSprite;
       gCameraZoom.vz = OBJ.savedZoom + (obj_s2->y1.n >> 4) + (obj_s2->y1.n >> 5);
       obj_s1 = OBJ.cam;
-      if (obj_s1->functionIndex == OBJF_CAMERA_TBD_026) {
+      if (obj_s1->functionIndex == OBJF_FOCUS_CAMERA) {
          obj_s1->d.objf026.target = obj_s2;
          obj_s1->d.objf026.zoom = gCameraZoom.vz;
       } else {
          obj_s1 = Obj_GetUnused();
-         obj_s1->functionIndex = OBJF_CAMERA_TBD_026;
+         obj_s1->functionIndex = OBJF_FOCUS_CAMERA;
          obj_s1->d.objf026.target = obj_s2;
          OBJ.cam = obj_s1;
          obj_s1->d.objf026.zoom = gCameraZoom.vz;

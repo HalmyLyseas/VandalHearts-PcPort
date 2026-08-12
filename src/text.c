@@ -474,7 +474,7 @@ void Objf351_MsgBoxText(Object *obj) {
    switch (obj->state) {
    case 0:
       gState.msgBoxFinished = 0;
-      gState.field_0x31d = 0;
+      gState.msgBoxPagePaused = 0;
       obj->state3 = 1;
       OBJ.todo_x48 = 0;
 
@@ -610,7 +610,7 @@ void Objf351_MsgBoxText(Object *obj) {
                p = OBJ.textPtr;
                OBJ.readingFromStringTable = 0;
             } else {
-               gState.field_0x31d = 1;
+               gState.msgBoxPagePaused = 1;
                obj->state = 5;
                return;
             }
@@ -620,7 +620,7 @@ void Objf351_MsgBoxText(Object *obj) {
                obj->x3.n = OBJ.indentChars;
                obj->y3.n++;
                if (obj->y3.n >= OBJ.maxRows) {
-                  gState.field_0x31d = 1;
+                  gState.msgBoxPagePaused = 1;
                   obj->state = 4;
                   return;
                }
@@ -649,10 +649,10 @@ void Objf351_MsgBoxText(Object *obj) {
                p++;
                if (obj->y3.n >= OBJ.maxRows) {
                   if (*p == '\0') {
-                     gState.field_0x31d = 1;
+                     gState.msgBoxPagePaused = 1;
                      obj->state = 5;
                   } else {
-                     gState.field_0x31d = 1;
+                     gState.msgBoxPagePaused = 1;
                      obj->state = 4;
                   }
                   return;
@@ -673,20 +673,20 @@ void Objf351_MsgBoxText(Object *obj) {
                   if (*p == '\n') {
                      OBJ.textPtr++;
                   }
-                  gState.field_0x31d = 1;
+                  gState.msgBoxPagePaused = 1;
                   obj->state = 4;
                   return;
 
                case 'F':
                case 'f':
                   //? Flag for e.g. event entity animation?
-                  gState.field_0x31d = 1;
+                  gState.msgBoxPagePaused = 1;
                   OBJ.textPtr++;
                   return;
 
                case 'P':
                case 'p':
-                  gState.field_0x31d = 1;
+                  gState.msgBoxPagePaused = 1;
                   obj->state = 6;
                   OBJ.textPtr++;
                   return;
@@ -803,7 +803,7 @@ void Objf351_MsgBoxText(Object *obj) {
          obj->state = 1;
          obj->x3.n = 0;
          obj->y3.n = 0;
-         gState.field_0x31d = 1;
+         gState.msgBoxPagePaused = 1;
          OBJ.textSpeedAccum = 0;
          OBJ.todo_x44 = 0;
       }

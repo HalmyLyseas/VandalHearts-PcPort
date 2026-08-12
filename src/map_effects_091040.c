@@ -100,7 +100,7 @@ void Objf651_Map33_LavaPitPlatform(Object *obj) {
          AssignFromMainCamera(&OBJ.camera);
          unitSprite = GetUnitSpriteAtPosition(obj->z2.s.hi, obj->x2.s.hi);
          obj_v1 = Obj_GetUnused();
-         obj_v1->functionIndex = OBJF_CAMERA_TBD_026;
+         obj_v1->functionIndex = OBJF_FOCUS_CAMERA;
          obj_v1->d.objf026.target = unitSprite;
          *(s16 *)(&obj_v1->d.objf026.type) = 1; //?
          obj_v1->d.objf026.zoom = 512;

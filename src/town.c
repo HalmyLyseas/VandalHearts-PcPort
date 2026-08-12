@@ -652,7 +652,7 @@ s32 Objf580_Town(Object *obj) {
          case 3:
             if (--OBJ.timer == 0) {
                SetupTownMsgBox(PORTRAIT_DOLAN, 0);
-               func_800440DC(0);
+               ShowTownMsgBoxSolo(0);
                OBJ.timer = 30;
                obj->state2++;
             }
@@ -660,7 +660,7 @@ s32 Objf580_Town(Object *obj) {
 
          case 4:
             if (--OBJ.timer == 0) {
-               func_80044364(14, 2);
+               SetTownMsgBoxText(14, 2);
                obj->state2++;
             }
             break;
@@ -668,8 +668,8 @@ s32 Objf580_Town(Object *obj) {
          case 5:
             if (gState.msgBoxFinished) {
                SetupTownMsgBox(PORTRAIT_SARA, 1);
-               func_8004404C(0);
-               func_8004404C(1);
+               ShowTownMsgBoxDual(0);
+               ShowTownMsgBoxDual(1);
                OBJ.timer = 30;
                obj->state2++;
             }
@@ -677,20 +677,20 @@ s32 Objf580_Town(Object *obj) {
 
          case 6:
             if (--OBJ.timer == 0) {
-               func_80044364(15, 1);
+               SetTownMsgBoxText(15, 1);
                obj->state2++;
             }
             break;
 
          case 7:
-            if (gState.field_0x31d != 0) {
-               gState.field_0x31d = 0;
+            if (gState.msgBoxPagePaused != 0) {
+               gState.msgBoxPagePaused = 0;
                obj->state2++;
             }
             break;
 
          case 8:
-            if (gState.field_0x31d != 0) {
+            if (gState.msgBoxPagePaused != 0) {
                SetupTownMsgBox(PORTRAIT_SARA_ANGRY, 1);
                obj->state2++;
             }
@@ -699,7 +699,7 @@ s32 Objf580_Town(Object *obj) {
          case 9:
             if (gState.msgBoxFinished) {
                SetupTownMsgBox(PORTRAIT_AMON_62, 0);
-               func_80044364(16, 3);
+               SetTownMsgBoxText(16, 3);
                obj->state2++;
             }
             break;
@@ -707,7 +707,7 @@ s32 Objf580_Town(Object *obj) {
          case 10:
             if (gState.msgBoxFinished) {
                SetupTownMsgBox(PORTRAIT_SARA_69, 1);
-               func_80044364(17, 1);
+               SetTownMsgBoxText(17, 1);
                obj->state2++;
             }
             break;
@@ -715,15 +715,15 @@ s32 Objf580_Town(Object *obj) {
          case 11:
             if (gState.msgBoxFinished) {
                SetupTownMsgBox(PORTRAIT_AMON_ANGRY, 0);
-               func_80044364(18, 3);
+               SetTownMsgBoxText(18, 3);
                obj->state2++;
             }
             break;
 
          case 12:
             if (gState.msgBoxFinished) {
-               func_80044134(0);
-               func_80044134(1);
+               HideTownMsgBox(0);
+               HideTownMsgBox(1);
                OBJ.timer = 30;
                obj->state2++;
             }
@@ -881,7 +881,7 @@ s32 Objf580_Town(Object *obj) {
          case 3:
             if (--OBJ.timer == 0) {
                SetupTownMsgBox(PORTRAIT_DARIUS_ANGRY, 0);
-               func_800440DC(0);
+               ShowTownMsgBoxSolo(0);
                OBJ.timer = 30;
                obj->state2++;
             }
@@ -889,7 +889,7 @@ s32 Objf580_Town(Object *obj) {
 
          case 4:
             if (--OBJ.timer == 0) {
-               func_80044364(30, 0);
+               SetTownMsgBoxText(30, 0);
                obj->state2++;
             }
             break;
@@ -897,8 +897,8 @@ s32 Objf580_Town(Object *obj) {
          case 5:
             if (gState.msgBoxFinished) {
                SetupTownMsgBox(PORTRAIT_ASH_ANGRY, 1);
-               func_8004404C(0);
-               func_8004404C(1);
+               ShowTownMsgBoxDual(0);
+               ShowTownMsgBoxDual(1);
                OBJ.timer = 30;
                obj->state2++;
             }
@@ -906,15 +906,15 @@ s32 Objf580_Town(Object *obj) {
 
          case 6:
             if (--OBJ.timer == 0) {
-               func_80044364(31, 1);
+               SetTownMsgBoxText(31, 1);
                obj->state2++;
             }
             break;
 
          case 7:
             if (gState.msgBoxFinished) {
-               func_80044134(0);
-               func_80044134(1);
+               HideTownMsgBox(0);
+               HideTownMsgBox(1);
                OBJ.timer = 30;
                obj->state2++;
             }
@@ -1342,7 +1342,7 @@ void func_801F5540(Object *town) {
    case 1:
       if (--town->d.objf580.timer == 0) {
          SetupTownMsgBox(town->d.objf580.portrait, 0);
-         func_800440DC(0);
+         ShowTownMsgBoxSolo(0);
          town->d.objf580.timer = 30;
          town->state3++;
       }
@@ -1350,14 +1350,14 @@ void func_801F5540(Object *town) {
 
    case 2:
       if (--town->d.objf580.timer == 0) {
-         func_80044364(town->d.objf580.textPtrIdx, 0);
+         SetTownMsgBoxText(town->d.objf580.textPtrIdx, 0);
          town->state3++;
       }
       break;
 
    case 3:
       if (gState.msgBoxFinished) {
-         func_80044134(0);
+         HideTownMsgBox(0);
          town->d.objf580.timer = 30;
          town->state3++;
       }
@@ -1387,7 +1387,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1395,14 +1395,14 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(0, 0);
+            SetTownMsgBoxText(0, 0);
             town->state2++;
          }
          break;
 
       case 3:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
+            HideTownMsgBox(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1430,7 +1430,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_DIEGO, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1438,14 +1438,14 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(3, 0);
+            SetTownMsgBoxText(3, 0);
             town->state2++;
          }
          break;
 
       case 3:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
+            HideTownMsgBox(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1473,7 +1473,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1481,7 +1481,7 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(8, 2);
+            SetTownMsgBoxText(8, 2);
             town->state2++;
          }
          break;
@@ -1489,8 +1489,8 @@ void func_801F56A4(Object *town) {
       case 3:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_CLINT, 1);
-            func_8004404C(0);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(0);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1498,15 +1498,15 @@ void func_801F56A4(Object *town) {
 
       case 4:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(9, 1);
+            SetTownMsgBoxText(9, 1);
             town->state2++;
          }
          break;
 
       case 5:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
-            func_80044134(1);
+            HideTownMsgBox(0);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1534,7 +1534,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_GROG, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1542,7 +1542,7 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(19, 0);
+            SetTownMsgBoxText(19, 0);
             town->state2++;
          }
          break;
@@ -1550,8 +1550,8 @@ void func_801F56A4(Object *town) {
       case 3:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_SARA, 1);
-            func_8004404C(0);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(0);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1559,7 +1559,7 @@ void func_801F56A4(Object *town) {
 
       case 4:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(20, 1);
+            SetTownMsgBoxText(20, 1);
             town->state2++;
          }
          break;
@@ -1567,15 +1567,15 @@ void func_801F56A4(Object *town) {
       case 5:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_80044364(21, 0);
+            SetTownMsgBoxText(21, 0);
             town->state2++;
          }
          break;
 
       case 6:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
-            func_80044134(1);
+            HideTownMsgBox(0);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1603,7 +1603,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_GROG, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1611,7 +1611,7 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(23, 2);
+            SetTownMsgBoxText(23, 2);
             town->state2++;
          }
          break;
@@ -1619,8 +1619,8 @@ void func_801F56A4(Object *town) {
       case 3:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_SARA, 1);
-            func_8004404C(0);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(0);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1628,7 +1628,7 @@ void func_801F56A4(Object *town) {
 
       case 4:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(24, 1);
+            SetTownMsgBoxText(24, 1);
             town->state2++;
          }
          break;
@@ -1636,14 +1636,14 @@ void func_801F56A4(Object *town) {
       case 5:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_80044364(25, 3);
+            SetTownMsgBoxText(25, 3);
             town->state2++;
          }
          break;
 
       case 6:
          if (gState.msgBoxFinished) {
-            func_80044134(1);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1652,7 +1652,7 @@ void func_801F56A4(Object *town) {
       case 7:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ZOHAR_ANGRY, 1);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1660,14 +1660,14 @@ void func_801F56A4(Object *town) {
 
       case 8:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(26, 1);
+            SetTownMsgBoxText(26, 1);
             town->state2++;
          }
          break;
 
       case 9:
          if (gState.msgBoxFinished) {
-            func_80044364(27, 3);
+            SetTownMsgBoxText(27, 3);
             town->state2++;
          }
          break;
@@ -1675,7 +1675,7 @@ void func_801F56A4(Object *town) {
       case 10:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ZOHAR, 1);
-            func_80044364(28, 1);
+            SetTownMsgBoxText(28, 1);
             town->state2++;
          }
          break;
@@ -1684,14 +1684,14 @@ void func_801F56A4(Object *town) {
       case 12:
       case 13:
       case 15:
-         if (gState.field_0x31d != 0) {
-            gState.field_0x31d = 0;
+         if (gState.msgBoxPagePaused != 0) {
+            gState.msgBoxPagePaused = 0;
             town->state2++;
          }
          break;
 
       case 14:
-         if (gState.field_0x31d != 0) {
+         if (gState.msgBoxPagePaused != 0) {
             SetupTownMsgBox(PORTRAIT_ZOHAR_HAPPY, 1);
             town->state2++;
          }
@@ -1699,8 +1699,8 @@ void func_801F56A4(Object *town) {
 
       case 16:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
-            func_80044134(1);
+            HideTownMsgBox(0);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1729,7 +1729,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1737,14 +1737,14 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(32, 0);
+            SetTownMsgBoxText(32, 0);
             town->state2++;
          }
          break;
 
       case 3:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
+            HideTownMsgBox(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1775,7 +1775,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_CLINT, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1783,7 +1783,7 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(33, 2);
+            SetTownMsgBoxText(33, 2);
             town->state2++;
          }
          break;
@@ -1791,8 +1791,8 @@ void func_801F56A4(Object *town) {
       case 3:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ASH, 1);
-            func_8004404C(0);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(0);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1800,7 +1800,7 @@ void func_801F56A4(Object *town) {
 
       case 4:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(34, 1);
+            SetTownMsgBoxText(34, 1);
             town->state2++;
          }
          break;
@@ -1808,14 +1808,14 @@ void func_801F56A4(Object *town) {
       case 5:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_DIEGO_ANGRY, 0);
-            func_80044364(35, 3);
+            SetTownMsgBoxText(35, 3);
             town->state2++;
          }
          break;
 
       case 6:
          if (gState.msgBoxFinished) {
-            func_80044364(36, 1);
+            SetTownMsgBoxText(36, 1);
             town->state2++;
          }
          break;
@@ -1823,20 +1823,20 @@ void func_801F56A4(Object *town) {
       case 7:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_DIEGO_UPSET, 0);
-            func_80044364(37, 3);
+            SetTownMsgBoxText(37, 3);
             town->state2++;
          }
          break;
 
       case 8:
-         if (gState.field_0x31d != 0) {
-            gState.field_0x31d = 0;
+         if (gState.msgBoxPagePaused != 0) {
+            gState.msgBoxPagePaused = 0;
             town->state2++;
          }
          break;
 
       case 9:
-         if (gState.field_0x31d != 0) {
+         if (gState.msgBoxPagePaused != 0) {
             SetupTownMsgBox(PORTRAIT_DIEGO_HAPPY, 0);
             town->state2++;
          }
@@ -1845,22 +1845,22 @@ void func_801F56A4(Object *town) {
       case 10:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ASH_UPSET, 1);
-            func_80044364(38, 1);
+            SetTownMsgBoxText(38, 1);
             town->state2++;
          }
          break;
 
       case 11:
          if (gState.msgBoxFinished) {
-            func_80044364(39, 3);
+            SetTownMsgBoxText(39, 3);
             town->state2++;
          }
          break;
 
       case 12:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
-            func_80044134(1);
+            HideTownMsgBox(0);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1888,7 +1888,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1896,14 +1896,14 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(45, 2);
+            SetTownMsgBoxText(45, 2);
             town->state2++;
          }
          break;
 
       case 3:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
+            HideTownMsgBox(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1932,7 +1932,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1940,7 +1940,7 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(46, 2);
+            SetTownMsgBoxText(46, 2);
             town->state2++;
          }
          break;
@@ -1948,8 +1948,8 @@ void func_801F56A4(Object *town) {
       case 3:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_AMON, 1);
-            func_8004404C(0);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(0);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -1957,7 +1957,7 @@ void func_801F56A4(Object *town) {
 
       case 4:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(47, 1);
+            SetTownMsgBoxText(47, 1);
             town->state2++;
          }
          break;
@@ -1965,14 +1965,14 @@ void func_801F56A4(Object *town) {
       case 5:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ZOHAR, 1);
-            func_80044364(48, 1);
+            SetTownMsgBoxText(48, 1);
             town->state2++;
          }
          break;
 
       case 6:
          if (gState.msgBoxFinished) {
-            func_80044364(49, 3);
+            SetTownMsgBoxText(49, 3);
             town->state2++;
          }
          break;
@@ -1980,22 +1980,22 @@ void func_801F56A4(Object *town) {
       case 7:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ELENI, 1);
-            func_80044364(50, 1);
+            SetTownMsgBoxText(50, 1);
             town->state2++;
          }
          break;
 
       case 8:
          if (gState.msgBoxFinished) {
-            func_80044364(51, 3);
+            SetTownMsgBoxText(51, 3);
             town->state2++;
          }
          break;
 
       case 9:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
-            func_80044134(1);
+            HideTownMsgBox(0);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -2023,7 +2023,7 @@ void func_801F56A4(Object *town) {
       case 1:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_800440DC(0);
+            ShowTownMsgBoxSolo(0);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -2031,7 +2031,7 @@ void func_801F56A4(Object *town) {
 
       case 2:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(53, 0);
+            SetTownMsgBoxText(53, 0);
             town->state2++;
          }
          break;
@@ -2039,8 +2039,8 @@ void func_801F56A4(Object *town) {
       case 3:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ELENI_HAPPY, 1);
-            func_8004404C(0);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(0);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -2050,14 +2050,14 @@ void func_801F56A4(Object *town) {
          if (--town->d.objf580.timer == 0) {
             PerformAudioCommand(AUDIO_CMD_PLAY_XA(96));
             PerformAudioCommand(AUDIO_CMD_FADE_OUT_128_2);
-            func_80044364(54, 1);
+            SetTownMsgBoxText(54, 1);
             town->state2++;
          }
          break;
 
       case 5:
          if (gState.msgBoxFinished) {
-            func_80044364(55, 3);
+            SetTownMsgBoxText(55, 3);
             town->state2++;
          }
          break;
@@ -2065,22 +2065,22 @@ void func_801F56A4(Object *town) {
       case 6:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ELENI, 1);
-            func_80044364(56, 1);
+            SetTownMsgBoxText(56, 1);
             town->state2++;
          }
          break;
 
       case 7:
       case 9:
-         if (gState.field_0x31d != 0) {
-            gState.field_0x31d = 0;
+         if (gState.msgBoxPagePaused != 0) {
+            gState.msgBoxPagePaused = 0;
             town->state2++;
          }
          break;
 
       case 8:
-         if (gState.field_0x31d != 0) {
-            gState.field_0x31d = 0;
+         if (gState.msgBoxPagePaused != 0) {
+            gState.msgBoxPagePaused = 0;
             SetupTownMsgBox(PORTRAIT_ELENI_28, 1);
             PerformAudioCommand(AUDIO_CMD_FADE_OUT_1_4);
             town->state2++;
@@ -2090,14 +2090,14 @@ void func_801F56A4(Object *town) {
       case 10:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ASH_ANGRY, 0);
-            func_80044364(57, 3);
+            SetTownMsgBoxText(57, 3);
             town->state2++;
          }
          break;
 
       case 11:
          if (gState.msgBoxFinished) {
-            func_80044134(1);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -2106,7 +2106,7 @@ void func_801F56A4(Object *town) {
       case 12:
          if (--town->d.objf580.timer == 0) {
             SetupTownMsgBox(PORTRAIT_OROSIUS, 1);
-            func_8004404C(1);
+            ShowTownMsgBoxDual(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }
@@ -2114,7 +2114,7 @@ void func_801F56A4(Object *town) {
 
       case 13:
          if (--town->d.objf580.timer == 0) {
-            func_80044364(58, 1);
+            SetTownMsgBoxText(58, 1);
             town->state2++;
          }
          break;
@@ -2122,22 +2122,22 @@ void func_801F56A4(Object *town) {
       case 14:
          if (gState.msgBoxFinished) {
             SetupTownMsgBox(PORTRAIT_ASH, 0);
-            func_80044364(59, 3);
+            SetTownMsgBoxText(59, 3);
             town->state2++;
          }
          break;
 
       case 15:
          if (gState.msgBoxFinished) {
-            func_80044364(60, 1);
+            SetTownMsgBoxText(60, 1);
             town->state2++;
          }
          break;
 
       case 16:
          if (gState.msgBoxFinished) {
-            func_80044134(0);
-            func_80044134(1);
+            HideTownMsgBox(0);
+            HideTownMsgBox(1);
             town->d.objf580.timer = 30;
             town->state2++;
          }

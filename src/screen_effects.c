@@ -318,7 +318,9 @@ void Objf795_EventFade(Object *obj) {
    }
 }
 
-s32 func_800A96A8(s32 theta1, s16 theta2) {
+/* Returns theta2 wrapped +/-360deg so easing from theta1 turns the SHORT way round --
+ * used by every map camera that eases its yaw toward a target angle. */
+s32 ShortestTurnAngle(s32 theta1, s16 theta2) {
    s16 diff;
    s16 ret;
 
