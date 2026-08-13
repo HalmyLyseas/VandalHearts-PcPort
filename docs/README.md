@@ -51,6 +51,20 @@ screen shows is cosmetic, while the values that drive combat are never surfaced.
 - [weapons-and-armor.md](game-mechanics/weapons-and-armor.md) — the display-vs-real power tables
 - [spells-and-items.md](game-mechanics/spells-and-items.md) — the full spell + consumable table
 
+## The decompiled code (contributor reference)
+
+**[decomp/](decomp/structure.md)** — the map of `src/` for anyone reading or extending the
+decompilation:
+
+- [structure.md](decomp/structure.md) — the nine-folder tree, the file-=-address-range law,
+  naming conventions, and the byte-exactness rules for touching `src/`
+- [objf-handlers.md](decomp/objf-handlers.md) — every object handler in the 804-slot dispatch
+  table: name, file, and how retail reaches it (generated from the source + retail data)
+- [spell-fx-dispatch.md](decomp/spell-fx-dispatch.md) — the `gSpellsEx` FX model and the full
+  71-spell dispatch table, validated live in-game
+- [event-scripts.md](decomp/event-scripts.md) — the EVDATA cutscene bytecode: format, the
+  interpreter, all opcodes, and the census of event-spawned objects
+
 ## The PC port internals
 
 - **[pc-port/overview.md](pc-port/overview.md)** — the swappable-interface design and how the six

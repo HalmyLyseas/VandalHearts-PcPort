@@ -19,9 +19,13 @@ period-correct GCC 2.x toolchain, via [splat](https://github.com/ethteck/splat) 
 `make check` proves this by rebuilding the executable and comparing its MD5 to the original
 (`596bb082a2de5f1fe977dd3d7e160b03`).
 
-- **1184 functions across 70 `src/*.c` files** are decompiled and matching. PsyQ SDK library
-  functions (Sony's proprietary runtime) are intentionally left as raw asm — they aren't the target
-  of the decomp, and on PC they're replaced wholesale (see Layer 2).
+- **1184 functions across 88 `src/` files, grouped in nine domain folders** (`core/`,
+  `states/`, `battle/`, `units/`, `world/`, `events/`, `spells/`, `maps/`, `ui/`) are decompiled
+  and matching — every function and file named for what it does. See
+  [decomp/structure.md](decomp/structure.md) for the layout, the naming conventions, and the
+  generated handler/dispatch references. PsyQ SDK library functions (Sony's proprietary runtime)
+  are intentionally left as raw asm — they aren't the target of the decomp, and on PC they're
+  replaced wholesale (see Layer 2).
 - Because the goal is byte-identity, `src/` is written to match the *original compiler's output*, not
   to be idiomatic or portable. Struct layouts, field order, and even some otherwise-dead data regions
   are fixed by what the original binary contains. **Do not "clean up" `src/` for readability or
