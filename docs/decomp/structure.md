@@ -62,8 +62,8 @@ Consequences worth knowing before you judge the layout:
   bridge to the data tables (spells, event scripts, map tables), which address handlers
   by number.
 - **`_FX1` / `_FX2` / `_FX3`** — spell-handler suffixes recording the `gSpellsEx` slot
-  (MAIN / per-target / per-slain-target). See
-  [spell-fx-dispatch.md](spell-fx-dispatch.md).
+  (MAIN / per-target / the alternate-outcome slot: slay for damage spells, no-stick for
+  ailments, dormant for support). See [spell-fx-dispatch.md](spell-fx-dispatch.md).
 - **`_Unused`** — in `gObjFunctionPointers` but reachable from no spell table, no retail
   event script, no data table and no code path: cut content, kept byte-exact.
 - **`Objf_Unk_*` / `func_*`** — not referenced by anything at all (not even the dispatch

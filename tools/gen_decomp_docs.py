@@ -212,11 +212,33 @@ def hname(v):
     if v <= 0: return '—'
     if not table.get(v): return 'null slot %d (never fires)' % v
     return '`%s`' % table[v]
-tbl = ['| id | spell | MAIN (FX1) | TARGET (FX2) | DEFEAT (FX3) |', '|---:|---|---|---|---|']
+# Distinct (spell, slot, objf) dispatches from the 2026-08 in-game validation session
+# (an instrumented build logged every gSpellsEx dispatch; all 70 castable spells/items
+# were exercised). Transcribed here so regeneration is deterministic.
+WITNESSED = [(1, 'main', 60), (1, 'target', 115), (2, 'main', 189), (2, 'target', 78), (3, 'main', 332), (3, 'target', 132), (4, 'main', 60), (4, 'target', 115), (5, 'main', 156), (5, 'target', 799), (6, 'main', 207), (6, 'target', 193), (7, 'main', 181), (7, 'target', 715), (8, 'main', 170), (8, 'target', 78), (9, 'main', 210), (9, 'target', 102), (10, 'main', 378), (10, 'target', 78), (11, 'main', 80), (11, 'target', 344), (12, 'defeat', 227), (12, 'main', 210), (12, 'target', 102), (13, 'main', 180), (13, 'target', 78), (14, 'main', 184), (14, 'target', 338), (15, 'main', 334), (15, 'target', 132), (16, 'main', 60), (16, 'target', 100), (17, 'main', 60), (17, 'target', 112), (18, 'main', 60), (18, 'target', 104), (19, 'main', 60), (19, 'target', 791), (20, 'main', 60), (20, 'target', 111), (21, 'main', 208), (21, 'target', 144), (22, 'main', 60), (22, 'target', 792), (23, 'main', 330), (23, 'target', 372), (24, 'main', 177), (24, 'target', 78), (25, 'main', 60), (25, 'target', 793), (26, 'main', 163), (26, 'target', 165), (27, 'main', 60), (27, 'target', 104), (28, 'main', 381), (28, 'target', 327), (29, 'main', 209), (29, 'target', 192), (30, 'main', 178), (30, 'target', 78), (31, 'main', 381), (31, 'target', 327), (32, 'main', 60), (32, 'target', 113), (33, 'main', 60), (33, 'target', 100), (34, 'main', 60), (34, 'target', 100), (35, 'main', 60), (35, 'target', 306), (36, 'main', 60), (36, 'target', 306), (37, 'main', 381), (37, 'target', 327), (38, 'main', 161), (38, 'target', 78), (39, 'main', 176), (39, 'target', 78), (40, 'main', 199), (40, 'target', 78), (41, 'main', 224), (41, 'target', 128), (42, 'main', 388), (42, 'target', 281), (43, 'main', 175), (43, 'target', 78), (44, 'main', 92), (44, 'target', 90), (45, 'defeat', 79), (45, 'main', 170), (45, 'target', 78), (46, 'main', 122), (46, 'target', 132), (47, 'defeat', 221), (47, 'main', 158), (48, 'defeat', 138), (48, 'main', 394), (48, 'target', 136), (49, 'main', 60), (49, 'target', 100), (50, 'main', 60), (50, 'target', 100), (51, 'main', 60), (51, 'target', 104), (52, 'main', 330), (52, 'target', 370), (53, 'main', 330), (53, 'target', 372), (54, 'main', 313), (54, 'target', 327), (55, 'main', 60), (55, 'target', 793), (56, 'main', 151), (56, 'target', 132), (57, 'main', 94), (57, 'target', 96), (58, 'main', 170), (58, 'target', 78), (59, 'main', 363), (59, 'target', 132), (60, 'main', 197), (60, 'target', 195), (61, 'main', 210), (61, 'target', 108), (62, 'main', 169), (62, 'target', 324), (63, 'main', 181), (63, 'target', 715), (64, 'defeat', 227), (64, 'main', 210), (64, 'target', 102), (65, 'main', 60), (65, 'target', 100), (66, 'main', 209), (66, 'target', 192), (67, 'main', 175), (67, 'target', 78), (68, 'main', 381), (68, 'target', 327), (69, 'main', 224), (69, 'target', 128), (70, 'main', 92), (70, 'target', 90)]
+W = {(a, b): c for a, b, c in WITNESSED}
+
+EFFECT_LABEL = {0: 'damage', 1: 'heal', 2: 'heal', 3: 'poison', 4: 'paralyze',
+                5: 'atk up', 6: 'def up', 7: 'atk/def up', 8: 'cure', 9: 'agl up',
+                10: 'mp restore', 11: 'mp transfer'}
+DEFEAT_LIVE = {0, 3, 4}   # executor reads slot 2 only for these classes (see the prose)
+
+def cell(sid, slotname, v, dormant=False):
+    if v <= 0: return '—'
+    mark = ' ✓' if W.get((sid, slotname)) == v else ''
+    if not table.get(v): return '%d = empty slot (never fires)' % v
+    body = '%d `%s`%s' % (v, table[v], mark)
+    return ('*dormant:* ' + body) if dormant else body
+
+tbl = ['| id | spell | class | MAIN | TARGET | slot 2 (defeat / no-stick) |',
+       '|---:|---|---|---|---|---|']
 for sid in range(1, 72):
-    main, target, defeat, _, _ = spells[sid]
-    tbl.append('| %d | %s | %s | %s | %s |' % (sid, spell_names.get(sid, '?'),
-               hname(main), hname(target), hname(defeat)))
+    main, target, defeat, _, eff = spells[sid]
+    dormant = eff not in DEFEAT_LIVE
+    tbl.append('| %d | %s | %s | %s | %s | %s |' % (
+        sid, spell_names.get(sid, '?'), EFFECT_LABEL.get(eff, str(eff)),
+        cell(sid, 'main', main), cell(sid, 'target', target),
+        cell(sid, 'defeat', defeat, dormant)))
 # splice the regenerated table into the prose doc, after the last prose line
 doc_p = 'docs/decomp/spell-fx-dispatch.md'
 doc = open(doc_p).read()
