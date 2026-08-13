@@ -6,8 +6,9 @@ game disc**, as a raw `.bin` image. Everything else has sensible defaults.
 ## Supplying the disc image
 
 The game reads its data (maps, sprites, audio, FMVs) from a raw 2352-byte/sector `.bin` dump of
-*Vandal Hearts (USA)*. You do **not** need to set anything if you put it where the port looks. On
-startup it searches, in order:
+*Vandal Hearts (USA)* (`SLUS-00447`) — or, equivalently, the *Vandal Hearts (Asia)* release
+(`SCPS-45183`); see [Supported releases](#supported-releases) below. You do **not** need to set
+anything if you put it where the port looks. On startup it searches, in order:
 
 1. a **`game/` folder next to the executable** containing any `*.bin`;
 2. a `*.bin` sitting **directly beside the executable**;
@@ -30,8 +31,27 @@ The port validates the image at mount: *Vandal Hearts (USA)*'s boot executable `
 `PS-X EXE` signature at a fixed sector, and the port checks for it. If the file is missing, or is a
 different game / region / a `.cue`/`.iso` instead of a raw `.bin`, it **exits with a clear message**
 (and a message box on Windows, for double-click users) rather than booting into a blank window. This is
-a cheap signature check, not a full hash — any genuine *Vandal Hearts (USA)* dump passes. See
-[pc-port/subsystems/cd-xa.md](pc-port/subsystems/cd-xa.md) for the mechanism.
+a cheap signature check, not a full hash — any genuine *Vandal Hearts (USA)* or *(Asia)* dump passes.
+See [pc-port/subsystems/cd-xa.md](pc-port/subsystems/cd-xa.md) for the mechanism.
+
+### Supported releases
+
+The port **is** the recompiled US game executable, and it reads disc data by fixed sector number
+(not by filename). So it runs a disc only if that disc has the same game code and the same file
+layout as the US release. Two releases qualify:
+
+| release | serial | status | why |
+|---|---|---|---|
+| Vandal Hearts (USA) | `SLUS-00447` | ✅ supported | the reference release |
+| Vandal Hearts (Asia) | `SCPS-45183` | ✅ supported | **byte-identical** to USA except the 14-byte memory-card save id; same disc master, same layout |
+| Vandal Hearts (Europe) | `SLES-00204` | ❌ not supported | different executable (multi-language En/Fr/De build), different disc |
+| Vandal Hearts (Japan) | `SLPM-86007` | ❌ not supported | different executable (kanji/SJIS build), different disc |
+
+The port names the mounted release in its console log (`mounted disc image '…' [Asia (SCPS-45183)]`).
+An unrecognized *Vandal Hearts* boot disc — most likely the Europe or Japan build — still passes the
+signature gate and boots, but the port warns that it does not reproduce that build and behavior will
+be wrong. Supporting Europe/Japan would each require a separate decompilation; note the
+[language packs](language-packs.md) already provide non-English text on the supported engine.
 
 ## The `vandalhearts.ini` config file
 

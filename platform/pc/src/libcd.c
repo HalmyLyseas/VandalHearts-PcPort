@@ -209,6 +209,33 @@ int PC_CdDiscSignatureOk(void) {
     return memcmp(sec + SECTOR_DATA_OFFSET, "PS-X EXE", 8) == 0;   /* same data offset as CdRead */
 }
 
+/* The game's memory-card save-file id ("BASLUS-00447VH" on USA, "BISCPS-45183VH" on the Asia
+ * release) is embedded in the boot exe at VRAM 0x800f5551. The two releases are byte-identical
+ * game code -- ONLY this 14-byte string differs -- and both run on this port unchanged (the port
+ * IS the recompiled US code, and the Asia disc is the same master with the same file layout). So
+ * the string is the canonical release tag. The exe is pinned at LBA 23 (see above) and stored one
+ * ISO sector = 2048 data bytes, so the id sits at a fixed raw-image offset; the 14 bytes stay
+ * within a single sector (no split read). Any other disc reads something else here and classifies
+ * as UNKNOWN -- still bootable, since PC_CdDiscSignatureOk is the hard gate and this is only for
+ * naming/logging. */
+#define VH_CARDID_VRAM   0x800f5551
+#define VH_EXE_LOAD_VRAM 0x80010000
+#define VH_EXE_HDR_SIZE  0x800
+#define VH_CARDID_IMG_OFF ((VH_CARDID_VRAM - VH_EXE_LOAD_VRAM) + VH_EXE_HDR_SIZE)
+
+PC_DiscRelease PC_CdDiscRelease(void) {
+    char id[14];
+    long lba, raw;
+    if (!s_disc) return VH_DISC_UNKNOWN;
+    lba = (long)SLUS_BOOT_LBA + VH_CARDID_IMG_OFF / SECTOR_DATA_SIZE;
+    raw = lba * SECTOR_RAW_SIZE + SECTOR_DATA_OFFSET + (VH_CARDID_IMG_OFF % SECTOR_DATA_SIZE);
+    if (fseek(s_disc, raw, SEEK_SET) != 0) return VH_DISC_UNKNOWN;
+    if (fread(id, 1, sizeof id, s_disc) != sizeof id) return VH_DISC_UNKNOWN;
+    if (memcmp(id, "BASLUS-00447VH", sizeof id) == 0) return VH_DISC_USA;
+    if (memcmp(id, "BISCPS-45183VH", sizeof id) == 0) return VH_DISC_ASIA;
+    return VH_DISC_UNKNOWN;
+}
+
 static char s_discPath[1024];   /* kept for the corruption guards' error messages */
 
 int PC_CdMount(const char *discImagePath) {

@@ -29,8 +29,19 @@ const char *PC_SaveDir(void);
  * extractcd`) as the virtual disc libcd.c reads from. Returns nonzero on
  * success. Must be called before CdInit(). */
 int PC_CdMount(const char *discImagePath);
-int PC_CdDiscSignatureOk(void);   /* 1 if the mounted image has Vandal Hearts (USA)'s boot signature */
+int PC_CdDiscSignatureOk(void);   /* 1 if the mounted image has Vandal Hearts's boot signature (PS-X EXE @ LBA 23) */
 long long PC_CdImageBytes(void);  /* mounted image size (-1 if none) -- the truncation gate (% 2352) */
+
+/* Which byte-compatible Vandal Hearts release the mounted disc is. USA (SLUS-00447) and the Asia
+ * release (SCPS-45183) share identical game code -- only the memory-card id string differs -- and
+ * both run on this port unchanged. UNKNOWN = a PS-X EXE disc this port doesn't specifically
+ * recognize (still boots; the signature check is the hard gate). See PC_CdDiscRelease in libcd.c. */
+typedef enum {
+    VH_DISC_UNKNOWN = 0,
+    VH_DISC_USA,      /* SLUS-00447 */
+    VH_DISC_ASIA      /* SCPS-45183 -- byte-identical to USA except the memory-card id */
+} PC_DiscRelease;
+PC_DiscRelease PC_CdDiscRelease(void);
 /* Fatal, user-actionable disc error: stderr + a Windows message box, then exit (pc_bootstrap.c).
  * Used at mount validation and by libcd.c's per-read corruption guards (a damaged image used to
  * hang the game silently instead). */

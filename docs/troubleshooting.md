@@ -12,8 +12,10 @@ explicitly with `VH_DISC_IMAGE` in `vandalhearts.ini`. The error message lists t
 tried.
 
 **"Wrong disc" error.** The port verifies the disc's boot signature before starting. If it refuses
-your image, the image is not the USA release (`SLUS-00447`), or the dump is not a raw 2352-byte
-`.bin`. Re-dump the disc as `.bin`/`.cue` and use the `.bin`.
+your image, it is not a supported *Vandal Hearts* dump (the USA `SLUS-00447` or the byte-identical
+Asia `SCPS-45183` — the Europe and Japan releases are different builds and are **not** supported; see
+[configuration.md](configuration.md#supported-releases)), or the dump is not a raw 2352-byte `.bin`.
+Re-dump the disc as `.bin`/`.cue` and use the `.bin`.
 
 **"Disc image is incomplete / corrupted" error — or, on v1.6.1 and older, the game starts but
 hangs (window "not responding") right after the `[HD] pack detected` console line.** This is the

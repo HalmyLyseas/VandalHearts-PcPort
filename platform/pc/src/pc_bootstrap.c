@@ -899,17 +899,32 @@ static void PC_Bootstrap(void) {
                 "This disc image looks TRUNCATED: its size is not a whole number of raw CD "
                 "sectors (2352 bytes), which usually means the file was only partially "
                 "copied or downloaded.\n\n"
-                "Re-copy or re-dump your Vandal Hearts (USA) disc and try again.", discPath);
+                "Re-copy or re-dump your Vandal Hearts disc and try again.", discPath);
         }
     }
     if (!PC_CdDiscSignatureOk()) {
         PC_FatalDiscError("Vandal Hearts - wrong disc image",
-            "This does not look like a Vandal Hearts (USA) disc image: the SLUS_004.47 boot "
-            "signature is missing.\n\n"
-            "Use a raw .bin dump of Vandal Hearts (USA) (not a different game, region, or a "
-            ".cue/.iso file).", discPath);
+            "This does not look like a Vandal Hearts disc image: the boot executable signature "
+            "is missing.\n\n"
+            "Use a raw .bin dump of Vandal Hearts USA (SLUS-00447) or Asia (SCPS-45183) -- not a "
+            "different game, the Europe/Japan releases, or a .cue/.iso file.", discPath);
     }
-    fprintf(stderr, "PC_Bootstrap: mounted disc image '%s'\n", discPath);
+    {
+        /* The USA and Asia releases share identical game code and disc layout, so both run; name
+         * whichever is mounted. An unrecognized PS-X EXE disc still boots (the signature above is
+         * the hard gate) but is flagged, since the Europe/Japan releases are different builds this
+         * port does not reproduce. */
+        PC_DiscRelease rel = PC_CdDiscRelease();
+        const char *relName = rel == VH_DISC_USA  ? "USA (SLUS-00447)"
+                            : rel == VH_DISC_ASIA ? "Asia (SCPS-45183)"
+                            : "unrecognized";
+        fprintf(stderr, "PC_Bootstrap: mounted disc image '%s' [%s]\n", discPath, relName);
+        if (rel == VH_DISC_UNKNOWN) {
+            fprintf(stderr, "PC_Bootstrap: WARNING: this is a Vandal Hearts boot disc but not the USA or "
+                            "Asia release. It may be the Europe/Japan build (different game code this "
+                            "port does not reproduce) -- expect incorrect behavior.\n");
+        }
+    }
 
     if (!PC_GpuInit(SCREEN_WIDTH, SCREEN_HEIGHT, "Vandal Hearts")) {
         fprintf(stderr, "PC_Bootstrap: failed to open a window (no display, or SDL2 issue)\n");
