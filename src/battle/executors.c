@@ -19,7 +19,7 @@
  *
  * Handshakes: gSignal3/gSignal4 are the "step finished" replies from the unit sprite
  * action and the spawned FX objects; gSignal5 is the camera protocol with
- * Objf017_AttackCamera / Objf571_LevelUp (battle/cameras.c) -- camera raises 1 when in
+ * Objf017_AttackCamera / Objf571_LevelUp (battle/presentation.c) -- camera raises 1 when in
  * place, the executor raises 99 to release it, the camera answers 100. Callers are the
  * player menus (battle/field.c) and the enemy-turn manager Objf013_BattleMgr. */
 #include "common.h"

@@ -1676,7 +1676,7 @@ s32 GetBestViewOfTarget(s8 z, s8 x, s32 param_3) {
 }
 
 /* GetBestViewOfTarget variant starting the obstruction search from the OPPOSITE yaw
- * (camera + 180deg); the battle camera (battle/cameras.c) picks among the three offset
+ * (camera + 180deg); the battle camera (battle/presentation.c) picks among the three offset
  * variants for shot variety. */
 s32 GetBestViewOfTargetPlus180(s8 z, s8 x, s32 param_3) {
    s16 angleToCheck;

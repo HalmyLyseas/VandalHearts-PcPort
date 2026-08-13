@@ -1,5 +1,5 @@
 /* The generic particle library and shared battle FX, second bank (the first is
- * spells/fx_common.c): rock spurts and rubble (Objf763/759, RotateQuadXY/YZ/XZ), stat and
+ * spells/hit_effects.c): rock spurts and rubble (Objf763/759, RotateQuadXY/YZ/XZ), stat and
  * level-up FX (Objf272/380/278/685), Spellbind FX2/FX3 (Objf715_to_718), the generic
  * particles (Objf710/739) and their emitters (projectile trails 764-769), item-spell
  * dispatch (770-789), Remove Paralysis (735/740/736/737), Phase Shift and Wyrmfang FX1

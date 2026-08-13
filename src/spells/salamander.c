@@ -1,6 +1,6 @@
 /* Salamander, the crawling flame serpent (Objf334 FX1 driver, Objf335 head, Objf336
  * segments), plus Rolling Fire FX1 (Objf332, a stray) and the Wyrmfang flames
- * (Objf747_748/749 -- FX1 is in spells/fx_common2.c). Dispatched via gSpellsEx (see
+ * (Objf747_748/749 -- FX1 is in spells/shared_fx.c). Dispatched via gSpellsEx (see
  * spells/casting_main.c). Objf377 (breath head) is cut content: its breath phase is
  * signalled by no shipped head; suffixed _Unused, kept byte-exact.
  *

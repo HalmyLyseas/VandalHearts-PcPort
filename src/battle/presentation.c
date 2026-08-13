@@ -291,7 +291,7 @@ void Objf026_588_FocusCamera(Object *obj) {
     * target is read-only here (only target->{x1,z1,y1} are read), so redirect NULL to a
     * zero Object -- every field then reads 0, bit-identical to the handler's per-read
     * zeroing (read-0, NOT skip: the camera still eases toward origin). NULL sites:
-    * battle/cameras.c:296/328/329/333. See exchange/56. */
+    * battle/presentation.c:296/328/329/333. See exchange/56. */
    {
       static const Object s_nullObj = {0};
       if (target == NULL) target = (Object *)&s_nullObj;

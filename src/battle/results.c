@@ -3,12 +3,12 @@
  *
  * TallySlainUnit is called from every death path of Objf014_BattleUnit (units/actor.c):
  * party members set a flag in gPartyMemberSlain, everyone else bumps the matching
- * gSlainUnits count. Both arrays are zeroed per battle by battle/eval.c and mirrored into
+ * gSlainUnits count. Both arrays are zeroed per battle by battle/evaluators.c and mirrored into
  * the in-battle save by core/card.c. CommitPartyStatus flushes every live gUnits entry back
  * into gPartyMembers; the results object runs it first, and Objf424_BattleEnder's debug
  * skip reuses it.
  *
- * Objf594_BattleResults is spawned by battle/eval.c once the victory banner finishes, and
+ * Objf594_BattleResults is spawned by battle/evaluators.c once the victory banner finishes, and
  * runs three concurrent lanes over the shared s_* statics: obj->state draws the windows;
  * obj->state2 walks the kill list and then the lost-party list, spawning one Objf593 child
  * every 10 frames and moving to a fresh row when the first penalty entry appears (a

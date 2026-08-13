@@ -988,7 +988,7 @@ void SetupBattleUnit(s16 stripIdx, u8 z, u8 x, s8 level, u8 team, u8 direction, 
          gTempUnitPtr->level = lvl;
          /* GAP 9: retail trial enemies carry expMulti 0, so physical attacks paid no XP (only support
           * did). Restore a per-chapter multiplier so clearing a trial rewards attackers too; the level
-          * cap keeps the total bounded. Paired with expScalingLevel in battle/eval.c. */
+          * cap keeps the total bounded. Paired with expScalingLevel in battle/evaluators.c. */
          gTempUnitPtr->expMulti = TrialEnemyExpMulti(gState.chapter);
       } else {
 #endif

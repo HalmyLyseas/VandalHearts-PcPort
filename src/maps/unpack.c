@@ -12,7 +12,7 @@
  * LoadEventData carves the freshly loaded EVDATA*.DAT out of gEvtEntityData: the leading
  * s16 is the entity count, and each entity's script is a run of s16 (opcode, argument)
  * pairs ending at opcode 99; walking the terminators yields one gEvtEntityDataPointers
- * entry per entity. events/events.c calls it and hands each pointer to SetupEventEntity
+ * entry per entity. events/scene_loaders.c calls it and hands each pointer to SetupEventEntity
  * (units/actor.c).
  *
  * Objf683_AdjustFaceElevation and Objf684_SlidingFace both index the 76-entry
@@ -25,7 +25,7 @@
  * format (s8 (frameIdx, delay) pairs closed by a zero pair, plus the 5-byte 0x3b/0x3c
  * records carrying a per-frame position offset), gathered into gAnimSet_80101fc0[56] and
  * two small sets nothing references. Entries come in front/back pairs because animation
- * is indexed animSet[animIdx + facingFront]; events/events.c passes these as event entities'
+ * is indexed animSet[animIdx + facingFront]; events/scene_loaders.c passes these as event entities'
  * base/alt sets. */
 #include "common.h"
 #include "field.h"

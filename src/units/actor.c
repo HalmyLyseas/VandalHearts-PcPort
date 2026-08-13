@@ -22,7 +22,7 @@
  * Event entities: SetupEventEntity[_SingleSet] binds one script from
  * gEvtEntityDataPointers plus two sprite strips to a new Objf409 (the interpreter itself
  * lives in events/entities.c); ReserveSprite MoveImages one 48x48 cell into a strip slot
- * (both called from events/events.c). */
+ * (both called from events/scene_loaders.c). */
 #include "common.h"
 #include "object.h"
 #include "window.h"

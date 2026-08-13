@@ -49,7 +49,7 @@ void PC_SpellListDump(int name, int cls, int lvl, int pathB, int advF, int advS,
 
 void PC_ReturnToTitle(void) {
     /* GAP 8: jump straight to the title menu from anywhere, skipping the intro videos, by replicating
-     * the game-over teardown (battle/eval.c). The title -> New/Load flow re-establishes run state, so
+     * the game-over teardown (battle/evaluators.c). The title -> New/Load flow re-establishes run state, so
      * leftover party/chapter/objects don't need clearing. Mode stays as-is (toggle editable at title). */
     {
         /* audio.h only carries a commented-out FIXME decl; declare the real signature

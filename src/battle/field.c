@@ -10,7 +10,7 @@
  * Attack/Magic/Item/Wait menu; spawns OBJF_TARGETING_ATTACK/_SPELL), Objf030_FieldInfo
  * (terrain/unit inspection), Objf586_BattleMsgBox with its SetupBattleMsgBox helpers, and
  * the scripted-event drivers Objf585_BattlePlayerEvent / Objf587_BattleEnemyEvent (per-map
- * dialogue and reinforcement spawns; win/lose rules live in battle/eval.c).
+ * dialogue and reinforcement spawns; win/lose rules live in battle/evaluators.c).
  *
  * Objf013_BattleMgr (~:3200) is the turn state machine: 0 wait for gIsEnemyTurn -> 13
  * "ENEMY TURN" banner, enemy event, upkeep -> 2..7 per-unit loop (pick the next enemy or

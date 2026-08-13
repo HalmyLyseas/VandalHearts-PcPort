@@ -133,7 +133,7 @@ software decoder feeding OpenAL:
 tracks** in the game, so this layer only ever streams finite one-shots.
 
 > **The game's background music is SEQ, not XA.** The loading/battle BGM is sequenced music
-> (`battle/eval.c` `PlayBattleBGM` → `AUDIO_CMD_PLAY_SEQ` → SPU voices), an entirely separate
+> (`battle/evaluators.c` `PlayBattleBGM` → `AUDIO_CMD_PLAY_SEQ` → SPU voices), an entirely separate
 > subsystem. If music is silent, it is never an XA problem. See [spu.md](spu.md).
 
 Movie (STR) playback shares this machinery: `CdRead2(Stream|RT)` (issued by `Movie_Start`) starts a
