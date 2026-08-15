@@ -1,3 +1,7 @@
+
+
+![cover-pc-port](docs/images/cover-pc-port.webp)
+
 # Vandal Hearts — Native PC Port
 
 A native PC port of the US PlayStation 1 release of **Vandal Hearts** (`SLUS_004.47`), built on a
