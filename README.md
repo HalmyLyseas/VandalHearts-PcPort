@@ -23,9 +23,14 @@ The project has three stages, **all completed**:
    an at-a-glance enemy threat overlay, an in-game options and save-management overlay, an opt-in
    **Tactical Mode** rebalance that offers a fresh way to play, a higher-fidelity graphics track (an
    accurate software rasterizer with optional internal-resolution supersampling), and an optional
-   **HD pack** for backgrounds and movies. The faithful retail experience stays the default; anything
-   that changes gameplay is opt-in. See [docs/gameplay-additions.md](docs/gameplay-additions.md),
-   [docs/tactical-mode.md](docs/tactical-mode.md) and [docs/hd-pack.md](docs/hd-pack.md).
+   **HD pack** for backgrounds and movies, plus a **translation framework** that lets the community
+   author and load language packs. The faithful retail experience stays the default; anything that
+   changes gameplay is opt-in. See:
+
+   - [docs/gameplay-additions.md](docs/gameplay-additions.md)
+   - [docs/tactical-mode.md](docs/tactical-mode.md)
+   - [docs/hd-pack.md](docs/hd-pack.md)
+   - [docs/language-packs.md](docs/language-packs.md)
 
 ## Status
 
@@ -67,6 +72,16 @@ playthroughs on both Windows and Linux, including the endgame and credits.
 | **Translate the game** | [Language packs](docs/language-packs.md) — what they cover and how they install — then the authoring toolchain: [hands-on quickstart](platform/pc/tools/langpack/quickstart.md) · [full reference](platform/pc/tools/langpack/README.md). |
 | **Contribute / fix a bug** | [Architecture](docs/architecture.md) first — the two-layer design and the one unbreakable rule — then [CONTRIBUTING.md](CONTRIBUTING.md). |
 | **Understand how it works** | The [documentation index](docs/README.md): internals, subsystem deep-dives, decoded game mechanics. |
+
+## Community language packs
+
+Packs made by the community, hosted by their authors. **They are not part of this project and are
+not reviewed by it**. Report problems with a pack on its own tracker. Install instructions are in
+[docs/language-packs.md](docs/language-packs.md).
+
+| Language | Creator | Link |
+|---|---|---|
+| Spanish  | arcadematicas | <https://github.com/arcadematicas/traduccion-vandal-hearts-decompiled-espa-ol> |
 
 ## Quick start
 
