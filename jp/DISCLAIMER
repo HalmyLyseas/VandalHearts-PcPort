@@ -1,0 +1,37 @@
+DISCLAIMER
+================================================================================
+
+This is a non-commercial fan preservation and interoperability project. It is
+NOT affiliated with, endorsed by, or sponsored by Konami or Sony. It is not
+sold and generates no profit.
+
+Vandal Hearts and all related characters, names, text, music, art, and other
+intellectual property are (c) Konami. The PlayStation, its BIOS, and the PsyQ
+SDK are (c) Sony. No ownership of, or license to, any Konami or Sony property
+is claimed by this project.
+
+You must supply your own legally-owned copy of the game.
+--------------------------------------------------------------------------------
+
+This source repository does NOT distribute any of the following. They are
+git-ignored and must be sourced from your own copy; the build reconstructs what
+it needs from them locally:
+
+  * the base game executable (SLPM_860.07) or a disc image;
+  * the Sony PsyQ SDK headers (include/PsyQ/) or any other Sony SDK/BIOS data;
+  * any extracted game asset -- graphics, audio, text, or map data. The files
+    under assets/ are GENERATED at build time from the executable you supply
+    (assets/*.bin by splat, assets/*.inc by tools/gen_assets_inc.py) and are
+    never committed.
+
+What this repository does contain is the reverse-engineered decompilation of
+the game's own code -- C source that, when compiled, reproduces the executable
+you already own, byte for byte. It is useless without that executable: there is
+no playable game here, and nothing in this tree can produce one.
+
+The purpose is preservation, study, and interoperability: documenting how the
+Japanese release was built, so the work is not lost when the hardware and the
+media are.
+
+If you are a rights holder and object to any part of this repository, please
+open an issue and it will be addressed.

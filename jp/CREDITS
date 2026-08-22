@@ -1,0 +1,25 @@
+CREDITS
+================================================================================
+
+Vandal Hearts (c) Konami. Developed and published by Konami; released for the
+PlayStation in 1996-1997. All game design, code, art, music, and text are the
+work and property of its original creators.
+
+This repository is a reverse-engineered decompilation of the Japanese release
+(SLPM-86007) by HalmyLyseas, 2026.
+
+Tools and prior work this project depends on:
+
+  * splat (ethteck and contributors)      -- binary splitting / extraction
+  * maspsx (mkst)                          -- old-GCC assembly -> modern GAS
+  * old-gcc (decompals)                    -- prebuilt GCC 2.x cc1 binaries
+  * psx-spx (Martin Korth / nocash)        -- PlayStation hardware documentation
+  * GNU binutils                           -- assembler and linker
+
+The decompilation of the North American release (SLUS-004.47) was used as a
+reference corpus while working:
+
+  https://github.com/HalmyLyseas/VandalHearts-PcPort
+
+It informed naming and structure; it was never assumed to be the answer -- every
+translation unit here is re-proven against the Japanese binary by md5.

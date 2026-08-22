@@ -1,0 +1,247 @@
+#ifndef GLYPHS_H
+#define GLYPHS_H
+
+#include "common.h"
+
+#define VRAM_GLYPHS_X 640
+#define VRAM_GLYPHS_Y 256
+#define VRAM_GLYPH_W (8 >> 2)
+#define VRAM_GLYPH_H 9
+#define VRAM_GLYPHS_PER_ROW 32
+
+typedef enum GlyphIndex {
+   GLYPH_BLANK = 0,
+   GLYPH_BG = 1,
+   GLYPH_CHAR_0 = 2,
+   GLYPH_CHAR_1 = 3,
+   GLYPH_CHAR_2 = 4,
+   GLYPH_CHAR_3 = 5,
+   GLYPH_CHAR_4 = 6,
+   GLYPH_CHAR_5 = 7,
+   GLYPH_CHAR_6 = 8,
+   GLYPH_CHAR_7 = 9,
+   GLYPH_CHAR_8 = 10,
+   GLYPH_CHAR_9 = 11,
+   GLYPH_CHAR_UPPERCASE_A = 68,
+   GLYPH_CHAR_UPPERCASE_B = 69,
+   GLYPH_CHAR_UPPERCASE_C = 70,
+   GLYPH_CHAR_UPPERCASE_D = 71,
+   GLYPH_CHAR_UPPERCASE_E = 72,
+   GLYPH_CHAR_UPPERCASE_F = 73,
+   GLYPH_CHAR_UPPERCASE_G = 74,
+   GLYPH_CHAR_UPPERCASE_H = 75,
+   GLYPH_CHAR_UPPERCASE_I = 76,
+   GLYPH_CHAR_UPPERCASE_J = 77,
+   GLYPH_CHAR_UPPERCASE_K = 78,
+   GLYPH_CHAR_UPPERCASE_L = 79,
+   GLYPH_CHAR_UPPERCASE_M = 80,
+   GLYPH_CHAR_UPPERCASE_N = 81,
+   GLYPH_CHAR_UPPERCASE_O = 82,
+   GLYPH_CHAR_UPPERCASE_P = 83,
+   GLYPH_CHAR_UPPERCASE_Q = 84,
+   GLYPH_CHAR_UPPERCASE_R = 85,
+   GLYPH_CHAR_UPPERCASE_S = 86,
+   GLYPH_CHAR_UPPERCASE_T = 87,
+   GLYPH_CHAR_UPPERCASE_U = 88,
+   GLYPH_CHAR_UPPERCASE_V = 89,
+   GLYPH_CHAR_UPPERCASE_W = 90,
+   GLYPH_CHAR_UPPERCASE_X = 91,
+   GLYPH_CHAR_UPPERCASE_Y = 92,
+   GLYPH_CHAR_UPPERCASE_Z = 93,
+   GLYPH_CHAR_PERIOD = 94,
+   GLYPH_CHAR_COMMA = 95,
+   GLYPH_CHAR_COLON = 96,
+   GLYPH_CHAR_EXCLAMATION = 97,
+   GLYPH_CHAR_QUESTION = 98,
+   GLYPH_CHAR_PERCENT = 99,
+   GLYPH_CHAR_EQUAL = 100,
+   GLYPH_CHAR_SLASH = 101,
+   GLYPH_CHAR_PLUS = 102,
+   GLYPH_ROUNDED_BORDER_TOP_LEFT = 103,
+   GLYPH_ROUNDED_BORDER_TOP = 104,
+   GLYPH_ROUNDED_BORDER_TOP_RIGHT = 105,
+   GLYPH_ROUNDED_BORDER_LEFT = 106,
+   GLYPH_ROUNDED_BORDER_RIGHT = 107,
+   GLYPH_ROUNDED_BORDER_BOTTOM_LEFT = 108,
+   GLYPH_ROUNDED_BORDER_BOTTOM = 109,
+   GLYPH_ROUNDED_BORDER_BOTTOM_RIGHT = 110,
+   GLYPH_CROSSED_BORDER_TOP_LEFT = 156,
+   GLYPH_CROSSED_BORDER_TOP = 157,
+   GLYPH_CROSSED_BORDER_TOP_RIGHT = 158,
+   GLYPH_CROSSED_BORDER_LEFT = 159,
+   GLYPH_CROSSED_BORDER_RIGHT = 160,
+   GLYPH_CROSSED_BORDER_BOTTOM_LEFT = 161,
+   GLYPH_CROSSED_BORDER_BOTTOM = 162,
+   GLYPH_CROSSED_BORDER_BOTTOM_RIGHT = 163,
+   GLYPH_LDRAGON_TOP_1 = 164,
+   GLYPH_LDRAGON_TOP_2 = 165,
+   GLYPH_LDRAGON_TOP_3 = 166,
+   GLYPH_LDRAGON_MID_1 = 167,
+   GLYPH_LDRAGON_MID_2 = 168,
+   GLYPH_LDRAGON_MID_3 = 169,
+   GLYPH_LDRAGON_TAIL = 170,
+   GLYPH_LDRAGON_TAIL_TIP = 171,
+   GLYPH_RDRAGON_TAIL_TIP = 172,
+   GLYPH_RDRAGON_TAIL = 173,
+   GLYPH_RDRAGON_MID_1 = 174,
+   GLYPH_RDRAGON_MID_2 = 175,
+   GLYPH_RDRAGON_MID_3 = 176,
+   GLYPH_RDRAGON_BOTTOM_1 = 177,
+   GLYPH_RDRAGON_BOTTOM_2 = 178,
+   GLYPH_RDRAGON_BOTTOM_3 = 179,
+   GLYPH_CHAR_ALT_0 = 180,
+   GLYPH_CHAR_ALT_1 = 181,
+   GLYPH_CHAR_ALT_2 = 182,
+   GLYPH_CHAR_ALT_3 = 183,
+   GLYPH_CHAR_ALT_4 = 184,
+   GLYPH_CHAR_ALT_5 = 185,
+   GLYPH_CHAR_ALT_6 = 186,
+   GLYPH_CHAR_ALT_7 = 187,
+   GLYPH_CHAR_ALT_8 = 188,
+   GLYPH_CHAR_ALT_9 = 189,
+   GLYPH_CHAR_ALT_SLASH = 190,
+   GLYPH_HP_BAR_0_PX = 191,
+   GLYPH_HP_BAR_1_PX = 192,
+   GLYPH_HP_BAR_2_PX = 193,
+   GLYPH_HP_BAR_3_PX = 194,
+   GLYPH_HP_BAR_4_PX = 195,
+   GLYPH_HP_BAR_5_PX = 196,
+   GLYPH_HP_BAR_6_PX = 197,
+   GLYPH_HP_BAR_7_PX = 198,
+   GLYPH_HP_BAR_8_PX = 199,
+   GLYPH_EXP_BAR_0_PX = 200,
+   GLYPH_EXP_BAR_1_PX = 201,
+   GLYPH_EXP_BAR_2_PX = 202,
+   GLYPH_EXP_BAR_3_PX = 203,
+   GLYPH_EXP_BAR_4_PX = 204,
+   GLYPH_EXP_BAR_5_PX = 205,
+   GLYPH_EXP_BAR_6_PX = 206,
+   GLYPH_EXP_BAR_7_PX = 207,
+   GLYPH_EXP_BAR_8_PX = 208,
+   GLYPH_CHAR_EXP_1 = 209,
+   GLYPH_CHAR_EXP_2 = 210,
+   GLYPH_CHAR_NEXT_1 = 211,
+   GLYPH_CHAR_NEXT_2 = 212,
+   GLYPH_CHAR_AGL_1 = 213,
+   GLYPH_CHAR_AGL_2 = 214,
+   GLYPH_EQUIP_1 = 215,
+   GLYPH_EQUIP_2 = 216,
+   GLYPH_WEAPON = 217,
+   GLYPH_HELMET = 218,
+   GLYPH_ARMOR = 219,
+   GLYPH_CLASS_KNIGHT_1 = 220, /* top-left */
+   GLYPH_CLASS_KNIGHT_2 = 221, /* top-right */
+   GLYPH_CLASS_KNIGHT_3 = 222, /* bottom-left */
+   GLYPH_CLASS_KNIGHT_4 = 223, /* bottom-right */
+   GLYPH_CLASS_ARCHER_1 = 224,
+   GLYPH_CLASS_ARCHER_2 = 225,
+   GLYPH_CLASS_ARCHER_3 = 226,
+   GLYPH_CLASS_ARCHER_4 = 227,
+   GLYPH_CLASS_ARMOR_1 = 228,
+   GLYPH_CLASS_ARMOR_2 = 229,
+   GLYPH_CLASS_ARMOR_3 = 230,
+   GLYPH_CLASS_ARMOR_4 = 231,
+   GLYPH_CLASS_AIRMAN_1 = 232,
+   GLYPH_CLASS_AIRMAN_2 = 233,
+   GLYPH_CLASS_AIRMAN_3 = 234,
+   GLYPH_CLASS_AIRMAN_4 = 235,
+   GLYPH_CLASS_MAGE_1 = 236,
+   GLYPH_CLASS_MAGE_2 = 237,
+   GLYPH_CLASS_MAGE_3 = 238,
+   GLYPH_CLASS_MAGE_4 = 239,
+   GLYPH_CLASS_PRIEST_1 = 240,
+   GLYPH_CLASS_PRIEST_2 = 241,
+   GLYPH_CLASS_PRIEST_3 = 242,
+   GLYPH_CLASS_PRIEST_4 = 243,
+   GLYPH_CLASS_MONK_1 = 244,
+   GLYPH_CLASS_MONK_2 = 245,
+   GLYPH_CLASS_MONK_3 = 246,
+   GLYPH_CLASS_MONK_4 = 247,
+   GLYPH_CLASS_VANDALIER_1 = 248,
+   GLYPH_CLASS_VANDALIER_2 = 249,
+   GLYPH_CLASS_VANDALIER_3 = 250,
+   GLYPH_CLASS_VANDALIER_4 = 251,
+   GLYPH_TBD_253 = 253,
+   GLYPH_TBD_254 = 254,
+   GLYPH_TERMINATOR = 255
+} GlyphIndex;
+
+extern u8 gGlyphStripGroup_800f0b84[];
+extern u8 gGlyphStripGroup_800f0b94[];
+extern u8 gGlyphStripGroup_800f0b9c[];
+extern u8 gGlyphStripGroup_800f0ba4[];
+extern u8 gGlyphStripGroup_800f0ba8[];
+extern u8 gGlyphStripGroup_800f0bb0[];
+extern u8 gGlyphStripGroup_800f0bb8[];
+extern u8 gGlyphStripGroup_800f0bc0[];
+extern u8 gGlyphStripGroup_800f0bd4[];
+extern u8 gGlyphStripGroup_800f0bf0[];
+extern u8 *gGlyphStripGroups[];
+extern u8 gGlyphStrip_01[];
+extern u8 gGlyphStrip_02[];
+extern u8 gGlyphStrip_03[];
+extern u8 gGlyphStrip_04[];
+extern u8 gGlyphStrip_05[];
+extern u8 gGlyphStrip_06[];
+extern u8 gGlyphStrip_07[];
+extern u8 gGlyphStrip_08[];
+extern u8 gGlyphStrip_09[];
+extern u8 gGlyphStrip_0A[];
+extern u8 gGlyphStrip_0B[];
+extern u8 gGlyphStrip_0C[];
+extern u8 gGlyphStrip_4B[];
+extern u8 gGlyphStrip_4C[];
+extern u8 gGlyphStrip_4D[];
+extern u8 gGlyphStrip_4E[];
+extern u8 gGlyphStrip_4F[];
+extern u8 gGlyphStrip_50[];
+extern u8 gGlyphStrip_51[];
+extern u8 gGlyphStrip_52[];
+extern u8 gGlyphStrip_53[];
+extern u8 gGlyphStrip_54[];
+extern u8 gGlyphStrip_55[];
+extern u8 gGlyphStrip_56[];
+extern u8 gGlyphStrip_57[];
+extern u8 gGlyphStrip_58[];
+extern u8 gGlyphStrip_59[];
+extern u8 gGlyphStrip_5A[];
+extern u8 gGlyphStrip_5B[];
+extern u8 gGlyphStrip_5C[];
+extern u8 gGlyphStrip_5D[];
+extern u8 gGlyphStrip_5E[];
+extern u8 gGlyphStrip_5F[];
+extern u8 gGlyphStrip_60[];
+extern u8 gGlyphStrip_61[];
+extern u8 gGlyphStrip_62[];
+extern u8 gGlyphStrip_63[];
+extern u8 gGlyphStrip_64[];
+extern u8 gGlyphStrip_65[];
+extern u8 gGlyphStrip_66[];
+extern u8 gGlyphStrip_67[];
+extern u8 gGlyphStrip_68[];
+extern u8 gGlyphStrip_C8[];
+extern u8 gGlyphStrip_C9[];
+extern u8 gGlyphStrip_CA[];
+extern u8 gGlyphStrip_CB[];
+extern u8 gGlyphStrip_CC[];
+extern u8 gGlyphStrip_CD[];
+extern u8 gGlyphStrip_CE[];
+extern u8 gGlyphStrip_CF[];
+extern u8 gGlyphStrip_D0[];
+extern u8 gGlyphStrip_D1[];
+extern u8 gGlyphStrip_D2[];
+extern u8 gGlyphStrip_D3[];
+extern u8 gGlyphStrip_D4[];
+extern u8 gGlyphStrip_D5[];
+extern u8 gGlyphStrip_D6[];
+extern u8 gGlyphStrip_D7[];
+extern u8 *gGlyphStrips[];
+extern u8 gClassIconStartingGlyph[];
+
+void IntToLeftPaddedGlyphs(s16, u8 *);
+// s32 StringToGlyphs(u8 *, u8 *);
+s32 IntToGlyphs(s16, u8 *);
+// void DrawGlyphStripGroup(u8 *, s32);
+u8 GetGlyphIdxForAsciiChar(u8);
+
+#endif

@@ -1,0 +1,48 @@
+Vandal Hearts (Japan) -- SLPM-86007 matching decompilation
+Copyright (C) 2026 HalmyLyseas
+
+================================================================================
+Scope of the GPL-2.0 license (LICENSE file)
+================================================================================
+
+The GPL-2.0 license in LICENSE covers ONLY the original work authored for this
+project by the copyright holder above. Concretely, that is:
+
+  * tools/**  -- the build and research tooling: the splat-config generator,
+                 the linker-script fixups, the TU manifest machinery, the
+                 asset-include generator, and the per-function verifier.
+  * The build system (Makefile) as authored here.
+  * The project documentation authored here (README.md, this NOTICE,
+    DISCLAIMER, CREDITS).
+
+================================================================================
+What the GPL-2.0 license does NOT cover
+================================================================================
+
+The following is NOT the copyright holder's work and is NOT licensed under
+GPL-2.0. No ownership is claimed over it. See DISCLAIMER.
+
+  * The decompiled game code -- src/**, and the matching-decomp headers and
+    configuration it depends on (include/*.h, symbol_addrs.txt,
+    SLPM_860.07.yaml, tools/tus.txt, undefined_additional.txt). This is a
+    reverse-engineered representation of Konami's original program. It is
+    published for preservation, study and interoperability; the underlying
+    work remains (c) Konami.
+
+  * Anything the build reads from your own copy of the game or from the Sony
+    SDK: SLPM_860.07, the PsyQ headers under include/PsyQ/, and every generated
+    file under asm/ and assets/. None of it is distributed here, and none of it
+    is licensed by this project.
+
+  * Third-party tooling the build depends on (splat, maspsx, old-gcc, binutils),
+    which carries its own licensing. See CREDITS.
+
+================================================================================
+In short
+================================================================================
+
+The tooling and documentation are free software under GPL-2.0. The decompiled
+game code is a derivative representation of a copyrighted work that the
+copyright holder of this repository does not own and cannot license to you; it
+is provided for preservation and study, and is useless without a copy of the
+game you already own.
