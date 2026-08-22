@@ -330,3 +330,53 @@ and `docs/width-bugs.md`):
 - **Some real API surface is never declared in any header** (Kernel's `GetRCnt`/`OpenEvent`, the
   memory-card file I/O). Old GCC allowed implicit-`int` calls; modern C doesn't. Grep actual call sites,
   not just headers, before concluding a subsystem's contract is complete.
+
+## v2.0.0 release-era facts + traps (2026-08-22 session)
+
+**Shipped state**: v2.0.0 public (master `69b9e0d`, curated 4-commit series; raw `jp-mvp` stays a
+LOCAL branch — never push it). Release binary = the UNIFIED build (`make unified` /
+`build-unified-win.sh`); single-region `make link` is dev-only. Test deployment (discs, hdpacks,
+langpacks, saves, ini) lives in `platform/pc/deploy/` — NEVER inside `build-uni*` (make-release.sh
+wipes those for clean builds, and now refuses to run if user data is found there).
+
+- **COFF `.refptr.<name>` COMDAT thunks MERGE ACROSS the two region blobs at final link** — the
+  old "each blob's copies are section-local" assumption was false. One surviving slot pointed the
+  JP game at `us_gGraphicBuffers` (split-brain ordering table → DrawOTag hang, Windows-only since
+  ELF has no thunks; the US game agreed with the surviving copy so only JP broke).
+  `tools/prefix_blob.py` now re-keys thunk symbols AND sections per blob. If a Windows-only,
+  one-region-only corruption ever appears again, FIRST scan the final exe for unprefixed
+  game/backend symbols (`nm | grep -v ' us_\| jp_\|refptr'`).
+- **LLP64: bare `long` in PLATFORM code is a landmine** — 32-bit on Windows, 64-bit on Linux. The
+  balance patcher passed repointed POINTERS through an `unsigned long` field: truncated on
+  Windows (image base 0x140000000 ⇒ always invalid), fully masked on Linux, invisible to every
+  sanitizer. Rule: platform code uses explicit `long long`/`(u)int64_t` for anything 64-bit;
+  detector = grep `\blong\b` excluding `long long` (docs/width-bugs.md entry 11).
+- **Windows bugs reproduce under Wine on this box** — unzip the release zip into a scratch dir,
+  `wine vandalhearts_pc.exe` (+ `VH_SMOKE=1` for boot checks). For a hang: `winedbg`,
+  `info process` → `attach 0x<pid>` → `bt 0x24` (first tid = main thread), then resolve
+  `vandalhearts_pc+0xOFFSET` against the UNSTRIPPED `build_win_uni/vandalhearts_pc.exe` via
+  mingw nm (the shipped exe is stripped at packaging; addresses are identical).
+- **JP memory card ≠ US card and the header LIES**: JP appends `icon3[128]` (header 512 vs 384)
+  but keeps the two-frame type byte 0x12, so layout cannot be derived — pc_saves PROBES the
+  listing CRC at 384 then 512. Native JP saves store captions in FULL-WIDTH SJIS (a US→JP
+  CONVERTED card keeps ASCII captions — don't let a converted card "prove" the format);
+  PC_SaveReadCard folds SJIS→ASCII for the caps-only overlay font.
+- **Fail-soft guard family** (ship posture: degrade, never crash): object allocators return a
+  sacrificial static on pool overflow (retail never NULL-checks; PSX absorbed the writes);
+  DrawOTag breaks out after 1M walk steps (cyclic OT) with a one-shot chain dump. Both dumps
+  diagnose while the game keeps running.
+- **Overlay RETURN TO TITLE is a REQUEST** (`pc_overlay.c` owns it now): the flip applies at the
+  main-loop top via `PC_ApplyReturnToTitle` — overlay input fires inside nested VSync wait loops,
+  and an immediate flip races live loaders/movie streams (crash + ghost-title bugs). The apply
+  also aborts an armed movie stream (START-skip teardown) and drops the held frame overlay
+  (backend keeps the last movie frame until a ClearScreen the jump never reaches).
+- **Fast boot** (`VH_FAST_BOOT`, default on): CD-model 16x grace until the FIRST movie stream
+  (one-way latch at `s_movieActive=1`). Boot loads tick no engine frames → RNG/drift-harness
+  untouched; everything from the logo onward stays hardware-exact. VSync now pumps SDL events
+  every tick (compositor ping answered during loads — the GNOME "not responding" fix).
+- **Release flow**: stage with `make-release.sh vX.Y.Z --no-publish`, add the two per-game
+  hdpack zips (`hdpacks/<game-id>/` root) + regenerate SHA256SUMS, user validates the STAGED
+  bytes, then publish the SAME files standalone:
+  `gh release create vX.Y.Z -R HalmyLyseas/VandalHearts-PcPort --notes-file RELEASE_NOTES.md <assets>`
+  (a plain publish run would REBUILD, shipping bytes nobody validated). RELEASE_NOTES.md is
+  GENERATED (script header + CHANGELOG section) — edits go in those two sources, never the file.

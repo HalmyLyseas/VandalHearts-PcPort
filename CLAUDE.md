@@ -96,7 +96,7 @@ job is byte-exact matching, not readability or portability; all port-side change
   **not part of the repo** and will not exist in a clone. Do not cite it as a durable reference; put
   anything that should survive into `docs/` or a skill.
 
-## The Japanese region (jp-mvp track)
+## The Japanese region (shipped in v2.0.0)
 
 The repo also carries **`jp/` — a complete second matching decomp of the Japanese release
 (SLPM-86007, 88/88 TUs byte-exact, its own Makefile/yaml/symbol map; verify with
@@ -114,7 +114,7 @@ calibrated to BizHawk hardware baselines. **The unified executable is COMPLETE**
 the JP game carries the full `PC_FEAT` set (Tactical, ally-cycle, threat overlay,
 fast-forward). HD packs live in per-region `hdpacks/<game-id>/` subfolders (legacy flat layout
 still detected). A translated retail debug menu exists in both regions behind `VH_DEBUG_MENU=1`
-(dev tool, undocumented). Full build/architecture detail in the
+(documented as an advanced option in `platform/pc/OPTIONS.md`). Full build/architecture detail in the
 [`phase-c-pc-port`](.claude/skills/phase-c-pc-port/SKILL.md) and
 [`decomp-build`](.claude/skills/decomp-build/SKILL.md) skills.
 
