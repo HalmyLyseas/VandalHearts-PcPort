@@ -173,6 +173,16 @@ void Obj_Execute(void) {
 
    for (i = 0; i < OBJ_DATA_CT; i++, obj++) {
       if (obj->functionIndex != OBJF_NULL) {
+#ifdef PC_PORT
+         /* Debug-menu warp guard (2026-08-22, gdb: wild jump into sUnitAnimDataBlob from this
+          * dispatch): a warped scene leaves stale objects whose functionIndex is out of the
+          * 804-entry table, so the indexed load fetched a pointer from adjacent DATA and jumped
+          * into it. Clear the slot instead of dispatching. Unreachable in normal play. */
+         if ((u32)obj->functionIndex >= (u32)(sizeof(gObjFunctionPointers) / sizeof(gObjFunctionPointers[0]))) {
+            obj->functionIndex = OBJF_NULL;
+            continue;
+         }
+#endif
          (*gObjFunctionPointers[obj->functionIndex])(obj);
       }
    }
@@ -202,6 +212,20 @@ void Obj_ResetAll(void) {
       gTempObj->functionIndex = OBJF_NULL;
    }
 }
+
+#ifdef PC_PORT
+/* Pool exhausted: retail returns NULL and every caller stores fields through it unchecked -- on
+ * PSX those writes land in low kernel RAM and the "object" simply never executes; on PC a NULL
+ * write is a fatal SIGSEGV (seen live 2026-08-22: overlay RETURN TO TITLE mid-demo-event-load
+ * overflowed the pool, crash in SetupEventEntity). A static sacrificial Object reproduces the
+ * hardware OUTCOME -- the writes are absorbed, the object is not in gObjectArray so it never
+ * runs -- without the kernel-corruption roulette. Re-zeroed per handout like a real slot. */
+static Object s_objPoolOverflow;
+static Object *Obj_PoolOverflow(void) {
+   memset(&s_objPoolOverflow, 0, sizeof(s_objPoolOverflow));
+   return &s_objPoolOverflow;
+}
+#endif
 
 Object *Obj_GetUnused(void) {
    s32 i;
@@ -247,7 +271,11 @@ Object *Obj_GetUnused(void) {
          return p;
       }
    }
+#ifdef PC_PORT
+   return Obj_PoolOverflow();   /* absorb the caller's unchecked writes -- see above */
+#else
    return NULL;
+#endif
 }
 
 Object *Obj_GetFirstUnused(void) {
@@ -293,7 +321,11 @@ Object *Obj_GetFirstUnused(void) {
          return p;
       }
    }
+#ifdef PC_PORT
+   return Obj_PoolOverflow();   /* absorb the caller's unchecked writes -- see above */
+#else
    return NULL;
+#endif
 }
 
 Object *Obj_GetLastUnused(void) { return Obj_GetLastUnusedSkippingTail(0); }
@@ -342,7 +374,11 @@ Object *Obj_GetLastUnusedSkippingTail(s32 tailEntriesToSkip) {
          return p;
       }
    }
+#ifdef PC_PORT
+   return Obj_PoolOverflow();   /* absorb the caller's unchecked writes -- see above */
+#else
    return NULL;
+#endif
 }
 
 s32 Obj_CountUnused(void) {

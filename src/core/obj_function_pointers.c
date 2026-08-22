@@ -458,7 +458,11 @@ void Objf580_Town(Object *);
 void Objf581_AudioCommand(Object *);
 void Objf582_MainMenu_Jpn(Object *);
 void Objf583_LoadingIndicator(Object *);
+#ifdef PC_FEAT
+void Objf584_DebugSceneSelect(Object *);
+#else
 void Objf584_Noop(Object *);
+#endif
 void Objf585_BattlePlayerEvent(Object *);
 void Objf586_BattleMsgBox(Object *);
 void Objf587_BattleEnemyEvent(Object *);
@@ -1165,7 +1169,11 @@ ObjFunction gObjFunctionPointers[804] = {
     [581] = Objf581_AudioCommand,
     [582] = Objf582_MainMenu_Jpn,
     [583] = Objf583_LoadingIndicator,
+#ifdef PC_FEAT
+    [584] = Objf584_DebugSceneSelect,   /* exchange/107: JP debug scene selector, US-translated */
+#else
     [584] = Objf584_Noop,
+#endif
     [585] = Objf585_BattlePlayerEvent,
     [586] = Objf586_BattleMsgBox,
     [587] = Objf587_BattleEnemyEvent,

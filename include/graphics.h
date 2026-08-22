@@ -709,25 +709,28 @@ extern s16 gSceneSpriteStripUnitIds[105][20];
 extern u8 **gSpriteStripAnimSets[25];
 /* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites (src/states/game_setup.c:1073) indexes
  * this with gSpriteStripUnitIds[i], and the decomp already carried a `//?: Won't this read
- * out-of-bounds of gUnitAnimSets?` comment at that line. The true index ceiling is ~300, not the
- * 151 first observed: SetupPartySprites (states/game_setup.c:117-176) shows event-sprite IDs run 151..274
- * and then get `+= adv*6` (adv up to 4) -> max ~298, and the comment there says "IDs 151..300 are
- * reserved for main party event sprites". An earlier fix sized this to [192] off the first observed
- * index (151) and a ch4 cutscene then overran it at ~199 -- the same "widen on an observed value"
- * mistake made with gTravelAscentCost. Sized once here to the documented ceiling.
+ * out-of-bounds of gUnitAnimSets?` comment at that line. The index ceiling is set by DATA, not
+ * reasoning: gSpriteStripUnitIds is filled from gSceneSpriteStripUnitIds, whose shipped table
+ * (byte-identical in both regions) carries 77 distinct ids in 401..488 (scene 0 slot 0 = 403) --
+ * so the array is sized [489], the shipped maximum + 1. The history is two rounds of the same
+ * "widen on a non-exhaustive value" mistake (also made with gTravelAscentCost): first [192] off
+ * the first observed index (151; a ch4 cutscene overran it at ~199), then [301] off a REASONED
+ * ceiling ("IDs 151..300 are reserved for main party event sprites", SetupPartySprites
+ * states/game_setup.c:117-176) that the actual scene table contradicts. Sized once here from an
+ * exhaustive scan of the shipped data.
  *
- * Unlike the generator-extracted travel tables, gUnitAnimSets is a hand-RECONSTRUCTED pointer table
+ * Unlike the generator-extracted travel tables, gUnitAnimSets is a RECONSTRUCTED pointer table
  * (platform/pc/src/pc_unit_anim_data.c), so the hardware bytes past 144 (adjacent gUnitClutIds read
- * as pointers -- garbage even on hardware) cannot be faithfully reproduced. Entries 144..300 are
+ * as pointers -- garbage even on hardware) cannot be faithfully reproduced. Entries 144..488 are
  * therefore NULL: the point of widening is SAFETY (the read stays in bounds and yields NULL instead
  * of a dereferenced wild pointer -- gSpriteStripAnimSets IS dereferenced at units/actor.c:142),
  * not faithfulness. Believed set-but-unused for rendering: cutscene units take their animset from
- * gEvtEntities (see milestone_cutscene_units_fixed), which is why entries 144..191 being NULL since
- * the earlier fix has not broken any cutscene sprite through ch1-ch4. If a future cutscene sprite
- * IS wrong, the real fix is to reconstruct those event-sprite animsets, not to grow the array.
+ * gEvtEntities, which is why the NULL padding has not broken any cutscene sprite across full
+ * playthroughs. If a future cutscene sprite IS wrong, the real fix is to reconstruct those
+ * event-sprite animsets, not to grow the array.
  * PERMUTER-gated; the matching build keeps [UNIT_DB_CT]. */
 #ifdef PERMUTER
-extern u8 **gUnitAnimSets[301];
+extern u8 **gUnitAnimSets[489];
 #else
 extern u8 **gUnitAnimSets[UNIT_DB_CT];
 #endif

@@ -91,6 +91,16 @@ void StartUnitSpritesDecoder(u8 stripIdx) {
    Object *obj = &gUnitSpritesDecoder;
 
    stripIdx -= 2;
+#ifdef PC_PORT
+   /* Debug-menu warp guard (2026-08-22, gdb: clicking a ghost-scene unit decoded a strip with a
+    * garbage stripIdx): both tables are [20], so an out-of-range index double-derefs into a
+    * garbage base pointer and the RLE decoder walks off a page. Don't arm the decoder -- the
+    * unit simply stays undrawn. Unreachable in normal play. */
+   if (stripIdx >= 20 || (u32)gUnitSetEncodedSpriteDataIdx[stripIdx] >= 20u ||
+       gEncodedUnitSpriteData[gUnitSetEncodedSpriteDataIdx[stripIdx]] == NULL) {
+      return;
+   }
+#endif
    obj->functionIndex = OBJF_UNIT_SPRITES_DECODER;
    obj->state = 0;
    obj->d.objf050.baseSrcDataPtr = gEncodedUnitSpriteData[gUnitSetEncodedSpriteDataIdx[stripIdx]];

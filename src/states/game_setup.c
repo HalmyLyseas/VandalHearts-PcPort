@@ -348,6 +348,16 @@ void SetupPartyBattleUnit(u8 partyIdx, u8 z, u8 x, u8 direction) {
       unit = CreateUnitInNextSlot();
 
       battler = Obj_GetUnused();
+#ifdef PC_PORT
+      /* Debug-menu warp guard (2026-08-21, JP event-map crash, core-verified): warping straight
+       * into a battle scene skips the roster/object-pool resets the normal flow does, so
+       * Obj_GetUnused() can exhaust (returns NULL -> the store below faulted) and CreateUnit can
+       * run off the full roster (returns &gUnits[UNIT_CT], one past the array -- retail OOB).
+       * Reachable ONLY via the retail debug menu (VH_DEBUG_MENU); bail instead of corrupting. */
+      if (battler == NULL || unit >= &gUnits[UNIT_CT]) {
+         return;
+      }
+#endif
       unit->battler = battler;
       battler->functionIndex = OBJF_BATTLE_UNIT;
       battler->d.objf014.unit = unit;
@@ -1038,6 +1048,17 @@ void SetupBattleUnits(void) {
    BattleEnemyUnitInitialState *pEnemyInit;
    BattlePartyUnitInitialState *pPartyInit;
 
+#ifdef PC_PORT
+   /* Debug-menu warp guard (2026-08-22, gdb: scene-7 warp entered battle setup with an
+    * unset/garbage mapNum): both tables are 74 per-map row POINTERS, so an out-of-range index
+    * reads a garbage row and the walk below faults; a NULL row (non-battle map) would too.
+    * Bail on either. Unreachable in normal play. */
+   if ((u32)gState.mapNum >= 74u ||
+       gBattleEnemyUnitInitialStates[gState.mapNum] == NULL ||
+       gBattlePartyUnitInitialStates[gState.mapNum] == NULL) {
+      return;
+   }
+#endif
    pEnemyInit = &gBattleEnemyUnitInitialStates[gState.mapNum][0];
    while (pEnemyInit->stripIdx != 0) {
       SetupBattleUnit(pEnemyInit->stripIdx, pEnemyInit->z, pEnemyInit->x, pEnemyInit->level,

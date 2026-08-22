@@ -171,6 +171,16 @@ s32 DecodeLineOfText(u8 *src, u8 *dst) {
    s32 n = 0;
 
    while (1) {
+#ifdef PC_PORT
+      /* Corrupt-input bound (2026-08-21, JP debug-menu event-map warp, gdb first-chance trace):
+       * with UNLOADED scratch data there is no CR/LF terminator, and the decode marched ~4.7KB
+       * past the caller's 1KB stack buffer into the guard page -- smearing the whole stack on
+       * the way (the "no dump, no core" crash). Real lines are <100 bytes; 1000 stays inside
+       * LoadText's buffer[1024] incl. the "\n\0" tail. LoadText treats a capped line as END. */
+      if (n >= 1000) {
+         break;
+      }
+#endif
       b1 = ~src[0];
       b2 = ~src[1];
       if (b1 == '\r' && b2 == '\n') {
@@ -208,6 +218,19 @@ void LoadText(s32 cdf, u8 *pText, u8 **textPointers) {
    while (entryNum <= 100) {
       n = DecodeLineOfText(pInputData, buffer);
 
+#ifdef PC_PORT
+      if (n >= 1000) {
+         /* Capped decode = corrupt/unloaded text data (see DecodeLineOfText). Don't just stop:
+          * leaving textPointers[] unfilled hands consumers garbage pointers that can sit at a
+          * page edge and fault inside the renderers (2026-08-22, debug-menu warp, 2nd gdb
+          * trace). Point every entry at a safe empty string instead, so draws render nothing. */
+         pText[0] = '\0';
+         for (n = 1; n <= 100; n++) {
+            textPointers[n] = pText;
+         }
+         break;
+      }
+#endif
       if (buffer[0] == '\n' && readingEntry == 0) {
          readingEntry = 1;
          textPointers[entryNum++] = pText;
@@ -949,6 +972,9 @@ void DrawText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 c
    s32 readingFromStringTable;
    u8 *insertionPoint;
    u8 *p;
+#ifdef PC_PORT
+   s32 guardSteps = 0;   /* unterminated-input bound; see the loop-top check */
+#endif
    s32 n;
    s32 pad;
    s32 column;
@@ -969,6 +995,14 @@ void DrawText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 c
    column = 0; // s3
 
    while (1) {
+#ifdef PC_PORT
+      /* Unterminated-input bound (2026-08-22, debug-menu warp, gdb first-chance in this loop):
+       * a garbage string walked ~60 glyphs past the screen edge and off a mapped page. Real
+       * draws are far below 4096 glyph/control steps per call; bail instead. */
+      if (++guardSteps > 4096) {
+         return;
+      }
+#endif
       switch (*p) {
       case '\0':
          if (readingFromStringTable) {
@@ -1057,6 +1091,9 @@ void DrawSjisText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s
    s32 readingFromStringTable;
    u8 *insertionPoint;
    u8 *p;
+#ifdef PC_PORT
+   s32 guardSteps = 0;   /* unterminated-input bound; see the loop-top check */
+#endif
    s32 n;
    s32 pad;
    s32 column;
@@ -1077,6 +1114,14 @@ void DrawSjisText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s
    column = 0;
 
    while (1) {
+#ifdef PC_PORT
+      /* Unterminated-input bound (2026-08-22, debug-menu warp, gdb first-chance in this loop):
+       * a garbage string walked ~60 glyphs past the screen edge and off a mapped page. Real
+       * draws are far below 4096 glyph/control steps per call; bail instead. */
+      if (++guardSteps > 4096) {
+         return;
+      }
+#endif
       switch (*p) {
       case '\0':
          if (readingFromStringTable) {

@@ -1227,6 +1227,21 @@ void Movie_Finish(void) {
    sMovieSectorHeader = NULL;
 }
 
+#ifdef PC_PORT
+/* Overlay RETURN TO TITLE (platform pc_balance.c): tear down an in-flight movie exactly like the
+ * START skip does (movie_state.c case 11: mute serial A, Movie_Finish -- whose CdlPause the PC
+ * backend uses to close the frame overlay / HD video / subtitles). No-op when no stream is armed
+ * (sMovieSectorHeader is this subsystem's own active predicate, see Movie_GetFrameNum). Without
+ * this the state flip left the stream running: frozen frame, audio playing on, and the movie's
+ * transition later clobbered the jump (user repro 2026-08-22, Konami logo movie). */
+void Movie_AbortForReturnToTitle(void) {
+   extern void SsSetSerialVol(char, short, short);   /* PsyQ libsnd; cd.c doesn't include it */
+   if (sMovieSectorHeader == NULL) return;
+   SsSetSerialVol(0 /* SS_SERIAL_A */, 0, 0);
+   Movie_Finish();
+}
+#endif
+
 u32 Movie_GetFrameNum(void) {
    if (sMovieSectorHeader == NULL) {
       return 0;

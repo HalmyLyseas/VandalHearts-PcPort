@@ -1335,6 +1335,15 @@ void Objf014_BattleUnit(Object *obj) {
       sprite->d.sprite.animInitialized = 0;
    }
    animSet = OBJ.animSet;
+#ifdef PC_PORT
+   /* Debug-menu warp guard (2026-08-22, gdb first-chance at this line): a warped-into battle
+    * spawns units whose sprite-strip decode never ran, so OBJ.animSet is still NULL (the pool's
+    * acquisition memset) and indexing it faults. Same NULL-animSet class as the cutscene-entity
+    * fixes; skip this unit's visual update instead of dying. Unreachable in normal play. */
+   if (animSet == NULL) {
+      return;
+   }
+#endif
    sprite->d.sprite.animData = animSet[OBJ.animIdx + sprite->d.sprite.facingFront];
    UpdateUnitSpriteAnimation(sprite);
 
