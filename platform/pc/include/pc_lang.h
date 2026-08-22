@@ -139,5 +139,8 @@ const char *PC_LangBgDir(void);
  * restart marker. A pack applies at BOOT; the overlay persists the choice, it never live-swaps. */
 int PC_LangListPacks(char folders[][64], char names[][64], int max);
 const char *PC_LangBootFolder(void);
+/* THE ONE MANIFEST READER (pc_lang_list.c -- compiled in BOTH regions, like PC_LangListPacks):
+ * the loader and the overlay picklist share this accept rule. Returns 1 if the pack may load. */
+int PC_LangManifestCheck(const char *dir, int *formatOut, char *nameOut, size_t nameN, int quiet);
 
 #endif /* PC_LANG_H */

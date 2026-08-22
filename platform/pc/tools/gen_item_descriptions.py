@@ -34,10 +34,18 @@ OUT = os.environ.get("VH_GENERATED_OUT",
 LOAD_ADDR = 0x80010000
 FILE_BASE = 0x800
 
-TABLES = [
-    ("gItemDescriptions",  0x800ef3d8, 101),
-    ("gItemDescriptions2", 0x800ef56c, 101),
-]
+REGION = os.environ.get("VH_REGION", "us")
+if REGION == "jp":
+    # JP has ONE description table serving both names (both symbols map to 0x800f16cc in
+    # SLPM_860.07 -- exchange/102 §3); gItemDescriptions2 is emitted as an alias below.
+    TABLES = [("gItemDescriptions", 0x800f16cc, 101)]
+    ALIASES = [("gItemDescriptions2", "gItemDescriptions", 101)]
+else:
+    TABLES = [
+        ("gItemDescriptions",  0x800ef3d8, 101),
+        ("gItemDescriptions2", 0x800ef56c, 101),
+    ]
+    ALIASES = []
 
 
 def foff(addr):
@@ -86,6 +94,12 @@ def main():
                 s = data[o:e].decode("latin1")
                 lines.append('    "%s", /* [%d] */' % (c_escape(s), i))
         lines.append("};")
+        lines.append("")
+    for alias, target, count in ALIASES:
+        lines.append("/* %s and %s are the SAME table in this region's binary (one address, two"
+                     % (alias, target))
+        lines.append(" * names) -- alias rather than duplicate, so both consumers share storage. */")
+        lines.append("extern char *%s[%d] __attribute__((alias(\"%s\")));" % (alias, count, target))
         lines.append("")
     open(OUT, "w").write("\n".join(lines))
     print("wrote %s (%s)" % (OUT, ", ".join(n for n, _, _ in TABLES)))

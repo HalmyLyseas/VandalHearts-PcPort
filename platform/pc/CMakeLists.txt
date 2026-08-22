@@ -35,12 +35,33 @@ separate_arguments(VH_SAN_LIST NATIVE_COMMAND "${VH_SANITIZE}")
 set(PC_DIR       ${CMAKE_CURRENT_SOURCE_DIR})
 set(PROJECT_ROOT ${PC_DIR}/../..)
 set(SRC_DIR      ${PROJECT_ROOT}/src)
+
+# ---- REGION (exchange/102/104, mirrors the Makefile) ------------------------------------------
+# VH_REGION=us|jp selects the game-code tree; VH_UNIFIED_CORE=ON compiles this core for the P5
+# unified binary (pc_bootstrap.c's bootstrap constructors compile out); VH_BLOB=ON produces the
+# prefix-renamed relocatable core (core_<region>.o) instead of an executable; VH_UNIFIED_CORES
+# builds the FINAL unified exe from two such blobs + pc_region_main.c.
+set(VH_REGION "us" CACHE STRING "Game region core: us or jp")
+option(VH_UNIFIED_CORE "Compile for the unified binary (VH_UNIFIED: explicit bootstrap)" OFF)
+option(VH_BLOB "Produce the prefix-renamed core_<region>.o instead of an executable" OFF)
+set(VH_UNIFIED_CORES "" CACHE STRING "Final unified link: semicolon list of core_us.o;core_jp.o")
+if(VH_REGION STREQUAL "jp")
+    set(GAME_ROOT ${PROJECT_ROOT}/jp)
+    set(PSX_BASENAME SLPM_860.07)
+    set(REGION_DEF VH_REGION_JP)
+    set(GAME_DEFS "PERMUTER;PC_PORT;PC_FEAT;VH_REGION_JP")  # full PC_FEAT since exchange/105
+else()
+    set(GAME_ROOT ${PROJECT_ROOT})
+    set(PSX_BASENAME SLUS_004.47)
+    set(REGION_DEF VH_REGION_US)
+    set(GAME_DEFS "PERMUTER;PC_PORT;PC_FEAT;VH_REGION_US")
+endif()
 set(GEN_DIR      ${CMAKE_BINARY_DIR}/datagen)     # generator's VH_BUILD_DIR (staging + work + output)
 set(STAGE_DIR    ${GEN_DIR}/include_stage)
 set(GEN_ASSET_DIR ${GEN_DIR}/generated_assets)
 set(GEN_DATA_DIR ${GEN_DIR}/generated_sources)
 
-set(VH_PSX_EXE "${PROJECT_ROOT}/SLUS_004.47" CACHE FILEPATH "Original US PS-X EXE used for generated data")
+set(VH_PSX_EXE "${GAME_ROOT}/${PSX_BASENAME}" CACHE FILEPATH "Original PS-X EXE of this region, used for generated data")
 set(VH_KROM_SOURCE "${PROJECT_ROOT}/external/psy-q/3.6/PSYQ/BIN/KROMDAT.BIN" CACHE FILEPATH
     "PsyQ KROMDAT.BIN or a PS1 BIOS containing the same font data")
 
@@ -60,6 +81,15 @@ foreach(_h ${_stage_hdrs})
     get_filename_component(_hn ${_h} NAME)
     file(CREATE_LINK ${_h} ${STAGE_DIR}/${_hn} SYMBOLIC)
 endforeach()
+if(VH_REGION STREQUAL "jp")
+    # Shared-HEADER rule (exchange/102 §4): 11 headers stay the US gate-carrying copies staged
+    # above; the 4 genuinely-different ones come from jp/include (field.h via the hand-merged
+    # region-jp variant that keeps the US gate blocks).
+    foreach(_rh audio.h card.h units.h)
+        file(CREATE_LINK ${GAME_ROOT}/include/${_rh} ${STAGE_DIR}/${_rh} SYMBOLIC)
+    endforeach()
+    file(CREATE_LINK ${PC_DIR}/include/region-jp/field.h ${STAGE_DIR}/field.h SYMBOLIC)
+endif()
 file(CREATE_LINK ${PC_DIR}/include/PsyQ        ${STAGE_DIR}/PsyQ        SYMBOLIC)
 file(CREATE_LINK ${PC_DIR}/include/types.h     ${STAGE_DIR}/types.h     SYMBOLIC)
 file(CREATE_LINK ${PC_DIR}/include/inline_gte.h ${STAGE_DIR}/inline_gte.h SYMBOLIC)
@@ -126,7 +156,27 @@ if(VH_HDVIDEO)
 endif()
 
 # ---- source lists -----------------------------------------------------------------------------
-file(GLOB GAME_SRCS CONFIGURE_DEPENDS ${SRC_DIR}/*.c ${SRC_DIR}/*/*.c)
+if(NOT VH_UNIFIED_CORES)   # normal / blob modes; the unified-final link skips to the executable
+# Inventory from the region's real tree; shared TUs (shared_tus.txt) always compile from the US
+# tree so gated fixes land once (exchange/102 §4); the rest from the region tree.
+file(GLOB _game_inventory RELATIVE ${GAME_ROOT}/src CONFIGURE_DEPENDS
+     ${GAME_ROOT}/src/*.c ${GAME_ROOT}/src/*/*.c)
+set(GAME_SRCS "")
+if(VH_REGION STREQUAL "jp")
+    file(STRINGS ${PC_DIR}/shared_tus.txt _shared_tus REGEX "^[^#]")
+    foreach(_rel ${_game_inventory})
+        list(FIND _shared_tus "${_rel}" _shared_idx)
+        if(_shared_idx GREATER -1)
+            list(APPEND GAME_SRCS ${SRC_DIR}/${_rel})
+        else()
+            list(APPEND GAME_SRCS ${GAME_ROOT}/src/${_rel})
+        endif()
+    endforeach()
+else()
+    foreach(_rel ${_game_inventory})
+        list(APPEND GAME_SRCS ${SRC_DIR}/${_rel})
+    endforeach()
+endif()
 file(MAKE_DIRECTORY ${GEN_ASSET_DIR}/assets)
 file(MAKE_DIRECTORY ${GEN_DATA_DIR})
 set(PSX_INCLUDE_OUTPUTS
@@ -149,7 +199,12 @@ if(APPLE)
 endif()
 
 # Backend + hand-written data files, grouped by their Makefile compile profile.
-set(BACKEND_PLAIN   pc_lang pc_lang_font libcd libspu libkernel libgpu pc_raster pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_movie_subs pc_hdvideo)
+set(BACKEND_PLAIN   pc_lang pc_lang_list pc_lang_font libcd libspu libkernel libgpu pc_raster pc_gpu_trace pc_hdpack libsn pc_bootstrap pc_xa pc_spu pc_mdec pc_kanji_font pc_overlay pc_saves pc_movie_subs pc_hdvideo)
+if(VH_REGION STREQUAL "jp")
+    # Langpack is US-only by design; the JP core links the documented no-pack stubs instead.
+    list(REMOVE_ITEM BACKEND_PLAIN pc_lang pc_lang_font)
+    list(APPEND BACKEND_PLAIN pc_lang_stub)
+endif()
 set(DATA_PERM       pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data pc_evt_entities)
 set(DATA_PLAIN      pc_spell_descriptions pc_item_descriptions pc_string_table)
 
@@ -173,6 +228,11 @@ endif()
 # (byte-exact build/SLUS_004.47 + PsyQ KROMDAT.BIN, both already required), so the source tree ships
 # no copyrighted data. Mirrors the Makefile's gen rules. See exchange/60.
 set(GENERATED_DATA_C pc_kanji_font pc_spell_descriptions pc_item_descriptions pc_evt_entities pc_string_table)
+if(VH_REGION STREQUAL "jp")
+    # The JP core regenerates ALL reconstructions from SLPM_860.07 (the src/ copies are the US
+    # originals); the generators are region-parametric (exchange/102 P1).
+    list(APPEND GENERATED_DATA_C pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data)
+endif()
 foreach(_g ${GENERATED_DATA_C})
     string(REPLACE "pc_" "" _base "${_g}")   # gen_<base>.py, e.g. pc_string_table -> gen_string_table.py
     set(_generated_source ${GEN_DATA_DIR}/${_g}.c)
@@ -181,6 +241,7 @@ foreach(_g ${GENERATED_DATA_C})
         COMMAND ${CMAKE_COMMAND} -E env "VH_PSX_EXE=${VH_PSX_EXE}"
                 "VH_KROM_SOURCE=${VH_KROM_SOURCE}"
                 "VH_GENERATED_OUT=${_generated_source}"
+                "VH_REGION=${VH_REGION}" "VH_GAME_ROOT=${GAME_ROOT}"
                 ${Python3_EXECUTABLE} ${PC_DIR}/tools/gen_${_base}.py
         DEPENDS ${PC_DIR}/tools/gen_${_base}.py ${PSX_VALIDATION_DEP} ${VH_KROM_SOURCE}
         WORKING_DIRECTORY ${PC_DIR}
@@ -208,7 +269,15 @@ endforeach()
 # An OBJECT library so the generator can be handed the real object paths ($<TARGET_OBJECTS:...>);
 # CMake's object layout does not match the Makefile glob the generator used to assume.
 add_library(vh_objs OBJECT ${ALL_OBJ_SRCS})
-add_dependencies(vh_objs vh_generated_assets)
+if(NOT VH_REGION STREQUAL "jp")   # the 3 generated US incs; jp resolves everything from jp/assets
+    add_dependencies(vh_objs vh_generated_assets)
+endif()
+# Region identity for every port TU (mirrors the Makefile's PORT_WARN += REGION_DEF), plus the
+# unified-core flag that compiles pc_bootstrap.c's bootstrap constructors out.
+target_compile_definitions(vh_objs PRIVATE ${REGION_DEF})
+if(VH_UNIFIED_CORE)
+    target_compile_definitions(vh_objs PRIVATE VH_UNIFIED)
+endif()
 
 # Common include dirs for our own backend/data files.
 target_include_directories(vh_objs PRIVATE ${PC_DIR}/include ${STAGE_DIR}
@@ -233,10 +302,17 @@ endif()
 # prelude (cmake_game_prelude.h), because CMake per-source options drop function-like macros and
 # de-duplicate repeated `-include` flags -- so a single `-include` is the only reliable form here.
 foreach(_g ${GAME_SRCS})
+    if(VH_REGION STREQUAL "jp")
+        # jp/assets holds ALL its own .inc/.bin extractions (incl. the 14 same-named ones that
+        # must NOT resolve to the US copies), so GAME_ROOT replaces GEN_ASSET_DIR+PROJECT_ROOT.
+        set(_game_incdirs "${STAGE_DIR};${PC_DIR}/include;${GAME_ROOT}")
+    else()
+        set(_game_incdirs "${STAGE_DIR};${GEN_ASSET_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
+    endif()
     set_source_files_properties(${_g} PROPERTIES
-        COMPILE_DEFINITIONS "PERMUTER;PC_PORT;PC_FEAT"
+        COMPILE_DEFINITIONS "${GAME_DEFS}"
         COMPILE_OPTIONS "-std=gnu89;-fno-builtin-csqrt;-include;${PC_DIR}/include/cmake_game_prelude.h;${GAME_WARN}"
-        INCLUDE_DIRECTORIES "${STAGE_DIR};${GEN_ASSET_DIR};${PC_DIR}/include;${PROJECT_ROOT}")
+        INCLUDE_DIRECTORIES "${_game_incdirs}")
 endforeach()
 if(APPLE)
     foreach(_g ${GAME_SRCS})
@@ -285,6 +361,13 @@ set_source_files_properties(${PC_DIR}/src/pc_balance.c PROPERTIES
     COMPILE_OPTIONS "-std=gnu89"
     INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 
+# pc_overlay.c gained the RETURN TO TITLE action (moved from pc_balance.c 2026-08-22), which
+# rewrites engine state -- same staged profile as pc_balance.c (matches the Makefile rule).
+set_source_files_properties(${PC_DIR}/src/pc_overlay.c PROPERTIES
+    COMPILE_DEFINITIONS "PERMUTER"
+    COMPILE_OPTIONS "-std=gnu89"
+    INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
+
 # -- warning policy on PORT code (the same 18 stems the Makefile treats as backend) ---------------
 # MUST come after every set_source_files_properties above: that call OVERWRITES COMPILE_OPTIONS,
 # so these appends would otherwise be silently clobbered (bit pc_balance/libgte on first attempt).
@@ -292,7 +375,7 @@ foreach(_b ${BACKEND_PLAIN} libetc pc_diag pc_battle_speed libsnd libgte pc_gpu_
     vh_source_path(_port_source "${_b}")
     set_property(SOURCE ${_port_source} APPEND PROPERTY COMPILE_OPTIONS "${PORT_WARN}")
 endforeach()
-foreach(_b libetc libsnd pc_balance)   # compile through the staged game headers -> game csqrt(int) decl
+foreach(_b libetc libsnd pc_balance pc_overlay)   # compile through the staged game headers -> game csqrt(int) decl
     set_property(SOURCE ${PC_DIR}/src/${_b}.c APPEND PROPERTY COMPILE_OPTIONS "-fno-builtin-csqrt")
 endforeach()
 
@@ -376,6 +459,8 @@ set(GEN_ENV
     "VH_CC=${CMAKE_C_COMPILER}"
     "VH_OBJ_FILES=$<JOIN:$<TARGET_OBJECTS:vh_objs>, >"
     "VH_PSX_EXE=${VH_PSX_EXE}"
+    "VH_GAME_ROOT=${GAME_ROOT}"
+    "VH_PSX_BASENAME=${PSX_BASENAME}"
     "VH_LINK_LIBS=${_GEN_MINGW_SEARCH} ${_GEN_SDL_LIB} ${_GEN_AL_LIB} ${_GEN_GL_LIB} -lm ${_GEN_WEBP_LIB} ${_GEN_AV_LIBS}")
 if(APPLE AND CMAKE_OSX_ARCHITECTURES)
     # CMake adds -arch to its own compile/link commands, but the data generator invokes clang
@@ -420,8 +505,56 @@ if(APPLE)
     set_property(SOURCE ${GENERATED_C} APPEND PROPERTY COMPILE_OPTIONS "-Wno-macro-redefined")
 endif()
 
-# ---- final executable -------------------------------------------------------------------------
+endif()   # NOT VH_UNIFIED_CORES (source lists / objects / generators)
+
+# ---- final executable (or region-core blob) ---------------------------------------------------
+if(VH_BLOB)
+    # P5 unified core: partial-link this region's ENTIRE object set and prefix-rename every
+    # defined external (incl. weak+common; COFF .refptr thunks re-keyed per blob --
+    # tools/prefix_blob.py has the COMDAT-dedup hazard story).
+    add_library(vh_gen_obj OBJECT ${GENERATED_C})
+    target_compile_definitions(vh_gen_obj PRIVATE ${REGION_DEF})
+    foreach(_t NM OBJCOPY OBJDUMP LINKER)   # some toolchains leave these unset; fall back to PATH names
+        if(NOT CMAKE_${_t})
+            string(TOLOWER ${_t} _tl)
+            if(_tl STREQUAL "linker")
+                set(_tl ld)
+            endif()
+            set(CMAKE_${_t} ${_tl})
+        endif()
+    endforeach()
+    set(_BLOB_DEFSYM "")
+    if(VH_REGION STREQUAL "jp")
+        set(_BLOB_DEFSYM --defsym DrawSjisText=DrawText --defsym MsgBox_IsFinished=ConsumeMsgBoxPagePause)
+    endif()
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/core_${VH_REGION}.o
+        COMMAND ${CMAKE_LINKER} -r -o ${CMAKE_BINARY_DIR}/core_${VH_REGION}_raw.o
+                "$<TARGET_OBJECTS:vh_objs>" "$<TARGET_OBJECTS:vh_gen_obj>" ${_BLOB_DEFSYM}
+        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/prefix_blob.py
+                ${CMAKE_BINARY_DIR}/core_${VH_REGION}_raw.o
+                ${CMAKE_BINARY_DIR}/core_${VH_REGION}.o ${VH_REGION}_
+                --nm=${CMAKE_NM} --objcopy=${CMAKE_OBJCOPY} --objdump=${CMAKE_OBJDUMP}
+        DEPENDS vh_objs vh_gen_obj "$<TARGET_OBJECTS:vh_objs>" "$<TARGET_OBJECTS:vh_gen_obj>"
+                ${PC_DIR}/tools/prefix_blob.py
+        COMMAND_EXPAND_LISTS VERBATIM
+        COMMENT "Partial-linking + prefix-renaming region core ${VH_REGION}")
+    add_custom_target(vh_core ALL DEPENDS ${CMAKE_BINARY_DIR}/core_${VH_REGION}.o)
+elseif(VH_UNIFIED_CORES)
+    # P5 final link: the shared layer + both prefixed cores. All platform link logic below
+    # (libs, -mconsole, DLL bundling) applies to this target exactly as to the normal exe.
+    add_executable(vandalhearts_pc ${PC_DIR}/src/pc_region_main.c ${VH_UNIFIED_CORES})
+    set_source_files_properties(${PC_DIR}/src/pc_region_main.c PROPERTIES
+        COMPILE_OPTIONS "${PORT_WARN}")
+else()
 add_executable(vandalhearts_pc $<TARGET_OBJECTS:vh_objs> ${GENERATED_C})
+if(VH_REGION STREQUAL "jp")
+    # The JP binary carries these two names for one address (exchange/102 §3).
+    target_link_options(vandalhearts_pc PRIVATE
+        "LINKER:--defsym,DrawSjisText=DrawText"
+        "LINKER:--defsym,MsgBox_IsFinished=ConsumeMsgBoxPagePause")
+endif()
+endif()
+if(NOT VH_BLOB)   # everything below configures the executable target
 target_link_libraries(vandalhearts_pc PRIVATE SDL2::SDL2 ${OPENAL_LIB} m Threads::Threads)
 if(NOT APPLE)
     target_link_libraries(vandalhearts_pc PRIVATE OpenGL::GL)
@@ -568,3 +701,4 @@ if(APPLE)
         COMMENT "Writing macOS reproducibility manifest"
         VERBATIM)
 endif()
+endif()   # NOT VH_BLOB

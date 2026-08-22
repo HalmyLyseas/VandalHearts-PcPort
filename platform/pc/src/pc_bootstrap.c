@@ -153,8 +153,12 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
 }
 #endif
 
+#ifndef VH_UNIFIED
 __attribute__((constructor))
-static void PC_ReservePsxRam(void) {
+#endif
+/* Non-static since the P5 unified binary: pc_region_main.c calls the (prefixed) pieces
+ * explicitly, in the same order the constructors run here -- see exchange/104 policy. */
+void PC_ReservePsxRam(void) {
 #if defined(__APPLE__)
     /* arm64 Mach-O reserves the low 4GiB. PC_PORT call sites use host-backed work buffers. */
 #else
@@ -248,8 +252,10 @@ int PC_GetDeployDir(char *out, size_t outSize) {
  * the real environment is NOT overridden, so scripts/power users still win, and the file only fills
  * in what's unset. Runs at constructor priority 101 -- before PC_ReservePsxRam and
  * the window/audio init (VH_SCALE, ...) read anything. Absent file => silently all-defaults. */
+#ifndef VH_UNIFIED
 __attribute__((constructor(101)))
-static void PC_LoadIniConfig(void) {
+#endif
+void PC_LoadIniConfig(void) {
     char dir[PATH_MAX], iniPath[PATH_MAX + 32], line[512];
     FILE *f;
     if (!PC_GetDeployDir(dir, sizeof(dir))) return;   /* AppImage: next to the .AppImage, not the mount */
@@ -423,14 +429,16 @@ static int HasBinExt(const char *name) {
 }
 
 /* Validate a discovery candidate before choosing it. Multi-track dumps commonly contain several .bin
- * files; only the data track has the USA executable header at raw-CD LBA 23, user-data offset 24. */
+ * files; only the data track has the executable header at THIS REGION's boot LBA (VH_REGION_BOOT_LBA,
+ * pc_platform.h: 23 US/Asia, 15200 JP), user-data offset 24. A folder holding both regions' dumps
+ * therefore auto-picks this build's own disc. */
 static int HasVandalHeartsBoot(const char *path) {
-    enum { RAW_SECTOR_SIZE = 2352, DATA_OFFSET = 24, BOOT_LBA = 23 };
+    enum { RAW_SECTOR_SIZE = 2352, DATA_OFFSET = 24 };
     unsigned char magic[8];
     FILE *f = fopen(path, "rb");
     size_t n;
     if (!f) return 0;
-    if (fseek(f, (long)BOOT_LBA * RAW_SECTOR_SIZE + DATA_OFFSET, SEEK_SET) != 0) {
+    if (fseek(f, (long)VH_REGION_BOOT_LBA * RAW_SECTOR_SIZE + DATA_OFFSET, SEEK_SET) != 0) {
         fclose(f);
         return 0;
     }
@@ -658,10 +666,34 @@ static int PC_MakePageWritable(uintptr_t addr) {
 
 static volatile sig_atomic_t s_crashHandlerActive;
 
+/* Async-signal-safe "label 0x<hex>\n" to stderr -- the crash path must not call printf. */
+static void PC_WriteHex(const char *label, uintptr_t v) {
+    char buf[2 + sizeof(uintptr_t) * 2]; int i;
+    ssize_t w = write(2, label, strlen(label)); (void)w;
+    buf[0] = '0'; buf[1] = 'x';
+    for (i = 0; i < (int)(sizeof(uintptr_t) * 2); i++)
+        buf[2 + i] = "0123456789abcdef"[(v >> ((sizeof(uintptr_t) * 2 - 1 - i) * 4)) & 0xf];
+    w = write(2, buf, sizeof(buf)); (void)w;
+    w = write(2, "\n", 1); (void)w;
+}
+
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
-    if (s_crashHandlerActive) _exit(128 + sig);  /* async-safe fail-closed path for a handler re-fault */
+    if (s_crashHandlerActive) {
+        /* A fault INSIDE the handler (e.g. backtrace() walking a corrupted stack). Leave a
+         * breadcrumb -- before this wrote nothing and _exit'd, so a trashed-stack crash died
+         * with NO output AND NO core (2026-08-21, JP debug-menu event-map index 12). */
+        static const char msg[] = "\n*** CRASH: handler re-fault (stack likely corrupt) -- dying "
+                                  "without a core; run under gdb for the first-chance trace ***\n";
+        ssize_t w = write(2, msg, sizeof(msg) - 1); (void)w;
+        _exit(128 + sig);
+    }
     s_crashHandlerActive = 1;
+    /* FIRST thing, before anything that can itself fault: say we crashed and where. */
+    { static const char msg[] = "\n*** CRASH: fatal signal ***\n";
+      ssize_t w = write(2, msg, sizeof(msg) - 1); (void)w; }
+    PC_WriteHex("  signal   ", (uintptr_t)sig);
+    PC_WriteHex("  si_addr  ", fault);
 #if defined(__APPLE__)
     (void)fault;
 #endif
@@ -855,8 +887,12 @@ void PC_FatalDiscError(const char *title, const char *body, const char *path) { 
     exit(1);
 }
 
-__attribute__((constructor))
-static void PC_Bootstrap(void) {
+/* The per-region bootstrap tail (P5, exchange/104): everything after config/arena --
+ * replay hook, rodata remap, signal handlers, disc mount + guards, window init. In the
+ * single-region builds the constructor below runs it with path discovery; the unified
+ * binary's pc_region_main.c calls the chosen region's (prefixed) copy with an explicit,
+ * already-classified path. */
+void PC_BootstrapRegion(const char *discPathArg) {
     /* GPU-trace replay mode (regression harness): feed a recorded trace straight through the
      * rasterizer and print the deterministic VRAM signature -- no game, no disc, no window.
      * See tools/regress/raster_check.sh. Must run before any other bootstrap work. */
@@ -871,23 +907,33 @@ static void PC_Bootstrap(void) {
      * re-fault terminate immediately through async-safe _exit instead of recursively diagnosing. */
     {
         struct sigaction sa;
+        /* Dedicated signal stack: without it a stack-overflow (or garbage-RSP wild jump) can't
+         * even ENTER the handler -- the kernel can't push the signal frame -- and the process
+         * dies with no dump and no core. 64KB static, installed once. */
+        static char s_sigStack[64 * 1024];
+        stack_t st;
+        memset(&st, 0, sizeof(st));
+        st.ss_sp = s_sigStack;
+        st.ss_size = sizeof(s_sigStack);
+        sigaltstack(&st, NULL);
         memset(&sa, 0, sizeof(sa));
         sa.sa_sigaction = PC_SigCrash;
-        sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+        sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
         sigemptyset(&sa.sa_mask);
         sigaction(SIGSEGV, &sa, NULL);
         sigaction(SIGBUS,  &sa, NULL);
     }
 #endif /* !_WIN32 -- no POSIX signal handlers on Windows (see notes above) */
-    const char *discPath = getenv("VH_DISC_IMAGE");
+    const char *discPath = discPathArg;
+    if (!discPath) discPath = getenv("VH_DISC_IMAGE");
     if (!discPath) discPath = DefaultDiscPath();
 
     if (!PC_CdMount(discPath)) {
         PC_FatalDiscError("Vandal Hearts - disc image not found",
             "Could not open a game disc image.\n\n"
-            "Put your Vandal Hearts (USA) .bin file in a \"game\" folder next to the "
-            "executable (or right beside it), or set the disc path via VH_DISC_IMAGE in "
-            "vandalhearts.ini (or the environment).", discPath);
+            "Put your Vandal Hearts " VH_REGION_NAME " .bin file in a \"game\" folder next "
+            "to the executable (or right beside it), or set the disc path via VH_DISC_IMAGE "
+            "in vandalhearts.ini (or the environment).", discPath);
     }
     /* Corruption guard 1/3 (post-1.6.1, from a real user report): a raw .bin is a whole number of
      * 2352-byte sectors, and an interrupted copy/download almost never is. Catching it here turns a
@@ -903,26 +949,44 @@ static void PC_Bootstrap(void) {
         }
     }
     if (!PC_CdDiscSignatureOk()) {
+        /* No boot exe at THIS region's LBA. Most likely user error now that two region builds
+         * exist: a valid Vandal Hearts disc of the OTHER region. Classify (the classifier
+         * probes both layouts) so the message names what was actually supplied. */
+        PC_DiscRelease rel = PC_CdDiscRelease();
+        if (rel == VH_DISC_JAPAN) {
+            PC_FatalDiscError("Vandal Hearts - wrong region disc",
+                "This is the JAPANESE Vandal Hearts disc (SLPM-86007), but this build runs the "
+                "USA/Asia game.\n\n"
+                "Supply a Vandal Hearts USA (SLUS-00447) or Asia (SCPS-45183) .bin, or use the "
+                "Japanese-region build with this disc.", discPath);
+        } else if (rel == VH_DISC_USA || rel == VH_DISC_ASIA) {
+            PC_FatalDiscError("Vandal Hearts - wrong region disc",
+                "This is the USA/Asia Vandal Hearts disc, but this build runs the JAPANESE "
+                "(SLPM-86007) game.\n\n"
+                "Supply a Vandal Hearts Japan (SLPM-86007) .bin, or use the USA/Asia build "
+                "with this disc.", discPath);
+        }
         PC_FatalDiscError("Vandal Hearts - wrong disc image",
             "This does not look like a Vandal Hearts disc image: the boot executable signature "
             "is missing.\n\n"
-            "Use a raw .bin dump of Vandal Hearts USA (SLUS-00447) or Asia (SCPS-45183) -- not a "
-            "different game, the Europe/Japan releases, or a .cue/.iso file.", discPath);
+            "Use a raw .bin dump of Vandal Hearts " VH_REGION_NAME " -- not a different game "
+            "or a .cue/.iso file.", discPath);
     }
     {
-        /* The USA and Asia releases share identical game code and disc layout, so both run; name
-         * whichever is mounted. An unrecognized PS-X EXE disc still boots (the signature above is
-         * the hard gate) but is flagged, since the Europe/Japan releases are different builds this
-         * port does not reproduce. */
+        /* Name the mounted release. USA/Asia share one master (both run on the US build);
+         * Japan is its own build (the jp/ tree). An unrecognized PS-X EXE disc that still
+         * carries this region's boot signature boots (the signature above is the hard gate)
+         * but is flagged. */
         PC_DiscRelease rel = PC_CdDiscRelease();
-        const char *relName = rel == VH_DISC_USA  ? "USA (SLUS-00447)"
-                            : rel == VH_DISC_ASIA ? "Asia (SCPS-45183)"
+        const char *relName = rel == VH_DISC_USA   ? "USA (SLUS-00447)"
+                            : rel == VH_DISC_ASIA  ? "Asia (SCPS-45183)"
+                            : rel == VH_DISC_JAPAN ? "Japan (SLPM-86007)"
                             : "unrecognized";
         fprintf(stderr, "PC_Bootstrap: mounted disc image '%s' [%s]\n", discPath, relName);
         if (rel == VH_DISC_UNKNOWN) {
-            fprintf(stderr, "PC_Bootstrap: WARNING: this is a Vandal Hearts boot disc but not the USA or "
-                            "Asia release. It may be the Europe/Japan build (different game code this "
-                            "port does not reproduce) -- expect incorrect behavior.\n");
+            fprintf(stderr, "PC_Bootstrap: WARNING: this disc boots like Vandal Hearts "
+                            VH_REGION_NAME " but is not a recognized release -- expect "
+                            "incorrect behavior.\n");
         }
     }
 
@@ -946,6 +1010,11 @@ static void PC_Bootstrap(void) {
         fprintf(stderr, ")\n");
     }
 }
+
+#ifndef VH_UNIFIED
+__attribute__((constructor))
+static void PC_Bootstrap(void) { PC_BootstrapRegion(NULL); }
+#endif
 
 /* ---- Stage 2.3 UI-visibility probe (PC_DEBUG_UI_LOG) ------------------------------------
  * The -m64 build renders terrain, sprites and the damage-number correctly but drops the Vandal

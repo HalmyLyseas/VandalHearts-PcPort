@@ -40,13 +40,16 @@ int HdReplaceCount(void) { return s_hdReplaceN; }
  *   <deploy>/hdpacks/manifest.json               validated: its "game" id must match this build
  *   <deploy>/hdpacks/backgrounds/<hash>.webp     the replacement images
  * VH_HD_PACK=<dir> still overrides (points straight at a <hash>.webp folder, skipping detection). */
-#define HD_GAME_ID "SLUS-00447"
+/* Region-derived (exchange/102 P2): "SLUS-00447" US / "SLPM-86007" JP. A pack authored for
+ * the other region is rejected BY NAME below (its asset hashes would not match anyway, but
+ * the failure must be explained, not silent). */
+#define HD_GAME_ID VH_HD_GAME_ID
 #define HD_PATH    1024
 extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe dir, or AppImage dir) */
 extern int g_vhHdPack;         /* runtime on/off toggle, owned by pc_gpu_window.c; the overlay binds it.
                                 * 0 until a valid pack is detected (HdDetect sets it: persisted VH_HDPACK, or
                                 * auto-ON on first detect). The VH_HD_PACK=<dir> override ignores it (CI). */
-static struct { int checked, available, valid, count, videoCount, packVersion; char dir[HD_PATH + 32]; char videosDir[HD_PATH + 32]; char reason[80]; } s_hdPack;
+static struct { int checked, available, valid, count, videoCount, packVersion; char dir[HD_PATH + 64]; char videosDir[HD_PATH + 64]; char reason[80]; } s_hdPack;
 
 static const char *HdEnv(const char *name, int slot) {
     static const char *v[2]; static int done[2];
@@ -75,13 +78,24 @@ static int HdManifestRead(const char *path, char *game, int gameSz, int *count) 
 
 /* Detect + validate <deploy>/hdpacks (runs once; caches in s_hdPack). reason[] drives the overlay label. */
 static void HdDetect(void) {
-    char deploy[HD_PATH], manifest[HD_PATH + 32], game[80];
+    char deploy[HD_PATH], base[HD_PATH + 32], manifest[HD_PATH + 64], game[80];
     if (s_hdPack.checked) return;
     s_hdPack.checked = 1;
     snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "no HD pack");
     if (!PC_GetDeployDir(deploy, sizeof(deploy))) return;
-    snprintf(manifest, sizeof(manifest), "%s/hdpacks/manifest.json", deploy);
-    if (!HdManifestRead(manifest, game, sizeof(game), &s_hdPack.count)) return;   /* no/blank manifest */
+    /* v2.0 layout: hdpacks/<game-id>/ -- one subfolder per region's pack, so a dual-disc install
+     * holds both and each session picks its own. Keyed by the COMPILE-TIME HD_GAME_ID (the same
+     * constant the manifest check validates), so an SCPS-45183 (Asia) disc -- byte-identical to
+     * the US master and served by the US core -- correctly resolves hdpacks/SLUS-00447/.
+     * Fallback: the pre-2.0 flat hdpacks/ layout keeps working untouched (its manifest is
+     * game-id-checked below either way), so existing installs need no migration. */
+    snprintf(base, sizeof(base), "%s/hdpacks/%s", deploy, HD_GAME_ID);
+    snprintf(manifest, sizeof(manifest), "%s/manifest.json", base);
+    if (!HdManifestRead(manifest, game, sizeof(game), &s_hdPack.count)) {
+        snprintf(base, sizeof(base), "%s/hdpacks", deploy);                   /* legacy flat layout */
+        snprintf(manifest, sizeof(manifest), "%s/manifest.json", base);
+        if (!HdManifestRead(manifest, game, sizeof(game), &s_hdPack.count)) return;   /* no pack */
+    }
     s_hdPack.available = 1;
     if (strcmp(game, HD_GAME_ID) != 0) {                 /* pack for a different disc/region */
         snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "HD pack is for %.60s", game);
@@ -98,8 +112,8 @@ static void HdDetect(void) {
     }
     s_hdPack.valid = 1;
     s_hdPack.reason[0] = '\0';
-    snprintf(s_hdPack.dir, sizeof(s_hdPack.dir), "%s/hdpacks/backgrounds", deploy);
-    snprintf(s_hdPack.videosDir, sizeof(s_hdPack.videosDir), "%s/hdpacks/videos", deploy);
+    snprintf(s_hdPack.dir, sizeof(s_hdPack.dir), "%s/backgrounds", base);
+    snprintf(s_hdPack.videosDir, sizeof(s_hdPack.videosDir), "%s/videos", base);
     {   /* best-practice sanity: the videos/ dir should hold what the manifest declares */
         DIR *d = opendir(s_hdPack.videosDir); int found = 0;
         if (d) { struct dirent *de;

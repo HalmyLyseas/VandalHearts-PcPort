@@ -26,7 +26,8 @@ SLUS = os.environ.get("VH_PSX_EXE", os.path.join(VH, "SLUS_004.47"))
 OUT = os.environ.get("VH_GENERATED_OUT",
                      os.path.join(VH, "platform", "pc", "src", "pc_spell_descriptions.c"))
 
-TABLE_ADDR = 0x800ee9f8
+REGION = os.environ.get("VH_REGION", "us")
+TABLE_ADDR = {"us": 0x800ee9f8, "jp": 0x800f0ca0}[REGION]
 COUNT = 72
 LOAD_ADDR = 0x80010000
 FILE_BASE = 0x800  # SLUS header size; file_off = addr - LOAD_ADDR + FILE_BASE
@@ -58,7 +59,9 @@ def main():
             elif 0x20 <= ord(ch) < 0x7f:
                 out.append(ch)
             else:
-                out.append("\\x%02x" % ord(ch))
+                # String-splice after the escape: a following ASCII hex digit would
+                # otherwise extend \xNN into an out-of-range escape (JP SJIS bytes).
+                out.append('\\x%02x" "' % ord(ch))
         return "".join(out)
 
     lines = []

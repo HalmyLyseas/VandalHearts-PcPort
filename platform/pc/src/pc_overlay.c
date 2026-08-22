@@ -15,7 +15,13 @@
 #include "pc_overlay.h"
 #include "pc_platform.h"   /* PC_SaveIniConfig, PC_GpuSetScale/SetFullscreen, g_vhScale/g_vhFullscreen */
 #include "pc_saves.h"      /* archive list + backup/restore/delete */
-#include "pc_balance.h"    /* gTacticalMode, PC_SyncBalance, PC_AtTitleMenu (no game headers) */
+#include "pc_balance.h"    /* gTacticalMode, PC_SyncBalance, PC_AtTitleMenu */
+/* Game headers for the RETURN TO TITLE action (moved here from pc_balance.c 2026-08-22): the menu
+ * MODEL stays game-agnostic, but this one action rewrites engine state directly. */
+#include "common.h"        /* s16, gPlayerControlSuppressed */
+#include "state.h"         /* gState, STATE_TITLE_SCREEN */
+#include "audio.h"         /* AUDIO_CMD_STOP_ALL */
+#include "battle.h"        /* gIsEnemyTurn */
 #include <stddef.h>
 #include <stdlib.h>        /* free */
 #include <stdio.h>         /* snprintf */
@@ -161,7 +167,93 @@ static void apply_language(int v) {
     langRefreshLabels();
 }
 
-static int dis_noLangPack(void)     { return s_langCount == 0; }
+/* ---- DISC picklist (P5 unified binary) ---------------------------------------------------------
+ * Offers every disc the unified launcher found -- ONE ENTRY PER RELEASE ID (pc_region_main.c
+ * publishes VH_DISC_ID_US/ASIA/JP before dispatch; SLUS-00447 and SCPS-45183 are the same master
+ * but distinct discs and list separately). Selecting another disc persists VH_REGION + VH_DISC_ID
+ * to the ini; the running blob IS its region, so the switch applies at the NEXT launch -- ' *'
+ * marks the pending restart, exactly like LANGUAGE. The no-'*' baseline is VH_DISC_BOOTED (the
+ * exact disc the launcher picked). With a single disc (or in a per-region dev build, where the
+ * launcher env is absent) the row is greyed+locked and just states what is running. */
+#define DISC_MAX 3
+static int  g_discSel;                          /* index into the parallel arrays below */
+static int  s_discCount;
+static int  s_discBootSel;                      /* the booted disc's entry */
+static int  s_discScanned;                      /* keep a pending choice across reopens */
+static char s_discTag[DISC_MAX][4];             /* "us" / "jp" -- the VH_REGION value */
+static char s_discId[DISC_MAX][16];
+static char s_discLabelBuf[DISC_MAX][20];       /* id + " *" when pending */
+static const char *s_discChoice[DISC_MAX + 1];
+
+static void discRefreshLabels(void) {
+    int i;
+    for (i = 0; i < s_discCount; i++) {
+        /* Precision cap makes the worst case (15 + 2 + NUL = 18) provably fit the 20-byte
+         * buffer, which is what silences -Wformat-truncation (it reasons from the format
+         * string alone) -- same idiom as pc_lang.c's LangPackDir. */
+        snprintf(s_discLabelBuf[i], sizeof s_discLabelBuf[i], "%.15s%s", s_discId[i],
+                 (g_discSel == i && g_discSel != s_discBootSel) ? " *" : "");
+        s_discChoice[i] = s_discLabelBuf[i];
+    }
+    for (i = s_discCount; i <= DISC_MAX; i++) s_discChoice[i] = "";
+}
+
+static void discScan(void) {
+    static const struct { const char *env; const char *tag; } kSlots[DISC_MAX] = {
+        { "VH_DISC_ID_US",   "us" },
+        { "VH_DISC_ID_ASIA", "us" },
+        { "VH_DISC_ID_JP",   "jp" },
+    };
+    const char *booted = getenv("VH_DISC_BOOTED");
+#ifdef VH_REGION_JP
+    const char *ownTag = "jp", *ownId = "SLPM-86007";
+#else
+    const char *ownTag = "us", *ownId = "SLUS-00447";
+#endif
+    int i;
+    s_discCount = 0;
+    for (i = 0; i < DISC_MAX; i++) {
+        const char *id = getenv(kSlots[i].env);
+        if (!id || !*id) continue;
+        snprintf(s_discTag[s_discCount], 4, "%s", kSlots[i].tag);
+        snprintf(s_discId[s_discCount], 16, "%s", id);
+        s_discCount++;
+    }
+    if (s_discCount == 0) {   /* per-region dev build: no launcher inventory */
+        snprintf(s_discTag[0], 4, "%s", ownTag);
+        snprintf(s_discId[0], 16, "%s", ownId);
+        s_discCount = 1;
+    }
+    /* Baseline entry: the exact disc that booted; fall back to the first entry of our own region
+     * (per-region builds, or an unexpectedly absent VH_DISC_BOOTED). */
+    s_discBootSel = 0;
+    for (i = 0; i < s_discCount; i++)
+        if (strcmp(s_discTag[i], ownTag) == 0) { s_discBootSel = i; break; }
+    if (booted && *booted)
+        for (i = 0; i < s_discCount; i++)
+            if (strcmp(s_discId[i], booted) == 0) { s_discBootSel = i; break; }
+    if (!s_discScanned || g_discSel >= s_discCount) { g_discSel = s_discBootSel; s_discScanned = 1; }
+    discRefreshLabels();
+}
+
+static void apply_disc(int v) {
+    if (v < 0) v = 0;                            /* safety only; the generic clamp already bounds v */
+    if (v >= s_discCount) v = s_discCount - 1;
+    g_discSel = v;
+    PC_SaveIniConfig("region", "VH_REGION", s_discTag[v]);
+    PC_SaveIniConfig("region", "VH_DISC_ID", s_discId[v]);   /* picks WITHIN the US family */
+    discRefreshLabels();
+}
+
+static int dis_oneDisc(void)        { return s_discCount < 2; }
+
+/* LANGUAGE is greyed+locked when the SELECTED disc is the Japanese game (running it, or a pending
+ * restart into it) -- langpacks are US-only by design (the JP core links pc_lang_stub.c, which also
+ * reports 0 installed packs, so the JP case greys through both terms) -- and when no pack is
+ * installed, as before. */
+static int dis_langRow(void) {
+    return (s_discCount > 0 && strcmp(s_discTag[g_discSel], "jp") == 0) || s_langCount == 0;
+}
 
 /* Tactical Mode is editable ONLY at the main title menu (a run's mode is fixed -- GAP 4). Greyed
  * (read-only) during a run, where it just reflects the current run's mode. */
@@ -197,11 +289,16 @@ static Item s_items[] = {
       "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
     { "BUTTON LABELS",   OVL_CHOICE, &g_btnLabels,    "controls", "VH_BUTTON_LABELS",
       NULL, NULL,             0, 1, 1, NULL, NULL,                NULL,           NULL, NULL, s_btnLabelText },
+    /* P5: which disc the unified binary boots. Persists VH_REGION (its own apply -- iniKey NULL
+     * skips the numeric persist); ' *' = applies on next launch. Greyed+locked with one disc. */
+    { "DISC",            OVL_CHOICE, &g_discSel,      NULL, NULL,
+      NULL, NULL,             0, DISC_MAX - 1, 1, NULL, apply_disc, NULL,         dis_oneDisc, dis_oneDisc, s_discChoice },
     /* v1.7 language packs: picklist of installed packs by manifest name; persists VH_LANG (its own
      * apply -- iniKey NULL skips the numeric persist); '*' = applies on next launch. Greyed+locked
-     * with no valid pack, like HD PACK. */
+     * with no valid pack -- and whenever the selected DISC is the Japanese game, where langpacks
+     * do not apply (visible-but-greyed on JP since the DISC row exists to explain it). */
     { "LANGUAGE",        OVL_CHOICE, &g_langSel,      NULL, NULL,
-      NULL, NULL,             0, LANG_MAX, 1, NULL, apply_language, NULL,         dis_noLangPack, dis_noLangPack, s_langChoice },
+      NULL, NULL,             0, LANG_MAX, 1, NULL, apply_language, NULL,         dis_langRow, dis_langRow, s_langChoice },
     { "SAVE MANAGEMENT", OVL_ACTION, NULL, NULL, NULL,
       NULL, NULL,             0, 0, 0, NULL, NULL,                act_enterSaves, NULL, NULL },
     { "RETURN TO TITLE", OVL_ACTION, NULL, NULL, NULL,
@@ -253,11 +350,14 @@ void PC_OverlayToggle(void) {
         s_screen = OVL_SCREEN_MAIN;
         s_sel = 0;                               /* always reopen at the top */
         langScan();                              /* refresh the LANGUAGE picklist (cheap dir scan) */
-        {   /* dynamic ceiling: arrows clamp at the real last pack, confirm cycles OFF..last -- the
-             * same behaviour as every other CHOICE row, no special wrap on one arrow only */
+        discScan();                              /* refresh the DISC picklist (launcher env, cheap) */
+        {   /* dynamic ceilings: arrows clamp at the real last entry, confirm cycles first..last --
+             * the same behaviour as every other CHOICE row, no special wrap on one arrow only */
             int i;
-            for (i = 0; i < N_ITEMS; i++)
-                if (s_items[i].value == &g_langSel) { s_items[i].maxv = s_langCount; break; }
+            for (i = 0; i < N_ITEMS; i++) {
+                if (s_items[i].value == &g_langSel) s_items[i].maxv = s_langCount;
+                if (s_items[i].value == &g_discSel) s_items[i].maxv = s_discCount - 1;
+            }
         }
     }
 }
@@ -345,6 +445,63 @@ static void act_returnToTitle(void) {
     /* startConfirm may have copied an archive label; replace it with the stakes warning. */
     strncpy(s_confLabel, "UNSAVED PROGRESS LOST", sizeof(s_confLabel) - 1);
     s_confLabel[sizeof(s_confLabel) - 1] = '\0';
+}
+
+/* ---- RETURN TO TITLE: the jump itself (GAP 8; moved here from pc_balance.c 2026-08-22) --------
+ * Jump straight to the title menu from anywhere, skipping the intro videos, by replicating the
+ * game-over teardown (battle/evaluators.c). The title -> New/Load flow re-establishes run state,
+ * so leftover party/chapter/objects don't need clearing. Mode stays as-is (toggle editable at
+ * title).
+ *
+ * DEFERRED since 2026-08-22 (crash: RETURN TO TITLE during the demo-event load): the overlay runs
+ * from the pad path, which fires inside NESTED VSync wait loops too (LoadCdFile spins VSync
+ * mid-LoadEvent). Flipping gState from there let the live loader's tail re-write gState right
+ * back (crash dump showed primary=52 after the flip) and race the title re-init until the object
+ * pool overflowed. So the confirm only REQUESTS the jump; PC_ApplyReturnToTitle performs it at
+ * the top of the main loop (main.c, before UpdateState's dispatch) -- the one point where no game
+ * code is mid-frame, so the flip is atomic: the title state's own Obj_ResetFromIdx10 then clears
+ * every leftover object before Obj_Execute can run one. */
+static int s_returnToTitlePending;
+
+static void PC_ReturnToTitle(void) {
+    s_returnToTitlePending = 1;
+}
+
+void PC_ApplyReturnToTitle(void) {
+    if (!s_returnToTitlePending) return;
+    s_returnToTitlePending = 0;
+    {
+        /* A movie stream is NOT object-driven: without this, the flip left the stream armed
+         * (user repro 2026-08-22, intro logo). Same teardown as the START skip; no-op when idle.
+         * Then DROP the held final frame: the backend's CdlPause deliberately keeps the last
+         * decoded frame on the overlay (wait-for-button movie ends) and relies on the movie
+         * flow's ClearScreen to remove it -- a path our jump never reaches, so without these the
+         * title menu ran INVISIBLY under the frozen frame (round-2 repro: [r2t] diagnostics
+         * showed the flip applying; the "2nd intro" was the title's own 25s attract timer).
+         * Same trio the backend's CdlReset hard-stop uses. */
+        extern void Movie_AbortForReturnToTitle(void);
+        extern void PC_MovieSubsClose(void);
+        Movie_AbortForReturnToTitle();
+        PC_GpuSetMovieOverlay(NULL, 0, 0);
+        PC_MovieSubsClose();
+    }
+    {
+        /* audio.h only carries a commented-out FIXME decl; declare the real signature
+         * (src/core/audio.c:1346) locally -- an implicit int declaration is UB at LP64. */
+        extern void PerformAudioCommand(s16 cmd);
+        PerformAudioCommand(AUDIO_CMD_STOP_ALL);
+    }
+    gIsEnemyTurn = 0;
+    /* A request can arrive mid-event/mid-load; clear the flags the abandoned sequence would
+     * have cleared itself (mirrors the demo-battle-end teardown, evaluators.c). */
+    gState.inEvent = 0;
+    gPlayerControlSuppressed = 0;
+    gState.primary   = STATE_TITLE_SCREEN;
+    gState.secondary = 0;
+    gState.state3    = 0;
+    gState.state4    = 0;
+    gState.state7    = 1;
+    PC_SyncBalance();   /* keep patchApplied == gTacticalMode consistent */
 }
 
 static void openDetail(void) {

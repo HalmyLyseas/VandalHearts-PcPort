@@ -283,6 +283,13 @@ int VSync(int mode) {
 
     PC_DiagFrameEntry(mode);   /* VH_FRAME_TIME work/idle split (pc_diag.c) */
 
+    /* Answer the compositor's responsiveness ping (and keep close/Ctrl+C live) even inside the
+     * game's VSync wait loops -- the hardware-exact boot load spins here for ~5-8s with nothing
+     * presented, which intermittently tripped GNOME's "not responding" dialog (pc_gpu_window.c
+     * has the full story). Every wait loop in the game funnels through VSync, so this one call
+     * covers them all. */
+    { extern void PC_GpuPumpEvents(void); PC_GpuPumpEvents(); }
+
     int waits = (mode == 0) ? 1 : mode;
     /* Stage-3 (1.4 F1): fast-forward resets to 1x on leaving battle, so it never carries into the next
      * battle or an overworld save -- each battle starts at normal speed. */

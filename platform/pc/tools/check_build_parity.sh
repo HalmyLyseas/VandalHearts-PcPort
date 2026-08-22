@@ -27,6 +27,8 @@ mk_stems="$(
     # file from BACKEND_SRCS while its rule remains must still be flagged.
     grep -vE '^\$\(BUILD_DIR\)/[A-Za-z_0-9]+\.o:' "$MK" \
       | grep -oE '\$\(BUILD_DIR\)/[A-Za-z_0-9]+\.o' | sed 's#.*/##; s/\.o$//'
+    # P5: the unified target compiles the shared layer outside $(BUILD_DIR)
+    grep -oE 'build-uni/[A-Za-z_0-9]+\.o' "$MK" | sed 's#.*/##; s/\.o$//'
   } | sort -u)"
 
 # ---- CMakeLists: stems it compiles ------------------------------------------------------------
@@ -35,6 +37,10 @@ cm_stems="$(
     sed -n 's/^set(DATA_PERM[[:space:]]*\(.*\))$/\1/p'      "$CM"
     sed -n 's/^set(DATA_PLAIN[[:space:]]*\(.*\))$/\1/p'     "$CM"
     grep -E '^foreach\(_b ' "$CM" | sed 's/^foreach(_b //; s/)$//' | tr ' ' '\n' | grep -v '^\${'
+    # P5: region-conditional backend swaps + the unified shared layer
+    sed -n 's/^[[:space:]]*list(APPEND BACKEND_PLAIN[[:space:]]*\(.*\))$/\1/p' "$CM"
+    sed -n 's/^[[:space:]]*list(APPEND GENERATED_DATA_C[[:space:]]*\(.*\))$/\1/p' "$CM"
+    grep -oE 'src/pc_region_main\.c' "$CM" | sed 's#.*/##; s/\.c$//'
   } | tr ' ' '\n' | grep -vE '^$' | sort -u)"
 
 # fail-closed: both parses must find a plausible number of entries

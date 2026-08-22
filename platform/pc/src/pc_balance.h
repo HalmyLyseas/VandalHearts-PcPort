@@ -43,10 +43,6 @@ void PC_SpellListDump(int name, int cls, int lvl, int pathB, int advF, int advS,
  * and before the first patch, so the snapshot captures retail values). Call after every mode change. */
 void PC_SyncBalance(void);
 
-/* GAP 8: return to the title menu from anywhere (skips intro videos). PC-side teardown; the overlay
- * "RETURN TO TITLE" entry calls this after a confirm. */
-void PC_ReturnToTitle(void);
-
 /* GAP 4 load-adopt: before applying a loaded save, adopt the on-disk card's mode from its header
  * marker (padding[0]). Self-heals a hand-moved file (a Tactical card in the Normal folder switches us
  * to Tactical, so its run uses the right tables). No-op when the marker already matches. */

@@ -15,7 +15,9 @@
 typedef struct {
     char file[64];    /* archive filename within .archive/ (e.g. BASLUS-00447VH.20260725-153045) */
     char label[24];   /* human display, parsed from the name: "2026-07-25 15:30"                 */
-    long mtime;       /* modification time (seconds); tie-breaker / fallback ordering             */
+    long long mtime;  /* modification time (seconds); tie-breaker / fallback ordering. 64-bit:
+                       * `long` is 32-bit on Windows (LLP64) and st_mtime is 64-bit there -- the
+                       * truncation would scramble backup ordering after 2038 (audit 2026-08-22) */
     int  active;      /* 1 if byte-identical to the current active card (i.e. this IS the loaded state) */
 } PC_SaveArchive;
 

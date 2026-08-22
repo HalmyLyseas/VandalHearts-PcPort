@@ -153,6 +153,19 @@ static int  s_xaMatchedYet = 0;            /* got >=1 matching sector this track
 static int s_lastReadResult = 0; /* 0 = idle/complete, -1 = error */
 static int s_motorStarted = 0;   /* set after the first-ever CdRead this process */
 static Uint32 s_pendingReadUntilMs = 0; /* 0 = no read pending; else SDL_GetTicks() target */
+
+/* Boot-grace fast loads: active from process start until the FIRST movie stream begins (one-way
+ * latch, cleared at s_movieActive=1 -- the intro logo on the retail path). While active, the
+ * CD delay model runs 16x scaled (see the CdRead scheduling block for the full rationale).
+ * VH_FAST_BOOT=0 disables the grace entirely (full hardware timing from the first read). */
+static int s_bootGrace = -1;   /* -1 = env unresolved, 1 = active, 0 = over */
+static int BootGraceActive(void) {
+    if (s_bootGrace < 0) {
+        const char *e = getenv("VH_FAST_BOOT");
+        s_bootGrace = (e && e[0] == '0') ? 0 : 1;
+    }
+    return s_bootGrace == 1;
+}
 static double s_pendingPerSectorMs = 0.0; /* for CdReadSync()'s remaining-sector estimate */
 
 /* Ported from octoshock's PS_CDC::CalcSeekTime() (BizHawk/psx/octoshock/
@@ -196,43 +209,52 @@ static int fromBCD(unsigned char v) {
  * (Region-EXACT verification would MD5 the boot exe from LBA 23 against 596bb082...; not done here
  * to keep mount instant and avoid rejecting valid alternate dumps -- this magic check passes for any
  * genuine Vandal Hearts (USA) .bin, since the ISO layout fixes SLUS_004.47 at LBA 23.) */
-#define SLUS_BOOT_LBA 23
+#define SLUS_BOOT_LBA 23      /* US/Asia master */
+#define SLPM_BOOT_LBA 15200   /* Japan master (SLPM_860.07; 283,860-sector image) */
 
-/* Public: does the currently-mounted image carry Vandal Hearts (USA)'s SLUS_004.47 boot signature at
- * LBA 23? 1 = yes, 0 = no / no disc mounted / read failed. */
-int PC_CdDiscSignatureOk(void) {
+/* "PS-X EXE" boot-exe magic probe at a given LBA (raw sector, data at +24 as everywhere). */
+static int BootSigAtLba(long bootLba) {
     unsigned char sec[SECTOR_RAW_SIZE];
-    long off = (long)SLUS_BOOT_LBA * SECTOR_RAW_SIZE;
     if (!s_disc) return 0;
-    if (fseek(s_disc, off, SEEK_SET) != 0) return 0;
+    if (fseek(s_disc, bootLba * SECTOR_RAW_SIZE, SEEK_SET) != 0) return 0;
     if (fread(sec, 1, SECTOR_RAW_SIZE, s_disc) != (size_t)SECTOR_RAW_SIZE) return 0;
-    return memcmp(sec + SECTOR_DATA_OFFSET, "PS-X EXE", 8) == 0;   /* same data offset as CdRead */
+    return memcmp(sec + SECTOR_DATA_OFFSET, "PS-X EXE", 8) == 0;
 }
 
-/* The game's memory-card save-file id ("BASLUS-00447VH" on USA, "BISCPS-45183VH" on the Asia
- * release) is embedded in the boot exe at VRAM 0x800f5551. The two releases are byte-identical
- * game code -- ONLY this 14-byte string differs -- and both run on this port unchanged (the port
- * IS the recompiled US code, and the Asia disc is the same master with the same file layout). So
- * the string is the canonical release tag. The exe is pinned at LBA 23 (see above) and stored one
- * ISO sector = 2048 data bytes, so the id sits at a fixed raw-image offset; the 14 bytes stay
- * within a single sector (no split read). Any other disc reads something else here and classifies
- * as UNKNOWN -- still bootable, since PC_CdDiscSignatureOk is the hard gate and this is only for
- * naming/logging. */
-#define VH_CARDID_VRAM   0x800f5551
+/* Public: does the currently-mounted image carry THIS REGION's boot signature at its boot LBA?
+ * 1 = yes, 0 = no / no disc mounted / read failed. The region-mismatch case (a valid Vandal
+ * Hearts disc of the OTHER region) is diagnosed by the caller via PC_CdDiscRelease(). */
+int PC_CdDiscSignatureOk(void) {
+    return BootSigAtLba(VH_REGION_BOOT_LBA);
+}
+
+/* The game's memory-card save-file id is embedded in each boot exe ("BASLUS-00447VH" USA /
+ * "BISCPS-45183VH" Asia at VRAM 0x800f5551 in SLUS_004.47; "BISLPM-86007VH" at VRAM 0x800f76a9
+ * in SLPM_860.07) and is the canonical release tag. Each exe is pinned at its region's boot LBA
+ * and stored in contiguous 2048-byte ISO sectors, so the id sits at a fixed raw-image offset
+ * (verified: neither id crosses a sector boundary). Classification probes BOTH regions'
+ * layouts, so a region build can NAME a wrong-region disc instead of just rejecting it. */
 #define VH_EXE_LOAD_VRAM 0x80010000
 #define VH_EXE_HDR_SIZE  0x800
-#define VH_CARDID_IMG_OFF ((VH_CARDID_VRAM - VH_EXE_LOAD_VRAM) + VH_EXE_HDR_SIZE)
+
+static int CardIdAt(long bootLba, unsigned long cardVram, char id[14]) {
+    unsigned long imgOff = (cardVram - VH_EXE_LOAD_VRAM) + VH_EXE_HDR_SIZE;
+    long lba = bootLba + (long)(imgOff / SECTOR_DATA_SIZE);
+    long raw = lba * SECTOR_RAW_SIZE + SECTOR_DATA_OFFSET + (long)(imgOff % SECTOR_DATA_SIZE);
+    if (fseek(s_disc, raw, SEEK_SET) != 0) return 0;
+    return fread(id, 1, 14, s_disc) == 14;
+}
 
 PC_DiscRelease PC_CdDiscRelease(void) {
     char id[14];
-    long lba, raw;
     if (!s_disc) return VH_DISC_UNKNOWN;
-    lba = (long)SLUS_BOOT_LBA + VH_CARDID_IMG_OFF / SECTOR_DATA_SIZE;
-    raw = lba * SECTOR_RAW_SIZE + SECTOR_DATA_OFFSET + (VH_CARDID_IMG_OFF % SECTOR_DATA_SIZE);
-    if (fseek(s_disc, raw, SEEK_SET) != 0) return VH_DISC_UNKNOWN;
-    if (fread(id, 1, sizeof id, s_disc) != sizeof id) return VH_DISC_UNKNOWN;
-    if (memcmp(id, "BASLUS-00447VH", sizeof id) == 0) return VH_DISC_USA;
-    if (memcmp(id, "BISCPS-45183VH", sizeof id) == 0) return VH_DISC_ASIA;
+    if (BootSigAtLba(SLUS_BOOT_LBA) && CardIdAt(SLUS_BOOT_LBA, 0x800f5551, id)) {
+        if (memcmp(id, "BASLUS-00447VH", sizeof id) == 0) return VH_DISC_USA;
+        if (memcmp(id, "BISCPS-45183VH", sizeof id) == 0) return VH_DISC_ASIA;
+    }
+    if (BootSigAtLba(SLPM_BOOT_LBA) && CardIdAt(SLPM_BOOT_LBA, 0x800f76a9, id)) {
+        if (memcmp(id, "BISLPM-86007VH", sizeof id) == 0) return VH_DISC_JAPAN;
+    }
     return VH_DISC_UNKNOWN;
 }
 
@@ -554,7 +576,30 @@ int CdSync(int mode, u_char *result) {
 }
 
 int CdRead(int sectors, unsigned int *buf, int mode) {
-    (void)mode;
+    /* Real PsyQ CdRead (disassembled from the byte-exact SLUS_004.47: wrapper @0x800d25a8,
+     * read kick @0x800d3da0) compares its mode ARGUMENT's low byte against the drive-mode
+     * shadow (0x80120f64, updated by every CD_cw CdlSetmode, incl. CdControl's) and issues
+     * CdlSetmode(arg) on mismatch before CdlReadN. The JP game depends on this: it passes
+     * CdlModeSpeed per read with NO separate Setmode step (jp/src/core/cd.c:948) -- ignoring
+     * the argument ran every JP load at 1x where hardware runs 2x.
+     *
+     * DELIBERATE DEVIATION for mode==0: faithfully applying a zero mode would drop the US
+     * drive to 1x mid-dance (US does CdlSetmode(0x80) then CdRead(...,0) -- src/core/cd.c:966
+     * /992), which contradicts the validated port-vs-hardware load timing (octoshock model
+     * ~5.36s vs HW ~5.08s => 2x-class transfer).
+     * ANSWERED by measurement (exchange/103 P4 D2, 2026-08-21): retail US hardware loads the
+     * demo battle in ~5.25s (BizHawk video capture) vs this port's ~4.98s natural run (-5%) --
+     * 2x-class either way, so the sticky-mode-on-zero behaviour is faithful IN OUTCOME and
+     * stays. (Whatever the BIOS-level shadow does with mode 0, no observable 1x drop exists.)
+     * The REMAINING regional timing question is different: the JP port loads ~1s (-18%) short
+     * of JP hardware -- see exchange/103 D3. Leading mechanism: this model charges seek +
+     * transfer only, never the drive's per-read START overhead; the US loader's per-file
+     * Setmode+CdSync+3-frame dance (src/core/cd.c:958-992) happens to absorb that overhead
+     * game-side, while the JP loader calls Setloc->CdRead back-to-back
+     * (jp/src/core/cd.c: no Setmode state, no wait) and exposes it. */
+    if ((mode & 0xff) != 0 && (unsigned char)mode != s_mode) {
+        s_mode = (unsigned char)mode;
+    }
     if (!s_disc || sectors <= 0) {
         s_lastReadResult = -1;
         s_pendingReadUntilMs = 0;
@@ -594,7 +639,77 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
     }
     int speed = (s_mode & CdlModeSpeed) ? 2 : 1;
     s_pendingPerSectorMs = 1000.0 / (SECTORS_PER_SEC_1X * speed);
-    s_pendingReadUntilMs = SDL_GetTicks() + (Uint32)(seekMs + s_pendingPerSectorMs * sectors);
+    /* Boot-grace fast loads (2026-08-22): the fresh-process boot spends 5-8s in the CD-timing
+     * simulation loading the boot files (LoadSoundSet etc.) behind a black window -- authentic
+     * mechanics, but on a console those seconds hid behind the BIOS boot animation. Until the
+     * FIRST movie stream starts (the intro logo -- see the one-way latch at s_movieActive=1),
+     * the composed delay is scaled down 16x and the READ_START inter-read charge skipped.
+     * Delays stay NONZERO, so completion still lands on a later VSync (the async-ordering
+     * contract). Provably safe scope: boot loads run no engine frames (rand() never ticks, so
+     * the RNG stream and the drift harness are untouched) and no XA/FMV stream can be active
+     * before the first movie by construction. Every load from the logo onward -- title, New
+     * Game, area transitions, the demo battle -- pays the hardware-exact model unchanged; a
+     * START mash cannot outrun the latch (the stream starts in movie-state case 10, the skip
+     * is read in case 11). Caveat: a VH_DEBUG_MENU=1 boot never plays a movie, so that dev
+     * path keeps fast loads for the whole session -- acceptable for a debug tool.
+     * VH_FAST_BOOT=0 (ini/env) restores full hardware timing for validation A/B. */
+    if (BootGraceActive()) {
+        seekMs /= 16.0;
+        s_pendingPerSectorMs /= 16.0;
+    }
+    double startMs = 0.0;
+    /* Per-read START overhead (exchange/103 D3, 2026-08-21). The octoshock-derived model above
+     * charges seek + transfer only; the real drive also pays a pause->ReadN start cost on EVERY
+     * read (command processing + laser re-sync after the stream stopped). The US game never
+     * exposed the omission: its loader runs a Setmode+CdSync+3-frame dance between files
+     * (src/core/cd.c:958-992, measured ~84-139ms of game-side idle per file), which overlaps the
+     * drive's start work, so the US port lands within -5% of hardware with no start charge. The
+     * JP loader issues Setloc->CdRead back-to-back (measured ~3-31ms idle), serializing the cost
+     * on hardware -- omitting it ran the JP load ~1s (-18%) short of the BizHawk baseline.
+     *
+     * Model: the drive needs READ_START_MS after the previous read's completion before the next
+     * can stream; game-side idle counts toward it (that's the overlap). Fitted against BOTH
+     * hardware baselines from the natural-run logs (timing_runs/natural/, 2026-08-21):
+     * JP 8-read battle window 4.24s -> 5.33s vs BizHawk 5.33s (READ_START_MS retuned 158->145:
+     * the window's first read is charged too). REGION-BLIND since 2026-08-21 (user-approved
+     * change to shipped US pacing): the same charge lands the US load at the BizHawk baseline
+     * too (measured -- see exchange/103 D3), replacing the historical -5%. */
+    #define READ_START_MS 145.0
+    {
+        static Uint32 s_prevReadDoneMs = 0;
+        Uint32 now = SDL_GetTicks();
+        if (s_prevReadDoneMs != 0 && !BootGraceActive()) {   /* boot grace: skip the start charge */
+            double idleMs = (double)(now - s_prevReadDoneMs);
+            if (idleMs < 0.0) idleMs = 0.0;
+            if (idleMs < READ_START_MS) startMs = READ_START_MS - idleMs;
+        }
+        s_prevReadDoneMs = now + (Uint32)(seekMs + startMs + s_pendingPerSectorMs * sectors);
+    }
+    s_pendingReadUntilMs = SDL_GetTicks() + (Uint32)(seekMs + startMs + s_pendingPerSectorMs * sectors);
+
+    { /* CD load accounting (set VH_CD_LOG=1) -- exchange/103 D3: the JP demo-battle load completes
+       * ~1s faster than hardware while US matches, and the octoshock CalcSeekTime model was only ever
+       * calibrated against US. This separates the two candidate causes with data: a per-read dump of
+       * sector count / seek / transfer, plus running totals, so a JP vs US capture shows whether the
+       * regional difference is DATA VOLUME (fewer sectors) or RATE (mis-charged time). Read-only. */
+      static FILE *lg = NULL; static int tried = 0;
+      static double cumMs = 0.0; static long cumSectors = 0; static int nreads = 0;
+      if (!tried) { tried = 1; if (getenv("VH_CD_LOG")) lg = fopen("vh_cd_log.txt", "w"); }
+      if (lg) {
+          double xferMs = s_pendingPerSectorMs * sectors;
+          nreads++; cumSectors += sectors; cumMs += seekMs + startMs + xferMs;
+          /* t = wall-clock ms since startup, so a capture can be aligned against the gdb
+           * harness's own elapsed-time markers (e.g. "FORCED demo battle at 52.0s") and the
+           * battle-load window isolated from boot/movie reads. Without it the totals mix
+           * every read of the session together -- which is exactly how the first capture
+           * came out unusable. */
+          fprintf(lg, "t=%-8u #%-4d lba=%-7d sectors=%-5d speed=%dx seek=%7.2f start=%6.2f xfer=%8.2f read=%8.2f | "
+                      "cum reads=%-4d sectors=%-7ld ms=%9.2f\n",
+                  SDL_GetTicks(), nreads, s_targetLBA, sectors, speed, seekMs, startMs, xferMs,
+                  seekMs + startMs + xferMs, nreads, cumSectors, cumMs);
+          fflush(lg);
+      }
+    }
 
     s_headLBA = s_targetLBA + sectors;
     s_lastReadResult = 0;
@@ -647,6 +762,9 @@ int CdRead2(int mode) {
          * of a .STR movie's VIDEO. Seed the demux cursor at the movie base (the just-seeked LBA)
          * and show frame 1 immediately so the first tick isn't black. */
         s_movieActive   = 1;
+        s_bootGrace     = 0;   /* first movie stream = boot is over; one-way latch, every later
+                                * load pays the hardware-exact model (a START skip can't outrun
+                                * this -- the stream starts before the skip input is read) */
         s_movieBaseLBA  = s_targetLBA;
         s_movieScanLBA  = s_targetLBA;
         s_movieScanFrame = 0;

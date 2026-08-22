@@ -5,12 +5,22 @@ pack in `hdpacks/` beside the executable and replaces each 320×240 background w
 image at render time (see `docs/`). The pack is data the user supplies — the port ships none of it.
 
 ## Layout the engine expects
+
+Since the dual-region build, packs live in **one subfolder per game id**, so both regions' packs
+can be installed side by side and each disc picks its own:
 ```
 hdpacks/
-  manifest.json          # {"game":"SLUS-00447","packVersion":2,"count":C,"hashes":[...],"videos":V,"sectors":[...]}
-  backgrounds/
-    <hash>.webp          # one per background, keyed by the engine's upload hash
+  SLUS-00447/            # the US pack (also used when playing the Asia SCPS-45183 disc -- same master)
+    manifest.json        # {"game":"SLUS-00447","packVersion":2,"count":C,"hashes":[...],"videos":V,"sectors":[...]}
+    backgrounds/
+      <hash>.webp        # one per background, keyed by the engine's upload hash
+    videos/
+      <sector>.mp4
+  SLPM-86007/            # the Japanese pack, same structure ("game":"SLPM-86007")
+    ...
 ```
+The pre-2.0 flat layout (`hdpacks/manifest.json` + `backgrounds/` + `videos/` directly) is still
+detected as a fallback, so existing installs keep working without changes.
 
 ## Building a pack
 

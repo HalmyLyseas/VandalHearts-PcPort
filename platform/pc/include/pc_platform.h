@@ -39,9 +39,28 @@ long long PC_CdImageBytes(void);  /* mounted image size (-1 if none) -- the trun
 typedef enum {
     VH_DISC_UNKNOWN = 0,
     VH_DISC_USA,      /* SLUS-00447 */
-    VH_DISC_ASIA      /* SCPS-45183 -- byte-identical to USA except the memory-card id */
+    VH_DISC_ASIA,     /* SCPS-45183 -- byte-identical to USA except the memory-card id */
+    VH_DISC_JAPAN     /* SLPM-86007 -- its own build (the jp/ tree); different disc layout */
 } PC_DiscRelease;
 PC_DiscRelease PC_CdDiscRelease(void);
+
+/* Region identity of THIS build (exchange/102 P2). The port Makefile/CMake define
+ * VH_REGION_JP for the JP core; everything region-derived hangs off these so no card id,
+ * pack id, or boot LBA is ever hardcoded twice. The JP card id/boot layout were read from
+ * the byte-exact SLPM_860.07 (card id at VRAM 0x800f76a9; boot exe at LBA 15200). */
+#ifdef VH_REGION_JP
+#define VH_REGION_NAME        "Japan (SLPM-86007)"
+#define VH_ACTIVE_CARD_NAME   "BISLPM-86007VH"
+#define VH_HD_GAME_ID         "SLPM-86007"
+#define VH_REGION_BOOT_LBA    15200
+#define VH_REGION_DISC        VH_DISC_JAPAN
+#else
+#define VH_REGION_NAME        "USA (SLUS-00447) / Asia (SCPS-45183)"
+#define VH_ACTIVE_CARD_NAME   "BASLUS-00447VH"
+#define VH_HD_GAME_ID         "SLUS-00447"
+#define VH_REGION_BOOT_LBA    23
+#define VH_REGION_DISC        VH_DISC_USA   /* ASIA also accepted -- same master */
+#endif
 /* Fatal, user-actionable disc error: stderr + a Windows message box, then exit (pc_bootstrap.c).
  * Used at mount validation and by libcd.c's per-read corruption guards (a damaged image used to
  * hang the game silently instead). */
@@ -83,6 +102,9 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
 /* Fullscreen movie (MDEC/FMV) overlay. libcd decodes each .STR frame to a 320x240 BGR555 buffer
  * and registers it here; PC_GpuPresent shows it fullscreen while set. Pass NULL to disable. */
 void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h);
+/* Pump + drain the SDL event queue (quit/Escape handling, compositor ping). Called from the
+ * present path and every VSync so long wait loops stay "responsive" to the window manager. */
+void PC_GpuPumpEvents(void);
 
 /* Stage-3 (1.1C) in-game options overlay: paints the pc_overlay.c menu over the presented frame.
  * Called by PC_GpuPresent when PC_OverlayIsOpen(). w,h are the native scratch dimensions. */

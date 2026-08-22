@@ -442,6 +442,7 @@ void DrawOTag(unsigned int *p) {
      * Env checked once. */
     static int s_primLog = -1;
     u32 nextTok = ((P_TAG *)p)->tag;
+    unsigned long walkSteps = 0;   /* fail-soft cycle guard -- see the cap check at the loop tail */
     int hiScale = PC_GpuGetInternalScale(); /* G2: >1 => also rasterize each prim into the hi-res buffer at Sx */
     static int s_rtTime = -1; static clock_t s_rtAccum = 0; static unsigned s_rtFrames = 0; clock_t s_rtStart = 0;
     TrcInit();
@@ -582,6 +583,30 @@ void DrawOTag(unsigned int *p) {
             }
         }
         nextTok = rawTagOfCur;
+        /* Fail-soft cycle guard: a cyclic OT link would spin this walk forever (seen live
+         * 2026-08-22: JP game on the WINDOWS build hung in DrawOTag at the intro-logo -> title
+         * transition; Windows froze the process as unresponsive). A legitimate frame is a few
+         * thousand prims + the 4096-bucket table; one million steps is unreachable except by a
+         * cycle. Dump a diagnostic tail once, drop the rest of the frame, keep running. */
+        if (++walkSteps > 1000000UL) {
+            static int cycleWarned = 0;
+            if (!cycleWarned) {
+                int d;
+                cycleWarned = 1;
+                fprintf(stderr, "[libgpu] OT walk exceeded 1M steps -- CYCLIC ordering table; "
+                                "dropping the rest of the frame. Chain tail:\n");
+                for (d = 0; d < 12 && nextTok; d++) {
+                    int b = 0;
+                    void *c2 = PC_OtResolve(nextTok, &b);
+                    if (!c2) { fprintf(stderr, "  tok=%u UNRESOLVED\n", nextTok); break; }
+                    fprintf(stderr, "  tok=%u %s addr=%p type=0x%02x code=0x%02x\n", nextTok,
+                            b ? "bucket" : "prim", c2,
+                            b ? 0 : PC_GPU_PRIM_TYPE((P_TAG *)c2), ((P_TAG *)c2)->code);
+                    nextTok = ((P_TAG *)c2)->tag;
+                }
+            }
+            break;
+        }
     }
 
     TrcFrameEnd();   /* trace record: 'Z' frame delimiter (+ closes the file at the frame cap) */

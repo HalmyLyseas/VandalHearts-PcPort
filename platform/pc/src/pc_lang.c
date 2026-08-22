@@ -224,90 +224,11 @@ static void AddText(int lba, const unsigned char *p, unsigned len) {
     s_lang.textN++;
 }
 
-/* Minimal manifest reads (same posture as pc_hdpack.c's HdManifestRead: the manifest is a
- * CONTROLLED file our own builder writes -- this is a field extractor, not a JSON parser). */
-static int MiniJsonStr(const char *buf, const char *key, char *out, size_t n) {
-    char pat[64];
-    const char *p, *e;
-    snprintf(pat, sizeof pat, "\"%s\"", key);
-    p = strstr(buf, pat);
-    if (!p) return 0;
-    p = strchr(p + strlen(pat), ':');
-    if (!p) return 0;
-    p = strchr(p, '"');
-    if (!p) return 0;
-    p++;
-    e = strchr(p, '"');
-    if (!e || (size_t)(e - p) >= n) return 0;
-    memcpy(out, p, (size_t)(e - p));
-    out[e - p] = '\0';
-    return 1;
-}
-
-static int MiniJsonInt(const char *buf, const char *key, int *out) {
-    char pat[64];
-    const char *p;
-    snprintf(pat, sizeof pat, "\"%s\"", key);
-    p = strstr(buf, pat);
-    if (!p) return 0;
-    p = strchr(p + strlen(pat), ':');
-    if (!p) return 0;
-    *out = atoi(p + 1);
-    return 1;
-}
-
-#define LANG_GAME_ID "vandal-hearts-usa"
-#define LANG_FORMAT  2      /* v2 adds 1-byte/16-char item names (exchange/91); v1 packs still load */
-
-/* The manifest is LOAD-BEARING (packaging decision, 2026-08-07): the folder name is a human
- * convention, the manifest is the machine truth. A pack with a missing/foreign/newer manifest is
- * refused LOUDLY and the game continues in English -- a renamed folder must never smuggle a pack
- * past identification. Returns 1 if the pack may load.
- *
- * THE ONE MANIFEST READER. Every consumer of the accept rule (the loader, the overlay picklist)
- * goes through here, so the rule cannot drift between them, and `format` is parsed exactly once
- * (formatOut). `quiet` suppresses the stderr chatter for the picklist -- listing is not loading.
- * nameOut (may be NULL) gets the display name, "" when the manifest carries none. */
-static int LangManifestCheck(const char *dir, int *formatOut, char *nameOut, size_t nameN,
-                             int quiet) {
-    char path[640], buf[2048], game[64], name[96], version[32];
-    FILE *f;
-    size_t n;
-    int format = 0;
-    snprintf(path, sizeof path, "%s/manifest.json", dir);
-    f = fopen(path, "r");
-    if (!f) {
-        if (!quiet)
-            fprintf(stderr, "[lang] %s: no manifest.json -- not a language pack (or built by a "
-                            "pre-manifest tool; rebuild it)\n", dir);
-        return 0;
-    }
-    n = fread(buf, 1, sizeof buf - 1, f);
-    buf[n] = '\0';
-    fclose(f);
-    if (!MiniJsonStr(buf, "game", game, sizeof game) || strcmp(game, LANG_GAME_ID) != 0) {
-        if (!quiet)
-            fprintf(stderr, "[lang] %s: pack is for game \"%s\", this build is \"%s\" -- refused\n",
-                    dir, MiniJsonStr(buf, "game", game, sizeof game) ? game : "?", LANG_GAME_ID);
-        return 0;
-    }
-    if (!MiniJsonInt(buf, "format", &format) || format > LANG_FORMAT) {
-        if (!quiet)
-            fprintf(stderr, "[lang] %s: pack format v%d, this build reads v%d -- refused (update "
-                            "the port, or rebuild the pack)\n", dir, format, LANG_FORMAT);
-        return 0;
-    }
-    if (formatOut) *formatOut = format;
-    if (nameOut && nameN) {
-        if (!MiniJsonStr(buf, "name", nameOut, nameN)) nameOut[0] = '\0';
-    }
-    if (!quiet) {
-        if (!MiniJsonStr(buf, "name", name, sizeof name)) snprintf(name, sizeof name, "(unnamed)");
-        if (!MiniJsonStr(buf, "version", version, sizeof version)) version[0] = '\0';
-        fprintf(stderr, "[lang] pack \"%s\"%s%s\n", name, version[0] ? " v" : "", version);
-    }
-    return 1;
-}
+/* Manifest reading + pack enumeration (MiniJson*, PC_LangManifestCheck, PC_LangListPacks) moved
+ * to pc_lang_list.c (2026-08-22) -- it compiles in BOTH region cores so the overlay's LANGUAGE
+ * picklist can enumerate installed packs on a JP session too (queueing a pack for a pending
+ * US-disc restart). PC_LangManifestCheck remains THE ONE MANIFEST READER: the loader below and
+ * the picklist share the same accept rule. */
 
 /* The folder name selected at boot ("" when no pack loaded) -- the overlay's picklist compares its
  * pending selection against this to show the restart marker. */
@@ -325,35 +246,6 @@ int PC_LangItemNames1Byte(void) {
     return s_lang.item1b;
 }
 
-/* Enumerate installed packs for the overlay picklist: every <deploy>/langpacks/<folder> that
- * LangManifestCheck accepts -- the SAME gate the loader applies, called quietly (listing is not
- * loading), so the picklist can never offer a pack the loader would then refuse at boot.
- * Returns the count; folders and display names are parallel arrays. */
-int PC_LangListPacks(char folders[][64], char names[][64], int max) {
-    char deploy[512], root[560], pdir[640];
-    DIR *d;
-    struct dirent *e;
-    int n = 0;
-    if (!PC_GetDeployDir(deploy, sizeof deploy)) return 0;
-    snprintf(root, sizeof root, "%s/langpacks", deploy);
-    d = opendir(root);
-    if (!d) return 0;
-    while ((e = readdir(d)) != NULL && n < max) {
-        if (e->d_name[0] == '.') continue;
-        /* a folder name too long for the picklist buffers can't be a valid pack -- skip it
-         * (also proves to -Wformat-truncation that truncation is handled, not ignored) */
-        if (strlen(e->d_name) >= 64) continue;
-        if (snprintf(pdir, sizeof pdir, "%s/%s", root, e->d_name) >= (int)sizeof pdir) continue;
-        if (!LangManifestCheck(pdir, NULL, names[n], 64, 1)) continue;
-        memcpy(folders[n], e->d_name, strlen(e->d_name) + 1);   /* length-checked above */
-        if (!names[n][0])                                        /* unnamed: show the folder */
-            memcpy(names[n], e->d_name, strlen(e->d_name) + 1);
-        n++;
-    }
-    closedir(d);
-    return n;
-}
-
 /* Load + apply once. Safe to call from anywhere after the data-segment constructors (i.e. after
  * main() starts), and idempotent -- both entry points below call it. */
 static void LangLoad(void) {
@@ -367,7 +259,7 @@ static void LangLoad(void) {
     if (s_lang.loaded) return;
     s_lang.loaded = 1;
     if (!LangPackDir(dir, sizeof dir)) return;
-    if (!LangManifestCheck(dir, &fmt, NULL, 0, 0)) return;
+    if (!PC_LangManifestCheck(dir, &fmt, NULL, 0, 0)) return;
     s_lang.mfOk = 1;                  /* manifest accepted: PC_LangBgDir may activate backgrounds */
     {   /* remember the boot selection BY FOLDER NAME (the overlay's restart marker compares to it);
          * a VH_LANGPACK dev override deliberately stays "" -- it is not a langpacks/ selection */

@@ -36,7 +36,10 @@ OUT = os.environ.get("VH_GENERATED_OUT",
                      os.path.join(VH, "platform", "pc", "src", "pc_string_table.c"))
 
 COUNT = 100
-TABLE_ADDR = 0x8010102c
+# Region switch (exchange/102 P1): same table, region-specific address (both 100 entries;
+# entry 100 is the PC-added dojo sentinel in both regions).
+REGION = os.environ.get("VH_REGION", "us")
+TABLE_ADDR = {"us": 0x8010102c, "jp": 0x80103530}[REGION]
 LOAD_ADDR = 0x80010000
 FILE_BASE = 0x800
 

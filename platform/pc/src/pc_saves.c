@@ -29,7 +29,11 @@
 #define PATH_MAX 4096
 #endif
 
-#define ACTIVE_CARD    "BASLUS-00447VH"   /* the game's fixed card file (core/card.c: "bu00:BASLUS-00447VH") */
+/* The game's fixed card file (core/card.c: "bu00:<id>"), region-derived (exchange/102 P2):
+ * "BASLUS-00447VH" US / "BISLPM-86007VH" JP. One shared saves/ dir stays safe: every archive
+ * name, listing filter, and restore check below is prefixed with this id, so the two regions'
+ * cards and backups can coexist without any cross-region restore being possible. */
+#define ACTIVE_CARD    VH_ACTIVE_CARD_NAME
 #define ARCHIVE_SUBDIR ".archive"         /* dot-prefixed => invisible to the game's firstfile() scan   */
 
 static void activePath(char *out, size_t n)  { snprintf(out, n, "%s/%s", PC_SaveDir(), ACTIVE_CARD); }
@@ -141,10 +145,19 @@ static void formatLabel(const char *file, char *out, size_t cap) {
 }
 
 /* Bytes of CardFileData_Header (card.h) that precede the listing in every card file: magic[2] +
- * type + blockCount + sjisName[64] + padding[28] + clut[32] + icon1[128] + icon2[128] = 384. The game
- * writes the listing at offset + sizeof(header) (core/card.c: Card_WriteFile FileSeek). No pointers in the
- * header, so this size is width-independent. */
-#define CARD_HEADER_SIZE 384
+ * type + blockCount + sjisName[64] + padding[28] + clut[32] + icon1[128] + icon2[128] = 384 on the
+ * US card; the JAPANESE card appends a third icon frame (icon3[128]) for 512. The game writes the
+ * listing at offset + sizeof(header) (core/card.c: Card_WriteFile FileSeek). No pointers in the
+ * header, so these sizes are width-independent.
+ *
+ * The header itself cannot tell the two apart: the icon-frame type byte is 0x12 (two frames) on
+ * BOTH cards -- KCET's JP build stores icon3 without bumping it. So the layout is PROBED: the
+ * listing's own CRC32 is tried at 384, then 512 (a false positive is a ~2^-32 accident). This
+ * keeps the parser region-blind -- a JP card inspected from a US session (hand-moved file) still
+ * reads correctly, matching the one-shared-saves-dir posture above. (2026-08-22: INSPECT said
+ * "INVALID BACKUP" for every JP card because 384 was hardcoded.) */
+#define CARD_HEADER_SIZE_US 384
+#define CARD_HEADER_SIZE_JP 512
 
 static unsigned long readU32LE(const unsigned char *p) {
     return (unsigned long)p[0] | (unsigned long)p[1] << 8 |
@@ -163,21 +176,30 @@ static unsigned long listingCrc(const unsigned char *p, size_t n) {
     return (~crc) & 0xffffffffUL;
 }
 
-static int readValidatedListing(const char *path, unsigned char *listing) {
+/* Returns the card's header size (384 US / 512 JP) with the validated listing in *listing, or 0. */
+static long readValidatedListing(const char *path, unsigned char *listing) {
+    static const long trySizes[2] = { CARD_HEADER_SIZE_US, CARD_HEADER_SIZE_JP };
     unsigned char header[4];
     FILE *f = fopen(path, "rb");
     size_t n;
+    int t;
+    long found = 0;
     if (!f) return 0;
     n = fread(header, 1, sizeof(header), f);
     if (n != sizeof(header) || header[0] != 'S' || header[1] != 'C' ||
-        header[2] != 0x12 || header[3] != 0x02 || fseek(f, CARD_HEADER_SIZE, SEEK_SET) != 0) {
+        header[2] != 0x12 || header[3] != 0x02) {
         fclose(f);
         return 0;
     }
-    n = fread(listing, 1, 128, f);
-    if (ferror(f)) { fclose(f); return 0; }
-    if (fclose(f) != 0 || n != 128) return 0;
-    return readU32LE(listing) == listingCrc(listing + 4, 124);
+    for (t = 0; t < 2 && !found; t++) {
+        if (fseek(f, trySizes[t], SEEK_SET) != 0) break;
+        n = fread(listing, 1, 128, f);
+        if (ferror(f)) break;
+        if (n == 128 && readU32LE(listing) == listingCrc(listing + 4, 124))
+            found = trySizes[t];
+    }
+    if (fclose(f) != 0) return 0;
+    return found;
 }
 
 static int validateCard(const char *path, unsigned char *listing) {
@@ -185,13 +207,14 @@ static int validateCard(const char *path, unsigned char *listing) {
     unsigned char save[REGULAR_SAVE_SIZE];
     FILE *f;
     int i;
-    if (!readValidatedListing(path, listing)) return 0;
+    long hdrSize = readValidatedListing(path, listing);
+    if (!hdrSize) return 0;
     f = fopen(path, "rb");
     if (!f) return 0;
     for (i = 0; i < 3; i++) {
         size_t n;
         if (!listing[4 + i]) continue;
-        if (fseek(f, CARD_HEADER_SIZE + (long)(i + 1) * CARD_RECORD_STRIDE, SEEK_SET) != 0) {
+        if (fseek(f, hdrSize + (long)(i + 1) * CARD_RECORD_STRIDE, SEEK_SET) != 0) {
             fclose(f); return 0;
         }
         n = fread(save, 1, sizeof(save), f);
@@ -220,8 +243,32 @@ int PC_SaveReadCard(const char *file, PC_SaveCard *out) {
         if (!out->occupied[i]) continue;
         for (j = 0; j < 39 && cap[j]; j++) {
             unsigned char c = cap[j];
+            /* The JAPANESE game writes its captions in full-width SJIS ("１章１節　Ｌ５　０：１０");
+             * the overlay's 5x7 font is caps-only ASCII, so fold: full-width digits/letters/space/
+             * colon to their ASCII forms, 章 (chapter) -> '-', 節 (section) -> dropped, giving e.g.
+             * "1-1 L5 0:10". A byte-wise filter here used to shred these into stray letters (the
+             * SJIS trail bytes are ASCII-range). US cards -- and US saves converted to JP -- carry
+             * plain ASCII captions and take the else branch unchanged. */
+            if ((c >= 0x81 && c <= 0x9f) || (c >= 0xe0 && c <= 0xef)) {
+                unsigned int pair;
+                unsigned char c2 = cap[j + 1];
+                if (j + 1 >= 39 || !c2) break;           /* truncated lead byte: stop cleanly */
+                pair = ((unsigned int)c << 8) | c2;
+                j++;                                     /* consume the trail byte */
+                if (n >= (int)sizeof(out->slot[0]) - 1) break;
+                if (pair == 0x8140)                       out->slot[i][n++] = ' ';
+                else if (pair == 0x8146)                  out->slot[i][n++] = ':';
+                else if (pair >= 0x824f && pair <= 0x8258) out->slot[i][n++] = (char)('0' + (pair - 0x824f));
+                else if (pair >= 0x8260 && pair <= 0x8279) out->slot[i][n++] = (char)('A' + (pair - 0x8260));
+                else if (pair >= 0x8281 && pair <= 0x829a) out->slot[i][n++] = (char)('A' + (pair - 0x8281));
+                else if (pair == 0x8fcd)                  out->slot[i][n++] = '-';   /* 章 */
+                else if (pair == 0x90df)                  ;                          /* 節: dropped */
+                else                                      out->slot[i][n++] = ' ';   /* other kanji */
+                continue;
+            }
             if (c >= 'a' && c <= 'z') c -= 32;           /* uppercase for the caps-only overlay font */
             if (c < 0x20 || c > 0x7e) c = ' ';           /* keep it printable/in-font */
+            if (n >= (int)sizeof(out->slot[0]) - 1) break;
             out->slot[i][n++] = (char)c;
         }
         while (n > 0 && out->slot[i][n - 1] == ' ') n--; /* trim trailing pad spaces */
@@ -365,7 +412,7 @@ int PC_SaveArchiveListAlloc(PC_SaveArchive **out) {
         strncpy(items[n].file, e->d_name, sizeof(items[n].file) - 1);
         items[n].file[sizeof(items[n].file) - 1] = '\0';
         formatLabel(e->d_name, items[n].label, sizeof(items[n].label));
-        items[n].mtime = (long)st.st_mtime;
+        items[n].mtime = (long long)st.st_mtime;
         n++;
     }
     closedir(d);

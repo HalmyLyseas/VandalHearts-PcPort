@@ -741,6 +741,28 @@ static int s_movieOvW = 0, s_movieOvH = 0;
 void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h) {
     s_movieOverlay = bgr555; s_movieOverlayRGB = NULL; s_movieOvW = w; s_movieOvH = h;
 }
+/* Pump + drain the SDL event queue. Initializing SDL_INIT_VIDEO installs SDL's own
+ * SIGINT/SIGTERM handlers, which translate Ctrl+C into an SDL_QUIT event instead of terminating
+ * the process; the window manager's close button posts the same SDL_QUIT. Handle SDL_QUIT and
+ * Escape by exiting cleanly. (SDL_GetKeyboardState in PadRead still works -- polling here also
+ * refreshes that internal key state.)
+ *
+ * Called from the present path AND from every VSync (2026-08-22): processing events is also what
+ * answers the compositor's responsiveness ping. The boot loads run at hardware-exact CD timing
+ * (~5-8s in LoadCdFile's VSync spin) with nothing presented and no PadRead -- the ping went
+ * unanswered and GNOME intermittently raised its "not responding" kill/wait dialog (its
+ * threshold sits right inside that window), and a close-button click sat queued until the first
+ * present. Safe when the window failed to open (SDL_PollEvent is a no-op then). */
+void PC_GpuPumpEvents(void) {
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev)) {
+        if (ev.type == SDL_QUIT ||
+            (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE)) {
+            exit(0);
+        }
+    }
+}
+
 /* 1.6 HD FMV: present a decoded HD frame directly at 24-bit (no 15-bit banding). Mutually exclusive with
  * the native BGR555 overlay; the frame is scaled to the window aspect-preserved like the native one. */
 void PC_GpuSetMovieOverlayRGB(const unsigned char *rgb, int w, int h) {
@@ -784,22 +806,8 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         else                { w = s_movieOvW;         h = s_movieOvH;         }
     }
 
-    /* Drain the SDL event queue so the process is actually closeable. Initializing
-     * SDL_INIT_VIDEO installs SDL's own SIGINT/SIGTERM handlers, which translate
-     * Ctrl+C into an SDL_QUIT event instead of terminating the process; the window
-     * manager's close button posts the same SDL_QUIT. Because nothing had ever
-     * polled the queue, both were swallowed and the process could only be killed
-     * externally. Handle SDL_QUIT and Escape by exiting cleanly. (SDL_GetKeyboardState
-     * in PadRead still works -- polling here also refreshes that internal key state.) */
-    {
-        SDL_Event ev;
-        while (SDL_PollEvent(&ev)) {
-            if (ev.type == SDL_QUIT ||
-                (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE)) {
-                exit(0);
-            }
-        }
-    }
+    /* Drain the SDL event queue so the process is actually closeable -- see PC_GpuPumpEvents. */
+    PC_GpuPumpEvents();
 
     if (w <= 0 || h <= 0) return;
 

@@ -14,14 +14,49 @@
 # directory symlink for PsyQ/ pointing at OUR clean-room headers instead --
 # same effect as replacing include/PsyQ/, without touching the real tree.
 
-SRC_DIR        := ../../src
+# ---- REGION (exchange/102) -- which game-code tree this build compiles ------------------------
+#   make link              -> REGION=us (default; behaviour identical to the pre-REGION build)
+#   make link REGION=jp    -> the jp/ tree (SLPM-86007) into build-jp/
+# The 54 TUs + 11 headers named by shared_tus.txt / tools/check_shared.py are byte-identical
+# between the trees once the PC gate conditionals are stripped, so BOTH regions compile them
+# from the US tree and every gated fix/feature lands once. The JP region takes the remaining
+# TUs from jp/src, and the four genuinely-different headers from jp/include (field.h via the
+# hand-merged include/region-jp/field.h, which carries the US gate blocks).
+# JP carries the full PC_FEAT set since the exchange/105 transplant (Tactical, ally-cycle,
+# threat overlay, fast-forward); langpack-only PC_FEAT sites stay US-only by design.
+REGION         ?= us
+ifeq ($(REGION),jp)
+GAME_ROOT      := ../../jp
+BUILD_DIR      := build-jp
+PSX_BASENAME   := SLPM_860.07
+GAME_FEAT_DEF  := -DPC_FEAT
+REGION_DEF     := -DVH_REGION_JP
+# The JP binary satisfies these two names by absolute address (undefined_additional.txt):
+# they are the same functions under second names -- see exchange/102 §3.
+REGION_LDFLAGS := -Wl,--defsym,DrawSjisText=DrawText -Wl,--defsym,MsgBox_IsFinished=ConsumeMsgBoxPagePause
+else
+GAME_ROOT      := ../..
 BUILD_DIR      := build
+PSX_BASENAME   := SLUS_004.47
+GAME_FEAT_DEF  := -DPC_FEAT
+REGION_DEF     := -DVH_REGION_US
+REGION_LDFLAGS :=
+endif
 STAGE_DIR      := $(BUILD_DIR)/include_stage
 
-C_FILES        := $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/*/*.c)
-GAME_O_FILES   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/src/%.o,$(C_FILES))
+# The file INVENTORY always comes from the region's real tree (identical 88-file layout on
+# both sides); which tree each file is COMPILED from is decided per file below (shared vs
+# region -- see the game object rules).
+SRC_DIR        := ../../src
+GAME_REL       := $(patsubst $(GAME_ROOT)/src/%,%,$(wildcard $(GAME_ROOT)/src/*.c $(GAME_ROOT)/src/*/*.c))
+GAME_O_FILES   := $(addprefix $(BUILD_DIR)/src/,$(GAME_REL:.c=.o))
 
-BACKEND_SRCS   := libetc.c pc_lang.c pc_lang_font.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_movie_subs.c pc_balance.c pc_hdvideo.c
+BACKEND_SRCS   := libetc.c pc_lang.c pc_lang_list.c pc_lang_font.c pc_diag.c pc_battle_speed.c libcd.c libsnd.c libspu.c libkernel.c libgte.c libgpu.c pc_raster.c pc_gpu_trace.c pc_hdpack.c pc_gpu_window.c libsn.c pc_bootstrap.c pc_xa.c pc_mdec.c pc_kanji_font.c pc_spu.c pc_overlay.c pc_saves.c pc_movie_subs.c pc_balance.c pc_hdvideo.c
+ifeq ($(REGION),jp)
+# The langpack engine is US-only by design (built on the US ASCII text path; exchange/101
+# §4.3); the JP core links pc_lang_stub.c (the engine's documented no-pack behaviour) instead.
+BACKEND_SRCS   := $(filter-out pc_lang.c pc_lang_font.c,$(BACKEND_SRCS)) pc_lang_stub.c
+endif
 BACKEND_OBJS   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BACKEND_SRCS))
 
 # TARGET WIDTH. Default is now 64-bit (Stage 2.3 complete, 2026-07-21).
@@ -131,9 +166,25 @@ GAME_WARN      := -Wno-incompatible-pointer-types -Wno-builtin-declaration-misma
                   -Wno-int-conversion
 # -Wno-unused-parameter: the PsyQ-API shims keep Sony's exact signatures; unused args are inherent.
 PORT_WARN      := -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
+# Region identity rides along in PORT_WARN so EVERY backend rule gets it without editing each
+# recipe -- pc_platform.h derives card id / HD pack id / boot LBA from it, and a backend that
+# starts using those macros must never silently default to the US values in a JP build.
+PORT_WARN      += $(REGION_DEF)
+# P5 unified build (exchange/104): UNIFIED=1 compiles the region cores destined for the fat
+# binary -- pc_bootstrap.c's four bootstrap constructors compile out (pc_region_main.c calls
+# the pieces explicitly), everything else is identical. Single-region `make link` never sets it.
+ifeq ($(UNIFIED),1)
+PORT_WARN      += -DVH_UNIFIED
+endif
+# The JP alias defsyms in raw-ld spelling (the blob partial link is ld -r, not cc).
+ifeq ($(REGION),jp)
+REGION_DEFSYM_LD := --defsym DrawSjisText=DrawText --defsym MsgBox_IsFinished=ConsumeMsgBoxPagePause
+else
+REGION_DEFSYM_LD :=
+endif
 
-GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PORT -DPC_FEAT -D'asm(x)=' \
-                   -I$(STAGE_DIR) -Iinclude -I../.. \
+GAME_C_FLAGS   := $(M32) $(SAN) -std=gnu89 -fno-builtin-csqrt -DPERMUTER -DPC_PORT $(GAME_FEAT_DEF) $(REGION_DEF) -D'asm(x)=' \
+                   -I$(STAGE_DIR) -Iinclude -I$(GAME_ROOT) \
                    -include pc_forward_decls.h -g $(GAME_WARN)
 
 # libwebp: STANDARD port dependency (1.6 HD pack). WebP-compressed replacements are ~7x smaller than raw
@@ -154,7 +205,7 @@ HD_VIDEO_CFLAGS := -DVH_HD_VIDEO $(shell pkg-config --cflags $(HD_VIDEO_PKGS) 2>
 HD_VIDEO_LIBS   := $(shell pkg-config --libs $(HD_VIDEO_PKGS) 2>/dev/null)
 endif
 
-.PHONY: default stage clean sweep gen-data link crash-trace asan asan32 ubsan
+.PHONY: default stage clean sweep gen-data link crash-trace asan asan32 ubsan check-shared objs blob unified
 default: $(GAME_O_FILES) $(BACKEND_OBJS)
 
 # Generates build/generated_data.c -- real definitions for the global
@@ -172,7 +223,8 @@ $(BUILD_DIR)/generated_data.c: default
 	@# changes size (Object is 96 bytes at -m32 and 160 at -m64). A width mismatch does not fail
 	@# loudly, it silently emits wrongly-sized objects. Pass our own $(M32) rather than letting
 	@# the script assume. VH_BUILD_DIR likewise lets a 32- and 64-bit tree coexist.
-	VH_TARGET_MARCH='$(M32)' VH_BUILD_DIR='$(BUILD_DIR)' VH_SAN='$(SAN)' python3 tools/build_data_segment.py
+	VH_TARGET_MARCH='$(M32)' VH_BUILD_DIR='$(BUILD_DIR)' VH_SAN='$(SAN)' \
+	VH_GAME_ROOT='$(GAME_ROOT)' VH_PSX_BASENAME='$(PSX_BASENAME)' python3 tools/build_data_segment.py
 
 # Kept as a convenience alias so `make gen-data` still works as documented elsewhere.
 gen-data: $(BUILD_DIR)/generated_data.c
@@ -226,19 +278,77 @@ ubsan:
 	$(MAKE) link BUILD_DIR=build_ubsan \
 	    SAN="-fsanitize=bounds -fno-omit-frame-pointer"
 
+# Data-segment + reconstruction objects. US links the committed hand-written/checked-in
+# reconstructions from src/ (unchanged); JP regenerates every reconstruction from its own
+# byte-exact executable into $(GEN_DIR) via the region-parametric generators (exchange/102 P1;
+# each generator is validated by regenerating the US file semantically identical first).
+DATA_OBJS := $(BUILD_DIR)/generated_data.o
+ifeq ($(REGION),jp)
+GEN_DIR   := $(BUILD_DIR)/gen
+DATA_OBJS += $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o \
+             $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o $(BUILD_DIR)/pc_spell_descriptions.o \
+             $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o
+
+# JP generated sources: region env + output into the build tree (never into src/, whose
+# copies are the US originals). VH_PSX_EXE uses the retail copy at the jp root so the
+# generators work before the first jp matching build.
+$(GEN_DIR)/pc_string_table.c:        tools/gen_string_table.py        ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_spell_descriptions.c:  tools/gen_spell_descriptions.py  ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_item_descriptions.c:   tools/gen_item_descriptions.py   ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_evt_entities.c:        tools/gen_evt_entities.py        ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_GAME_ROOT=$(GAME_ROOT) VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_sprite_box_quads.c:    tools/gen_sprite_box_quads.py    ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_GAME_ROOT=$(GAME_ROOT) VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_battle_data.c:         tools/gen_battle_data.py         ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_GAME_ROOT=$(GAME_ROOT) VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_unit_anim_data.c:      tools/gen_unit_anim_data.py      ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_GAME_ROOT=$(GAME_ROOT) VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+$(GEN_DIR)/pc_event_anim_data.c:     tools/gen_event_anim_data.py     ; @mkdir -p $(GEN_DIR); VH_REGION=jp VH_GAME_ROOT=$(GAME_ROOT) VH_PSX_EXE=$(GAME_ROOT)/SLPM_860.07 VH_GENERATED_OUT=$@ python3 $<
+
+# JP data objects compile from the generated sources with the same include profile as their
+# US counterparts (game headers where the US rule stages them, plain -Iinclude otherwise).
+$(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o: $(BUILD_DIR)/%.o: $(GEN_DIR)/%.c | stage
+	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
+$(BUILD_DIR)/pc_spell_descriptions.o $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o: $(BUILD_DIR)/%.o: $(GEN_DIR)/%.c
+	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+else
+DATA_OBJS += $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o \
+             $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o $(BUILD_DIR)/pc_spell_descriptions.o \
+             $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o
+endif
+
+# ---- P5 unified binary (exchange/104) ---------------------------------------------------------
+# `make unified` builds BOTH region cores (own build dirs -- flags differ, and the stale-flag
+# trap is real), partial-links each region's ENTIRE object set into one relocatable blob,
+# renames every defined global with a us_/jp_ prefix, and links both blobs under the shared
+# pc_region_main.c. Only one core ever executes per process; data-init constructors in both
+# blobs run harmlessly at load (their own renamed globals).
+objs: default $(DATA_OBJS)
+
+blob: objs
+	ld -r -o $(BUILD_DIR)/core_$(REGION)_raw.o $(GAME_O_FILES) $(BACKEND_OBJS) $(DATA_OBJS) $(REGION_DEFSYM_LD)
+	@# Rename all DEFINED external symbols (incl. weak + common: a tentative definition left
+	@# unrenamed would silently MERGE across the two blobs at the final link). Locals need no
+	@# rename (file scope). On COFF, .refptr.* thunks must be filtered -- see exchange/104.
+	nm -g --defined-only $(BUILD_DIR)/core_$(REGION)_raw.o | 	    awk '$$3 != "" && $$3 !~ /^\.refptr/ {print $$3" $(REGION)_"$$3}' > $(BUILD_DIR)/core_$(REGION).map
+	objcopy --redefine-syms=$(BUILD_DIR)/core_$(REGION).map $(BUILD_DIR)/core_$(REGION)_raw.o $(BUILD_DIR)/core_$(REGION).o
+
+unified:
+	$(MAKE) UNIFIED=1 REGION=us BUILD_DIR=build-uni-us blob
+	$(MAKE) UNIFIED=1 REGION=jp BUILD_DIR=build-uni-jp blob
+	mkdir -p build-uni
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -c -o build-uni/pc_region_main.o src/pc_region_main.c
+	$(CC) $(M32) $(SAN) build-uni/pc_region_main.o build-uni-us/core_us.o build-uni-jp/core_jp.o 	    $(SDL2_LIBS) $(OPENAL_LIBS) -lGL -lm -lpthread $(HD_WEBP_LIBS) $(HD_VIDEO_LIBS) -rdynamic 	    -o build-uni/vandalhearts_pc
+	@cp -n vandalhearts.ini build-uni/ 2>/dev/null || true
+
 # `gen-data` is not listed here: $(BUILD_DIR)/generated_data.o already depends on the generated
 # source, so the generator still runs, and naming it in both places just duplicated the edge.
-link: $(BUILD_DIR)/generated_data.o $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o $(BUILD_DIR)/pc_spell_descriptions.o $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o
-	$(CC) $(M32) $(SAN) $(GAME_O_FILES) $(BACKEND_OBJS) $(BUILD_DIR)/generated_data.o \
-	    $(BUILD_DIR)/pc_battle_data.o $(BUILD_DIR)/pc_unit_anim_data.o $(BUILD_DIR)/pc_sprite_box_quads.o \
-	    $(BUILD_DIR)/pc_event_anim_data.o $(BUILD_DIR)/pc_evt_entities.o $(BUILD_DIR)/pc_spell_descriptions.o \
-	    $(BUILD_DIR)/pc_item_descriptions.o $(BUILD_DIR)/pc_string_table.o \
+link: $(DATA_OBJS)
+	$(CC) $(M32) $(SAN) $(GAME_O_FILES) $(BACKEND_OBJS) $(DATA_OBJS) \
+	    $(REGION_LDFLAGS) \
 	    $(SDL2_LIBS) $(OPENAL_LIBS) -lGL -lm -lpthread $(HD_WEBP_LIBS) $(HD_VIDEO_LIBS) -rdynamic -o $(BUILD_DIR)/vandalhearts_pc
 	@cp -n vandalhearts.ini $(BUILD_DIR)/ 2>/dev/null || true   # ship config template (don't clobber an edited copy)
 
 $(BUILD_DIR)/generated_data.o: $(BUILD_DIR)/generated_data.c
 	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $(BUILD_DIR)/generated_data.c
 
+ifneq ($(REGION),jp)  # US data objects come from src/; JP builds its own from $(GEN_DIR) above
 # Real, hand-extracted definitions for the flagged pointer globals fixed so far
 # (gBattleEnemyUnitInitialStates, gBattlePartyUnitInitialStates -- see the file's own header
 # comment and exchange/12-phase-c-bootstrap.md Bug 11). Needs the same staged-include flags as
@@ -261,6 +371,8 @@ $(BUILD_DIR)/pc_sprite_box_quads.o: src/pc_sprite_box_quads.c | stage
 $(BUILD_DIR)/pc_event_anim_data.o: src/pc_event_anim_data.c | stage
 	$(CC) -fno-builtin-csqrt $(M32) $(SAN) -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
+endif
+
 # ---- GENERATED game/BIOS-derived data files (gitignored; regenerated at build) ----------------
 # These reconstruct copyrighted content (Konami UI text, PS1 BIOS kanji glyphs) from the user's OWN
 # copy -- the byte-exact ../../build/SLUS_004.47 and the PsyQ KROMDAT.BIN, both already required by
@@ -272,6 +384,8 @@ src/pc_spell_descriptions.c: tools/gen_spell_descriptions.py ; python3 $<
 src/pc_item_descriptions.c:  tools/gen_item_descriptions.py  ; python3 $<
 src/pc_evt_entities.c:       tools/gen_evt_entities.py       ; python3 $<
 src/pc_string_table.c:       tools/gen_string_table.py       ; python3 $<
+
+ifneq ($(REGION),jp)
 
 # Reconstructed gEvtEntities[95] event-entity property tables (were NULL -> invisible cutscene
 # units; see the file's own header).
@@ -292,6 +406,8 @@ $(BUILD_DIR)/pc_item_descriptions.o: src/pc_item_descriptions.c
 # destination names and every "#N" string-table escape; see gen_string_table.py).
 $(BUILD_DIR)/pc_string_table.o: src/pc_string_table.c
 	$(CC) $(M32) $(SAN) -Iinclude -g -MMD -MP -c -o $@ $<
+endif
+
 
 # Regenerate the symlink staging tree. Order-only prerequisite on the game
 # object rule below -- cheap to redo, and must reflect the current state of
@@ -302,18 +418,48 @@ stage:
 	@for f in ../../include/*.h ../../include/*.inc; do \
 		[ -f "$$f" ] && ln -sf "$$(realpath "$$f")" "$(STAGE_DIR)/$$(basename "$$f")"; \
 	done
+ifeq ($(REGION),jp)
+	@# Region headers (exchange/102 "Shared-HEADER rule"): the US copies staged above carry
+	@# the PC gate blocks and are stripped-identical for 11 of 15 headers; the 4 genuinely
+	@# different ones are overridden -- audio/card/units from jp/include as-is (gate-free,
+	@# no gates needed), field.h from the hand-merged variant that keeps the US gates.
+	@for f in audio.h card.h units.h; do \
+		ln -sf "$$(realpath $(GAME_ROOT)/include/$$f)" "$(STAGE_DIR)/$$f"; \
+	done
+	@ln -sf "$$(realpath include/region-jp/field.h)" $(STAGE_DIR)/field.h
+endif
 	@ln -sfn "$$(realpath include/PsyQ)" $(STAGE_DIR)/PsyQ
 	@ln -sfn "$$(realpath include/types.h)" $(STAGE_DIR)/types.h
 	@ln -sfn "$$(realpath include/inline_gte.h)" $(STAGE_DIR)/inline_gte.h
+
+# Region shared-source guard (exchange/102 §4): proves every TU/header in the shared lists is
+# still byte-identical between src/ and jp/src after gate-stripping. Run after any src/ edit
+# that touches a shared file; a diverged file must move out of shared_tus.txt.
+check-shared:
+	python3 tools/check_shared.py
 
 # -MMD -MP emits a .d file listing every header this object depends on, and the -include at the
 # bottom of this Makefile feeds them back to make. WITHOUT this the rule depends only on the .c,
 # so editing a header rebuilt NOTHING -- which produced a build still containing the OLD code
 # while appearing to succeed (bugreport-05: the addPrim macro fix looked like it had failed).
 # -MP adds phony targets for the headers so a deleted/renamed header doesn't wedge the build.
+ifeq ($(REGION),jp)
+# JP region: per-file source selection (exchange/102 §4). Shared TUs compile from the US
+# tree (their gated fixes serve both regions -- identity guarded by `make check-shared`);
+# the rest from jp/src. Static pattern rules so each object names its real source file.
+SHARED_REL := $(shell grep -v '^\#' shared_tus.txt)
+JPONLY_REL := $(filter-out $(SHARED_REL),$(GAME_REL))
+$(addprefix $(BUILD_DIR)/src/,$(SHARED_REL:.c=.o)): $(BUILD_DIR)/src/%.o: ../../src/%.c | stage
+	@mkdir -p $(dir $@)
+	$(CC) $(GAME_C_FLAGS) -MMD -MP -c -o $@ $<
+$(addprefix $(BUILD_DIR)/src/,$(JPONLY_REL:.c=.o)): $(BUILD_DIR)/src/%.o: $(GAME_ROOT)/src/%.c | stage
+	@mkdir -p $(dir $@)
+	$(CC) $(GAME_C_FLAGS) -MMD -MP -c -o $@ $<
+else
 $(BUILD_DIR)/src/%.o: $(SRC_DIR)/%.c | stage
 	@mkdir -p $(dir $@)
 	$(CC) $(GAME_C_FLAGS) -MMD -MP -c -o $@ $<
+endif
 
 # Debug (exchange/30-* study): NO_FADE=1 compiles core/screen_effects.c with the fade overlay
 # forced transparent, so the battle scene renders at full brightness from its first frame.
@@ -448,6 +594,14 @@ $(BUILD_DIR)/pc_gpu_trace.o: src/pc_gpu_trace.c
 $(BUILD_DIR)/pc_lang.o: src/pc_lang.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
+# Pack ENUMERATION -- both regions (the JP overlay lists packs for a pending US-disc restart).
+$(BUILD_DIR)/pc_lang_list.o: src/pc_lang_list.c
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+
+# JP region only: the langpack engine's no-pack behaviour as stubs (see the file header).
+$(BUILD_DIR)/pc_lang_stub.o: src/pc_lang_stub.c
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+
 $(BUILD_DIR)/pc_lang_font.o: src/pc_lang_font.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
 
@@ -461,9 +615,11 @@ $(BUILD_DIR)/pc_hdpack.o: src/pc_hdpack.c
 $(BUILD_DIR)/pc_gpu_window.o: src/pc_gpu_window.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude $(SDL2_CFLAGS) -g -MMD -MP -c -o $@ $<
 
-# Stage-3 (1.1C) in-game options overlay model -- pure C, no SDL/game headers.
-$(BUILD_DIR)/pc_overlay.o: src/pc_overlay.c
-	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+# Stage-3 (1.1C) in-game options overlay model + its RETURN TO TITLE action. The action (moved
+# here from pc_balance.c, 2026-08-22) rewrites engine state (gState etc.), so the overlay now
+# compiles through the staged game headers with the same gnu89+PERMUTER profile as pc_balance.o.
+$(BUILD_DIR)/pc_overlay.o: src/pc_overlay.c | stage
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -fno-builtin-csqrt -std=gnu89 -DPERMUTER -I$(STAGE_DIR) -Iinclude -MMD -MP -c -o $@ $<
 
 # Stage-3 (1.2b) save-management file ops -- pure C, no SDL/game headers.
 $(BUILD_DIR)/pc_saves.o: src/pc_saves.c
@@ -500,8 +656,18 @@ $(BUILD_DIR)/pc_hdvideo.o: src/pc_hdvideo.c
 
 # Generated PS1 BIOS kanji charset-2 glyphs (see tools/gen_kanji_font.py) used
 # by Krom2RawAdd in libkernel.c -- pure data, no game headers.
+# Region-dependent CONTENT (exchange/102 P3): US embeds the audited 209-glyph subset from
+# src/ (unchanged); JP regenerates the FULL charset-2+3 ROM font (3489 glyphs) into GEN_DIR,
+# since the JP game draws its entire text repertoire through Krom2RawAdd.
+ifeq ($(REGION),jp)
+$(GEN_DIR)/pc_kanji_font.c: tools/gen_kanji_font.py
+	@mkdir -p $(GEN_DIR); VH_REGION=jp VH_GENERATED_OUT=$@ python3 $<
+$(BUILD_DIR)/pc_kanji_font.o: $(GEN_DIR)/pc_kanji_font.c
+	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+else
 $(BUILD_DIR)/pc_kanji_font.o: src/pc_kanji_font.c
 	$(CC) $(M32) $(SAN) $(PORT_WARN) -Iinclude -g -MMD -MP -c -o $@ $<
+endif
 
 # Compiles every src/*.c independently and reports a pass/fail summary
 # without stopping at the first error -- the fast way to see the whole

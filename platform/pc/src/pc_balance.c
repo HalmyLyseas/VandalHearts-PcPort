@@ -47,24 +47,9 @@ void PC_SpellListDump(int name, int cls, int lvl, int pathB, int advF, int advS,
     fprintf(stderr, "]\n");
 }
 
-void PC_ReturnToTitle(void) {
-    /* GAP 8: jump straight to the title menu from anywhere, skipping the intro videos, by replicating
-     * the game-over teardown (battle/evaluators.c). The title -> New/Load flow re-establishes run state, so
-     * leftover party/chapter/objects don't need clearing. Mode stays as-is (toggle editable at title). */
-    {
-        /* audio.h only carries a commented-out FIXME decl; declare the real signature
-         * (src/core/audio.c:1346) locally -- an implicit int declaration is UB at LP64. */
-        extern void PerformAudioCommand(s16 cmd);
-        PerformAudioCommand(AUDIO_CMD_STOP_ALL);
-    }
-    gIsEnemyTurn = 0;
-    gState.primary   = STATE_TITLE_SCREEN;
-    gState.secondary = 0;
-    gState.state3    = 0;
-    gState.state4    = 0;
-    gState.state7    = 1;
-    PC_SyncBalance();   /* keep patchApplied == gTacticalMode consistent */
-}
+/* GAP 8 RETURN TO TITLE lived here historically (it ends in PC_SyncBalance); the whole
+ * request/apply pair moved to pc_overlay.c (2026-08-22) -- it is the overlay's action, not
+ * balance logic. */
 
 /* GAP 4 Layer 2 -- card-header mode marker in the free padding[28] (offset 68 in the header, which is
  * at file offset 0). 'T' = Tactical, 0 = Normal. The game never touches padding (verified in core/card.c),
@@ -79,10 +64,13 @@ static void stampSaveMarker(void) {
 
 void PC_AdoptSaveMode(void) {
     char path[PATH_MAX];
+    /* Region note (exchange/105): the JP card header shares the US layout through padding[28] at
+     * offset 68 -- JP only APPENDS a third icon frame at the tail (512B vs 384B), so the marker
+     * offset and the free-padding guarantee hold in both regions (neither card.c touches padding). */
     FILE *f;
     unsigned char b = 0;
     int diskTactical;
-    snprintf(path, sizeof(path), "%s/BASLUS-00447VH", PC_SaveDir());
+    snprintf(path, sizeof(path), "%s/%s", PC_SaveDir(), VH_ACTIVE_CARD_NAME);
     f = fopen(path, "rb");
     if (f) {
         if (fseek(f, 68, SEEK_SET) == 0 && fread(&b, 1, 1, f) != 1) b = 0;
@@ -128,7 +116,11 @@ int TrialGoldPenalty(int chapter)     { static const int v[7] = { 110,110,220,44
 typedef struct {
     void          *addr;      /* target location in a mutable global table */
     unsigned char  size;      /* 1/2/4/8 bytes for scalars; up to sizeof(orig) for string patches */
-    unsigned long  tac;       /* scalar Tactical value (size<=8; host is little-endian) */
+    unsigned long long tac;   /* scalar Tactical value (size<=8; host is little-endian). MUST be a
+                               * 64-bit type: the desc swaps pass POINTERS through this field, and
+                               * `unsigned long` is 32-bit on Windows (LLP64) -- the truncated
+                               * pointer crashed the spell-info bar on every swapped spell there
+                               * (user repro 2026-08-22; Linux LP64 masked it). */
     const void    *tacptr;    /* byte/string source when size>8 (addStrPatch); NULL for scalars */
     unsigned char  orig[24];  /* pristine snapshot */
 } Patch;
@@ -139,7 +131,7 @@ static int   s_nPatch  = 0;
 static int   s_inited  = 0;
 static int   s_applied = 0;
 
-static void addPatch(void *addr, unsigned char size, unsigned long tac) {
+static void addPatch(void *addr, unsigned char size, unsigned long long tac) {
     Patch *p;
     if (s_nPatch >= MAX_PATCH) return;
     p = &s_patch[s_nPatch++];
@@ -187,8 +179,8 @@ static void addDescSwap(int id, const char *flavor) {
      * to the active pack by content (PC_LangStr; the literal itself when no pack / no entry).
      * Resolved ONCE here, at patch-build time, so apply/restore stay simple value writes. */
     flavor = (const char *)PC_LangStr(flavor);
-    addPatch(&gItemDescriptions[id],  sizeof(char *), (unsigned long)(uintptr_t)flavor);
-    addPatch(&gItemDescriptions2[id], sizeof(char *), (unsigned long)(uintptr_t)flavor);
+    addPatch(&gItemDescriptions[id],  sizeof(char *), (unsigned long long)(uintptr_t)flavor);
+    addPatch(&gItemDescriptions2[id], sizeof(char *), (unsigned long long)(uintptr_t)flavor);
 }
 
 /* bugreport-03: the spell-info bar (ui/window.c:2292) draws gSpellDescriptions[] -- a BAKED string with
@@ -196,7 +188,7 @@ static void addDescSwap(int id, const char *flavor) {
  * is correct) but the display string stays stale. Repoint the reworked spells' info line in Tactical. */
 static void addSpellDescSwap(int id, const char *s) {
     s = (const char *)PC_LangStr(s);           /* translatable, same as addDescSwap */
-    addPatch(&gSpellDescriptions[id], sizeof(char *), (unsigned long)(uintptr_t)s);
+    addPatch(&gSpellDescriptions[id], sizeof(char *), (unsigned long long)(uintptr_t)s);
 }
 
 /* Build the patch list + snapshot originals, once. Lazily invoked by PC_SyncBalance so it runs
@@ -244,7 +236,16 @@ static void ensureInit(void) {
     addPatch(&gSpellsEx[26][SPELL_EX_OBJF_TARGET], 2, 128);
     addPatch(&gSpellsEx[26][SPELL_EX_OBJF_DEFEAT], 2, 129);
     addPatch(&gSpellLevelRequirement[26], 1, 21);                              /* mage learns it @21 (Spread Force's slot) */
+#ifdef VH_REGION_JP
+    /* User witness 2026-08-22: the ASCII rename rendered BLANK on JP (spell list + cast banner)
+     * -- the JP renderer draws full-width SJIS names. Same region-faithful treatment as the
+     * desc swaps: katakana, consistent with the surrounding retail names. */
+    addStrPatch(gSpellNames[26],
+        "\x83\x54\x83\x93\x83\x5f\x81\x5b\x83\x7b\x81\x5b\x83\x8b",  /* サンダーボール */
+        sizeof gSpellNames[0]);                                        /* was ストーンシャワー */
+#else
     addStrPatch(gSpellNames[26], "Thunder Ball", sizeof gSpellNames[0]);      /* was "Stone Shower" */
+#endif
 
     /* Spell-list swaps (gSpellLists[party][path][slot], s32). Monk path=1 slot 3; mage path=0 slot 7. */
     addPatch(&gSpellLists[4][1][3],  4, 13); addPatch(&gSpellLists[5][1][3],  4, 13);  /* Eleni/Huxley Monk -> Spread Force */
@@ -296,6 +297,21 @@ static void ensureInit(void) {
     /* GAP 6 -- Tactical-only item descriptions (Normal keeps the retail "??????????"/blank). The nine
      * ?????-items (88-96) are hidden-tile finds; 8-11 are the generic "Attack magic item" entries;
      * 35 is the restored Bloodaxe. Original authored flavor text. */
+#ifdef VH_REGION_JP
+    /* JP (exchange/105): stay faithful to the disc -- the JP binary already ships accurate
+     * descriptions for the SPELLS these items cast (gSpellDescriptions[gItemSpells[id]], the same
+     * strings the Vandalier/debug all-spells menu pairs with them: paralyze/poison/heal/... plus
+     * the real Rng/Fld; items burn no MP and those spell lines carry none). Reuse them verbatim
+     * for the nine ?????-items. Items 8-11 need NO swap here: unlike the US disc's generic
+     * "Attack magic item", the JP retail item text already states the specs. The nine reused
+     * spells (63-71) take no Tactical patches, so the baked numbers stay correct. */
+    {
+        static const unsigned char mystery[] = { 88, 89, 90, 91, 92, 93, 94, 95, 96 };
+        int mi;
+        for (mi = 0; mi < 9; mi++)
+            addDescSwap(mystery[mi], (const char *)gSpellDescriptions[gItemSpells[mystery[mi]]]);
+    }
+#else
     addDescSwap(88, "Casts Spellbind");
     addDescSwap(89, "Casts Poison Cloud");
     addDescSwap(8,  "Burn enemies in field");
@@ -309,9 +325,36 @@ static void ensureInit(void) {
     addDescSwap(11, "Huge rings of fire");
     addDescSwap(95, "Casts Dagger Storm");
     addDescSwap(96, "Casts Dark Hurricane");
+#endif
 
     /* bugreport-03 -- sync the spell-info bar text with the GAP-5/C3-2 balance (display-only; the real
      * gSpells fields are already patched above). Format/spacing copied from the retail strings. */
+#ifdef VH_REGION_JP
+    /* JP (exchange/105): each line is the RETAIL JP string with ONLY the numerals swapped to the
+     * Tactical values patched above (the JP baked text is data-accurate -- verified byte-for-byte
+     * against retail gSpells, unlike the US strings whose Rng/MP claims drifted from the data).
+     * Format: <retail prefix> 射程R 範囲F 消費ＭＰn, full-width digits 0x82,0x4f+d.
+     * Wording (2026-08-21 review): 29 keeps its retail prefix (accurate; the added anti-magic
+     * is a documented Tactical extra). 32 instead takes 29's protective prefix in BOTH regions
+     * ("Protect Magic" / retail 物理攻撃を防御) -- MYSTIC_ENERGY v3 drops the ATK half, so the
+     * retail "ATK/DEF up" wording would misdescribe it. */
+    addSpellDescSwap(13,
+        "\x8d\x55\x8c\x82\x96\x82\x96\x40\x81\x40\x8e\xcb\x92\xf6\x82\x4f\x81\x40\x94\xcd\x88\xcd\x82\x52\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x57");  /* SPREAD_FORCE   mp 7->8 */
+    addSpellDescSwap(26,
+        "\x8d\x55\x8c\x82\x96\x82\x96\x40\x81\x40\x8e\xcb\x92\xf6\x82\x54\x81\x40\x94\xcd\x88\xcd\x82\x50\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x50\x82\x4f");  /* THUNDER_BALL   rng 0->5 */
+    addSpellDescSwap(27,
+        "\x8f\xf3\x91\xd4\x89\xf1\x95\x9c\x81\x40\x8e\xcb\x92\xf6\x82\x4f\x81\x40\x94\xcd\x88\xcd\x82\x52\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x55");  /* CURE_WIDE      fld 1->3, mp 4->6 */
+    addSpellDescSwap(28,
+        "\x89\xf1\x95\x9c\x96\x82\x96\x40\x81\x40\x8e\xcb\x92\xf6\x82\x4f\x81\x40\x94\xcd\x88\xcd\x82\x52\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x55");  /* HEALING_CIRCLE fld 1->3 */
+    addSpellDescSwap(29,
+        "\x95\xa8\x97\x9d\x8d\x55\x8c\x82\x82\xf0\x96\x68\x8c\xe4\x81\x40\x8e\xcb\x92\xf6\x82\x55\x81\x40\x94\xcd\x88\xcd\x82\x4f\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x50\x82\x51");  /* PERFECT_GUARD  rng 4->6, mp 15->12 */
+    addSpellDescSwap(30,
+        "\x8d\x55\x8c\x82\x96\x82\x96\x40\x81\x40\x8e\xcb\x92\xf6\x82\x4f\x81\x40\x94\xcd\x88\xcd\x82\x52\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x50\x82\x53");  /* THUNDER_FLASH  fld 2->3, mp 12->14 */
+    addSpellDescSwap(31,
+        "\x89\xf1\x95\x9c\x96\x82\x96\x40\x81\x40\x8e\xcb\x92\xf6\x82\x4f\x81\x40\x94\xcd\x88\xcd\x82\x52\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x50\x82\x51");  /* HEALING_WAVE   fld 2->3, mp 10->12 */
+    addSpellDescSwap(32,
+        "\x95\xa8\x97\x9d\x8d\x55\x8c\x82\x82\xf0\x96\x68\x8c\xe4\x81\x40\x8e\xcb\x92\xf6\x82\x4f\x81\x40\x94\xcd\x88\xcd\x82\x52\x81\x40\x8f\xc1\x94\xef\x82\x6c\x82\x6f\x82\x52\x82\x54");  /* MYSTIC_ENERGY  rng 4->0, fld 0->3, mp 15->35; prefix = PERFECT_GUARD (29) retail wording -- v3 is protective, per 2026-08-21 review */
+#else
     addSpellDescSwap(13, "Attack magic  Rng:0  Fld:3  MP:8");    /* SPREAD_FORCE   (Monk) fld3 pow8 mp8 */
     addSpellDescSwap(26, "Attack Magic  Rng:5  Fld:1  MP:10");   /* THUNDER_BALL   (mage) ranged nuke  */
     addSpellDescSwap(27, "Cure Status  Rng:0  Fld:3  MP:6");     /* CURE_WIDE                          */
@@ -319,7 +362,8 @@ static void ensureInit(void) {
     addSpellDescSwap(29, "Protect Magic  Rng:6  F:0  MP:12");    /* PERFECT_GUARD  Rng 7->6, MP 15->12 */
     addSpellDescSwap(30, "Attack Magic  Rng:0  Fld:3  MP:14");   /* THUNDER_FLASH  Fld3 MP14           */
     addSpellDescSwap(31, "Healing Magic  Rng:0  F:3  MP:12");    /* HEALING_WAVE   MP 10->12           */
-    addSpellDescSwap(32, "DEF,AT Up  Rng:0  Fld:3  MP:35");      /* MYSTIC_ENERGY  mp 30->35           */
+    addSpellDescSwap(32, "Protect Magic  Rng:0  Fld:3  MP:35");  /* MYSTIC_ENERGY  v3 is protective (DEF+anti-magic, ATK dropped) -- same wording as PERFECT_GUARD (29), per 2026-08-21 review */
+#endif
 }
 
 void PC_BalanceBoot(void) {
@@ -352,7 +396,7 @@ void PC_SyncBalance(void) {
                 gSpellsEx[32][SPELL_EX_OBJF_DEFEAT], gSpellsEx[32][SPELL_EX_EFFECT]);
             for (i = 0; i < s_nPatch; i++)
                 if (s_patch[i].addr == (void *)&gSpells[26].mpCost || s_patch[i].addr == (void *)&gSpells[26].fieldSize)
-                    fprintf(stderr, "[baldump] patch#%d addr=%p size=%u tac=%lu orig=%u cur=%u\n",
+                    fprintf(stderr, "[baldump] patch#%d addr=%p size=%u tac=%llu orig=%u cur=%u\n",
                         i, s_patch[i].addr, s_patch[i].size, s_patch[i].tac, s_patch[i].orig[0], *(unsigned char *)s_patch[i].addr);
         }
     } else if (!gTacticalMode && s_applied) {

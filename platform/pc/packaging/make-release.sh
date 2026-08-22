@@ -56,6 +56,19 @@ rm -rf "$STAGE"; mkdir -p "$STAGE"
 # pc_hdvideo incident). Catch it before spending minutes on either build.
 "$PC_DIR/tools/check_build_parity.sh" || die "build-system parity check failed (see above)"
 
+# The AppImage stage runs `rm -rf build-uni*` (clean builds are a hard release rule). A live test
+# DEPLOYMENT (disc images, hdpacks/langpacks, saves) parked inside build-uni/ would be deleted
+# with it -- which happened once (2026-08-22, v2.0.0 staging: the dev deployment was wiped and had
+# to be restored from external/ + work-dir copies). Refuse to run while user data sits there.
+for d in "$PC_DIR"/build-uni; do
+    [ -d "$d" ] || continue
+    if compgen -G "$d/*.bin" >/dev/null || [ -d "$d/saves" ] || [ -d "$d/saves_tactical" ] \
+       || [ -d "$d/hdpacks" ] || [ -d "$d/langpacks" ]; then
+        die "user data (discs/saves/packs) found in $d -- the release build wipes build-uni*. \
+Move your test deployment elsewhere (e.g. a deploy/ folder) first."
+    fi
+done
+
 # ---- Windows: host MinGW-w64 cross-compile ----------------------------------
 if [ "$DO_WIN" = 1 ]; then
     command -v x86_64-w64-mingw32-gcc >/dev/null || die "MinGW-w64 toolchain not found (pacman -S mingw-w64-gcc)"
@@ -79,13 +92,11 @@ if [ "$DO_WIN" = 1 ]; then
     # archives from another -- exactly the 1.6.1 AppImage crash: a build_deb pc_hdvideo.o compiled
     # against the container's shared libav-59 headers got linked into the static libav-61 binary
     # (mismatched struct offsets -> SEGV in avcodec_parameters_to_context). Never ship incremental.
-    rm -rf "$PC_DIR/build_win"
-    ( cd "$PC_DIR"
-      VH_MINGW_FFMPEG="$FFPREFIX" cmake -S . -B build_win \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
-            -DCMAKE_C_FLAGS=-O2 -DVH_MINGW_FFMPEG="$FFPREFIX" >/dev/null
-      cmake --build build_win >/dev/null )
-    WIN_EXE="$PC_DIR/build_win/vandalhearts_pc.exe"
+    # P5 (exchange/104): the shipped Windows exe is the UNIFIED binary (both regions, runtime
+    # disc selection). build-unified-win.sh does the three clean CMake stages (us core, jp core,
+    # final link) with these exact toolchain conventions.
+    VH_MINGW_FFMPEG="$FFPREFIX" "$PC_DIR/packaging/build-unified-win.sh" >/dev/null
+    WIN_EXE="$PC_DIR/build_win_uni/vandalhearts_pc.exe"
     [ -f "$WIN_EXE" ] || die "Windows build produced no .exe"
     WZIP_DIR="$STAGE/win"; mkdir -p "$WZIP_DIR"
     cp "$WIN_EXE" "$WZIP_DIR/"
@@ -99,7 +110,7 @@ if [ "$DO_WIN" = 1 ]; then
         die "shipped Windows exe still contains local build paths"
     fi
     # the 8 runtime DLLs the CMake post-build step stages next to the .exe (6 base + libwebp/libsharpyuv)
-    cp "$PC_DIR"/build_win/*.dll "$WZIP_DIR/" 2>/dev/null || die "expected runtime DLLs beside the .exe"
+    cp "$PC_DIR"/build_win_uni/*.dll "$WZIP_DIR/" 2>/dev/null || die "expected runtime DLLs beside the .exe"
     cp "$INI" "$WZIP_DIR/"
     # 6 base runtime DLLs (SDL2, OpenAL32, libwinpthread, libgcc_s_seh, libstdc++, libssp) + 2 for the
     # 1.6 HD background codec (libwebp, libsharpyuv). libav is static, so it adds none. -> 8 expected.
@@ -141,9 +152,10 @@ if [ "$DO_LINUX" = 1 ]; then
         pkg-config --exists libwebp || { echo \"ERROR: libwebp-dev missing in container '$CONTAINER'.\"; \
               echo \"  fix: distrobox enter $CONTAINER -- sudo apt-get install -y libwebp-dev\"; exit 1; }
         export PKG_CONFIG_PATH='$FF_LINUX/lib/pkgconfig'\${PKG_CONFIG_PATH:+:\$PKG_CONFIG_PATH}
-        rm -rf build_deb                      # clean build: see the comment at the Windows step
-        make link BUILD_DIR=build_deb CC='cc -O2' >/dev/null
-        packaging/appimage/build-appimage.sh build_deb/vandalhearts_pc >/dev/null"
+        # P5 (exchange/104): ship the UNIFIED binary (both regions). Clean all three stages.
+        rm -rf build-uni-us build-uni-jp build-uni
+        make unified CC='cc -O2' >/dev/null
+        packaging/appimage/build-appimage.sh build-uni/vandalhearts_pc >/dev/null"
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"
     [ -f "$APP" ] || die "container build produced no AppImage"
     cp "$APP" "$STAGE/VandalHearts-$TAG-linux-x86_64.AppImage"
@@ -196,7 +208,8 @@ WHATS_NEW="$(awk -v ver="$VER" '
 cat > "$NOTES" <<NOTE
 ## Vandal Hearts — PC Port $TAG
 
-A native PC port of Vandal Hearts (US, SLUS_004.47). **You must supply your own
+A native PC port of Vandal Hearts — one executable for the USA (SLUS-00447), Asia
+(SCPS-45183) and Japan (SLPM-86007) releases. **You must supply your own
 legally-owned disc image** (\`.bin\`); the download does nothing without it.
 NOTE
 
@@ -214,12 +227,11 @@ cat >> "$NOTES" <<NOTE
 | Windows 10/11 | \`VandalHearts-$TAG-windows-x64.zip\` | Unzip; put your disc in a \`game\\\` folder next to \`vandalhearts_pc.exe\`; run it. |
 | Linux (glibc ≥ 2.34) | \`VandalHearts-$TAG-linux-x86_64.AppImage\` + \`vandalhearts.ini\` | Put both together; put your disc in a \`game/\` folder beside the \`.AppImage\`; \`chmod +x\` and run. Needs FUSE2. |
 | Any | \`VandalHearts-$TAG-Manual.pdf\` | The Player Manual: setup, controls, features, troubleshooting. |
+| Optional | \`VandalHearts-$TAG-hdpack-SLUS-00447.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable. Loaded on **US/Asia discs**. |
+| Optional | \`VandalHearts-$TAG-hdpack-SLPM-86007.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable. Loaded on **Japan**. |
 NOTE
-if [ "${HDPACK_DONE:-0}" = 1 ]; then
-cat >> "$NOTES" <<NOTE
-| Optional | \`VandalHearts-$TAG-hdpack.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable.${HDPACK_NOTE:+ $HDPACK_NOTE} |
-NOTE
-fi
+# (2.0: HD packs are standing per-game release assets -- the rows above are unconditional. The
+# legacy --hdpack single-zip row is retired; HDPACK_DONE still gates the validation/zip flow.)
 cat >> "$NOTES" <<NOTE
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).
@@ -231,18 +243,17 @@ run — © Konami / © Sony, no ownership claimed. It is a fraction of the game;
 bulk loads from your own disc at runtime. See NOTICE/DISCLAIMER.
 
 Verify downloads against \`SHA256SUMS.txt\`.
-NOTE
-if [ "${HDPACK_DONE:-0}" = 1 ]; then
-cat >> "$NOTES" <<NOTE
 
-### Optional HD pack
-\`VandalHearts-$TAG-hdpack.zip\` — higher-resolution backgrounds + re-encoded FMV
-movies. **Optional**; the game runs identically without it. Unzip so \`hdpacks/\`
-sits next to the executable, then enable **HD PACK** in the Select+Start options
-(see docs/hd-pack.md). This is upscaled derivative art (© Konami), provided for
-convenience and also buildable from your own disc — see NOTICE / DISCLAIMER.
+### Optional HD packs
+Higher-resolution backgrounds + re-encoded FMV movies, one pack per game
+(\`SLUS-00447\` for US/Asia, \`SLPM-86007\` for Japan). **Optional**; the game runs
+identically without one. Unzip so \`hdpacks/\` sits next to the executable, then
+enable **HD PACK** in the Select+Start options (see docs/hd-pack.md). Upgrading a
+1.x install? Your old pack still works — or move the previous contents of
+\`hdpacks/\` into a new \`hdpacks/SLUS-00447/\` folder to match the new layout.
+This is upscaled derivative art (© Konami), provided for convenience and also
+buildable from your own disc — see NOTICE / DISCLAIMER.
 NOTE
-fi
 log "Notes: $NOTES"
 
 # ---- publish ----------------------------------------------------------------

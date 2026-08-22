@@ -635,6 +635,11 @@ struct DIRENTRY *nextfile(struct DIRENTRY *entry) {
         snprintf(path, sizeof(path), "%s/%.128s", SaveDir(), de->d_name);
         struct stat st;
         if (stat(path, &st) != 0) continue;
+        /* Regular files ONLY: a real card cannot hold directories, but a dev/test subfolder in
+         * saves/ was being returned as a card file, and Card_CountFreeBlocks then read garbage
+         * as its header block count -> "no free blocks" with a near-empty card (2026-08-22,
+         * found during the JP Tactical-OFF witness via the legacy cwd-saves fallback). */
+        if (!S_ISREG(st.st_mode)) continue;
         strncpy(entry->name, de->d_name, sizeof(entry->name) - 1);
         entry->name[sizeof(entry->name) - 1] = '\0';
         entry->size = (int)st.st_size;
@@ -648,9 +653,10 @@ struct DIRENTRY *nextfile(struct DIRENTRY *entry) {
     return NULL;
 }
 
-/* PS1 BIOS kanji charset 2, glyph bitmaps 0..208 (pc_kanji_font.c, generated
- * from PsyQ KROMDAT.BIN by tools/gen_kanji_font.py). 30 bytes per glyph. */
-extern const unsigned char pc_kanji_charset2[6270];
+/* PS1 BIOS kanji ROM glyphs (pc_kanji_font.c, generated from PsyQ KROMDAT.BIN by
+ * tools/gen_kanji_font.py). 30 bytes per glyph. Size is region-dependent (US: the audited
+ * 209-glyph alphanumeric subset; JP: all 3489 charset-2+3 glyphs), hence unsized here. */
+extern const unsigned char pc_kanji_charset2[];
 
 /* Map a full-width Shift-JIS code to its glyph index within charset 2. The
  * BIOS packs the charset compacted (undefined codes skipped), so these anchors
@@ -659,6 +665,55 @@ extern const unsigned char pc_kanji_charset2[6270];
  * kuten row 1, which the langpack subtitle renderer (pc_lang.c AsciiToWideSjis)
  * relies on for punctuation -- keep the row-1 span when touching this. Anything
  * else returns -1 (blank), same as the game's own out-of-range guard. */
+#ifdef VH_REGION_JP
+/* JP region: the FULL BIOS kanji ROM mapping. The JP game draws its entire text repertoire
+ * (kana, level-1 kanji, punctuation) through Krom2RawAdd, so this reproduces the BIOS's real
+ * layout (psx-spx kernelbios.md "BIOS Character Sets"):
+ *   charset 2 (blob glyphs 0..523):    SJIS 0x8140..0x84BE = JIS X 0208 kuten rows 1-8,
+ *     COMPACTED -- undefined kuten positions are skipped. The per-row defined sets below sum
+ *     to exactly 524 = the ROM's charset-2 extent, and rows 1+2 sum to 147 = the US port's
+ *     empirically recovered digit anchor, so the compaction rule is proven twice over.
+ *   charset 3 (blob glyphs 524..3488): SJIS 0x889F..0x9872 = kuten rows 16-47, all 2965
+ *     JIS level-1 kanji, DENSE (31 full 94-cell rows + 51 in row 47).
+ * Bitmap-verified against KROMDAT: idx 147 renders fullwidth '0', 210 hiragana-a,
+ * 293 katakana-a, 524 the kanji 'a' (16-01). Everything else returns -1, exactly like the
+ * BIOS -- the JP game then falls back to its own gCustomGlyphs (core/text.c) for the ~27
+ * level-2 codes it needs, as on hardware. */
+static s32 sjis_to_krom_glyph(u32 sjis) {
+    /* JIS X 0208 defined kuten spans for rows 1-8, with cumulative charset-2 bases. */
+    static const struct { unsigned char row, first, last; unsigned short base; } k2[] = {
+        {1,  1, 94,   0},
+        {2,  1, 14,  94}, {2, 26, 33, 108}, {2, 42, 48, 116},
+        {2, 60, 74, 123}, {2, 82, 89, 138}, {2, 94, 94, 146},
+        {3, 16, 25, 147}, {3, 33, 58, 157}, {3, 65, 90, 183},
+        {4,  1, 83, 209},
+        {5,  1, 86, 292},
+        {6,  1, 24, 378}, {6, 33, 56, 402},
+        {7,  1, 33, 426}, {7, 49, 81, 459},
+        {8,  1, 32, 492},
+    };
+    u32 hi = (sjis >> 8) & 0xff, lo = sjis & 0xff;
+    u32 row, cell;
+    unsigned i;
+    if (hi < 0x81 || hi > 0x98 || lo < 0x40 || lo == 0x7f || lo > 0xfc) return -1;
+    row = (hi - 0x81) * 2 + 1;                 /* kuten row (first of the byte's pair) */
+    cell = lo - 0x40 - (lo > 0x7f ? 1 : 0);    /* 0..187 across the two rows */
+    if (cell >= 94) { row += 1; cell -= 94; }
+    cell += 1;                                 /* 1-based kuten position */
+    if (row <= 8) {
+        for (i = 0; i < sizeof(k2) / sizeof(k2[0]); i++) {
+            if (k2[i].row == row && cell >= k2[i].first && cell <= k2[i].last)
+                return (s32)(k2[i].base + (cell - k2[i].first));
+        }
+        return -1;
+    }
+    if (row >= 16 && row <= 47) {
+        if (row == 47 && cell > 51) return -1; /* level 1 ends at 47-51 (SJIS 0x9872) */
+        return (s32)(524 + (row - 16) * 94 + (cell - 1));
+    }
+    return -1;
+}
+#else
 static s32 sjis_to_krom_glyph(u32 sjis) {
     /* Kuten row 1 (0x8140-0x817C) is packed LINEARLY in charset 2: the empirically recovered
      * anchors (space=0, period=4, plus=59, minus=60) all satisfy index == sjis - 0x8140, which
@@ -671,6 +726,7 @@ static s32 sjis_to_krom_glyph(u32 sjis) {
     if (sjis >= 0x8281 && sjis <= 0x829a) return 183 + (sjis - 0x8281); /* a-z */
     return -1;
 }
+#endif /* VH_REGION_JP */
 
 /* Emulates BIOS call B(51h) Krom2RawAdd: returns a pointer to the 30-byte glyph bitmap for a
  * Shift-JIS code, or -1 on error -- exactly what src/core/text.c's DrawSjisGlyph() expects. Without

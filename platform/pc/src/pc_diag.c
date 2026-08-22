@@ -641,6 +641,24 @@ static double FtNowMs(void) {
 void PC_DiagFrameEntry(int mode) {
     static double lastEntry, idleSum; static int lastMode;
     double now;
+    /* Dev-only test aid (exchange/102 P2 evaluation, user-requested): VH_DEBUG_MENU=1 turns
+     * the title screen into the retail JP debug-menu hub -- idle ~1.5s at the title and
+     * Objf414's menu opens (battle-map warp, scene-select Objf584), replacing the gdb-forced
+     * state flips used during bring-up. Waits until the title has been VISIBLE for 90 idle
+     * frames (secondary==2, state3 counting), so window assets/backdrop are always loaded --
+     * the same settle rule that fixed the probe's render race. Off by default; documented in
+     * OPTIONS.md since 2.0.0 (with the warp-state / unsupported-saves caveats).
+     * BOTH regions since exchange/107 (2026-08-22): the US build carries the translated
+     * scene selector + restored hub states, PC_FEAT-gated in the game trees. */
+    {
+        static int s_dbgMenu = -1;
+        if (s_dbgMenu < 0) { const char *e = getenv("VH_DEBUG_MENU"); s_dbgMenu = (e && atoi(e) != 0) ? 1 : 0; }
+        if (s_dbgMenu && gState.primary == STATE_TITLE_SCREEN && gState.secondary == 2 &&
+            gState.state3 > 90) {
+            gState.primary = STATE_LOAD_DEBUG_MENU;
+            gState.secondary = 0;
+        }
+    }
     if (s_ftOn < 0) s_ftOn = getenv("VH_FRAME_TIME") ? 1 : 0;
     if (!s_ftOn) return;
     now = FtNowMs();

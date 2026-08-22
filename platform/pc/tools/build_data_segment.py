@@ -36,9 +36,13 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # platform/pc
 os.chdir(ROOT)
 
-PROJECT_ROOT = os.path.join(ROOT, '..', '..')
-ELF = os.path.join(PROJECT_ROOT, 'build', 'SLUS_004.47.elf')
-PSX_EXE = os.environ.get('VH_PSX_EXE', os.path.join(PROJECT_ROOT, 'SLUS_004.47'))
+# Region parameterisation (exchange/102): VH_GAME_ROOT points at the game tree this build
+# compiles (US repo root by default, jp/ for REGION=jp) and VH_PSX_BASENAME names its
+# byte-exact executable. Defaults preserve the original US behaviour exactly.
+PROJECT_ROOT = os.environ.get('VH_GAME_ROOT', os.path.join(ROOT, '..', '..'))
+PSX_BASENAME = os.environ.get('VH_PSX_BASENAME', 'SLUS_004.47')
+ELF = os.path.join(PROJECT_ROOT, 'build', PSX_BASENAME + '.elf')
+PSX_EXE = os.environ.get('VH_PSX_EXE', os.path.join(PROJECT_ROOT, PSX_BASENAME))
 SYMBOL_ADDRS = os.path.join(PROJECT_ROOT, 'symbol_addrs.txt')
 # Stage 2.3: BUILD_DIR is settable so 32- and 64-bit trees can be generated side by side
 # (the safest way to A/B the -m64 flip). Defaults to 'build', i.e. unchanged behaviour.
@@ -64,6 +68,12 @@ typedef struct EvtEntityProperties {
    u16 padding;
 } EvtEntityProperties;
 '''
+# Region note (exchange/102 P1, verified 2026-08-19): every value below was re-derived
+# against the JP tree and is IDENTICAL -- gText/gSeqData gap-to-next match exactly
+# (0x2ab0/0xb800 in both maps), gScratch1/gScratch3 max observed offsets are within the US
+# bounds (jp 0xa000/0x445c0), and JP's StashOverlayCodeToVram uses the same [0x10380]+0x4380
+# ceiling for additional_VRAM. One dict serves both regions; re-verify if either tree's
+# usage changes.
 SIZE_OVERRIDES = {
     'gMenuMem_TransferFrom': 2, 'gMenuMem_TransferTo': 2,
     'gMenuMem_SellingFromDepot': 12, 'gMenuMem_ShopOrDepot': 12,
@@ -256,7 +266,12 @@ def find_undefined_symbols():
 
 
 def find_declarations(syms):
-    files = glob.glob('../../include/*.h') + glob.glob('../../src/*.c') + glob.glob('../../src/*/*.c')
+    # Headers come from the STAGE, not the raw tree: the stage is what the build (and the
+    # sizeof probe below) actually compiles against, and for REGION=jp it substitutes
+    # gate-carrying US/merged headers whose array geometries differ from the raw jp/ copies
+    # (e.g. field.h's PERMUTER-widened gTravelAscentCost[20][20] vs raw [14][20]).
+    files = (glob.glob(f'{STAGE_DIR}/*.h') + glob.glob(f'{PROJECT_ROOT}/src/*.c')
+             + glob.glob(f'{PROJECT_ROOT}/src/*/*.c'))
     text_cache = {f: strip_comments(open(f, encoding='latin1').read()) for f in files}
     simple_re_t = r'extern\s+[^;{{]*\b({sym})\b[^;{{]*;'
     anon_re_t = r'extern\s+(?:struct|union)\s*\{{[^}}]*\}}\s*({sym})\s*(\[[^\]]*\])?\s*;'
@@ -303,7 +318,12 @@ def extract_base_type(decl_text):
 
 
 def find_struct_pointer_fields(type_names):
-    files = glob.glob('../../include/*.h') + glob.glob('../../src/*.c') + glob.glob('../../src/*/*.c')
+    # Headers come from the STAGE, not the raw tree: the stage is what the build (and the
+    # sizeof probe below) actually compiles against, and for REGION=jp it substitutes
+    # gate-carrying US/merged headers whose array geometries differ from the raw jp/ copies
+    # (e.g. field.h's PERMUTER-widened gTravelAscentCost[20][20] vs raw [14][20]).
+    files = (glob.glob(f'{STAGE_DIR}/*.h') + glob.glob(f'{PROJECT_ROOT}/src/*.c')
+             + glob.glob(f'{PROJECT_ROOT}/src/*/*.c'))
     text_cache = {f: strip_comments(open(f, encoding='latin1').read()) for f in files}
     pointer_types = set()
     for t in type_names:
@@ -381,7 +401,7 @@ def run_sizeof_probe(results):
     probe_bin = f'{WORK_DIR}/probe'
     for _ in range(15):
         syms = gen_probe(probe_c)
-        r = sh([*HOST_CC, *M32, *SAN, *EXTRA_CFLAGS, '-std=gnu89', '-DPERMUTER', f'-I{STAGE_DIR}', '-Iinclude', '-I../..',
+        r = sh([*HOST_CC, *M32, *SAN, *EXTRA_CFLAGS, '-std=gnu89', '-DPERMUTER', f'-I{STAGE_DIR}', '-Iinclude', f'-I{PROJECT_ROOT}',
                 '-include', 'pc_forward_decls.h', probe_c, '-o', probe_bin])
         errors = [l for l in r.stderr.splitlines() if ': error:' in l]
         if not errors:
