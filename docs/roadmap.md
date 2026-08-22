@@ -147,10 +147,23 @@ Also ships the project's first community code contribution (thanks to Christophe
 **save-management hardening** (atomic backup/restore, checksum-validated backups, an overlay
 status line) and **smarter disc auto-discovery** (boot-signature check — multi-track dumps work).
 
+### 2.0 — One executable, three regions ✅
+
+The region barrier falls: a **second complete matching decompilation** — the Japanese
+`SLPM-86007` build — joins the US one, and a unified executable carries both, auto-detecting
+whichever supported disc you own (USA / Asia / Japan) with an in-game **DISC** switcher when
+several are installed. The Japanese game runs with the **full PC feature set** (Tactical Mode,
+overlay, HD pack support, fast-forward) and its own faithful Japanese text; a dedicated Japanese
+**HD pack** ships alongside the US one (`hdpacks/<game-id>/`). Also in 2.0: **fast boot** (the
+pre-logo load runs accelerated; in-game loads stay hardware-exact — and the US game's load pacing
+is now exact too, closing a historical −5%), window-manager responsiveness during loads, and a
+set of long-standing fixes (details in the [changelog](../CHANGELOG.md)).
+
 ## Beyond
 
 The originally planned feature arc (Stages 1–3, **v1.0–v1.6**) is complete, and the project has
-kept moving where it matters: **v1.7** answered the most-requested community feature, macOS support
+kept moving where it matters: **v1.7** answered the most-requested community feature, **v2.0**
+brought the Japanese release and its own decompilation under the same roof, macOS support
 arrived as the first community contribution, and fixes land as issues are reported
 ([known_issues.md](known_issues.md)). There is no fixed roadmap beyond the next release — direction
 comes from what players and translators actually need.

@@ -26,6 +26,61 @@ provides a **second implementation of the same header paths** under `platform/pc
 backed by SDL2 (Pad/VSync, GPU presentation), a raw disc image (CD), OpenAL (Audio), real host files
 (Kernel/memory-card), and a software rasterizer + software GTE.
 
+## Two game-code trees — the REGION build (JP support)
+
+The repo carries TWO byte-exact game trees: `src/`+`include/` (US, SLUS-00447) and `jp/`
+(Japan, SLPM-86007 — its own full decomp with its own Makefile/symbol map/verification).
+The port compiles either against the SAME `platform/pc` backends:
+
+    make link               # US -> build/
+    make link REGION=jp     # JP -> build-jp/  (correctness-first: no -DPC_FEAT)
+
+- **Shared-source scheme**: 54 of the 88 game TUs and 11 of the 15 headers are byte-identical
+  between the trees once PC gate conditionals are stripped, so BOTH regions compile them from
+  the US tree — every gated fix/feature lands once. The JP region takes the remaining TUs from
+  `jp/src` and the 4 genuinely-different headers from `jp/include` (`field.h` via the
+  hand-merged `platform/pc/include/region-jp/field.h`, which keeps the US gate blocks —
+  raw jp headers are gate-free and would silently DROP the LP64/PC_PORT fixes if staged).
+  Guard: `make check-shared` (`tools/check_shared.py` + `shared_tus.txt`); the headers list
+  lives in the TOOL, not the txt file. A diverging shared file must move to per-region.
+- **Region identity** is centralised in `pc_platform.h` (`VH_ACTIVE_CARD_NAME`,
+  `VH_HD_GAME_ID`, `VH_REGION_BOOT_LBA`, `VH_REGION_NAME`) keyed off `-DVH_REGION_*`, which
+  every backend gets via the Makefile. Never hardcode a card id / boot LBA / pack id twice.
+- **Region-parametric data generators** (`tools/gen_*.py`, `build_data_segment.py`): all honour
+  `VH_REGION` / `VH_GAME_ROOT` / `VH_PSX_EXE` / `VH_GENERATED_OUT`; JP outputs land in
+  `$(BUILD_DIR)/gen/`, never in `src/` (whose copies are the US originals). Validation
+  discipline when touching one: regenerate the US output and prove it byte-identical (or
+  object-identical) BEFORE trusting the JP output. The JP link also needs two alias defsyms
+  (`DrawSjisText=DrawText`, `MsgBox_IsFinished=ConsumeMsgBoxPagePause` — the JP binary carries
+  both names for one address; wired in `REGION_LDFLAGS`).
+- **JP text** is the BIOS kanji ROM: `gen_kanji_font.py VH_REGION=jp` embeds all of KROMDAT.BIN
+  (= BIOS charsets 2+3 exactly, 3489 glyphs) and `libkernel.c`'s `VH_REGION_JP` mapping does
+  SJIS→kuten with the JIS X 0208 defined-position compaction; codes outside return −1 so the
+  game's own `gCustomGlyphs` fallback runs as on hardware.
+- **JP tree edits** follow the same gating rules as `src/` with its own target md5
+  (`cd jp && PATH="$PWD/external/toolchain/bin:$PATH" make check < /dev/null` →
+  `53849277b08184863bd45f10925995a6`).
+- **CD timing**: the octoshock-derived model charges seek + transfer + a per-read START
+  overhead (`READ_START_MS`, overlap-aware against game-side idle). Both regions are calibrated
+  to BizHawk hardware baselines (US 5.25 s / JP 5.33 s demo-battle load). The US loader idles
+  84–139 ms between files (its Setmode dance), JP 3–31 ms — remember that before "fixing"
+  either loader's pacing. `VH_CD_LOG=1` dumps per-read accounting.
+- **Dev aid**: `VH_DEBUG_MENU=1` (BOTH regions since 2026-08-22) — idle ~1.5 s at
+  the title and the retail debug menu opens: hub (battle-map warp, event maps, unit select,
+  game start, debug mode) + SELECT B → the scene selector (events 0–94 / world-map / towns; US
+  carries a full translation, PC_FEAT-gated in the game trees). Env-gated, undocumented, not a
+  shipped feature. Eight crash guards make warped scenes fail soft in both regions; warped
+  scenes may pair mismatched pieces (env vs script state) — that's retail warp behavior.
+- **Save/card facts**: the virtual card = every regular FILE in `saves*/` (subdirs skipped —
+  a real card can't hold folders); extra files eat blocks, keep backups in `.archive/`.
+  Tactical saves live in `saves_tactical/`. US↔JP card conversion is container-only: the JP
+  header just appends `icon3[128]` at offset 384 (marker byte 68 + all save structs identical).
+- **HD packs**: per-region subfolders `hdpacks/<game-id>/` (SLUS-00447 also serves the Asia
+  SCPS-45183 disc), legacy flat `hdpacks/` still detected — no user migration. Backgrounds
+  keyed by upload FNV hash (offline-derivable, `tools/hdpack/vh_tim_hashpack.py`); FMVs keyed
+  by start sector (`videos/<hex-lba>.mp4`, from the game's movie table). Canonical tools =
+  committed `platform/pc/tools/hdpack/` (a stale copy may lurk in gitignored scratch dirs).
+
 ## The header swap actually needs symlink staging — `-I` order alone does NOT work
 
 The single most important build detail. `include/common.h`'s own `#include "PsyQ/..."` lines resolve
@@ -211,6 +266,27 @@ and `docs/width-bugs.md`):
 > rather than guessing from one sample.
 
 ## Traps already hit (avoid repeating)
+
+- **The SJIS text renderers consume TWO bytes per glyph unconditionally** — feeding ASCII to
+  `DrawSjisText` draws NOTHING (invalid pairs; this is why Konami's US debug-menu text never
+  rendered on real hardware). And `DrawText` (ASCII renderer) treats bare `'U'`/`'D'` as
+  spacing control codes. For US-visible strings in game code use FULL-WIDTH SJIS — the US
+  KROM font's 209 glyphs are exactly all full-width symbols + alphanumerics (rows 1–2 = 147 +
+  digits/latin 62). Katakana is OUTSIDE the US font. The `#NN` string-table escape is unusable
+  on US through the SJIS path (inserts ASCII table text → eaten; odd lengths desync past the
+  terminator).
+- **A defensive bail must FILL the state it skips** — a corrupt-data `break` in LoadText left
+  `textPointers[]` dangling and just moved the crash into the renderer. Fill safe defaults.
+- **`OPT=1`/flag changes are NOT dependency-tracked in either build dir** — an incremental
+  `make link OPT=1` over `-O0` objects yields a MIXED binary (rasterizer at `-O0` = ~3× CPU,
+  looks like a perf regression at internal-res 4). `rm -rf <builddir>` on any flag change.
+- **gdb on `-O2` builds: `call Fn()` can silently no-op** ("unknown return type") — use
+  `call (void)Fn()`. And probe balance/patch state only AFTER the lazy first-VSync boot
+  (`break PC_BalanceBoot`), or retail tables masquerade as a reset bug.
+- **Crash forensics**: the SIGSEGV handler prints banner+si_addr first and runs on a
+  sigaltstack; if console shows nothing, `coredumpctl` has the core — but autopsy it BEFORE
+  rebuilding the binary (symbolization uses the on-disk exe). First-chance truth: run under
+  `gdb -q -ex run`, then `bt`.
 
 - **Quoted `#include "..."` resolves relative to the including file's own directory BEFORE any `-I`
   flag, always.** The biggest lesson from real `src/*.c` compilation (see the header-staging section).

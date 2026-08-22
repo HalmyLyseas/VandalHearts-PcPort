@@ -12,18 +12,21 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 
 | Variable | Default | Effect |
 |---|---|---|
-| `VH_DISC_IMAGE` | auto-detected (a `game/` folder or a `*.bin` next to the exe/AppImage; dev fallback `../../../external/game/Vandal Hearts (USA).bin`) | Path to your game disc `.bin`; overrides auto-detect. |
+| `VH_DISC_IMAGE` | auto-detected (a `game/` folder or a `*.bin` next to the exe/AppImage; dev fallback `../../../external/{game,alt}/`) | Path to your game disc `.bin`; overrides the scan. Any supported release: USA `SLUS-00447`, Asia `SCPS-45183`, Japan `SLPM-86007`. |
+| `VH_REGION` | `auto` (US/Asia preferred) | Which game to boot when discs of both regions are installed: `us` or `jp` (2.0). Written by the overlay's **DISC** row; applies at launch. |
+| `VH_DISC_ID` | unset | Exact disc within the US family when both dumps are installed (`SLUS-00447` vs `SCPS-45183`). Written by the **DISC** row alongside `VH_REGION`. |
 | `VH_SCALE` | `2` | Integer window scale (clamped 1–8). Aspect-preserved. Also settable live in the in-game options overlay (SELECT+START). |
 | `VH_FULLSCREEN` | `0` | Start in fullscreen-desktop (`1`) vs windowed (`0`). Aspect preserved (letterboxed). Also toggleable in the options overlay. |
 | `VH_ACCURATE` | `1` | PSX-accurate software rasterizer — a fixed-point integer DDA (coverage + UV at the exact GPU pixel position), ordered dithering (gated on the GPU dither-enable bit), 5-bit blend. ~99.8–99.99% pixel-exact vs a DuckStation VRAM capture. On by default. `0` = legacy renderer (softer, no dithering); advanced users only. |
 | `VH_INTERNAL_SCALE` | `1` | **Internal-resolution supersampling** (1.5/G2). `1` = off (native render). `2`–`4` render the software GPU at that multiple: each primitive is rasterized a second time into an Nx-larger buffer (geometry ×N, native texture sampled per hi-res pixel), for crisper terrain/edges without re-authoring any art. Needs `VH_ACCURATE=1` (the default). Cost is roughly N² × the native rasterizer (dual-pass), but the hi-res pass is **multithreaded** (see `VH_RASTER_THREADS`), so on a multicore CPU `2`/`3`/`4` all hold the 30 fps cap and battle fast-forward stays effective at `4`×. Also settable live in the options overlay ("INTERNAL RES", X1/X2/X3/X4) and persisted. **"Crust-free" tile sampling** is built in (no knob): the hi-res pass biases the UV sample +0.5 texel on perspective world polys so tile edges land on the bright cell interior instead of the dark border "crust" texel — this is exactly what the reference renderer does, and it removes the faint dark grid that finer sampling would otherwise draw along terrain/lava/water tile seams (and the compass "dotted lines"), with no softening. Axis-aligned 2D UI/text/sprites are auto-detected and keep plain centre-sampling, so glyph/border columns never shift. The decision is per-quad, so a quad's two triangles always agree (no diagonal seam). Hi-res pass only — native `s_vram` stays byte-exact. |
 | `VH_RASTER_THREADS` | auto | Worker-thread count for the internal-resolution rasterizer (1.5/P1). Default = online CPU count (auto-detected via SDL, capped at 32). Set a number only to **cap** it (e.g. `4` to leave cores free). Ignored at `VH_INTERNAL_SCALE=1` (nothing to parallelize) or for a tiny display list (falls back to single-threaded). Bands write disjoint hi-res scanlines → lock-free; output is bit-identical to single-threaded (harness-validated). |
-| `VH_HDPACK` | auto | **HD background pack** on/off (1.6). Set automatically when a valid `hdpacks/` is auto-detected beside the executable (manifest game id must match `SLUS-00447`); toggle live in the overlay ("HD PACK", greyed with no pack) and persisted here. Enabling bumps `INTERNAL RES`→≥2 and (windowed) `WINDOW SCALE`→≥2 so the HD detail is visible; dropping either to 1 disables it. Only 8bpp backgrounds are replaced — pixel-art portraits/sprites/UI stay native. `VH_HD_PACK=<dir>` (underscore) overrides the auto-detect with an explicit `backgrounds/` folder. HD images decode on a background thread (a scene shows native texels for the first frame or two behind the fade-in); `VH_HD_SYNC=1` forces the old inline decode for A/B. See [../../docs/hd-pack.md](../../docs/hd-pack.md). |
+| `VH_HDPACK` | auto | **HD background pack** on/off (1.6; per-region since 2.0). Set automatically when a valid pack for the running game is found under `hdpacks/<game-id>/` beside the executable (`SLUS-00447` for USA/Asia, `SLPM-86007` for Japan; the pre-2.0 flat `hdpacks/` still works as a US fallback); toggle live in the overlay ("HD PACK", greyed with no pack) and persisted here. Enabling bumps `INTERNAL RES`→≥2 and (windowed) `WINDOW SCALE`→≥2 so the HD detail is visible; dropping either to 1 disables it. Only 8bpp backgrounds are replaced — pixel-art portraits/sprites/UI stay native. `VH_HD_PACK=<dir>` (underscore) overrides the auto-detect with an explicit `backgrounds/` folder. HD images decode on a background thread (a scene shows native texels for the first frame or two behind the fade-in); `VH_HD_SYNC=1` forces the old inline decode for A/B. See [../../docs/hd-pack.md](../../docs/hd-pack.md). |
 | `VH_VERBOSE` | `0` | Per-event backend console chatter: `[lang]` table/section apply lines and per-read dialogue substitutions, `[HD] REPLACED` per background, `[HDvideo]` per movie. Default OFF (post-1.7 console hygiene, same spirit as the av_log errors-only rule): the console keeps the one-time boot summary (config echo, pack identities, `[HD] pack detected`) and EVERY warning/refusal -- only the recurring progress lines are gated. Set `1` when debugging a pack or reporting an issue. |
-| `VH_LANG` | unset | **Language pack** selection (1.7): the folder name under `<deploy>/langpacks/` whose `manifest.json` passes the game/format gate. Set from the overlay ("LANGUAGE", System — a pending change is marked `*` and applies at the next launch; packs apply at boot only, no live swap) and persisted here. A pack's localized backgrounds render at every `VH_INTERNAL_SCALE` — at 1× the engine keeps a native-size shadow pass alive just for the pack (HD-pack backgrounds still need ≥ 2×). `VH_LANGPACK=<dir>` points straight at a pack folder (dev override, skips the picklist). See [../../docs/language-packs.md](../../docs/language-packs.md). |
+| `VH_LANG` | unset | **Language pack** selection (1.7): the folder name under `<deploy>/langpacks/` whose `manifest.json` passes the game/format gate. Set from the overlay ("LANGUAGE" — a pending change is marked `*` and applies at the next launch; packs apply at boot only, no live swap) and persisted here. US-disc feature: greyed on the Japanese game (a pack can still be queued there while a US disc switch is pending in the DISC row). A pack's localized backgrounds render at every `VH_INTERNAL_SCALE` — at 1× the engine keeps a native-size shadow pass alive just for the pack (HD-pack backgrounds still need ≥ 2×). `VH_LANGPACK=<dir>` points straight at a pack folder (dev override, skips the picklist). See [../../docs/language-packs.md](../../docs/language-packs.md). |
 | `VH_CAM_INVERT_X` | `0` | Invert the right-stick camera *horizontal* axis (rotate direction). `1` = inverted. Also toggleable in the in-game options overlay (SELECT+START). |
 | `VH_CAM_INVERT_Y` | `1` | Invert the right-stick camera *vertical* axis (raise/lower angle). **Ships inverted** — the modern twin-stick convention (push up = tilt the view down); set `0` for a normal vertical axis. Also toggleable in the in-game options overlay. |
 | `VH_SEQ_MUTE` | off | `1` = mute only the SEQ **music**, keep VAG SFX + XA audible (useful for isolating sound effects). |
+| `VH_FAST_BOOT` | `1` | **Fast boot** (2.0.0): the fresh-process boot load (the black-window stretch before the intro logo) runs the CD-timing model 16× scaled — on a console those seconds hid behind the BIOS animation. Everything from the first movie onward (title, New Game, area loads, battles) keeps the **hardware-exact** load pacing untouched. `0` = full hardware timing from the very first read (validation A/B). |
 
 > **Audio is calibration-fixed (hardwired, no knobs).** The software SPU matches real-hardware output at
 > the authentic values, so there are no tuning env vars — the settings are fixed in code: master trim
@@ -38,6 +41,18 @@ The game runs **cap-less** (no `setcap`, no elevated rights): the portable NULL-
 handler in `pc_bootstrap.c` catches transient PSX NULL/low-address accesses, emulates them (read 0 /
 discard store), logs each site, and steps over — so no page-0 mapping is needed. This is the sole path;
 the old privileged low-page-mapping fallback (and its `setcap` targets) was retired.
+
+## Debug menu (advanced)
+
+| Variable | Default | Effect |
+|---|---|---|
+| `VH_DEBUG_MENU` | off | `1` = enable KCET's original development debug menu (both regions, 2.0.0). Idle ~1.5 s at the **title screen** and it opens: battle-map warp, scene selector (all 95 story events, world-map destinations, towns), unit viewer, GAME START. The menu is the Japanese dev team's own tool; the US game shipped it stripped — this port restores it, with the scene lists translated. |
+
+**Use at your own risk.** Warping skips the setup a scene normally gets from the story flow:
+some destinations load with placeholder state, look wrong, or drop you somewhere unplayable —
+that is authentic dev-tool behavior, not a port bug. Two hard rules: **saves made from a warped
+state are unsupported** (they can encode states unreachable in normal play), and bug reports
+are only actionable from a normal boot (no `VH_DEBUG_MENU`).
 
 ## Diagnostics — logging
 
@@ -89,5 +104,7 @@ so the matching decomp build (`make check`) never sees them and stays byte-exact
 
 | Target | Purpose |
 |---|---|
-| `make link` | Build the PC binary (cap-less; no setcap needed). |
+| `make unified` | Build the all-regions release binary (both game cores + disc-dispatch launcher) → `build-uni/`. |
+| `make link` | Build the single-region dev binary (US default; `REGION=jp` for the Japanese core). |
+| `make check-shared` | Verify the game files shared between the US and JP decomp trees are identical (modulo PC gates). |
 | `make crash-trace` | Resolve each site in `vh_null_reads.log` to `file:line` (nm + addr2line). |

@@ -3,7 +3,7 @@ title: "Vandal Hearts — PC Port"
 subtitle: "Player Manual"
 ---
 
-![](platform/pc/packaging/appimage/vandalhearts.svg){.cover-logo}
+![](docs/images/cover-pc-port.webp){.cover-logo}
 
 <p class="version">@VERSION@</p>
 
@@ -14,7 +14,8 @@ game's code. It plays the original faithfully by default, and adds optional qual
 features on top — all of them off, or purely cosmetic, unless you turn them on.
 
 **You need your own game disc.** The port ships no game content: supply your own legally-owned
-*Vandal Hearts (USA)* disc image. This is a non-commercial fan preservation project, not
+*Vandal Hearts* disc image — the USA (`SLUS-00447`), Asia (`SCPS-45183`) or Japan (`SLPM-86007`)
+release; one executable runs them all. This is a non-commercial fan preservation project, not
 affiliated with Konami or Sony.
 
 # Setup
@@ -23,10 +24,12 @@ affiliated with Konami or Sony.
 
 1. Unzip the release (`VandalHearts-*-windows-x64.zip`) into one folder. Keep everything
    together — the game needs all 8 DLLs next to `vandalhearts_pc.exe`.
-2. Put your disc image — a raw `.bin` dump of *Vandal Hearts (USA)* — into a `game` folder next
-   to the `.exe` (or directly beside it).
-3. Run `vandalhearts_pc.exe`. The disc is found automatically; a wrong or missing disc produces a
-   clear message, not a blank window.
+2. Put your disc image — a raw `.bin` dump of a supported *Vandal Hearts* release (USA, Asia or
+   Japan; several at once is fine) — into a `game` folder next to the `.exe` (or directly beside
+   it).
+3. Run `vandalhearts_pc.exe`. Each disc is found automatically; with more than one installed, the
+   in-game **DISC** option picks which game to run (it applies at the next launch). A wrong or
+   missing disc produces a clear message, not a blank window.
 
 Works on a stock Windows 10 or 11 — no runtimes to install.
 
@@ -37,18 +40,23 @@ Works on a stock Windows 10 or 11 — no runtimes to install.
    (package `fuse2` / `libfuse2` on most distributions).
 3. Put your disc `.bin` in a `game/` folder next to the AppImage, and run it.
 
-## The HD pack (optional)
+## The HD packs (optional)
 
-Download `VandalHearts-*-hdpack.zip` from the release page and unzip it so the `hdpacks/` folder
-sits next to the executable (next to the AppImage on Linux). The game detects it at the next
-launch and turns the **HD PACK** option on. Without the pack, nothing changes.
+Download the HD pack for your game from the release page — one exists per disc (USA/Asia share
+one; the Japanese game has its own) — and unzip it so the `hdpacks/` folder sits next to the
+executable (next to the AppImage on Linux); inside it, each pack lives in its game's folder
+(`hdpacks/SLUS-00447/`, `hdpacks/SLPM-86007/`). The game detects the right pack at the next
+launch and turns the **HD PACK** option on. Without a pack, nothing changes. *(Upgrading from a
+1.x install? Your old pack still works as-is — or move the previous contents of `hdpacks/` into a
+new `hdpacks/SLUS-00447/` folder to match the new layout.)*
 
 ## Language packs (optional)
 
 Community-made translations install the same way: place the pack folder under `langpacks/` next
 to the executable (e.g. `langpacks/fr-fantrad/`), then pick it with the **LANGUAGE** option
 in-game — **the pack applies at the next launch, so restart the game after choosing it**. Without
-a pack the game is its original English.
+a pack the game is its original English. Language packs apply to the USA/Asia game only — the
+Japanese game plays with its own original Japanese text.
 
 ## Settings
 
@@ -77,11 +85,14 @@ Space Select. Full reference: `docs/controls.md` in the repository.
 
 # Features
 
-All features work in both the normal game and Tactical Mode, except where marked.
+All features work in both the normal game and Tactical Mode, and on every supported disc —
+USA, Asia and Japan — except where marked.
 
 ## The options overlay
 
 Press **SELECT + START** during play. Every setting applies immediately and is remembered.
+Two exceptions apply at the next launch and are marked `*` until then: **DISC** (which game to
+run, when several discs are installed) and **LANGUAGE**.
 
 ![](../images/OverlayMenu-Main.png)
 
@@ -126,7 +137,8 @@ With a pack selected, the game's text — dialogue, menus, items, battle message
 the story videos — displays in that language, at any graphics setting. Some packs also translate
 backgrounds with baked-in text (such as the title card). **Changing the language takes effect at
 the next launch**; the port's own SELECT+START menu deliberately stays English. Packs are made by
-the community with the tools in the repository — this project distributes no game text.
+the community with the tools in the repository — this project distributes no game text. Language
+packs apply to the USA/Asia game; the Japanese game keeps its own original text.
 
 ## Tactical Mode *(opt-in, changes gameplay)* {.page-break}
 

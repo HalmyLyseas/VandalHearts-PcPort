@@ -11,6 +11,11 @@ spell names and descriptions, character and class names, terrain names, the text
 game's code, and Tactical Mode's text. It does **not** translate the port's own SELECT+START options
 overlay, which stays English in every language (see *What a pack does not cover*).
 
+Packs are a **US-disc feature**: they are built on the US game's text engine, so they apply to the
+USA and Asia discs only. On the Japanese game the overlay's LANGUAGE row is greyed (the game plays
+with its own original Japanese text) — though with a US disc switch pending in the DISC row, you
+can already queue a pack there for the restart.
+
 ## Installing and selecting a pack
 
 Place the pack in a `langpacks/<name>/` folder beside the executable (the same place the game finds

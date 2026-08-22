@@ -91,3 +91,7 @@ vh_vram_*.ppm
 # 1.6: locally-built static libav for the Windows HD-video build (make-release.sh)
 /platform/pc/ffmpeg-mingw-static/
 /platform/pc/ffmpeg-linux-static/
+
+# Local test deployment (discs, packs, saves) -- lives OUTSIDE build-uni* so release
+# clean builds can never wipe it (make-release.sh guards against the reverse).
+/platform/pc/deploy/

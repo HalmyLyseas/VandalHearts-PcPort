@@ -10,6 +10,18 @@ Two rules hold everywhere:
 - **Anything that changes gameplay is opt-in** (Tactical Mode). Everything else is presentation,
   controls, or convenience.
 
+Since v2.0 every feature on this page works on **all supported discs** — USA, Asia and Japan —
+except language packs, which target the US game's text engine (noted below).
+
+## Startup & loading *(v2.0)*
+
+In-game loads run at **hardware-exact pacing** — the port simulates the PS1 CD drive's seek and
+transfer timing, validated against real-hardware captures — so battles, towns and scene changes
+feel exactly like the console. The one exception is deliberate: the **initial boot load** (the
+stretch before the intro logo, which a real console hides behind its BIOS boot animation) runs
+accelerated, taking the fresh launch from ~7 s to ~2 s. `VH_FAST_BOOT=0` restores full hardware
+timing there too.
+
 ---
 
 ## Controls & camera
@@ -38,7 +50,7 @@ The full scheme — every binding, pad and keyboard — is in [controls.md](cont
 Press **SELECT + START** during play to open the overlay. Every setting applies live and persists
 to `vandalhearts.ini`:
 
-![The options overlay: Tactical Mode, HD pack, resolution, camera, labels, language, saves](images/OverlayMenu-Main.png)
+![The options overlay: Tactical Mode, HD pack, resolution, camera, labels, disc, language, saves](images/OverlayMenu-Main.png)
 
 - **TACTICAL MODE** — the opt-in rebalance (see below). Changeable only at the title screen: a
   run's mode is fixed.
@@ -46,8 +58,12 @@ to `vandalhearts.ini`:
   this row says why (`NO PACK` / `OUTDATED PACK` / `WRONG GAME`).
 - **INTERNAL RES / WINDOW SCALE / FULLSCREEN** — display settings (see *Graphics*).
 - **CAMERA X/Y-AXIS, BUTTON LABELS** — controls settings (above).
-- **LANGUAGE** — pick an installed language pack (see below). The one overlay setting that is not
-  live: a pending change is marked `*` and applies at the next launch.
+- **DISC** *(v2.0)* — with more than one supported disc installed (USA / Asia / Japan), pick which
+  game to run. Not live: the pending disc is marked `*` and boots at the next launch. Greyed with
+  a single disc.
+- **LANGUAGE** — pick an installed language pack (see below). Also not live: a pending change is
+  marked `*` and applies at the next launch. Greyed on the Japanese game (packs target the US text
+  engine) — but with a US disc switch pending you can already queue a pack for the restart.
 - **SAVE MANAGEMENT / RETURN TO TITLE** — below.
 
 ### Save management
@@ -198,7 +214,8 @@ Greek are proven in game), and everything renders at every graphics setting.
 
 Select an installed pack with the overlay's `LANGUAGE` row — it applies at the next launch. A pack
 is a *diff*: entries a Latin-script pack has not translated yet simply stay English, so a
-work-in-progress translation is already playable.
+work-in-progress translation is already playable. Packs are a **US-disc feature** (they are built
+on the US game's text engine); the Japanese game plays with its own original Japanese text.
 
 *Greek demo — translated dialogue (note the `;`, the Greek question mark):*
 
@@ -215,6 +232,31 @@ work-in-progress translation is already playable.
 Installing and what a pack covers: [language-packs.md](language-packs.md). Making one: the
 [hands-on quickstart](../platform/pc/tools/langpack/quickstart.md) and the
 [toolchain reference](../platform/pc/tools/langpack/README.md).
+
+---
+
+## The debug menu *(v2.0, advanced)*
+
+**Intent: restore the developers' own tool, for the curious.**
+
+The Japanese release shipped with KCET's development debug menu still in the code — battle-map
+warp, a scene selector covering all 95 story events plus world-map destinations and towns, a unit
+viewer. The US release stripped most of it (and what remained could never render: its menu text
+was drawn through an incompatible text path, blank even on real hardware). The port restores the
+full menu **on every supported disc** — on the US/Asia game with the scene lists translated:
+
+*The original Japanese menu, and the same menu on the US game:*
+
+![The KCET debug menu on the Japanese game](images/features-2.0.0-DebugMenu-01.png)
+
+![The same debug menu on the US game, translated](images/features-2.0.0-DebugMenu-02.png)
+
+It is off by default and stays a power-user feature: launch with `VH_DEBUG_MENU=1` and idle
+~1.5 s at the title screen to open it. Warping skips the setup a scene normally gets from the
+story flow, so some destinations load with placeholder state or look wrong — that is authentic
+dev-tool behavior. **Saves made from warped states are unsupported, and bug reports are only
+actionable from a normal boot.** Details in
+[`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md#debug-menu-advanced).
 
 ---
 

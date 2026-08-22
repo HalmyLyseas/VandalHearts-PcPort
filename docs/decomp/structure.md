@@ -4,6 +4,10 @@ The decompiled game code is 88 files in nine domain folders, 1184 matched functi
 address-derived names. This page explains the layout, the naming conventions, and the one
 law that governs everything: **a file is a contiguous address range of the retail binary.**
 
+This page describes the US tree (`src/`, the reference). The Japanese decompilation (`jp/src/`,
+since 2.0) mirrors the same tree and conventions for its own binary; most files are byte-shared
+with the US tree (verified by the port build), and only genuinely diverged revisions exist twice.
+
 ## The tree
 
 ```

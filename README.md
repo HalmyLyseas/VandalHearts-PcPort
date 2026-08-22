@@ -4,17 +4,21 @@
 
 # Vandal Hearts — Native PC Port
 
-A native PC port of the US PlayStation 1 release of **Vandal Hearts** (`SLUS_004.47`), built on a
-byte-exact matching decompilation of the game.
+A native PC port of the PlayStation 1 game **Vandal Hearts**, built on byte-exact matching
+decompilations of the game. **One executable runs the USA (`SLUS-00447`), Asia (`SCPS-45183`)
+and Japan (`SLPM-86007`) releases** — drop in whichever disc you own and the region is
+auto-detected.
 
 > **Non-commercial fan preservation project. Not affiliated with Konami or Sony. You must supply
 > your own legally-owned copy of the game.** See [DISCLAIMER](DISCLAIMER) and *Legal* below.
 
 The project has three stages, **all completed**:
 
-1. **Matching decompilation.** Every non-PsyQ function is decompiled to C that rebuilds the original
-   `SLUS_004.47` byte-for-byte (`md5 596bb082a2de5f1fe977dd3d7e160b03`, verified by `make check`).
-   This is the foundation the port is built on, and it is still enforced on every change.
+1. **Matching decompilation.** Every non-PsyQ function is decompiled to C that rebuilds the
+   original executable byte-for-byte, verified by `make check` on every change — the US
+   `SLUS_004.47` (`md5 596bb082a2de5f1fe977dd3d7e160b03`) and, since 2.0.0, the Japanese
+   `SLPM_860.07` (`md5 53849277b08184863bd45f10925995a6`) from its own decompiled tree. This
+   is the foundation the port is built on, and it is still enforced on every change.
 2. **De-consolization → native PC port.** Each PlayStation hardware interface — GPU packet
    submission, GTE matrix math, CD-ROM / XA audio, SPU, MDEC video, pad input — is replaced with a
    portable equivalent (SDL2 + Metal/OpenGL + OpenAL), so the game boots and runs on a modern desktop from
@@ -38,6 +42,11 @@ The port **runs the full game** end-to-end from the original data — intro FMVs
 battles, world map, party management, dialogue, shops, and save/load — validated by full
 playthroughs on both Windows and Linux, including the endgame and credits.
 
+- **All three regional discs, one executable (v2.0):** USA, Asia and Japan releases are
+  auto-detected (put any or all of them in `game/`); with several discs installed, the
+  in-game **DISC** option switches between them. The Japanese game runs with the full PC
+  feature set — Tactical Mode, the options overlay, HD pack support, fast-forward — with its
+  own faithful Japanese text. **Language packs remain a US-disc feature by design**.
 - **A/V fidelity: complete**, validated against real hardware (BizHawk): GTE/perspective and
   terrain/sprite rendering; a sample-accurate software SPU driving the SEQ music and VAG sound
   effects; CD-XA streamed audio; MDEC/STR video; and PS1 Shift-JIS/kanji text.
@@ -45,11 +54,13 @@ playthroughs on both Windows and Linux, including the endgame and credits.
   coverage + texture sampling, dithering, 5-bit blend; ~99.8–99.99% pixel-exact vs a reference-emulator
   capture), with optional **internal-resolution supersampling** (1–4×) on a multithreaded high-res pass
   for a sharper image with no re-authored art. The faithful look is the default.
-- **Optional HD pack (v1.6):** an opt-in layer that replaces the pre-rendered backgrounds and the FMV
-  movies with higher-resolution art (`.webp` + HEVC), auto-detected beside the executable and toggled by
-  the **HD PACK** option. The source tree and base build ship no art — a pack is either built offline from
-  your own disc or downloaded as an optional 1.6 release asset; the base build is unchanged without one.
-  See [docs/hd-pack.md](docs/hd-pack.md).
+- **Optional HD packs (v1.6, per-region since v2.0):** an opt-in layer that replaces the pre-rendered
+  backgrounds and the FMV movies with higher-resolution art (`.webp` + HEVC), auto-detected beside the
+  executable and toggled by the **HD PACK** option. Packs are per game disc under
+  `hdpacks/<game-id>/` — one for the US/Asia master, one for the Japanese game (its movies carry
+  burned-in Japanese subtitles). The source tree and base build ship no art — a pack is either built
+  offline from your own disc or downloaded as an optional release asset; the base build is unchanged
+  without one. See [docs/hd-pack.md](docs/hd-pack.md).
 - **64-bit** is the default build. The port is memory-safe — it runs unprivileged (no root, no
   `setcap`) and has passed both an AddressSanitizer out-of-bounds sweep and a UBSan pass across the
   game, which together fixed seven real out-of-bounds bugs latent in the retail game.
@@ -86,7 +97,8 @@ not reviewed by it**. Report problems with a pack on its own tracker. Install in
 ## Quick start
 
 You supply the game; the port supplies everything else. **You need your own legally-owned copy of
-Vandal Hearts (USA), dumped as a raw `.bin` disc image** — nothing game-derived is distributed here.
+Vandal Hearts — USA (`SLUS-00447`), Asia (`SCPS-45183`) or Japan (`SLPM-86007`) — dumped as a raw
+`.bin` disc image** — nothing game-derived is distributed here.
 
 | Platform | Package | Requirements |
 |---|---|---|
@@ -99,9 +111,11 @@ and built from source ([docs/cross-platform.md](docs/cross-platform.md)). macOS 
 provided by community members on their own forks — those are outside this project's scope and are
 not verified or supported here.
 
-Put your disc image in a `game/` folder next to the executable and launch — the disc is
-auto-detected and verified, settings live in the in-game overlay (**SELECT + START**) and
-`vandalhearts.ini`, and saves are plain files in `saves/`. Details: the Player Manual,
+Put your disc image (any supported region, or several) in a `game/` folder next to the executable
+and launch — each disc is auto-detected and verified, and with more than one installed the in-game
+**DISC** option switches the active game (applies on restart). Settings live in the in-game overlay
+(**SELECT + START**) and `vandalhearts.ini`, and saves are plain files in `saves/` (per region —
+US and Japanese saves are separate). Details: the Player Manual,
 [configuration.md](docs/configuration.md), and [`platform/pc/OPTIONS.md`](platform/pc/OPTIONS.md).
 
 ## Building from source
@@ -112,9 +126,12 @@ auto-detected and verified, settings live in the in-game overlay (**SELECT + STA
 > tables — see *Legal* and [NOTICE](NOTICE).)
 
 ```sh
-cd platform/pc && make link       # the native port  -> build/vandalhearts_pc   (needs SDL2/OpenAL/GL/libwebp/libav, Python 3)
-make check                        # (repo root) byte-exact decomp verification -> MD5 must match
+cd platform/pc && make unified    # the release binary (all regions) -> build-uni/vandalhearts_pc
+cd platform/pc && make link       # single-region dev build          -> build/vandalhearts_pc
+make check                        # (repo root) US byte-exact decomp verification -> MD5 must match
+cd jp && make check               # Japanese byte-exact decomp verification
 ```
+(Native deps: SDL2/OpenAL/GL/libwebp/libav, Python 3.)
 
 The full picture — CMake, the Windows cross-compile, the AppImage container, sanitizers, and the
 matching-decomp toolchain — is in [building.md](docs/building.md) and
@@ -148,7 +165,9 @@ build must stay byte-exact).
 expects them (and where the upstream decompilation keeps them). The port lives entirely under
 `platform/pc/`.
 
-- `src/`, `include/` — the matching decompilation (C source and project headers).
+- `src/`, `include/` — the US matching decompilation (C source and project headers).
+- `jp/` — the Japanese matching decompilation (`SLPM_860.07`), same shape (own `make check`);
+  most files are shared with the US tree and verified identical at build time.
 - `SLUS_004.47.yaml`, `undefined_additional.txt` — splat configuration and linker symbol input.
 - `symbol_addrs.txt` — the address → symbol map. **Shared ground truth, not decomp-only**: the
   port's data-segment generator reads it on every port build.
@@ -202,6 +221,7 @@ Not included in this repository:
 
 | file | md5 |
 |---|---|
-| `SLUS_004.47` (base executable) | `596bb082a2de5f1fe977dd3d7e160b03` |
+| `SLUS_004.47` (US base executable) | `596bb082a2de5f1fe977dd3d7e160b03` |
+| `SLPM_860.07` (Japanese base executable) | `53849277b08184863bd45f10925995a6` |
 | `ASPSX.EXE` (ASPSX v2.21, PSYQ v3.3 / DTL-S2190) | `e3ae8aea2623b916f89384bf70f55487` |
 | `LIB34.ZIP` | `d25fd757e944a05369e8fb003a007dd2` |

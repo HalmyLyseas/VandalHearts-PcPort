@@ -17,21 +17,31 @@ crisp UI and text. Smoothing pixel art would clash with them.
 
 ## Installing a pack
 
-Place the pack in a `hdpacks/` folder beside the executable (the same place the game finds its disc image
-and `vandalhearts.ini`):
+Packs are **per game disc** (v2.0): each supported release has its own pack, installed under
+`hdpacks/<game-id>/` beside the executable (the same place the game finds its disc image and
+`vandalhearts.ini`). Both packs can be installed side by side:
 
 ```
 hdpacks/
-  manifest.json
-  backgrounds/
-    <hash>.webp
-  videos/            # optional
-    <sector>.mp4
+  SLUS-00447/        # Vandal Hearts (USA) -- also used by the Asia disc (same master)
+    manifest.json
+    backgrounds/
+      <hash>.webp
+    videos/          # optional
+      <sector>.mp4
+  SLPM-86007/        # Vandal Hearts (Japan) -- its own art; the movies carry Japanese subtitles
+    manifest.json
+    backgrounds/
+    videos/
 ```
 
-On launch the port auto-detects `hdpacks/`, validates `manifest.json`, and enables the **HD PACK** option
-in the SELECT+START options overlay. `VH_HD_PACK=<dir>` overrides the auto-detect with an explicit
-`backgrounds/`-style folder.
+The pre-2.0 **flat layout** (`hdpacks/manifest.json` directly, no per-game folder) still works as a
+fallback for the US game, so an existing install keeps working untouched. To migrate it by hand:
+create `hdpacks/SLUS-00447/` and move the previous contents of `hdpacks/` into it.
+
+On launch the port auto-detects the running game's pack, validates `manifest.json`, and enables the
+**HD PACK** option in the SELECT+START options overlay. `VH_HD_PACK=<dir>` overrides the
+auto-detect with an explicit `backgrounds/`-style folder.
 
 `manifest.json` records the disc/build id, pack version, and the pack's content (background hashes +
 FMV start sectors). The engine requires **packVersion 2**. The startup console log reports the pack's
@@ -43,8 +53,9 @@ content (`75 backgrounds, 16 videos`); when the pack can't be used, the overlay'
   "videos": 16, "sectors": ["1fded", ...] }
 ```
 
-The `game` id must match the build (`SLUS-00447`, Vandal Hearts USA). A pack for a different version is
-reported and left disabled rather than loaded, so it can't silently do nothing.
+The `game` id must match the running game (`SLUS-00447` for USA/Asia, `SLPM-86007` for Japan). A
+pack for a different version is reported and left disabled rather than loaded, so it can't silently
+do nothing.
 
 ## The HD PACK option
 
@@ -102,7 +113,7 @@ both, but HEVC is ~40 % smaller at the same visual quality:
 ```sh
 ffmpeg -framerate 14.99 -i processed/frame_%06d.png \
        -c:v libx265 -preset slow -crf 26 -g 300 -pix_fmt yuv420p -tag:v hvc1 -an NAME.STR.mp4
-./vh_hdpack_videos.py --videos <DIR of NAME.STR.mp4> --out hdpacks   # -> videos/<sector>.mp4
+./vh_hdpack_videos.py --videos <DIR of NAME.STR.mp4> --out hdpacks/SLUS-00447   # -> videos/<sector>.mp4
 ```
 
 Two requirements: the mp4 must have **at least the game's frame count** for that movie, or its last frame

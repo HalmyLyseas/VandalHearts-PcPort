@@ -4,6 +4,94 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.0] — One executable, three regions
+
+A region barrier falls. This release adds a **second complete matching decompilation** — the
+Japanese release, `SLPM-86007`, rebuilt byte-for-byte like the US one — and ships **one
+executable that runs the USA, Asia and Japan discs**, auto-detecting whichever you own. The
+Japanese game is a first-class citizen: the full PC feature set, its own HD pack, its own
+faithful Japanese text. As always, normal mode remains byte-for-byte the retail game — now for
+two retail games.
+
+### Added
+
+- **Japan and Asia disc support.** Drop any supported disc — USA (`SLUS-00447`), Asia
+  (`SCPS-45183`) or Japan (`SLPM-86007`) — in the `game/` folder and play; several at once is
+  fine. The Asia release (byte-identical to USA bar the save id) has quietly worked for a while —
+  this is its first *supported* release. The Japanese release is a different build of the game
+  entirely, and runs on its own decompiled code. Setup:
+  [configuration.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/configuration.md#supported-releases).
+- **The DISC option.** With more than one disc installed, a new overlay row lists each by its
+  release id; pick one and it boots at the next launch (marked `*` until then, like LANGUAGE).
+- **Full feature parity on the Japanese game**: Tactical Mode, the options overlay, save
+  management, battle fast-forward, threat overlay, unit-cycle, finer camera elevation, internal
+  resolution, HD pack support. Tactical Mode's reworked text stays faithful to the Japanese disc —
+  its clarified item descriptions reuse the disc's own Japanese spell lines, and adjusted spell
+  info lines are the retail Japanese text with only the numbers updated. **Language packs remain a**
+  **US-disc feature by design** (they are built on the US game's text engine); the LANGUAGE row
+  explains itself — greyed on the Japanese game, and even usable there to queue a pack when a
+  switch to a US disc is pending.
+- **A Japanese HD pack.** Backgrounds and story videos for the Japanese game (its movies carry
+  the original burned-in Japanese subtitles), downloadable as a release asset like the US pack.
+- **The developers' own debug menu** *(advanced)*. KCET's development menu — battle warp, a
+  selector for all 95 story events, world-map and town warps, a unit viewer — survived in the
+  Japanese release; the US release stripped most of it, and what remained could never render even
+  on real hardware. Restored on **every** disc, translated on US/Asia. Off by default; launch
+  with `VH_DEBUG_MENU=1` and idle at the title screen. Warped scenes can load in odd states —
+  that's authentic dev-tool behavior — and saves made from them are unsupported. Details:
+  [gameplay-additions.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/gameplay-additions.md#the-debug-menu-v20-advanced).
+- **Fast boot.** The fresh-launch load before the intro logo (a black screen a real console hides
+  behind its BIOS animation) now runs accelerated — launch-to-logo drops from ~7 s to under 2 s.
+  Everything from the logo onward keeps the hardware-exact load pacing. `VH_FAST_BOOT=0` restores
+  full hardware timing.
+
+### Changed
+
+- **Load pacing is now hardware-exact on the US game too.** The CD-timing model gained the
+  drive's per-read start cost, tuned against real-hardware captures of both regions; US loads
+  were previously ~5% faster than a console. If a load feels marginally longer than 1.7.1, it is
+  now *exactly* as long as the real thing.
+- **HD packs are per-game** — `hdpacks/SLUS-00447/` and `hdpacks/SLPM-86007/` side by side, the
+  right one auto-detected for the running disc (the Asia disc uses the US pack — same master).
+  Already have the 1.x HD pack? No need to re-download — create `hdpacks/SLUS-00447/` and move
+  the previous contents of `hdpacks/` into it (the old flat layout also still works as-is).
+- **Tactical Mode: Mystic Energy's info line now reads "Protect Magic"** (was "DEF,AT Up") —
+  matching the spell's Tactical redesign, which is protective (DEF + magic resistance) and no
+  longer raises ATK. Display only; Normal mode untouched.
+
+### Fixed
+
+- **RETURN TO TITLE is now safe from anywhere.** Pressed during a loading scene it could crash;
+  pressed during a video it froze the frame while audio played on. The jump now tears down
+  in-flight loads and movie streams cleanly, from any state.
+- **The startup "not responding" dialog is gone.** During long loads the window answered no
+  desktop events, so window managers (notably GNOME) sometimes flagged the game as stuck and the
+  close button appeared dead. Loads now stay responsive — closing the window works even
+  mid-load. Latent since 1.0.0.
+- **Stray files in `saves/` no longer break saving.** A folder or foreign file in the saves
+  directory was treated as save-card content and could produce a bogus "no free blocks" error.
+  Latent since 1.1.0.
+- **Windows, Tactical Mode: crash on a reworked spell's info line.** Moving the spell-list
+  cursor onto a Tactical-reworked spell (Spread Force, Thunder Ball, the retuned support
+  spells) could crash — a 32-bit truncation specific to Windows builds (Linux was never
+  affected). Latent since Tactical Mode shipped in 1.3.0; found in 2.0.0's Windows
+  validation and fixed, with a full audit of the port for the same defect class
+  ([width-bugs.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/docs/width-bugs.md)).
+- Internal hardening from the two-region port work: object-pool overflow and a corrupt GPU
+  ordering table now fail soft instead of crashing or hanging, and a reconstructed animation
+  table's safety padding is sized from the shipped game data instead of an estimate.
+
+### Compatibility
+
+- **Existing installs upgrade in place**: saves, `vandalhearts.ini` and the flat 1.x `hdpacks/`
+  layout all keep working untouched.
+- **Saves are per-region** (matching the real consoles' different memory-card formats): the
+  US/Asia and Japanese games keep separate save files, and the DISC switch does not carry
+  progress across.
+- New `vandalhearts.ini` keys: `VH_REGION`, `VH_DISC_ID` (written by the DISC row) and
+  `VH_FAST_BOOT`. Full reference:
+  [OPTIONS.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/OPTIONS.md).
+
 ## [1.7.1] — Language packs: the story videos, subtitled
 
 The translation framework's one remaining gap is closed: the burned-in English narration of the

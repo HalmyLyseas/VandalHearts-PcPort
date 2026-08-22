@@ -96,6 +96,28 @@ job is byte-exact matching, not readability or portability; all port-side change
   **not part of the repo** and will not exist in a clone. Do not cite it as a durable reference; put
   anything that should survive into `docs/` or a skill.
 
+## The Japanese region (jp-mvp track)
+
+The repo also carries **`jp/` — a complete second matching decomp of the Japanese release
+(SLPM-86007, 88/88 TUs byte-exact, its own Makefile/yaml/symbol map; verify with
+`cd jp && PATH="$PWD/external/toolchain/bin:$PATH" make check < /dev/null`, target md5
+`53849277b08184863bd45f10925995a6`)**, and the port builds either region against the same
+backends: `make link` (US) / `make link REGION=jp` (both with the full `PC_FEAT` set).
+54/88 game TUs + 11/15 headers are byte-identical between the trees after stripping the PC
+gates and compile from the US tree for BOTH regions (gated fixes land once) — guarded by
+`make check-shared`. Region identity (card id, boot LBA, HD pack id) is centralised in
+`platform/pc/include/pc_platform.h` via `-DVH_REGION_*`; all game-data reconstructions are
+region-parametric generators under `platform/pc/tools/`. Both regions' CD load timing is
+calibrated to BizHawk hardware baselines. **The unified executable is COMPLETE**: `make unified`
+(and the CMake/MinGW equivalent) links both prefix-renamed region cores into one
+`vandalhearts_pc` that auto-detects the inserted disc (US/Asia/JP; `VH_REGION` override), and
+the JP game carries the full `PC_FEAT` set (Tactical, ally-cycle, threat overlay,
+fast-forward). HD packs live in per-region `hdpacks/<game-id>/` subfolders (legacy flat layout
+still detected). A translated retail debug menu exists in both regions behind `VH_DEBUG_MENU=1`
+(dev tool, undocumented). Full build/architecture detail in the
+[`phase-c-pc-port`](.claude/skills/phase-c-pc-port/SKILL.md) and
+[`decomp-build`](.claude/skills/decomp-build/SKILL.md) skills.
+
 ## Stage 1 status (matching decomp)
 
 - **`make check` is byte-exact** (`596bb082a2de5f1fe977dd3d7e160b03`), reproduced from a from-scratch

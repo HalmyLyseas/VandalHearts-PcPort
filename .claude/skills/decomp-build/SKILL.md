@@ -34,6 +34,27 @@ optimization/GP flags than the global defaults (`core/audio.c` uses `cc1_v257` +
 `core/glyphs.c`, `ui/supplies.c`, `world/dojo.c`, `world/map.c` use `-G0`). If you add per-file special
 casing, follow this pattern rather than changing global flags.
 
+## The Japanese tree (`jp/`) builds the same way — with three differences
+
+`jp/` is a complete second matching decomp (SLPM-86007, 88/88 TUs byte-exact) with its own
+Makefile, yaml, symbol map and verification target:
+
+    cd jp && PATH="$PWD/external/toolchain/bin:$PATH" make check < /dev/null
+    # both md5 lines must read 53849277b08184863bd45f10925995a6
+
+1. **PATH**: the JP tree ships its own slim toolchain at `jp/external/toolchain/bin`
+   (`cc1_v263_decompals` etc. — same compilers as the US build, prebuilt); nothing else from
+   the US environment recipe is needed.
+2. **`< /dev/null` is mandatory FOR BOTH TREES** (maspsx blocks on non-EOF stdin — a
+   backgrounded US `make check` without it slept 21 min, 2026-08-22) and the usual rules apply:
+   never pipe make through grep, never two makes over one build dir.
+3. Its `.inc` regeneration quirk: editing `assets/*.inc` does NOT invalidate `build/%.i` —
+   touch the including `.c`. From-clean builds work (the build rules mkdir their own output
+   dirs).
+
+Gated PC edits to `jp/src`/`jp/include` follow the same PERMUTER/PC_PORT discipline as the US
+tree, verified against the JP md5 above.
+
 ## Toolchain / dependency inventory
 
 **Local dependency layout:** all local, non-committed build dependencies live under **`vh/external/`**
@@ -101,6 +122,14 @@ that directory to `PATH` before invoking `make`, from `vh/`:
 
 ```
 PATH="$(pwd)/external/toolchain/bin:$PATH" make PYTHON=python3 CROSS=mipsel-linux-gnu- ...
+
+The proven US one-liner (2026-08-22, used ~10x during the debug-menu track):
+
+    PATH="$PWD/external/toolchain/bin:$PATH" make check CROSS=mipsel-linux-gnu- PYTHON=python3 < /dev/null
+
+If `build/` was ever cleaned, the Makefile does NOT recreate its directory skeleton — recreate
+it first (`find src asm assets -type d | sed 's|^|build/|' | xargs mkdir -p`), or every stage
+fails with "can't create build/...: No such file or directory".
 ```
 
 Both binaries are 32-bit x86 ELF, statically linked — verified they execute on this x86_64

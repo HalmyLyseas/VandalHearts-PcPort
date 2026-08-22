@@ -6,16 +6,19 @@ details that make a problem findable.
 
 ## The game won't start
 
-**"Disc image not found."** The port needs your own *Vandal Hearts (USA)* disc dump as a raw
-`.bin`. Put it in a `game/` folder next to the executable (or directly beside it), or set the path
-explicitly with `VH_DISC_IMAGE` in `vandalhearts.ini`. The error message lists the exact path it
-tried.
+**"No usable disc image found."** The port needs your own *Vandal Hearts* disc dump as a raw
+`.bin` — USA (`SLUS-00447`), Asia (`SCPS-45183`) or Japan (`SLPM-86007`). Put it in a `game/`
+folder next to the executable (or directly beside it), or set the path explicitly with
+`VH_DISC_IMAGE` in `vandalhearts.ini`. The error message lists what it looked for. If the message
+says a specific region was requested but not found, a `VH_REGION`/`VH_DISC_ID` setting (written by
+the overlay's DISC row) points at a disc that is no longer there — remove the keys from
+`vandalhearts.ini` or put the disc back.
 
-**"Wrong disc" error.** The port verifies the disc's boot signature before starting. If it refuses
-your image, it is not a supported *Vandal Hearts* dump (the USA `SLUS-00447` or the byte-identical
-Asia `SCPS-45183` — the Europe and Japan releases are different builds and are **not** supported; see
-[configuration.md](configuration.md#supported-releases)), or the dump is not a raw 2352-byte `.bin`.
-Re-dump the disc as `.bin`/`.cue` and use the `.bin`.
+**"Wrong disc" error.** The port verifies each disc's boot signature before starting. If it
+refuses your image, it is not a dump of a supported release (the Europe `SLES-00204` is a
+different build and is **not** supported; see
+[configuration.md](configuration.md#supported-releases)), or the dump is not a raw 2352-byte
+`.bin`. Re-dump the disc as `.bin`/`.cue` and use the `.bin`.
 
 **"Disc image is incomplete / corrupted" error — or, on v1.6.1 and older, the game starts but
 hangs (window "not responding") right after the `[HD] pack detected` console line.** This is the
@@ -56,9 +59,9 @@ options overlay (**SELECT + START**). For sharper 3D, raise `INTERNAL RES` — s
 
 | Value | Meaning | Fix |
 |---|---|---|
-| `NO PACK` | no `hdpacks/` folder was found beside the executable | install the pack from the release page |
+| `NO PACK` | no pack was found for the running game (v2.0: packs live in `hdpacks/<game-id>/`, one per disc) | install the running game's pack from the release page — `SLUS-00447` for USA/Asia, `SLPM-86007` for Japan |
 | `OUTDATED PACK` | the pack's manifest is an old version | download the current pack, or regenerate the manifest (`tools/hdpack/vh_hdpack_manifest.py`) |
-| `WRONG GAME` | the pack was built for a different game version | use the pack for `SLUS-00447` (USA) |
+| `WRONG GAME` | the pack was built for a different game version | each disc needs its own pack: `SLUS-00447` (USA/Asia) or `SLPM-86007` (Japan) |
 
 **HD is ON but the current screen still looks native.** Enabling HD takes effect from the next
 screen or background load; the screen you are on updates when it next reloads. Turning HD off is
@@ -72,7 +75,10 @@ missing-FMV warning there means the pack's `videos/` folder is incomplete.
 
 **Where are my saves?** Ordinary files in `saves/` next to the executable (Tactical Mode uses its
 own `saves_tactical/`). Copy the folder to move or back up progress — saves are
-architecture-agnostic and work across machines and builds.
+architecture-agnostic and work across machines and builds. Saves are **per-region**: the US/Asia
+and Japanese games keep separate card files (different memory-card formats, like the real
+consoles), so switching the DISC does not carry progress across. Keep only save files (and the
+port's own backups) in these folders — stray files or folders there are treated as card content.
 
 **I restored the wrong backup.** The restore flow's default is "back up then restore", so the card
 you replaced was itself backed up first — restore that one.

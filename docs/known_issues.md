@@ -45,8 +45,22 @@ unless noted otherwise.
   (fullscreen, internal resolution ×4): no dip. If you still see scene-entry dips on v1.6.1 or later,
   please report it with your CPU model and settings.
 
+## Retail quirks — authentic behavior of the original game
+
+- **`gMapCursorStartingPos` out-of-bounds read (benign).** The original game code indexes its
+  44-entry map-cursor starting-position table past the end for some map ids, on real hardware as
+  well — the stray read lands in adjacent static data and the cursor is immediately repositioned,
+  so nothing visible goes wrong. Present in both regional builds; the port reproduces it
+  deliberately (fixing it would change retail behavior). Noted here so a sanitizer report or a
+  code reader doesn't mistake it for a port defect.
+
 ## Not bugs — by design
 
+- **DISC changes need a restart (v2.0).** Switching the game with the overlay's DISC row marks the
+  choice with `*` and boots it at the next launch — the running game can't be swapped live.
+- **Saves are per-region (v2.0).** The US/Asia and Japanese games keep separate card files
+  (different memory-card formats, matching the real consoles); the DISC switch does not carry
+  progress across.
 - **Avalanche debris (Tactical Mode).** The Tactical ice re-skin re-textures only the main boulder; the
   tumbling debris behind it is drawn from fixed rock sprites and stays rocky by design (a full snow
   effect would need new artwork). See [tactical-mode.md](tactical-mode.md#avalanche--an-ice-re-skin).

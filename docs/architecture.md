@@ -2,11 +2,15 @@
 
 This project has two distinct layers, kept deliberately separate:
 
-1. A **matching decompilation** of the US PlayStation 1 release of *Vandal Hearts* (`SLUS_004.47`)
-   — C source that recompiles to a byte-for-byte identical copy of the original executable.
+1. **Matching decompilations** of the PlayStation 1 releases of *Vandal Hearts* — C source that
+   recompiles to byte-for-byte identical copies of the original executables: the US
+   `SLUS_004.47` (repo root, the reference tree) and, since 2.0, the Japanese `SLPM_860.07`
+   (the `jp/` tree, same shape; most game files are byte-shared between the two).
 2. A **native PC port** built on top of that source — every PlayStation hardware dependency replaced
    with a portable equivalent (SDL2 + Metal/OpenGL + OpenAL), so the game runs on a modern desktop from its
-   own disc data.
+   own disc data. The release binary is **unified**: both regional cores compiled in, a thin
+   launcher classifying the disc and dispatching to the matching core (only one ever executes per
+   process).
 
 Understanding why these are separate, and how the port avoids disturbing the match, is the key to
 working in this codebase.
@@ -17,7 +21,11 @@ The decompilation is the foundation. Its single job is fidelity: the C in `src/`
 period-correct GCC 2.x toolchain, via [splat](https://github.com/ethteck/splat) and
 [maspsx](https://github.com/mkst/maspsx)) back into the exact bytes of the retail `SLUS_004.47`.
 `make check` proves this by rebuilding the executable and comparing its MD5 to the original
-(`596bb082a2de5f1fe977dd3d7e160b03`).
+(`596bb082a2de5f1fe977dd3d7e160b03`). The Japanese tree (`jp/`) holds the same layer for
+`SLPM_860.07` (`53849277b08184863bd45f10925995a6`) with its own `make check`; the two builds are
+close revisions of one codebase, so most files are literally shared — the port build's
+`make check-shared` verifies the shared set stays identical (modulo PC gates), and only genuinely
+diverged files exist twice.
 
 - **1184 functions across 88 `src/` files, grouped in nine domain folders** (`core/`,
   `states/`, `battle/`, `units/`, `world/`, `events/`, `spells/`, `maps/`, `ui/`) are decompiled
@@ -97,8 +105,10 @@ extraction on the decomp side, and the port's data-segment generator
 (`platform/pc/tools/build_data_segment.py`) on every port build.
 
 ```
-src/                 matching-decomp C source (Layer 1) — byte-exact, do not de-consolize here
+src/                 US matching-decomp C source (Layer 1) — byte-exact, do not de-consolize here
 include/             matching-decomp project headers
+jp/                  the Japanese matching decompilation (SLPM_860.07) — same shape, own Makefile;
+                     most files byte-shared with src/ (verified by make check-shared)
 SLUS_004.47.yaml     splat configuration (segment/section layout, symbols)
 symbol_addrs.txt     authoritative address → symbol map (shared: decomp extraction + port data-gen)
 undefined_additional.txt   extra linker-symbol input for the matching link

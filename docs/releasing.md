@@ -7,8 +7,10 @@ Releases are built locally, never CI (the data-segment generator needs the byte-
 
 ## 1. Correctness gates (before any packaging)
 
-- [ ] **`make check` is byte-exact** (top level) if anything under `src/` or `include/` changed —
-      target MD5 `596bb082a2de5f1fe977dd3d7e160b03`. Non-negotiable.
+- [ ] **`make check` is byte-exact** if anything under `src/`, `include/` or `jp/` changed — US
+      (top level) MD5 `596bb082a2de5f1fe977dd3d7e160b03` **and** JP (`cd jp && make check`) MD5
+      `53849277b08184863bd45f10925995a6`, plus `make check-shared` (platform/pc) proving the
+      shared game files are still identical between the trees. Non-negotiable.
 - [ ] **Boot smoke:** `platform/pc/tools/regress/smoke_boot.sh` (~7s) — the whole boot chain
       (data-segment constructors, disc mount, MDEC, SPU/XA, font, rasterizer).
 - [ ] **Raster golden-image:** `platform/pc/tools/regress/raster_check.sh` (<1s) — byte-exact VRAM
@@ -50,8 +52,13 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
   that only ran on Linux.
 - [ ] Windows zip runs in a VM (8 DLLs expected; the exe must import **no** ffmpeg DLLs).
 - [ ] AppImage runs (self-contained; FUSE2 note in [cross-platform.md](cross-platform.md)).
-- [ ] With `--hdpack`: the zip holds `hdpacks/{backgrounds,videos}/` + manifest, and the pack art
-      is metadata-stripped (PII scan below covers it).
+- [ ] Both packaged binaries are the **unified** build (all supported discs; the script's
+      Windows path runs `build-unified-win.sh`, the Linux path `make unified` from clean) — boot
+      each against a US **and** a JP disc.
+- [ ] With `--hdpack`: the zip holds the per-game layout `hdpacks/<game-id>/{backgrounds,videos}/`
+      + manifest (one zip per game id — `SLUS-00447`, `SLPM-86007`), and the pack art is
+      metadata-stripped (PII scan below covers it). Re-upload the packs on every release (users
+      download from the latest release page, not old ones).
 
 ## 4. Publication hygiene (public repo)
 

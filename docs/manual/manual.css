@@ -8,7 +8,7 @@ body {
 header#title-block-header { text-align: center; margin: 34mm 0 0; }
 header#title-block-header h1.title { font-size: 26pt; margin-bottom: 4mm; }
 header#title-block-header p.subtitle { font-size: 15pt; color: #444; }
-img.cover-logo { width: 42mm; border: none; margin: 14mm auto 0; }
+img.cover-logo { width: 120mm; border: none; margin: 14mm auto 0; }   /* 2.0: wide cover art (was the 42mm square logo) */
 p.version { text-align: center; color: #888; margin-top: 10mm; }
 h1 { font-size: 17pt; border-bottom: 2px solid #333; padding-bottom: 2mm; margin-top: 0;
      page-break-before: always; }

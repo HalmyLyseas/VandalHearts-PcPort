@@ -165,6 +165,22 @@ faithful 24-bit `addr` / 8-bit `len` tag layout. Full detail in
 pointer-containing structs are the wrong size at 64-bit. *Fix:* take the width from the build. See
 [pc-port/data-segment.md](pc-port/data-segment.md).
 
+### Found on Windows (the LLP64 mirror image of the class)
+
+**11. Host-side `unsigned long` held a pointer — Tactical spell-info crash, Windows only (v2.0).**
+The inverse trap of #1: after mapping *PSX* `long`→`int`, the port's own *platform* code still used
+host `unsigned long` — 64-bit on Linux (LP64), **32-bit on Windows (LLP64)**. The balance patcher's
+scalar field carried repointed description *pointers*; on Windows the 8-byte apply wrote a truncated
+pointer (top half from struct padding), and with the MinGW image based at `0x140000000` every
+truncated pointer is invalid — the spell-info bar crashed on exactly the swapped spells. Linux
+masked it completely, so it survived every Linux test pass and sanitizer run. *Fix:* the field and
+its casts widened to `unsigned long long`; a follow-up sweep of the platform layer found no second
+instance (and one non-crash cousin: an `mtime` stored in `long`, wrong past 2038 on Windows).
+*Detector:* grep platform code for `\blong\b` **excluding** `long long` — on this project any bare
+`long` outside Linux-only paths is a question to answer, because the codebase's intent is "32-bit
+everywhere the PSX had 32, 64-bit for host quantities", and bare `long` means **both, depending on
+OS**.
+
 ## The recurring lessons
 
 Distilled from the whole 2.3 effort — these are the transferable ones:

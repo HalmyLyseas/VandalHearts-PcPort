@@ -38,6 +38,11 @@ only to run. MinGW-w64 was chosen over MSVC precisely for this: it keeps a GCC f
 from Linux. Crucially it is **not** Cygwin — the output is an ordinary Win32 binary with no POSIX
 emulation DLL; its only real dependencies are our own (SDL2, OpenAL) plus the MinGW runtime.
 
+Since 2.0 the shipped Windows exe is the **unified** (all-regions) binary:
+`packaging/build-unified-win.sh` runs the three clean CMake stages (US core blob, JP core blob,
+launcher link) that mirror `make unified`. The single-region CMake build below remains the dev
+shape.
+
 ### Toolchain
 
 ```sh
@@ -122,7 +127,8 @@ stable with `version 'GLIBC_2.XX' not found`.
 
 Releases therefore ship as an **AppImage**: one self-contained file, matching the Windows-zip
 experience. It is built inside a pinned **Debian 12 container** so its runtime requirements are fixed
-and low.
+and low. Since 2.0 the packaged binary is the **unified** (all-regions) build — the release script
+runs `make unified` from clean inside the container.
 
 ### What an AppImage is (and the one code change it forced)
 

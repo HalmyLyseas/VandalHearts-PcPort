@@ -9,6 +9,10 @@ in their own place, so turning it on never touches a vanilla playthrough.
 > a full playthrough. Normal mode is unaffected. See the [roadmap](roadmap.md) and
 > [changelog](../CHANGELOG.md).
 
+Since v2.0 Tactical Mode also runs on the **Japanese game**, with its reworked text kept faithful
+to the Japanese disc: the clarified item descriptions reuse the disc's own Japanese spell lines,
+and the adjusted spell info lines are the retail Japanese text with only the numbers updated.
+
 ## Design goals
 
 **Tactical Mode doesn't aim to make the game harder — it aims to make it more varied.** Retail Vandal
@@ -151,6 +155,9 @@ true ultimate: a costly, potent defensive bubble around the Ninja.
   of the next player turn.
 - Now casts as a true area buff — an icy-blue protective aura on each ally in range, with a "DEF up"
   indicator (the boost is defensive only).
+- Its in-battle info line reads **"Protect Magic"** (v2.0) — the same wording as Perfect Guard,
+  matching the redesign's protective identity (the old "DEF,AT Up" text described the retail spell,
+  which no longer raises ATK).
 
 For reference, the normal defense buff (Mystic Shield) grants only defBoost 1, and magic resistance 1
 matches the caster line's own resistance. It has strong synergy with the Dragoon — soaking a late-game

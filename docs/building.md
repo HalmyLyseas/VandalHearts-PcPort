@@ -2,10 +2,14 @@
 
 There are two independent builds, matching the two layers in [architecture.md](architecture.md):
 
-- **The matching decompilation** — rebuilds the original `SLUS_004.47` and proves byte-identity. Uses
-  a period-correct MIPS toolchain; you only need this to verify the decomp or work on `src/`.
+- **The matching decompilations** — rebuild the original executables and prove byte-identity: the
+  US `SLUS_004.47` from the repo root, and (since 2.0) the Japanese `SLPM_860.07` from the `jp/`
+  tree, each with its own `make check`. Uses a period-correct MIPS toolchain; you only need this
+  to verify the decomps or work on `src/` / `jp/src/`.
 - **The native PC port** — builds the playable desktop binary. Uses a normal host compiler + SDL2 /
-  OpenAL and Metal (macOS) or OpenGL (other targets). This is what most contributors build.
+  OpenAL and Metal (macOS) or OpenGL (other targets). This is what most contributors build. The
+  release shape is the **unified binary** (`make unified`), which carries both regional builds;
+  `make link` builds a single-region binary for development.
 
 Both builds reconstruct a few game/BIOS-derived files locally from your own copy of the game; nothing
 copyrighted is committed (see [NOTICE](../NOTICE) and [pc-port/data-segment.md](pc-port/data-segment.md)).
@@ -42,13 +46,17 @@ part of the byte-identity check.
 # from the repo root
 make extract        # splat: disassemble the original into asm/ + stub .c
 make check          # rebuild SLUS_004.47 and md5-compare it to the original
+cd jp && make check # same for the Japanese SLPM_860.07 (its own tree, same recipe)
 ```
 
 `make check` is the **only correctness signal**: it rebuilds the executable and compares its MD5 to
-the original (`596bb082a2de5f1fe977dd3d7e160b03`). A match means every decompiled function still
-reproduces the original bytes. **Run it after any change to `src/` or `include/`** — an ungated edit
+the original (US `596bb082a2de5f1fe977dd3d7e160b03`, JP `53849277b08184863bd45f10925995a6`). A
+match means every decompiled function still reproduces the original bytes. **Run it after any
+change to `src/` or `include/`** (and the `jp/` twin when a shared file changes) — an ungated edit
 that shifts a struct or array silently breaks the match (see the gating conventions in
-[architecture.md](architecture.md#how-the-port-avoids-breaking-the-match)).
+[architecture.md](architecture.md#how-the-port-avoids-breaking-the-match)). Most game files are
+byte-shared between the two trees; the port build verifies the shared set stays identical
+(`make check-shared`).
 
 A handful of files need per-file compiler overrides (e.g. `core/audio.c` builds with `cc1_v257 -O2 -G0`);
 these are already in the `Makefile`. Follow that pattern rather than changing global flags.
@@ -78,13 +86,19 @@ and is what the Windows cross-compile uses.
 
 ```sh
 # --- Makefile ---
-make link                              # -> build/vandalhearts_pc          (64-bit, default)
+make unified                           # -> build-uni/vandalhearts_pc      (ALL regions -- the release shape)
+make link                              # -> build/vandalhearts_pc          (US-only dev build, 64-bit)
+make link REGION=jp                    # -> build-jp/vandalhearts_pc       (JP-only dev build)
 make link M32=-m32 BUILD_DIR=build32   # -> build32/vandalhearts_pc        (32-bit reference build)
 
 # --- CMake ---
 cmake -S . -B build_cmake
 cmake --build build_cmake              # -> build_cmake/vandalhearts_pc
 ```
+
+`make unified` compiles both regional cores into per-region blobs and links them under one thin
+launcher (disc scan → region classify → dispatch); only one core ever executes per process. The
+single-region `make link` builds stay the everyday dev shape (faster iteration, direct symbols).
 
 **64-bit is the default.** The port was deliberately 32-bit for most of its life as a debugging
 baseline — see [memory-safety.md](memory-safety.md) for why, and why the 32-bit build is still kept
