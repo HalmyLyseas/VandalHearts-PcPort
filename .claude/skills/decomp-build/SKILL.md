@@ -65,24 +65,53 @@ the `vh/` repo root (where you run `make`).
 
 | Dependency | Purpose | Status |
 |---|---|---|
-| `splat` (Python pkg) | disassembly/extraction (`make extract`) | **done 2026-07-10** — system package `python-splat64` (0.41.0, upstream `ethteck/splat`) installed. Ran directly against `SLUS_004.47.yaml`: full config parsed with zero schema errors, got exactly to opening the (absent) base binary before failing — correct/expected failure point, confirms compatibility. |
+| `splat` (Python pkg) | disassembly/extraction (`make extract`) | **done** — system package `python-splat64`, Arch `extra/` (upstream `ethteck/splat`). **Re-verified 2026-08-23 at 0.50.0** (spimdisasm 1.42.4): a full `python3 -m splat split SLUS_004.47.yaml` runs end-to-end with zero schema errors, and the rebuild from the regenerated `asm/` is still byte-exact. Previously recorded working at 0.41.0. |
 | `tools/sortSymbols.py` (+ its `symbols.csv` input) | sorts `symbol_addrs.txt` before splat runs (`SORT_SYM` step) | **missing from the repo** (a bespoke script + personal spreadsheet the original author never committed). It is **skippable**: `symbol_addrs.txt` as committed is already sorted sufficiently — run `splat` directly instead of via `make extract`, which unconditionally invokes the missing script. |
 | `tools/maspsx/maspsx.py` | post-process GCC output for PSX `as` | **present** — a `mkst/maspsx` clone at `external/maspsx/`; `vh/tools/maspsx` symlinks to it (`-> ../external/maspsx`), which is how the Makefile (`tools/maspsx`) reaches it. |
 | `cc1_v263_decompals`, `cc1_v257_decompals` | old GCC 2.x compiler frontends | **present** — prebuilt `cc1` binaries from `decompals/old-gcc`'s Releases (tag `0.17`: `gcc-2.6.3-psx.tar.gz`, `gcc-2.5.7-psx.tar.gz`; no Docker build needed) under `external/old-gcc/build-gcc-{2.6.3,2.5.7}-psx/`, symlinked into `external/toolchain/bin/` under the exact names the Makefile expects. **Must be on `PATH`** when running `make` — see "Wiring up cc1" below. |
-| `{as,ld,objcopy}` for MIPS r3000 | cross binutils | **done 2026-07-10** — system `mipsel-linux-gnu-binutils` (2.46.1) works; use `make CROSS=mipsel-linux-gnu- ...` instead of editing the Makefile's hardcoded `mips-suse-linux-` prefix. See "Toolchain vendor triple" below. |
-| `python3.11` | required interpreter version (pinned in Makefile) | **not installed** (found 2026-07-10) — only `python3.14` is present, which is what `python-splat64` targets. Use `make PYTHON=python3 ...` rather than editing the Makefile. |
+| `{as,ld,objcopy}` for MIPS r3000 | cross binutils | **done** — `mipsel-linux-gnu-binutils`; use `make CROSS=mipsel-linux-gnu- ...` instead of editing the Makefile's hardcoded `mips-suse-linux-` prefix. See "Toolchain vendor triple" below. **On Arch this is AUR-only, not a repo package** (`yay -S mipsel-linux-gnu-binutils`) — the 2026-07-10 note calling it a "system package" was wrong, or the package has since left the repos. Verified byte-exact at **2.46.1** and again at **2.47-1** (2026-08-23). `mipsel-linux-gnu-binutils-minimal` (2.45) is the AUR fallback if a version ever misbehaves. |
+| `python3.11` | required interpreter version (pinned in Makefile) | **not installed** (re-checked 2026-08-23) — only `python3.14` is present, which is what `python-splat64` targets. Use `make PYTHON=python3 ...` rather than editing the Makefile. |
 | `include/PsyQ/*.h` (libgpu.h, libgte.h, libcd.h, libpress.h, …) | headers the app code includes directly | **user-supplied**, gitignored — real Sony PsyQ **v3.3** SDK `INCLUDE/` headers at `vh/include/PsyQ/` (lowercase). Proprietary, never committed. Validate a candidate set by compiling `src/core/graphics.c` through the full pipeline. A modern hosted header set does NOT work. See "PsyQ SDK headers" below. |
 | `SLUS_004.47` (original exe), `LIB34.ZIP` (PsyQ v3.4 lib objects), full ISO | base game files, needed for extraction + asset/audio data | **`SLUS_004.47` done 2026-07-10** — extracted from the user's own CHD via `chdman`+`bchunk`+`7z`, MD5-verified exact match. See "Getting the base game files" below. `LIB34.ZIP` not needed by the current pipeline (see there); disc images + `SLUS_004.47` kept in `external/game/` for later asset/audio extraction if needed. |
 
 Before trusting this table, re-verify — it reflects a single point-in-time check, not a
 guarantee these stay missing.
 
+## Re-establishing the host after an OS reinstall (Arch) — 2026-08-23
+
+Done once for real (CachyOS → Omarchy). **Everything the repo needs that isn't a system package
+lives in `external/` and `include/PsyQ/` — if `$HOME` survives, so does all of it**, and the only
+work is reinstalling packages. Nothing in the repo, and no hand-made artifact (`assets/*.inc`,
+the `include/assets` and `tools/maspsx` symlinks, `external/toolchain/bin` cc1 symlinks), needed
+recreating. Budget ~15 min, most of it AUR compile time.
+
+```sh
+sudo pacman -S --needed base-devel python-splat64        # matching decomp
+yay -S mipsel-linux-gnu-binutils                         # AUR — the only real blocker
+```
+
+That is the *entire* dependency set for `make check` on both trees. Notes:
+
+- **The cc1 binaries are 32-bit i386 static ELF**, so the host kernel needs ia32 emulation
+  (`CONFIG_IA32_EMULATION`). Stock Arch/Omarchy kernels have it; verify with a bare
+  `external/old-gcc/build-gcc-2.6.3-psx/cc1 </dev/null` — it should emit `.file 1 "stdin"`
+  rather than "cannot execute". **No 32-bit userspace/multilib is needed** (they're static).
+- **`splat` is not needed for `make check`** — only for `make extract`. `asm/` holds just 16
+  data `.s` files (all 88 TUs are decompiled), so once extracted it rarely needs regenerating.
+- **`chdman`/`bchunk`/`7z` are not needed** unless re-extracting from the CHD; `external/game/`
+  already holds the disc `.bin` and the verified `SLUS_004.47`.
+- **`make dirs` alone may not be enough** after wiping `build/` — belt-and-braces, run the
+  `find src asm assets -type d | sed 's|^|build/|' | xargs mkdir -p` line from "Verifying a
+  build works" as well. (Both were run together in the 2026-08-23 rebuild, so which one
+  sufficed is untested.)
+- Port + release host packages are a separate, larger set — see the `phase-c-pc-port` skill.
+
 ## Toolchain vendor triple — `mips-suse-linux-` is not load-bearing
 
 The Makefile hardcodes `CROSS := mips-suse-linux-`, but this vendor string isn't functionally
 required — it's just whatever triple the project's original toolchain build happened to use.
-Confirmed 2026-07-10: a stock `mipsel-linux-gnu-binutils` (2.46.1, e.g. from Arch/CachyOS
-repos) assembles/links/objcopies correctly against the exact flags this Makefile passes
+Confirmed 2026-07-10 and again 2026-08-23: a stock `mipsel-linux-gnu-binutils` (2.46.1, then
+2.47-1 — AUR on Arch) assembles/links/objcopies correctly against the exact flags this Makefile passes
 (`-EL -march=r3000 -mtune=r3000 -no-pad-sections -G0` for `as`; `--cref
 --no-check-sections` for `ld`; `-O binary` for `objcopy`), verified with an end-to-end smoke
 test. This makes sense because the final artifact is a raw binary via `objcopy -O binary` —
@@ -98,7 +127,9 @@ That's only provable once `cc1_v263_decompals`/`cc1_v257_decompals`, `maspsx`, `
 PsyQ headers, and the base game files are all in place and `make check`'s `md5sum` passes. If
 it ever doesn't match, a binutils version difference in macro/pseudo-instruction expansion
 (not the vendor triple) would be a reasonable first suspect — try pinning an older binutils
-before suspecting the decompiled C.
+before suspecting the decompiled C. **Two versions are now known-good end-to-end (2.46.1 and
+2.47), so treat "binutils drifted" as a weaker hypothesis than it first appears** — this
+toolchain has proven insensitive to the version across a major bump.
 
 Separately: `mipsel-linux-gnu-gcc`, if installed alongside the binutils package, is **not**
 used by this build at all — the Makefile compiles with the specific prebuilt old GCC 2.x
@@ -261,19 +292,22 @@ from the disc.
 **Verified correct**: these 4 `.inc` files were *not* the source of the mismatch found during
 bisection (see below) — they held up under the full byte-exact verification.
 
-### `splat` rewrites some tracked helper files — expected, not a bug
+### `splat` may rewrite some tracked helper files — expected, not a bug
 
-Running `splat split` modifies `include/include_asm.h` and `include/macro.inc` (both
-tracked) and creates `include/gte_macros.inc` / `include/labels.inc` (new). This is normal:
-splat generates/refreshes these assembler-compatibility glue files (the `glabel`/`dlabel`/
-`INCLUDE_ASM` macro definitions, GTE instruction macros for GAS) to match whatever splat
-version is currently running — confirmed by precedent, the project's own commit history shows
-the "switch to maspsx + current splat" commit touching these exact same files. Since this
-environment's `splat` (0.41.0) is newer than whatever was pinned when the repo was last
-touched (2024-09), the regenerated versions differ from what's committed — that's expected,
-not a mistake to revert. These files only affect assembler directive syntax (`.type`/`.size`/
-`.ent`/`.end`, and which literal `.s` file gets `.include`d) — not actual instruction bytes —
-so this shouldn't affect byte-exact matching. Leave them as splat regenerates them.
+`splat split` generates/refreshes the assembler-compatibility glue files (the `glabel`/`dlabel`/
+`INCLUDE_ASM` macro definitions, GTE instruction macros for GAS) to match whatever splat version
+is running, and creates `include/gte_macros.inc` / `include/labels.inc` (both gitignored).
+
+- **At 0.41.0** it also modified the *tracked* `include/include_asm.h` and `include/macro.inc`,
+  leaving the tree dirty after every extract. That was expected, not a mistake to revert —
+  precedent being the project's own "switch to maspsx + current splat" commit touching these
+  same files.
+- **At 0.50.0 it no longer does** (verified 2026-08-23): a full split leaves `git status` clean,
+  including a byte-identical regeneration of the tracked `SLUS_004.47.ld`.
+
+Either way these files only affect assembler directive syntax (`.type`/`.size`/`.ent`/`.end`,
+and which literal `.s` file gets `.include`d) — not instruction bytes — so they don't affect
+byte-exact matching. If a future splat dirties them again, leave them as splat regenerates them.
 
 ## Bisection methodology (used successfully 2026-07-10, reusable for any future mismatch)
 
@@ -346,6 +380,13 @@ Worth a real decompilation pass later; doesn't block anything else.
   If a *future* from-scratch build doesn't match, suspect a regression introduced since
   2026-07-10 (check `git diff`/recent changes to `src/`) or an environment/toolchain
   difference (binutils version, etc.) before suspecting the underlying source is wrong.
+- **Reproduced again 2026-08-23 on a rebuilt host** (OS reinstalled CachyOS → Omarchy, both
+  Arch-based) at commit `ce079c2`, with a *newer* toolchain than either prior run —
+  binutils **2.47**, splat **0.50.0**, python **3.14.7** — after deleting `build/` in both
+  trees (**not** `make clean`, which eats `assets/*.inc`). Both regions matched:
+  US `596bb082a2de5f1fe977dd3d7e160b03`, JP `53849277b08184863bd45f10925995a6`. Only
+  `external/` and the system packages had to be re-established; nothing in the repo changed.
+  This is the third independent reproduction and the second distinct toolchain generation.
 - `SLUS_004.47`'s correct MD5 is `596bb082a2de5f1fe977dd3d7e160b03` (matches `README.md`) —
   verified 2026-07-10 against the user's own CHD.
 - If `src/core/text.c`'s two `D_` placeholder blocks (see above) are ever removed/"cleaned up" by

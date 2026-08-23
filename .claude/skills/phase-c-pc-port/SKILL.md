@@ -380,3 +380,57 @@ wipes those for clean builds, and now refuses to run if user data is found there
   `gh release create vX.Y.Z -R HalmyLyseas/VandalHearts-PcPort --notes-file RELEASE_NOTES.md <assets>`
   (a plain publish run would REBUILD, shipping bytes nobody validated). RELEASE_NOTES.md is
   GENERATED (script header + CHANGELOG section) — edits go in those two sources, never the file.
+
+## Host environment for port + release (re-established from scratch 2026-08-23)
+
+Verified end-to-end after an OS reinstall (CachyOS → Omarchy, both Arch). As with the decomp
+(see the `decomp-build` skill), **everything non-package survived in `$HOME`** — `platform/pc/deploy/`
+(all four disc images, hdpacks, langpacks, saves) and both cached static-libav prefixes
+(`ffmpeg-linux-static`, `ffmpeg-mingw-static`), so no FFmpeg rebuild was needed. Only packages and
+the container had to come back.
+
+```sh
+sudo pacman -S --needed base-devel cmake ninja mingw-w64-gcc distrobox podman pandoc-cli
+yay -S mingw-w64-sdl2 mingw-w64-openal mingw-w64-libwebp   # AUR, into /usr/x86_64-w64-mingw32/
+```
+
+Linux-native port deps (SDL2, OpenAL, GL, libwebp, ffmpeg) came from the normal desktop package
+set and needed nothing special. `chromium` (manual PDF) was already present; `pandoc` is the one
+piece nothing else pulls in. The `vh-deb12` container is NOT in `$HOME` and must be recreated from
+[`docs/cross-platform.md`](../../../docs/cross-platform.md) — rootless podman worked out of the box
+(`/etc/subuid`/`subgid` were already populated).
+
+**Watch item — Arch has replaced `sdl2` with `sdl2-compat`** (2.32.70, an SDL3-backed shim). The
+port builds, links and boots all three discs against it, but it is a different SDL underneath than
+everything before 2026-08-23 was validated on. Suspect it early for windowing/input/VSync oddities
+that don't reproduce on the Windows build or in the Debian container (which still has real SDL2
+2.26.5). The MinGW `mingw-w64-sdl2` is also still real SDL2, so **the Linux dev build is now the
+only target on the shim.**
+
+### The whole-matrix check, and what it costs
+
+Run after any environment change — this is the cheapest proof the machine is still release-capable:
+
+| Step | Command | ~time |
+|---|---|---|
+| US decomp | `PATH="$PWD/external/toolchain/bin:$PATH" make check CROSS=mipsel-linux-gnu- PYTHON=python3 < /dev/null` | 1 min |
+| JP decomp | `cd jp && PATH="$PWD/external/toolchain/bin:$PATH" make check < /dev/null` | 1 min |
+| shared guard | `make check-shared` | instant |
+| unified | `make unified` | 2 min |
+| Windows | `VH_MINGW_FFMPEG=$PWD/ffmpeg-mingw-static packaging/build-unified-win.sh` | 3 min |
+| AppImage | container `make unified CC='cc -O2'` + `packaging/appimage/build-appimage.sh` | 5 min |
+| boot, ×3 discs | `VH_DISC_IMAGE=deploy/<disc>.bin tools/regress/smoke_boot.sh build-uni/vandalhearts_pc` | 30 s each |
+| manual | `tools/build-manual.sh <tag> /tmp/m.pdf` | 15 s |
+
+- **`smoke_boot.sh` against the UNIFIED binary with an explicit `VH_DISC_IMAGE` is the single
+  highest-value check** — one command per disc exercises region classification, disc mount, the
+  data segment, MDEC, SPU/XA, the kanji font and the rasterizer. Reference for a healthy boot:
+  USA 116 frames, Japan 66, Asia 116.
+- **`raster_check.sh`'s baseline is machine-local and gitignored** (`build/regress/`), so a host
+  rebuild silently loses it and the next run records a *new* reference instead of verifying against
+  the old one. No golden hash is recorded anywhere in the repo, by design — **do not read a fresh
+  "BASELINE OK" as a passed regression test.** Re-baseline deliberately after a host change, and
+  treat rasterizer regressions as only verifiable within one machine's lifetime.
+- The COMDAT `.refptr.*` "does not match section name" warnings from `ar`/`ld` during the Windows
+  unified link are **expected** — they are `tools/prefix_blob.py` re-keying thunks per blob (see
+  the v2.0.0 traps above), not a new problem.
