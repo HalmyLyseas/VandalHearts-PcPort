@@ -58,6 +58,13 @@ saves/
 /platform/pc/asan_runs/
 /platform/pc/ubsan_runs/
 
+# CD/load-timing calibration runs: VH_CD_LOG per-read captures plus the per-region comparison
+# sets used to calibrate US/JP load timing against the BizHawk hardware baselines. Same category
+# as the sanitizer runs above -- pure debug output, regenerate on demand; the calibrated RESULT
+# lives in the CD backend + docs, not here. AND THE SAME PII HAZARD: the gdb.log files in here
+# capture full runtime output including the build machine's absolute paths (/home/<user>/...).
+/platform/pc/timing_runs/
+
 # env-gated PC-port debug dumps (per-frame CSVs / logs) written to cwd or platform/pc/;
 # these are diagnostics, never committed (VH_XA_CSV, VH_XA_LOG, SPRITE_LOG, etc.)
 vh_*.csv
