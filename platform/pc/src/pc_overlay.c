@@ -9,6 +9,7 @@
  * action rewrites engine state directly. */
 #include "common.h"        /* s16, gPlayerControlSuppressed */
 #include "state.h"         /* gState, STATE_TITLE_SCREEN */
+#include "cd_files.h"      /* MOV_LOGO_USA_STR, MOV_TITLE_WS_STR */
 #include "audio.h"         /* AUDIO_CMD_STOP_ALL */
 #include "battle.h"        /* gIsEnemyTurn */
 #include <stddef.h>
@@ -320,22 +321,27 @@ static void loadArchives(void) {
 int  PC_OverlayIsOpen(void) { return s_open; }
 int  PC_OverlayScreen(void) { return s_screen; }
 
-void PC_OverlayToggle(void) {
-    s_open = !s_open;
-    if (s_open) {
-        s_screen = OVL_SCREEN_MAIN;
-        s_sel = 0;                               /* always reopen at the top */
-        langScan();                              /* refresh the LANGUAGE picklist (cheap dir scan) */
-        discScan();                              /* refresh the DISC picklist (launcher env, cheap) */
-        {   /* dynamic ceilings: arrows clamp at the real last entry, confirm cycles first..last --
-             * the same behaviour as every other CHOICE row, no special wrap on one arrow only */
-            int i;
-            for (i = 0; i < N_ITEMS; i++) {
-                if (s_items[i].value == &g_langSel) s_items[i].maxv = s_langCount;
-                if (s_items[i].value == &g_discSel) s_items[i].maxv = s_discCount - 1;
-            }
-        }
+/* Every entry point that opens the overlay must come through here. The ESC prompt can be the first
+ * action while the renderer sizes from MAIN rows, so refresh the variable-length picklists first;
+ * their choiceText/maxv pairs are then valid. */
+static void overlayOpen(void) {
+    int i;
+    s_open = 1;
+    s_screen = OVL_SCREEN_MAIN;
+    s_sel = 0;                                   /* always reopen at the top */
+    langScan();                                  /* refresh the LANGUAGE picklist (cheap dir scan) */
+    discScan();                                  /* refresh the DISC picklist (launcher env, cheap) */
+    /* Dynamic ceilings: arrows clamp at the real last entry, confirm cycles first..last -- the
+     * same behaviour as every other CHOICE row, no special wrap on one arrow only. */
+    for (i = 0; i < N_ITEMS; i++) {
+        if (s_items[i].value == &g_langSel) s_items[i].maxv = s_langCount;
+        if (s_items[i].value == &g_discSel) s_items[i].maxv = s_discCount - 1;
     }
+}
+
+void PC_OverlayToggle(void) {
+    if (s_open) s_open = 0;
+    else        overlayOpen();
 }
 
 /* ---- MAIN screen logic ------------------------------------------------------------------------- */
@@ -429,12 +435,26 @@ static void act_returnToTitle(void) {
 static void doExit(void) { exit(0); }
 static void (*s_quitAction)(void) = doExit;
 
+/* No progress exists in the title flow. State_Movie's transition table makes MOV_LOGO_USA_STR and
+ * MOV_TITLE_WS_STR the boot/title-attract pair; every later MOV_* leads into (or follows) a run,
+ * so story FMVs retain the confirmation. PC_AtTitleMenu is the corresponding non-movie state. */
+static int quitImmediately(void) {
+    return PC_AtTitleMenu() ||
+           (gState.primary == STATE_MOVIE &&
+            (gState.movieIdxToPlay == MOV_LOGO_USA_STR ||
+             gState.movieIdxToPlay == MOV_TITLE_WS_STR));
+}
+
 void PC_OverlayRequestQuit(void) {
     if (s_open) {                 /* overlay already open: Escape is Back -- close it entirely */
         s_open = 0;
         return;
     }
-    s_open = 1;
+    if (quitImmediately()) {
+        s_quitAction();           /* title / title-attract: no progress to protect */
+        return;
+    }
+    overlayOpen();
     startConfirm(CONF_QUIT);
     /* startConfirm may have copied an archive label; replace it with the stakes warning. */
     strncpy(s_confLabel, "UNSAVED PROGRESS LOST", sizeof(s_confLabel) - 1);
@@ -646,11 +666,11 @@ const char *PC_OverlayItemWidestValue(int i) {
     it = &s_items[i];
     if (it->kind == OVL_CHOICE && it->choiceText) {
         /* measure the TRANSLATED forms -- the panel is sized off this */
-        const char *best = it->choiceText[it->minv];
+        const char *best = NULL;
         int v;
-        for (v = it->minv + 1; v <= it->maxv; v++) {
+        for (v = it->minv; v <= it->maxv; v++) {
             const char *t = it->choiceText[v];
-            if (strlen(t) > strlen(best)) best = t;
+            if (t && (!best || strlen(t) > strlen(best))) best = t;
         }
         return best;
     }

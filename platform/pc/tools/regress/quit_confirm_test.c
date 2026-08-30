@@ -31,7 +31,8 @@ void PC_GpuSetScale(int scale) { g_vhScale = scale; }
 void PC_GpuSetFullscreen(int on) { g_vhFullscreen = on; }
 void PC_GpuSetInternalScale(int scale) { g_vhInternalScale = scale; }
 int gTacticalMode = 0;
-int PC_AtTitleMenu(void) { return 1; }
+static int s_atTitle = 0;
+int PC_AtTitleMenu(void) { return s_atTitle; }
 void PC_SyncBalance(void) {}
 int PC_SaveArchiveListAlloc(PC_SaveArchive **out) { *out = NULL; return 0; }
 void PC_SaveArchiveListFree(PC_SaveArchive *out) { (void)out; }
@@ -78,32 +79,46 @@ static void FixtureA_OpensOnQuitConfirm(void) {
     printf(g_fail ? "fixture a: FAIL\n" : "fixture a: PASS\n");
 }
 
-/* Fixture b: the Back button (Cross) on the quit confirm closes the overlay entirely, not MAIN --
- * ESC opened it directly, so cancelling must not drop the player into the settings list. */
-static void FixtureB_BackClosesEntirely(void) {
+/* Fixture b: the exact UAT crash path. Escape is the first overlay action, then the renderer
+ * sizes its shared layout from EVERY MAIN item, including the uninstalled LANGUAGE/DISC picklists.
+ * This used to reach strlen(NULL); quit_confirm.sh runs this under ASan. */
+static void FixtureB_FirstOpenSizesEveryItem(void) {
     int before = g_fail;
-    printf("fixture b: Cross on the quit confirm closes the overlay entirely (not MAIN)\n");
-    PC_OverlayInput(OVL_BTN_CROSS);
-    CHECK(PC_OverlayIsOpen() == 0, "Back did not close the overlay");
+    int i;
+    printf("fixture b: first Escape open sizes every MAIN item without NULL strings\n");
+    PC_OverlayRequestQuit();              /* exact first overlay action in this process */
+    CHECK(PC_OverlayIsOpen() == 1, "first Escape did not open the quit prompt");
+    for (i = 0; i < PC_OverlayCount(); i++) (void)PC_OverlayItemWidestValue(i);
+    PC_OverlayInput(OVL_BTN_CROSS);       /* leave the remaining fixtures at their normal baseline */
     printf((g_fail != before) ? "fixture b: FAIL\n" : "fixture b: PASS\n");
 }
 
-/* Fixture c: Escape while the overlay is already open (any screen) acts as Back -- closes it. */
-static void FixtureC_EscapeOnOpenOverlayCloses(void) {
+/* Fixture c: the Back button (Cross) on the quit confirm closes the overlay entirely, not MAIN --
+ * ESC opened it directly, so cancelling must not drop the player into the settings list. */
+static void FixtureC_BackClosesEntirely(void) {
     int before = g_fail;
-    printf("fixture c: Escape while the overlay is already open closes it (Back)\n");
+    printf("fixture c: Cross on the quit confirm closes the overlay entirely (not MAIN)\n");
+    PC_OverlayInput(OVL_BTN_CROSS);
+    CHECK(PC_OverlayIsOpen() == 0, "Back did not close the overlay");
+    printf((g_fail != before) ? "fixture c: FAIL\n" : "fixture c: PASS\n");
+}
+
+/* Fixture d: Escape while the overlay is already open (any screen) acts as Back -- closes it. */
+static void FixtureD_EscapeOnOpenOverlayCloses(void) {
+    int before = g_fail;
+    printf("fixture d: Escape while the overlay is already open closes it (Back)\n");
     PC_OverlayToggle();   /* open on MAIN, e.g. via SELECT+START -- not the quit path */
     CHECK(PC_OverlayIsOpen() == 1, "setup: overlay did not open");
     PC_OverlayRequestQuit();
     CHECK(PC_OverlayIsOpen() == 0, "Escape on an already-open overlay did not close it");
-    printf((g_fail != before) ? "fixture c: FAIL\n" : "fixture c: PASS\n");
+    printf((g_fail != before) ? "fixture d: FAIL\n" : "fixture d: PASS\n");
 }
 
-/* Fixture d: reopen via Escape, move to YES and confirm -- the quit hook observes the request
+/* Fixture e: reopen via Escape, move to YES and confirm -- the quit hook observes the request
  * instead of the harness process exiting. */
-static void FixtureD_YesQuitsViaHook(void) {
+static void FixtureE_YesQuitsViaHook(void) {
     int before = g_fail;
-    printf("fixture d: selecting YES, QUIT and confirming reaches the quit action\n");
+    printf("fixture e: selecting YES, QUIT and confirming reaches the quit action\n");
     s_quitAction = observeQuit;
     PC_OverlayRequestQuit();
     CHECK(PC_OverlayIsOpen() == 1, "setup: overlay did not reopen");
@@ -112,13 +127,44 @@ static void FixtureD_YesQuitsViaHook(void) {
     PC_OverlayInput(OVL_BTN_CIRCLE);
     CHECK(s_quitObserved == 1, "the quit action was never invoked");
     CHECK(PC_OverlayIsOpen() == 0, "overlay should also be closed once the quit is requested");
-    printf((g_fail != before) ? "fixture d: FAIL\n" : "fixture d: PASS\n");
+    printf((g_fail != before) ? "fixture e: FAIL\n" : "fixture e: PASS\n");
+}
+
+/* Fixture f: title state and exactly the boot/title-attract movie IDs exit without a prompt;
+ * a story movie remains confirmation-gated. The hook avoids terminating this test process. */
+static void FixtureF_TitleFlowExitsImmediately(void) {
+    int before = g_fail;
+    printf("fixture f: title flow exits immediately; story movies still prompt\n");
+    s_quitObserved = 0;
+    s_quitAction = observeQuit;
+    s_atTitle = 1;
+    PC_OverlayRequestQuit();
+    CHECK(s_quitObserved == 1 && !PC_OverlayIsOpen(), "title screen did not exit immediately");
+    s_quitObserved = 0;
+    s_atTitle = 0;
+    gState.primary = STATE_MOVIE;
+    gState.movieIdxToPlay = MOV_LOGO_USA_STR;
+    PC_OverlayRequestQuit();
+    CHECK(s_quitObserved == 1 && !PC_OverlayIsOpen(), "logo movie did not exit immediately");
+    s_quitObserved = 0;
+    gState.movieIdxToPlay = MOV_TITLE_WS_STR;
+    PC_OverlayRequestQuit();
+    CHECK(s_quitObserved == 1 && !PC_OverlayIsOpen(), "title-attract movie did not exit immediately");
+    s_quitObserved = 0;
+    gState.movieIdxToPlay = MOV_1BU_WS_STR;
+    PC_OverlayRequestQuit();
+    CHECK(s_quitObserved == 0 && PC_OverlayIsOpen(), "story movie skipped its quit confirmation");
+    PC_OverlayInput(OVL_BTN_CROSS);
+    gState.primary = STATE_0;
+    printf((g_fail != before) ? "fixture f: FAIL\n" : "fixture f: PASS\n");
 }
 
 int main(void) {
+    FixtureB_FirstOpenSizesEveryItem();
     FixtureA_OpensOnQuitConfirm();
-    FixtureB_BackClosesEntirely();
-    FixtureC_EscapeOnOpenOverlayCloses();
-    FixtureD_YesQuitsViaHook();
+    FixtureC_BackClosesEntirely();
+    FixtureD_EscapeOnOpenOverlayCloses();
+    FixtureE_YesQuitsViaHook();
+    FixtureF_TitleFlowExitsImmediately();
     return g_fail ? 1 : 0;
 }

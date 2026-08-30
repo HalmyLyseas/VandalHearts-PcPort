@@ -81,7 +81,8 @@ directly. Saves are ordinary files in a `saves/` folder; copy it to back up or m
 
 Keyboard: arrows move, `S` confirm, `D` cancel, `A` unit list, `W` menu, `Q`/`E` rotate,
 `R`/`F` raise/lower the view, `[`/`]` cycle units, `.`/`,` fast-forward, Enter Start,
-Space Select, Esc quit prompt (No is the default). Full reference: `docs/controls.md` in the
+Space Select, Esc quits immediately at the title screen and its logo/title-attract videos; elsewhere it
+opens a quit prompt (No is the default). Full reference: `docs/controls.md` in the
 repository.
 
 # Features
