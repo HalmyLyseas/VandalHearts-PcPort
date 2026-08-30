@@ -72,7 +72,8 @@ subtitled *(packs built with the 1.7.1 toolchain or later)*. The port covers the
 draws the pack's translation in the game's large font, at the original narration's own on-screen
 size — identically with or without the HD pack, at every INTERNAL RES setting. Subtitles are a
 **per-line diff** even in a non-Latin pack: a line the pack has not translated keeps its burned-in
-English, which stays readable — so a partially subtitled pack is still a working pack.
+English, which stays readable — so a partially subtitled pack is still a working pack. Each cue's
+cover rect must lie inside the native 320×240 frame; a cue outside it is rejected rather than shown.
 
 ## Localized backgrounds
 

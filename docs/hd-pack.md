@@ -141,6 +141,10 @@ The build tools live in [`platform/pc/tools/hdpack/`](../platform/pc/tools/hdpac
 about 310 MB, so a complete pack is ~330 MB. A raw `.hdi` format is also
 accepted as a fallback for builds made without libwebp.
 
+Each replacement image (`.webp` or `.hdi`) is capped at 8192 pixels per side and 32 megapixels total —
+generous headroom over the sharpest shipped pack (2560×1920 at 8×). An oversize image is skipped with a
+console line rather than loaded, so a stray or corrupt asset can't force a multi-gigabyte decode.
+
 ## Building the movies
 
 Each FMV is keyed by its **start sector** (the identity the game plays it from), so the files are named
