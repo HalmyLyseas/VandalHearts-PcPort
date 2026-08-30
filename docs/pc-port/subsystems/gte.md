@@ -46,7 +46,8 @@ LP64 host `long` is 64-bit, which would silently grow `MATRIX` and make `int *` 
 The backend keeps one global instance of the GTE register file (`g` in `libgte.c`): the control
 matrices (`rt`, `light`, `colorMat`), translation/background/far-colour vectors, the projection
 constants, and the data-register FIFOs (`sz0..sz3`, `sxy0..sxy2`, IR registers, MAC accumulators,
-the RGB FIFO, and `flag`).
+the RGB FIFO, and `flag`). Like real hardware, `flag` is reset to 0 at the start of every public GTE
+command (`RTPS`/`RTPT`, `RotTrans`, `RotTransPers`, `RotTransPers4`) rather than only ever OR-ed.
 
 All the real work funnels through `TransformOne(vx, vy, vz)`, which reproduces the RTPS formula in
 portable C at the hardware's Q12 scale:
