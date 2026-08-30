@@ -17,6 +17,7 @@
 #include "pc_bootstrap.c"
 
 #include <stdint.h>
+#include <sys/prctl.h>
 
 /* ---- stubs for externs PC_BootstrapRegion() references but this fixture never calls ---- */
 int PC_CdMount(const char *path) { (void)path; return 0; }
@@ -99,6 +100,9 @@ int main(int argc, char **argv) {
         long ps = sysconf(_SC_PAGESIZE);
         unsigned char *p = mmap(NULL, (size_t)ps, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (p == MAP_FAILED) { perror("fault_retry: mmap"); return 2; }
+        /* This crash is the expected outcome: mark the process non-dumpable so the kernel
+         * skips the core dump (and the host's crash notification) for it. */
+        prctl(PR_SET_DUMPABLE, 0);
         *p = 0xCC;
         printf("fault_retry: BUG -- outside-main-image write survived, should have crashed\n");
         return 0;
