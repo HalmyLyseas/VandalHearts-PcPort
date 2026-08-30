@@ -23,8 +23,8 @@ the retail game.
 
 ### Fixed
 
-Eighteen issues found by an independent code review of the port, none reachable in normal play
-with an unmodified disc:
+Eighteen issues found by an independent code review of the port. All but the first need a damaged
+or deliberately modified disc image or add-on file to reach:
 
 - **A rare audio crackle/crash on scene change** — a sound bank could be freed while a fading-out
   sound effect was still playing from it. Voices using a bank are now stopped before it's freed.
