@@ -528,6 +528,10 @@ def generate(results, sizes, unresolved_by_probe):
             continue
         if re.search(r'\[\s*\]', def_decl):
             def_decl = re.sub(r'\[\s*\]', f'[{size}]', def_decl, count=1)
+        if s == 'gSeqData':
+            # SsSeqOpen has no length argument (retail API); this is the only place that
+            # knows the size actually given to the buffer, so hand it to libsnd.c as a bound.
+            out.append(f'const unsigned int PC_GenSize_gSeqData = {size};')
         if s in UNCERTAIN_SIZE:
             out.append(f'/* {s}: size is gap-to-next-known-symbol, NOT authoritative -- TODO verify at runtime */')
         vram = vram_addrs.get(s)

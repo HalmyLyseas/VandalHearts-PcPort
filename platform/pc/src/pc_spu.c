@@ -242,6 +242,17 @@ void PC_SpuStopAll(void) {
     for (i = 0; i < SPU_VOICES; i++) { s_v[i].active = 0; s_v[i].adsrPhase = ADSR_OFF; }
 }
 
+/* A VAB bank is about to free its decoded PCM (SsVabClose); hard-stop every voice still
+ * pointing at it, including ones in RELEASE -- a releasing voice keeps reading v->pcm each
+ * render (see SpuGetSample), so only stopping outright (not key-off) is safe here. */
+void PC_SpuStopVoicesUsing(const short *pcm) {
+    int i;
+    if (!pcm) return;
+    for (i = 0; i < SPU_VOICES; i++) {
+        if (s_v[i].pcm == pcm) { s_v[i].active = 0; s_v[i].adsrPhase = ADSR_OFF; }
+    }
+}
+
 /* So libsnd's voice allocator (which keys off s_voices[].active) can track when a
  * software-SPU note has finished on its own (one-shot end or release). */
 int PC_SpuVoiceActive(int voice) {

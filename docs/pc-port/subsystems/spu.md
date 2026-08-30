@@ -115,6 +115,17 @@ SMF-style length field**. A tempo event is `FF 51 tt tt tt` (three raw bytes), n
 byte as a length, skipped into a note-on, and desynced the whole stream — the "stuck chord after a
 scene transition" bug.
 
+**Lifecycle and bounds are disc-derived-data-hostile.** `SsVabClose` hard-stops (not key-offs — a
+releasing voice still reads its PCM each render) every software-SPU voice pointing at the bank's
+decoded samples before freeing them, so swapping a bank while one of its voices is still
+sustaining/releasing can't read freed memory. `SsVabTransBodyPartly`'s decode loop checks each VAG's
+`offset + size` against the staged body's real length before calling `DecodeVag`, stopping that
+bank's decode (and logging once) rather than reading past a malformed VAB's size table. `SsSeqOpen`
+bounds a song against the real size the data-segment generator gave `gSeqData`
+(`PC_GenSize_gSeqData`) when the blob lives there, instead of the `SEQ_MAX_BYTES` safety cap alone;
+`SeqProcessEvent` additionally checks its bound before every fixed-width read (status byte, 1/2/3
+data bytes), so a song missing its `FF 2F` terminator stops cleanly at the buffer edge.
+
 ## The PsyQ volume law
 
 Getting a note's loudness right required disassembling PsyQ's real key-on volume path out of the
