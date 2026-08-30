@@ -991,7 +991,8 @@ void PC_BootstrapRegion(const char *discPathArg) {
     }
 
     if (!PC_GpuInit(SCREEN_WIDTH, SCREEN_HEIGHT, "Vandal Hearts")) {
-        fprintf(stderr, "PC_Bootstrap: failed to open a window (no display, or SDL2 issue)\n");
+        fprintf(stderr, "PC_Bootstrap: no window -- running headless (reason on the PC_Gpu "
+                        "line above); the game will run normally but present nothing\n");
     } else {
         int ww = SCREEN_WIDTH, wh = SCREEN_HEIGHT, sc = 1;
         int isc = g_vhInternalScale > 0 ? g_vhInternalScale : 1;

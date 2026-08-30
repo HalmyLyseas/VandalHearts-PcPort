@@ -610,7 +610,10 @@ int PC_GpuInit(int width, int height, const char *title) {
          * (known NULL reads have per-site PC_PORT guards; Linux i386 also has a fault-handler net),
          * so the trigger is gone: verified by running native Wayland with the current build, full
          * speed, no crash. */
-        if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return 0;
+        if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+            fprintf(stderr, "PC_Gpu: SDL video init failed (no display?): %s\n", SDL_GetError());
+            return 0;
+        }
     }
     /* Display-resolution scaling: the game renders a native 320x240 framebuffer;
      * we open the window at native*scale and upscale the blit (nearest-neighbour,
@@ -641,7 +644,10 @@ int PC_GpuInit(int width, int height, const char *title) {
 #else
                                  SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 #endif
-    if (!s_window) return 0;
+    if (!s_window) {
+        fprintf(stderr, "PC_Gpu: could not open a window: %s\n", SDL_GetError());
+        return 0;
+    }
     s_winW = width; s_winH = height;   /* the real (scaled) window size, for PC_GpuGetWindowSize */
     if (g_vhFullscreen)                /* apply the persisted fullscreen preference at startup */
         SDL_SetWindowFullscreen(s_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -667,7 +673,13 @@ int PC_GpuInit(int width, int height, const char *title) {
     }
 #else
     s_glCtx = SDL_GL_CreateContext(s_window);
-    if (!s_glCtx) { SDL_DestroyWindow(s_window); s_window = NULL; return 0; }
+    if (!s_glCtx) {
+        /* The window opened, so a display exists and SDL is fine -- the DRIVER refused a GL
+         * context. That is a different report from the no-display case above, and telling them
+         * apart is the whole diagnosis when a user says "it starts but nothing appears". */
+        fprintf(stderr, "PC_Gpu: OpenGL context creation failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(s_window); s_window = NULL; return 0;
+    }
     /* Explicitly OFF, not on. The game's own VSync() (src/libetc.c) already
      * paces frames in software, matching real hardware's ~60Hz timing --
      * this project's own reference PC port of another PS1 decomp
@@ -682,6 +694,19 @@ int PC_GpuInit(int width, int height, const char *title) {
      * driver, where swap-interval behavior is known to be inconsistent
      * under a compositor. */
     SDL_GL_SetSwapInterval(0);
+    /* Name the driver in the log, mirroring the Metal branch's "presentation renderer=" line.
+     * Every "black screen" / "slow on my machine" report needs this and it is unrecoverable
+     * afterwards; it also makes a stale assumption about which renderer is in use (see the
+     * swap-interval note above) visible instead of inherited. */
+    {
+        const GLubyte *ven = glGetString(GL_VENDOR);
+        const GLubyte *ren = glGetString(GL_RENDERER);
+        const GLubyte *ver = glGetString(GL_VERSION);
+        fprintf(stderr, "PC_Gpu: GL vendor=%s renderer=%s version=%s\n",
+                ven ? (const char *)ven : "unknown",
+                ren ? (const char *)ren : "unknown",
+                ver ? (const char *)ver : "unknown");
+    }
     glViewport(0, 0, width, height);
 #endif
     return 1;

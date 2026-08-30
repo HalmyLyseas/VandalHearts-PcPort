@@ -480,16 +480,122 @@ void PopMatrix(void) {
 
 /* Euler angle order (Rz * Ry * Rx applied to column vectors) is an SDK
  * library convention, not a raw GTE opcode -- psx-spx doesn't cover it.
- * Reasoned choice, matching the most common PsyQ-era convention; flagged
- * pending verification once real rendering output can be eyeballed. */
+ * VERIFIED (2026-08-23) against the real PsyQ RotMatrix disassembled out of the
+ * byte-exact SLUS_004.47 at 0x800d0aa8 (symbol_addrs.txt): all nine entries
+ * match the terms below one for one, signs included. The reasoned choice was
+ * right; this is no longer pending.
+ *
+ * The ORDER is confirmed -- the ARITHMETIC is not the same. The original is
+ * pure integer: a packed sin/cos table at 0x8011C6C0 (entry i = (cos<<16)|sin,
+ * 4096 fixed point) with `multu` + `sra ,0xc`, re-quantising the triple
+ * products at each stage. This double-precision version differs from it in
+ * ~83% of matrix entries, by up to 15/4096 (~0.37%) -- dominated by the
+ * table's own ~6.8-unit deviation from ideal sin/cos, NOT by rounding mode
+ * (measured: lrint and floor both change essentially nothing). See
+ * exchange/110, and RotMatrixExact below for the A/B harness. */
+/* ---- exchange/110 item 2c, step-1 measurement harness -------------------------------------
+ * Two runtime switches, both MEASUREMENT AIDS, both off by default:
+ *   VH_GTE_EXACT=<path>       RotMatrix uses the integer algorithm transcribed from the real
+ *                             PsyQ routine at 0x800d0aa8, reading the 4096-entry packed sin/cos
+ *                             table the retail executable keeps at 0x8011C6C0 (16 KB;
+ *                             entry i = (cos_i << 16) | sin_i, 4096 fixed point).
+ *   VH_GTE_EXACT_CHECK=<path> stay on the float path, but compute the exact matrix alongside and
+ *                             report how far the two disagree. Answers "is the transcription sane
+ *                             on the angles the game really uses?" without perturbing the run.
+ *   VH_GTE_AB=<path> + VH_GTE_AB_USE=float|exact
+ *                             EQUAL-COST A/B. Both matrices are computed on every call in BOTH
+ *                             runs; only which one is kept differs. Needed because RotMatrix runs
+ *                             ~92x/frame, so simply switching implementations changes how long a
+ *                             frame takes -- enough to shift scene-load completion by one frame,
+ *                             which desynchronises rand() and makes the two runs show different
+ *                             battles. Equalising the cost removes that confound, so any surviving
+ *                             divergence is attributable to the matrix values themselves.
+ * The table is game data: read from a file at runtime, never compiled in, never committed.
+ * Extract it from your own copy with tools/gen_gte_table.py. */
+static int s_gteTbl[4096];
+static int s_gteTblOk = -1;
+static int s_gteExact = -1;
+static int s_gteCheck = -1;
+static int s_gteAB = -1;      /* equal-cost A/B: compute BOTH every call */
+static int s_gteABUse;        /* 0 = keep float, 1 = keep exact */
+static int s_chkWorst;
+static long s_chkCalls;
+
+static int GteLoadTable(const char *path) {
+    FILE *f;
+    if (s_gteTblOk == 1) return 1;      /* loaded once, shared by both switches */
+    if (!path || !*path) return 0;      /* NOT latched: a miss here must not poison the other switch */
+    f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "PC_Gte: cannot open sin/cos table '%s' -- staying on the float path\n", path);
+        return 0;
+    }
+    if (fread(s_gteTbl, 4, 4096, f) == 4096) s_gteTblOk = 1;
+    else fprintf(stderr, "PC_Gte: sin/cos table '%s' is short -- staying on the float path\n", path);
+    fclose(f);
+    return s_gteTblOk;
+}
+
+/* Transcription of 0x800d0aa8. The two details that are easy to get wrong:
+ *   - `sra` is a floor shift and the negation happens BEFORE it (`negu` then `sra`), so the
+ *     negated terms are floor(-x/4096), not -floor(x/4096).
+ *   - the triple products are re-quantised at each stage: P and Q are taken to 12-bit fixed
+ *     point first, then multiplied again. Doing the product at full width and shifting once
+ *     does NOT reproduce it.
+ * m[0][2] is stored raw and unshifted -- it is sy straight out of the table. */
+static void RotMatrixExact(SVECTOR *r, MATRIX *m) {
+    int sx, cx, sy, nsy, cy, sz, cz, t, P, Q;
+    if (r->vx >= 0) { t = s_gteTbl[r->vx & 0xfff];    sx =  (short)(t & 0xffff); cx = t >> 16; }
+    else            { t = s_gteTbl[(-r->vx) & 0xfff]; sx = -(short)(t & 0xffff); cx = t >> 16; }
+    if (r->vy >= 0) { t = s_gteTbl[r->vy & 0xfff];    sy =  (short)(t & 0xffff); nsy = -sy; cy = t >> 16; }
+    else            { t = s_gteTbl[(-r->vy) & 0xfff]; nsy = (short)(t & 0xffff); sy = -nsy; cy = t >> 16; }
+    if (r->vz >= 0) { t = s_gteTbl[r->vz & 0xfff];    sz =  (short)(t & 0xffff); cz = t >> 16; }
+    else            { t = s_gteTbl[(-r->vz) & 0xfff]; sz = -(short)(t & 0xffff); cz = t >> 16; }
+    P = (nsy * cz) >> 12;
+    Q = (nsy * sz) >> 12;
+    m->m[0][0] = (short)((cz * cy) >> 12);
+    m->m[0][1] = (short)((-(sz * cy)) >> 12);
+    m->m[0][2] = (short)sy;
+    m->m[1][0] = (short)(((sz * cx) >> 12) - ((P * sx) >> 12));
+    m->m[1][1] = (short)(((cz * cx) >> 12) + ((Q * sx) >> 12));
+    m->m[1][2] = (short)((-(cy * sx)) >> 12);
+    m->m[2][0] = (short)(((sz * sx) >> 12) + ((P * cx) >> 12));
+    m->m[2][1] = (short)(((cz * sx) >> 12) - ((Q * cx) >> 12));
+    m->m[2][2] = (short)((cx * cy) >> 12);
+}
+
+static void RotMatrixCheck(SVECTOR *r, const MATRIX *flt) {
+    MATRIX ex; int i, j, d;
+    RotMatrixExact(r, &ex);
+    s_chkCalls++;
+    for (i = 0; i < 3; i++) for (j = 0; j < 3; j++) {
+        d = flt->m[i][j] - ex.m[i][j];
+        if (d < 0) d = -d;
+        if (d > s_chkWorst) {
+            s_chkWorst = d;
+            fprintf(stderr, "PC_Gte[check] new worst |float-exact| = %d at m[%d][%d], "
+                            "angles (%d,%d,%d), call %ld\n", d, i, j, r->vx, r->vy, r->vz, s_chkCalls);
+        }
+    }
+    if ((s_chkCalls % 20000) == 0)
+        fprintf(stderr, "PC_Gte[check] %ld calls, worst |float-exact| so far = %d (of 4096)\n",
+                s_chkCalls, s_chkWorst);
+}
+
 MATRIX *RotMatrix(SVECTOR *r, MATRIX *m) {
-    double rx = r->vx * (2.0 * M_PI / 4096.0);
-    double ry = r->vy * (2.0 * M_PI / 4096.0);
-    double rz = r->vz * (2.0 * M_PI / 4096.0);
-    double sx = sin(rx), cx = cos(rx);
-    double sy = sin(ry), cy = cos(ry);
-    double sz = sin(rz), cz = cos(rz);
+    /* gnu89: every declaration stays ahead of the first statement. */
+    double rx, ry, rz, sx, cx, sy, cy, sz, cz;
     double R[3][3];
+
+    if (s_gteExact < 0) s_gteExact = GteLoadTable(getenv("VH_GTE_EXACT"));
+    if (s_gteExact) { RotMatrixExact(r, m); return m; }
+
+    rx = r->vx * (2.0 * M_PI / 4096.0);
+    ry = r->vy * (2.0 * M_PI / 4096.0);
+    rz = r->vz * (2.0 * M_PI / 4096.0);
+    sx = sin(rx); cx = cos(rx);
+    sy = sin(ry); cy = cos(ry);
+    sz = sin(rz); cz = cos(rz);
 
     R[0][0] = cy * cz;
     R[0][1] = -cy * sz;
@@ -506,6 +612,26 @@ MATRIX *RotMatrix(SVECTOR *r, MATRIX *m) {
         for (i = 0; i < 3; i++)
             for (j = 0; j < 3; j++)
                 m->m[i][j] = (short)(R[i][j] * ONE);
+    }
+    if (s_gteCheck < 0) s_gteCheck = GteLoadTable(getenv("VH_GTE_EXACT_CHECK"));
+    if (s_gteCheck) RotMatrixCheck(r, m);
+
+    if (s_gteAB < 0) {
+        s_gteAB = GteLoadTable(getenv("VH_GTE_AB"));
+        s_gteABUse = 0;
+        if (s_gteAB) {
+            const char *u = getenv("VH_GTE_AB_USE");
+            s_gteABUse = (u && (*u == 'e' || *u == 'E')) ? 1 : 0;
+            fprintf(stderr, "PC_Gte: equal-cost A/B active, keeping the %s matrix\n",
+                    s_gteABUse ? "EXACT" : "FLOAT");
+        }
+    }
+    if (s_gteAB) {
+        MATRIX ex;
+        RotMatrixExact(r, &ex);          /* ALWAYS computed, so both runs cost the same */
+        /* copy only m[][] -- neither path writes the translation t[], and taking it from an
+         * uninitialised local would clobber the caller's. */
+        if (s_gteABUse) memcpy(m->m, ex.m, sizeof(m->m));
     }
     return m;
 }
