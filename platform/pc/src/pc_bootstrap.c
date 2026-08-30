@@ -519,6 +519,23 @@ static int PC_IsWriteFault(void *ucv) {   /* x86 page-fault error code bit 1 == 
     return (((ucontext_t *)ucv)->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
 }
 
+/* The main executable's own [start,end) PT_LOAD ranges, recorded by the Linux walk below so the
+ * write-fault retry stays scoped to the main image instead of any mapped page. Left empty on a
+ * POSIX host without that walk -- see PC_AddrInMainImage. */
+#define PC_MAX_MAIN_IMAGE_RANGES 16
+static struct { uintptr_t start, end; } s_mainImageRanges[PC_MAX_MAIN_IMAGE_RANGES];
+static int s_mainImageRangeCount = 0;
+
+/* Is `addr` inside a recorded main-image range? An empty table means no walk ever ran, so nothing is
+ * known to exclude -- permit unconditionally, matching this function's pre-existing behavior. */
+static int PC_AddrInMainImage(uintptr_t addr) {
+    int i;
+    if (s_mainImageRangeCount == 0) return 1;
+    for (i = 0; i < s_mainImageRangeCount; i++)
+        if (addr >= s_mainImageRanges[i].start && addr < s_mainImageRanges[i].end) return 1;
+    return 0;
+}
+
 /* Lazily make the page containing `addr` writable: the game mutates string literals in place (e.g.
  * ShowExpDialog writing EXP digits into "You got     "), a SIGSEGV on a host. On-demand safety net
  * behind the startup remap; logs each site. Returns 1 to retry the store, 0 (dedup by page) to crash. */
@@ -529,6 +546,8 @@ static int PC_MakePageWritable(uintptr_t addr) {
     if (ps <= 0) ps = 4096;
     uintptr_t page = addr & ~((uintptr_t)ps - 1);
     int i;
+    if (!PC_AddrInMainImage(addr)) return 0;   /* outside the main image: a genuine wild write, not the
+                                                 * in-place string-literal case -- fall through to fatal */
     for (i = 0; i < seenCount; i++)
         if (seen[i] == page) return 0;         /* remapped once already yet still faulting -> give up */
     if (mprotect((void *)page, (size_t)ps, PROT_READ | PROT_WRITE) != 0) return 0;  /* not our page */
@@ -640,9 +659,18 @@ static int PC_RodataPhdrCb(struct dl_phdr_info *info, size_t size, void *unused)
     for (int i = 0; i < info->dlpi_phnum; i++) {
         const ElfW(Phdr) *p = &info->dlpi_phdr[i];
         if (p->p_type != PT_LOAD) continue;
-        if (p->p_flags & (PF_W | PF_X)) continue;   /* already writable, or code (leave RX) */
         uintptr_t start = (uintptr_t)info->dlpi_addr + p->p_vaddr;
         uintptr_t end   = start + p->p_memsz;
+#if defined(PC_HAVE_WRITE_FAULT_INFO)
+        /* Record every PT_LOAD of the main image (not just the RO-data ones remapped below) so the
+         * write-fault retry in PC_MakePageWritable can be scoped to the whole main executable. */
+        if (s_mainImageRangeCount < PC_MAX_MAIN_IMAGE_RANGES) {
+            s_mainImageRanges[s_mainImageRangeCount].start = start;
+            s_mainImageRanges[s_mainImageRangeCount].end = end;
+            s_mainImageRangeCount++;
+        }
+#endif
+        if (p->p_flags & (PF_W | PF_X)) continue;   /* already writable, or code (leave RX) */
         uintptr_t pstart = start & ~((uintptr_t)ps - 1);
         uintptr_t pend   = (end + (uintptr_t)ps - 1) & ~((uintptr_t)ps - 1);
         mprotect((void *)pstart, (size_t)(pend - pstart), PROT_READ | PROT_WRITE);

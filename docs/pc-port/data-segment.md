@@ -142,6 +142,12 @@ so where a generator needs a table size it falls back to the US map's annotation
 clamped by the JP map's own gap-to-next-symbol (a hard upper bound — the plain gap overshoots, e.g.
 `gAnimSet_800f2db4` is `0xd0` bytes but its gap is `0x24c0`).
 
+Before any of that, the generator validates the input executable itself: it requires the file size to
+cover the header's own `load_size` and compares the whole-file md5 against the known retail hash for
+the selected region, aborting with a one-line message on a wrong-region or truncated exe.
+`VH_ALLOW_UNVERIFIED_EXE=1` skips only the hash check (the size check always applies), for a
+deliberately modified executable.
+
 ## Hand-written data files (committed)
 
 A handful of pointer-typed game-data tables are reconstructed from the byte-exact binary (values read

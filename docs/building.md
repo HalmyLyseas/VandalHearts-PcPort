@@ -103,7 +103,9 @@ single-region `make link` builds stay the everyday dev shape (faster iteration, 
 **64-bit is the default.** The port was deliberately 32-bit for most of its life as a debugging
 baseline — see [memory-safety.md](memory-safety.md) for why, and why the 32-bit build is still kept
 as an A/B reference. Both build systems run the mid-build data-segment generator; see
-[pc-port/data-segment.md](pc-port/data-segment.md).
+[pc-port/data-segment.md](pc-port/data-segment.md). The generator refuses a wrong-region or truncated
+PS-X executable (size + md5 check against the known retail hashes) before it slices any data out of
+it; `VH_ALLOW_UNVERIFIED_EXE=1` overrides the hash check for a deliberately modified executable.
 
 ### Optimization
 
