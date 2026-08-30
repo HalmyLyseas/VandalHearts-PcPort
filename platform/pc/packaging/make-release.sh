@@ -285,6 +285,11 @@ for row in "${HDPACK_ROWS[@]+"${HDPACK_ROWS[@]}"}"; do
     printf '| Optional | `%s` | HD backgrounds + movies. Unzip so `hdpacks/` sits beside the executable. Loaded on %s. |\n' \
         "$zipname" "$label" >> "$NOTES"
 done
+# No zip was packaged this run (unchanged pack, or none built) -- fall back to a single
+# standing-row note via --hdpack-note instead of leaving the table silent about HD packs.
+if [ "${#HDPACK_ROWS[@]}" -eq 0 ] && [ -n "$HDPACK_NOTE" ]; then
+    printf '| Optional | HD packs | %s |\n' "$HDPACK_NOTE" >> "$NOTES"
+fi
 cat >> "$NOTES" <<NOTE
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).
