@@ -25,6 +25,7 @@ Run from platform/pc/ after `make default` has produced build/src/*.o and
 the backend build/*.o files.
 """
 import glob
+import hashlib
 import json
 import os
 import re
@@ -44,6 +45,67 @@ PSX_BASENAME = os.environ.get('VH_PSX_BASENAME', 'SLUS_004.47')
 ELF = os.path.join(PROJECT_ROOT, 'build', PSX_BASENAME + '.elf')
 PSX_EXE = os.environ.get('VH_PSX_EXE', os.path.join(PROJECT_ROOT, PSX_BASENAME))
 SYMBOL_ADDRS = os.path.join(PROJECT_ROOT, 'symbol_addrs.txt')
+
+# Known retail md5 of each region's byte-exact PS-X EXE (the same targets `make check` proves).
+# ValidatePsxExe below uses this to catch a wrong-region or truncated executable before anything
+# is sliced out of it -- a JP exe fed to a US build, or vice versa, still links successfully.
+KNOWN_EXE_MD5 = {
+    'us': '596bb082a2de5f1fe977dd3d7e160b03',
+    'jp': '53849277b08184863bd45f10925995a6',
+}
+
+
+def DetectRegion():
+    """Which region PSX_EXE is expected to be. VH_REGION overrides; otherwise inferred from
+    VH_PSX_BASENAME (SLPM_860.07 -> jp, everything else -> us), matching the Makefile/CMake
+    default (no VH_REGION is passed for the US build)."""
+    env = os.environ.get('VH_REGION')
+    if env:
+        return env.strip().lower()
+    return 'jp' if PSX_BASENAME.upper().startswith('SLPM') else 'us'
+
+
+def ValidatePsxExe():
+    """Guard against a wrong-region or truncated PSX_EXE. Requires the file size
+    to be at least the header's own 0x800 + load_size, then compares the whole-file md5 against
+    the known retail hash for DetectRegion(). VH_ALLOW_UNVERIFIED_EXE=1 skips only the hash
+    check (for a deliberately modified executable) and prints a warning instead; the size check
+    always applies."""
+    if not os.path.isfile(PSX_EXE):
+        raise SystemExit(f'build_data_segment: PSX_EXE not found: {PSX_EXE}')
+    with open(PSX_EXE, 'rb') as f:
+        hdr = f.read(0x800)
+    if not hdr.startswith(b'PS-X EXE') or len(hdr) < 0x20:
+        raise SystemExit(f'build_data_segment: not a PS-X EXE: {PSX_EXE}')
+    load_size = int.from_bytes(hdr[0x1c:0x20], 'little')
+    file_size = os.path.getsize(PSX_EXE)
+    need = 0x800 + load_size
+    if file_size < need:
+        raise SystemExit(
+            f'build_data_segment: PSX_EXE looks truncated: {PSX_EXE} is {file_size} bytes, '
+            f'need at least {need} (0x800 header + this header\'s own {load_size}-byte load_size)')
+    region = DetectRegion()
+    expected = KNOWN_EXE_MD5.get(region)
+    if expected is None:
+        return   # unrecognized VH_REGION value: nothing known to check the hash against
+    h = hashlib.md5()
+    with open(PSX_EXE, 'rb') as f:
+        for block in iter(lambda: f.read(1024 * 1024), b''):
+            h.update(block)
+    actual = h.hexdigest()
+    if actual == expected:
+        return
+    if os.environ.get('VH_ALLOW_UNVERIFIED_EXE') == '1':
+        print(f'build_data_segment: WARNING: {PSX_EXE} does not match the known {region.upper()} '
+              f'retail md5 ({actual} != {expected}) -- VH_ALLOW_UNVERIFIED_EXE=1, proceeding anyway',
+              file=sys.stderr)
+        return
+    raise SystemExit(
+        f'build_data_segment: PSX_EXE does not match the known {region.upper()} retail '
+        f'executable: {PSX_EXE} md5={actual}, expected {expected}. Set VH_ALLOW_UNVERIFIED_EXE=1 '
+        f'to override (e.g. a deliberately modified executable).')
+
+
 # Stage 2.3: BUILD_DIR is settable so 32- and 64-bit trees can be generated side by side
 # (the safest way to A/B the -m64 flip). Defaults to 'build', i.e. unchanged behaviour.
 BUILD_DIR = os.environ.get('VH_BUILD_DIR', 'build')
@@ -602,6 +664,7 @@ def generate(results, sizes, unresolved_by_probe):
 
 
 def main():
+    ValidatePsxExe()
     print("1. Linking to find undefined symbols...")
     syms, link_ok = find_undefined_symbols()
     if link_ok:
@@ -635,4 +698,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if '--validate-only' in sys.argv:
+        # Runs just ValidatePsxExe() with no link/probe/extract work -- lets
+        # tools/regress/generator_guard.sh exercise the PSX_EXE guard without a prior build.
+        ValidatePsxExe()
+        print(f'build_data_segment: PSX_EXE OK: {PSX_EXE}')
+    else:
+        main()

@@ -44,6 +44,12 @@ Two things about step 3 are easy to get wrong, and both bit this project:
 The generator is build-system-agnostic via environment hooks (`VH_CC`, `VH_HOST_CC`, `VH_OBJ_FILES`,
 `VH_LINK_LIBS`, `VH_TARGET_MARCH`, `VH_EXTRA_CFLAGS`), so the Makefile and CMake drive the same script.
 
+Before any of that, the generator validates the input executable itself: it requires the file size to
+cover the header's own `load_size` and compares the whole-file md5 against the known retail hash for
+the selected region, aborting with a one-line message on a wrong-region or truncated exe.
+`VH_ALLOW_UNVERIFIED_EXE=1` skips only the hash check (the size check always applies), for a
+deliberately modified executable.
+
 ## Hand-written data files (committed)
 
 A handful of game-data tables can't be produced by the normal link and are reconstructed by hand from

@@ -113,22 +113,10 @@ else()
     set(OPENAL_INCLUDE_DIR "")
 endif()
 
-# macOS responsibility gate: every offset-based data extractor must consume the byte-exact US
-# executable. The stamp depends on the input itself, so replacing a file at the same path after
-# configuration re-runs validation before any generated source or include is rebuilt.
+# build_data_segment.py's own ValidatePsxExe() (region-aware md5 + size) now runs on every
+# invocation, on every platform, so it is the single source of truth for a real, region-matching
+# PS-X EXE. PSX_VALIDATION_DEP just names the exe file so the DEPENDS lists below stay unchanged.
 set(PSX_VALIDATION_DEP ${VH_PSX_EXE})
-if(APPLE)
-    set(PSX_VALIDATION_STAMP ${GEN_DIR}/validated-slus-00447.stamp)
-    add_custom_command(
-        OUTPUT ${PSX_VALIDATION_STAMP}
-        COMMAND ${Python3_EXECUTABLE} ${PC_DIR}/tools/validate_psx_exe.py ${VH_PSX_EXE}
-        COMMAND ${CMAKE_COMMAND} -E touch ${PSX_VALIDATION_STAMP}
-        DEPENDS ${VH_PSX_EXE} ${PC_DIR}/tools/validate_psx_exe.py
-        COMMENT "Validating byte-exact SLUS_004.47 input"
-        VERBATIM)
-    add_custom_target(vh_validate_psx DEPENDS ${PSX_VALIDATION_STAMP})
-    set(PSX_VALIDATION_DEP ${PSX_VALIDATION_STAMP})
-endif()
 if(APPLE)
     # The data generator links outside CMake targets and needs a concrete SDL library path.
     find_library(SDL2_GEN_LIB NAMES SDL2 SDL2-2.0 REQUIRED)
