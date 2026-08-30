@@ -284,7 +284,7 @@ static Item s_items[] = {
 
 /* ---- state ------------------------------------------------------------------------------------- */
 
-enum { CONF_RESTORE, CONF_DELETE, CONF_RETURN_TITLE };
+enum { CONF_RESTORE, CONF_DELETE, CONF_RETURN_TITLE, CONF_QUIT };
 
 static int s_open   = 0;
 static int s_screen = OVL_SCREEN_MAIN;
@@ -423,6 +423,24 @@ static void act_returnToTitle(void) {
     s_confLabel[sizeof(s_confLabel) - 1] = '\0';
 }
 
+/* ---- ESC quit confirmation. Reuses the CONFIRM screen/plumbing above; the only new wiring is
+ * this entry point and execConfirm's CONF_QUIT branch (PC_GpuPumpEvents calls this on Escape
+ * instead of exiting directly). The quit hook lets a harness observe YES without exiting. ----- */
+static void doExit(void) { exit(0); }
+static void (*s_quitAction)(void) = doExit;
+
+void PC_OverlayRequestQuit(void) {
+    if (s_open) {                 /* overlay already open: Escape is Back -- close it entirely */
+        s_open = 0;
+        return;
+    }
+    s_open = 1;
+    startConfirm(CONF_QUIT);
+    /* startConfirm may have copied an archive label; replace it with the stakes warning. */
+    strncpy(s_confLabel, "UNSAVED PROGRESS LOST", sizeof(s_confLabel) - 1);
+    s_confLabel[sizeof(s_confLabel) - 1] = '\0';
+}
+
 /* ---- RETURN TO TITLE. The confirm only REQUESTS the jump; PC_ApplyReturnToTitle performs it at
  * the top of the main loop (main.c, before UpdateState) -- the one point where no game code is
  * mid-frame, unlike the pad path. See docs/gameplay-additions.md, "Overlay internals". ---------- */
@@ -498,6 +516,13 @@ static void savesInput(int b) {
 static int confCount(void) { return (s_confKind == CONF_RESTORE) ? 3 : 2; }
 
 static void execConfirm(void) {
+    if (s_confKind == CONF_QUIT) {
+        /* yes: quit (exactly what Escape did before this feature); no: opened by Escape, so close
+         * entirely rather than falling back to MAIN. Either way the overlay closes. */
+        if (s_confSel == 1) s_quitAction();
+        s_open = 0;
+        return;
+    }
     if (s_confKind == CONF_RETURN_TITLE) {
         if (s_confSel == 0) { PC_ReturnToTitle(); s_open = 0; }  /* yes: teardown to title + close overlay */
         else                { s_screen = OVL_SCREEN_MAIN; }      /* cancel: back to the settings list */
@@ -534,7 +559,10 @@ static void confirmInput(int b) {
     case OVL_BTN_DOWN:  case OVL_BTN_RIGHT: if (s_confSel < n - 1) s_confSel++; break;
     case OVL_BTN_CIRCLE:                    execConfirm(); break;
     case OVL_BTN_CROSS:  /* cancel -> back to where the confirm was opened from */
-        s_screen = (s_confKind == CONF_RETURN_TITLE) ? OVL_SCREEN_MAIN : OVL_SCREEN_SAVES; break;
+        if (s_confKind == CONF_QUIT)              s_open = 0;   /* opened by Escape: close entirely */
+        else if (s_confKind == CONF_RETURN_TITLE) s_screen = OVL_SCREEN_MAIN;
+        else                                       s_screen = OVL_SCREEN_SAVES;
+        break;
     default: break;
     }
 }
@@ -568,9 +596,12 @@ void PC_OverlayInput(int b) {
  * render here anyway; English keeps every language's behaviour identical. */
 const char *PC_OverlayTitle(void) {
     if (s_screen == OVL_SCREEN_SAVES) return "SAVE MANAGEMENT";
-    /* CONFIRM: save-mgmt confirms belong to that screen; the return-to-title confirm is an OPTIONS action. */
-    if (s_screen == OVL_SCREEN_CONFIRM)
+    /* CONFIRM: save-mgmt confirms belong to that screen; return-to-title is an OPTIONS action;
+     * quit gets its own title (it wasn't opened from either the settings list or the archive browser). */
+    if (s_screen == OVL_SCREEN_CONFIRM) {
+        if (s_confKind == CONF_QUIT) return "QUIT";
         return (s_confKind == CONF_RETURN_TITLE) ? "OPTIONS" : "SAVE MANAGEMENT";
+    }
     return "OPTIONS";
 }
 
@@ -645,6 +676,7 @@ int PC_OverlaySaveActive(int i) {   /* 1 if row i matches the current active car
 }
 
 const char *PC_OverlayConfirmMsg(void) {
+    if (s_confKind == CONF_QUIT)         return "QUIT THE GAME?";
     if (s_confKind == CONF_RETURN_TITLE) return "RETURN TO TITLE?";
     return (s_confKind == CONF_RESTORE) ? "REPLACE CURRENT CARD?" : "DELETE THIS BACKUP?";
 }
@@ -653,13 +685,15 @@ int PC_OverlayConfirmSelected(void) { return s_confSel; }
 const char *PC_OverlayConfirmTarget(void) { return s_confLabel; }   /* the archive label being acted on */
 /* A destructive confirm gets ONE red "eye-catch" line, on the element that matters most: DELETE /
  * RESTORE -> the QUESTION line (the target is a neutral backup date; delete is permanent, restore
- * overwrites the current card); RETURN TO TITLE -> the TARGET line, itself the stakes warning. */
+ * overwrites the current card); RETURN TO TITLE / QUIT -> the TARGET line, itself the stakes warning. */
 int PC_OverlayConfirmMsgWarn(void)    { return s_confKind == CONF_DELETE || s_confKind == CONF_RESTORE; }
-int PC_OverlayConfirmTargetWarn(void) { return s_confKind == CONF_RETURN_TITLE; }  /* red = a warning line */
+int PC_OverlayConfirmTargetWarn(void) { return s_confKind == CONF_RETURN_TITLE || s_confKind == CONF_QUIT; }
 const char *PC_OverlayConfirmOption(int i) {
     static const char *RESTORE[3] = { "BACK UP THEN RESTORE", "RESTORE ONLY", "CANCEL" };
     static const char *DELETE_[2] = { "DELETE", "CANCEL" };
     static const char *RETTITLE[2] = { "RETURN TO TITLE", "CANCEL" };
+    static const char *QUIT[2] = { "NO", "YES, QUIT" };
+    if (s_confKind == CONF_QUIT)         return (i >= 0 && i < 2) ? QUIT[i] : "";
     if (s_confKind == CONF_RETURN_TITLE) return (i >= 0 && i < 2) ? RETTITLE[i] : "";
     if (s_confKind == CONF_RESTORE)      return (i >= 0 && i < 3) ? RESTORE[i] : "";
     return (i >= 0 && i < 2) ? DELETE_[i] : "";
