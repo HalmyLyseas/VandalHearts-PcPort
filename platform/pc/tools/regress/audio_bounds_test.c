@@ -38,10 +38,9 @@ static int g_fail = 0;
 
 static void PutU16LE(unsigned char *p, unsigned short v) { p[0] = v & 0xff; p[1] = (v >> 8) & 0xff; }
 
-/* Builds a minimal one-program/one-tone VAB header: program 0 owns tone 0, tone 0 points at
- * VAG index 1 (index 0 is the reserved/dummy slot), whose size-table entry is `vagSizeUnits`
- * (8-byte SPU units, matching SsVabTransBodyPartly's own scale). `hdrLen` must be at least
- * 2592 + 4 (program table + one tone block + a 2-entry size table). */
+/* Minimal one-program/one-tone VAB header: program 0 owns tone 0, which points at VAG index 1
+ * (index 0 is the reserved slot) with size-table entry `vagSizeUnits` (8-byte SPU units).
+ * `hdrLen` must be at least 2592 + 4: program table + one tone block + a 2-entry size table. */
 static void BuildVabHeader(unsigned char *hdr, int hdrLen, unsigned short vagSizeUnits) {
     unsigned char *prog0, *tone0, *sizeTable;
     memset(hdr, 0, (size_t)hdrLen);
