@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
-# gpu_bounds.sh -- ASan regression for the LoadImage/StoreImage VRAM-bound and
-# ParseTimSection/ReadTIM plausibility-bound fixes in src/libgpu.c.
-#
-# Compiles ONLY src/libgpu.c + gpu_bounds_test.c (no pc_raster.c/pc_gpu_trace.c/pc_hdpack.c/
-# pc_gpu_window.c -- gpu_bounds_test.c stubs the few externs libgpu.c reaches across those
-# split-out TUs, per pc_gpu_internal.h) under AddressSanitizer, then runs three fixtures:
-#   1. LoadImage(rect.x = -1) and StoreImage(rect.y = -1) -- must not touch memory before vram[].
-#   2. a TIM blob with a CLUT section sec[0] = 0xFFFFFFF0 -- ReadTIM must reject it (prect NULL
-#      or zero-size) without parsing off into the buffer.
-#   3. a valid minimal TIM -- must still parse to the expected embedded rect.
-# Any real out-of-bounds access aborts the process under ASan; this script also checks each
-# fixture's own PASS line.
+# gpu_bounds.sh -- ASan regression for the LoadImage/StoreImage VRAM-bound and ParseTimSection/ReadTIM plausibility-bound fixes in src/libgpu.c; compiles ONLY src/libgpu.c + gpu_bounds_test.c (no pc_raster.c/pc_gpu_trace.c/pc_hdpack.c/pc_gpu_window.c -- gpu_bounds_test.c stubs the few externs libgpu.c reaches across those split-out TUs, per pc_gpu_internal.h) under AddressSanitizer.
+# Runs three fixtures (see gpu_bounds_test.c for what each builds and asserts); any real out-of-bounds access aborts the process under ASan.
+# This script also checks each fixture's own PASS line.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/../.." && pwd)"

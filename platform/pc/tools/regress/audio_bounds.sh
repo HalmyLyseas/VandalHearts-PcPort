@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
-# audio_bounds.sh -- ASan regression for the SsVabClose/VAB-size-table/SEQ-parser bounds
-# fixes in src/libsnd.c + src/pc_spu.c.
-#
-# Compiles ONLY src/libsnd.c + src/pc_spu.c + src/libspu.c + audio_bounds_test.c (no
-# core/cd.c, no generated data segment -- audio_bounds_test.c stubs the few externs libsnd.c
-# reaches for there) under AddressSanitizer, then runs three synthetic fixtures:
-#   1. key a voice on from a one-VAG bank, SsVabClose it, render one PC_SpuService pass.
-#   2. a VAB whose size-table entry is far bigger than its staged body.
-#   3. a SEQ blob living inside gSeqData with no FF 2F terminator.
-# Any real out-of-bounds access aborts the process under ASan; this script also checks each
-# fixture's own PASS line and (fixture 2) that the bounds guard's own diagnostic fired.
+# audio_bounds.sh -- ASan regression for the SsVabClose/VAB-size-table/SEQ-parser bounds fixes in src/libsnd.c + src/pc_spu.c; compiles ONLY src/libsnd.c + src/pc_spu.c + src/libspu.c + audio_bounds_test.c (no core/cd.c, no generated data segment -- the test file stubs the few externs libsnd.c reaches for there) under AddressSanitizer.
+# Runs three synthetic fixtures (see audio_bounds_test.c for what each builds); any real out-of-bounds access aborts the process under ASan.
+# This script also checks each fixture's own PASS line and (fixture 2) that the bounds guard's own diagnostic fired.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/../.." && pwd)"

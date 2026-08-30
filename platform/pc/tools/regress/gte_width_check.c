@@ -1,10 +1,5 @@
-/* gte_width_check.c -- PR C / finding 2.6 regression.
- * Reproduces `g.tr[0] * 4096L` under the old (32-bit `long`, as on MinGW/LLP64)
- * and new (explicit int64_t, as libgte.c now does) forms with tr = 600000, a
- * value whose product overflows a 32-bit intermediate but not a 64-bit one.
- * Asserts the new form matches the true 64-bit result and that a genuine
- * 32-bit `long` would have wrapped to something else.
- */
+/* gte_width_check.c -- PR C / finding 2.6 regression: reproduces `g.tr[0] * 4096L` under the old (32-bit `long`, as on MinGW/LLP64) and new (explicit int64_t, as libgte.c now does) forms with tr = 600000, a value whose product overflows a 32-bit intermediate but not a 64-bit one.
+ * Asserts the new form matches the true 64-bit result and that a genuine 32-bit `long` would have wrapped to something else. */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

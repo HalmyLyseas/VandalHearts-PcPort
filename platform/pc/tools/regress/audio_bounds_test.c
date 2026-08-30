@@ -1,13 +1,6 @@
-/* Regression fixtures for the three libsnd.c/pc_spu.c audio-lifecycle-and-bounds fixes
- * (SsVabClose voice stop, VAB size-table body bound, SEQ parser bound). Compiled and run
- * under AddressSanitizer by audio_bounds.sh; not part of the real game build.
- *
- * This links only src/libsnd.c + src/pc_spu.c + src/libspu.c + this file (see
- * src/test_libsnd.c's header comment for the sibling harness's linking approach). It does
- * NOT link core/cd.c or the generated data segment, so every extern libsnd.c reaches for in
- * those TUs (gCdFiles, gVabLoader, gSeqData, PC_GenSize_gSeqData, SDL_GetTicks) is stubbed
- * below with the same layout libsnd.c expects.
- */
+/* Regression fixtures for the three libsnd.c/pc_spu.c audio-lifecycle-and-bounds fixes (SsVabClose voice stop, VAB size-table body bound, SEQ parser bound); compiled and run under AddressSanitizer by audio_bounds.sh, not part of the real game build.
+ * Links only src/libsnd.c + src/pc_spu.c + src/libspu.c + this file (see src/test_libsnd.c's header comment for the sibling harness's linking approach) -- NOT core/cd.c or the generated data segment.
+ * Every extern libsnd.c reaches for in those TUs (gCdFiles, gVabLoader, gSeqData, PC_GenSize_gSeqData, SDL_GetTicks) is stubbed below with the same layout libsnd.c expects. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -180,9 +180,8 @@ log "Manual: building the Player Manual PDF"
     || die "manual build failed (pandoc + chromium needed -- see tools/build-manual.sh)"
 
 # ---- optional HD pack (a SEPARATE release asset, not embedded in any binary) -------------------
-# --hdpack=<dir> (or VH_HDPACK_DIR): an assembled hdpacks/ root -- per-game <game-id>/manifest.json
-# subfolders (see docs/hd-pack.md) or the legacy flat layout (root manifest.json, US only). The art
-# is supplied finished and metadata-stripped (see NOTICE); one zip per game id, or one legacy zip.
+# --hdpack=<dir> (or VH_HDPACK_DIR): an assembled hdpacks/ root -- per-game <game-id>/manifest.json subfolders (docs/hd-pack.md) or the legacy flat layout (root manifest.json, US only).
+# Art is supplied finished and metadata-stripped (see NOTICE); one zip per game id, or one legacy zip.
 HDPACK_ROWS=()   # "zipname|game-id" per zip actually produced, for the notes table below
 hdpack_symlink_guard() {   # refuse a symlink under $1 whose real target escapes $1
     local root="$1" real link target

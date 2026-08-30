@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# release_script_guard.sh -- fast regression for make-release.sh + smoke_boot.sh guard logic.
-#
-# No build, no network: exercises the tag/path/symlink guards via VH_RELEASE_DRY_RUN=1 (stops
-# make-release.sh right after its correctness gates, before any build) and re-runs the hdpack
-# packaging block in isolation (extracted verbatim from the script -- it only needs `zip`, no
-# build) on tiny fixture directories. Also runs smoke_boot.sh against /bin/true and the real exe.
+# release_script_guard.sh -- fast regression for make-release.sh + smoke_boot.sh guard logic; no build, no network.
+# Exercises the tag/path/symlink guards via VH_RELEASE_DRY_RUN=1 (stops make-release.sh right after its correctness gates, before any build) and re-runs the hdpack packaging block in isolation (extracted verbatim from the script -- it only needs `zip`, no build) on tiny fixture directories.
+# Also runs smoke_boot.sh against /bin/true and the real exe.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/../.." && pwd)"

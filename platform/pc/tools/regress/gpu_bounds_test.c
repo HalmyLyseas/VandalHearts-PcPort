@@ -1,12 +1,6 @@
-/* Regression fixtures for the LoadImage/StoreImage VRAM-bound and ParseTimSection/ReadTIM
- * plausibility-bound fixes in src/libgpu.c (codex 1.1, 1.3). Compiled and run under
- * AddressSanitizer by gpu_bounds.sh; not part of the real game build.
- *
- * This links only src/libgpu.c + this file, exactly like audio_bounds_test.c links only
- * libsnd.c/pc_spu.c/libspu.c. libgpu.c's split-out subsystem seams (pc_gpu_internal.h) --
- * pc_raster.c, pc_gpu_trace.c, pc_hdpack.c, pc_gpu_window.c -- are stubbed below rather
- * than linked in, since none of them are exercised by the LoadImage/StoreImage/ReadTIM path.
- */
+/* Regression fixtures for the LoadImage/StoreImage VRAM-bound and ParseTimSection/ReadTIM plausibility-bound fixes in src/libgpu.c (codex 1.1, 1.3); compiled and run under AddressSanitizer by gpu_bounds.sh, not part of the real game build.
+ * Links only src/libgpu.c + this file, exactly like audio_bounds_test.c links only libsnd.c/pc_spu.c/libspu.c.
+ * libgpu.c's split-out subsystem seams (pc_gpu_internal.h) -- pc_raster.c, pc_gpu_trace.c, pc_hdpack.c, pc_gpu_window.c -- are stubbed below rather than linked in, since none of them are exercised by the LoadImage/StoreImage/ReadTIM path. */
 #include <stdio.h>
 #include <string.h>
 #include "PsyQ/libgpu.h"

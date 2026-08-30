@@ -301,10 +301,8 @@ static void dda_uv_init(DdaUV *s, int us, int vs) {
 }
 static int dda_getu(const DdaUV *s) { return (int)((s->u >> (DDA_ASHIFT + DDA_APOST)) & 0xFF); }
 static int dda_getv(const DdaUV *s) { return (int)((s->v >> (DDA_ASHIFT + DDA_APOST)) & 0xFF); }
-/* The (int) cast of an unsigned dudx/dudy near UINT_MAX (a negative fixed-point step,
- * reinterpreted) times n can exceed INT_MAX -- signed-overflow UB (codex 1.7). Unsigned
- * multiplication wraps mod 2^32 by definition, giving the same bit pattern GCC's wrapping
- * signed overflow already produces, so this is a well-definedness fix, not a logic change. */
+/* The (int) cast of an unsigned dudx/dudy near UINT_MAX (a negative fixed-point step, reinterpreted) times n can exceed INT_MAX -- signed-overflow UB (codex 1.7).
+ * Unsigned multiplication wraps mod 2^32 by definition, giving the same bit pattern GCC's wrapping signed overflow already produces, so this is a well-definedness fix, not a logic change. */
 static void dda_stepx_n(DdaUV *s, const DdaUVStep *st, int n) {
     s->u += (unsigned)st->dudx * (unsigned)n; s->v += (unsigned)st->dvdx * (unsigned)n;
 }

@@ -549,12 +549,9 @@ int OpenTIM(unsigned int *addr) {
     return 0;
 }
 
-/* Plausibility bounds on a section header (codex 1.3): a garbage size or rect -- e.g. from a
- * corrupt/modified TIM on the disc image -- must not walk the cursor off into memory outside
- * the file buffer, nor hand the caller an implausible upload rect. Real sections are at least
- * the 12-byte header, word-aligned, comfortably under this project's largest legitimate
- * section, and target a rect that fits inside the 1024x512 VRAM this port models. Returns NULL
- * (leaving outRect/outData untouched) on rejection; retail sections never trip this. */
+/* Plausibility bounds on a section header (codex 1.3): rejects a garbage size or rect (e.g. from a corrupt/modified TIM) rather than walking the cursor off into memory outside the file buffer or handing back an implausible upload rect.
+ * Real sections are at least the 12-byte header, word-aligned, comfortably under this project's largest legitimate section, and target a rect that fits inside the 1024x512 VRAM this port models.
+ * Returns NULL (leaving outRect/outData untouched) on rejection; retail sections never trip this. */
 static unsigned int *ParseTimSection(unsigned int *sec, RECT *outRect, unsigned int **outData) {
     unsigned int size = sec[0];
     unsigned int destCoord, whWord;

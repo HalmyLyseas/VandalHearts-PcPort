@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
-# hdvideo_switch.sh -- ASan regression for the mid-stream geometry-change fix in src/pc_hdvideo.c
-# (codex 1.2): a later SPS/PPS can change frame width/height/pixel format, and the sws
-# context/output buffer must be recreated for it rather than scaled/written into with the
-# open-time geometry.
-#
-# Generates a fixture mp4 with ffmpeg (present on this box): a 320x240 h264 clip concatenated
-# with a 160x120 one via the concat demuxer, so the decoded stream genuinely carries two SPS
-# sizes (verified below with ffprobe). Compiles pc_hdvideo.c standalone with its built-in
-# -DHDVIDEO_TEST main (see the file's own header comment for the base cc line) under ASan
-# against the system libav, and decodes past the switch point. Expects exit 0, no ASan report,
-# and the frame at the switch point reporting the NEW geometry.
+# hdvideo_switch.sh -- ASan regression for the mid-stream geometry-change fix in src/pc_hdvideo.c (codex 1.2): a later SPS/PPS can change frame width/height/pixel format, and the sws context/output buffer must be recreated for it rather than scaled/written into with the open-time geometry.
+# Generates a fixture mp4 with ffmpeg (present on this box): a 320x240 h264 clip concatenated with a 160x120 one via the concat demuxer, so the decoded stream genuinely carries two SPS sizes (verified below with ffprobe).
+# Compiles pc_hdvideo.c standalone with its built-in -DHDVIDEO_TEST main (see the file's own header comment for the base cc line) under ASan against the system libav, and decodes past the switch point; expects exit 0, no ASan report, and the frame at the switch point reporting the NEW geometry.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/../.." && pwd)"

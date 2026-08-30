@@ -76,10 +76,8 @@ static int hdv_decode_next(void) {
     for (;;) {
         int r = avcodec_receive_frame(V.dec, V.frame);
         if (r == 0) {
-            /* A later SPS/PPS can change width/height/pixel format mid-stream (codex 1.2) --
-             * recreate the scaler + output buffer for the new geometry rather than scaling
-             * into a context/buffer still sized for the old one. Keep the same 8192 cap as
-             * open time; a geometry too large to honor ends the video, keeping the last frame. */
+            /* A later SPS/PPS can change width/height/pixel format mid-stream (codex 1.2) -- recreate the scaler + output buffer for the new geometry rather than scaling into a context/buffer still sized for the old one.
+             * Keeps the same 8192 cap as open time; a geometry too large to honor ends the video, keeping the last frame. */
             if (V.frame->width != V.w || V.frame->height != V.h || V.frame->format != V.pixFmt) {
                 int nw = V.frame->width, nh = V.frame->height;
                 unsigned char *nrgb;
