@@ -113,7 +113,9 @@ accessor functions. Four screens: MAIN (the settings list), SAVES (the archive b
   face-button close would leak the still-held press to the game underneath.
 - **Escape asks before quitting.** Pressing Escape opens the overlay straight on a CONFIRM screen
   reusing the RETURN TO TITLE plumbing (`CONF_QUIT`, `PC_OverlayRequestQuit()`), defaulting to NO;
-  Escape again while the overlay is open just closes it, same as Back.
+  Escape again while the overlay is open just closes it, same as Back. At the title screen and its
+  logo/title-attract movies, Escape exits immediately because no run is active; story movies still
+  use the confirmation.
 - **MAIN is a data-driven table** (`s_items[]`): each row is a toggle, a choice or an action with
   an optional `apply` callback, an ini section/key to persist to, and two predicates —
   `disabled` (greyed, visual only) and `locked` (read-only). Window Scale and Fullscreen are

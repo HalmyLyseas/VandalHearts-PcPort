@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 # quit_confirm.sh -- regression for Escape's quit confirmation (src/pc_overlay.c CONF_QUIT).
 
-# Compiles quit_confirm_test.c (see its header comment) and runs four fixtures against
-# pc_overlay.c's real state machine: (a) Escape on a closed overlay opens the CONFIRM screen on
-# CONF_QUIT with NO as the safe default; (b) the Back button closes the overlay entirely, not MAIN.
-
-# (c) Escape on an already-open overlay acts as Back; (d) selecting YES, QUIT and confirming
-# reaches the quit action (observed via a hook, so the harness process never exits).
+# Compiles quit_confirm_test.c under ASan (see its header comment) and runs six fixtures: (a) safe
+# CONF_QUIT default; (b) first Escape sizing; (c/d) Back behavior; (e) observed YES quit; (f) title
+# flow exits immediately while story movies retain confirmation.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/../.." && pwd)"
@@ -22,7 +19,7 @@ fi
 
 echo "quit_confirm: compiling..."
 mkdir -p "$PC_DIR/build"
-if ! cc -fno-builtin-csqrt -m64 -std=gnu89 -DPERMUTER -I"$STAGE_DIR" -Iinclude \
+if ! cc -fno-builtin-csqrt -m64 -std=gnu89 -DPERMUTER -fsanitize=address -fno-omit-frame-pointer -I"$STAGE_DIR" -I"$PC_DIR/include" \
        "$HERE/quit_confirm_test.c" -o "$BIN" 2>&1; then
     echo "quit_confirm: build failed" >&2
     exit 1
@@ -31,7 +28,7 @@ fi
 echo "quit_confirm: running..."
 LOG="$(mktemp)"
 rc=0
-( cd "$PC_DIR" && "$BIN" ) > "$LOG" 2>&1 || rc=$?
+( cd "$PC_DIR" && ASAN_OPTIONS=detect_leaks=0 "$BIN" ) > "$LOG" 2>&1 || rc=$?
 cat "$LOG"
 
 fail=0
@@ -39,7 +36,7 @@ if [ "$rc" -ne 0 ]; then
     echo "quit_confirm: test binary exited $rc (a fixture assertion failed)" >&2
     fail=1
 fi
-for n in a b c d; do
+for n in a b c d e f; do
     grep -q "^fixture $n: PASS$" "$LOG" || { echo "quit_confirm: fixture $n did not report PASS" >&2; fail=1; }
 done
 
