@@ -167,6 +167,11 @@ if [ "$DO_LINUX" = 1 ]; then
         # Ship the unified binary (both regions); clean all three build stages.
         rm -rf build-uni-us build-uni-jp build-uni
         make unified CC='cc -O2' >/dev/null
+        # DWARF carries the build host's paths and login; drop it (the symbol table stays, so the
+        # crash handler's backtraces still resolve), then gate on the same PII grep the exe gets.
+        strip --strip-debug build-uni/vandalhearts_pc
+        if strings build-uni/vandalhearts_pc | grep -qE '/home/|'"$(id -un)"; then
+            echo 'ERROR: Linux binary still contains local build paths after strip'; exit 1; fi
         packaging/appimage/build-appimage.sh build-uni/vandalhearts_pc >/dev/null"
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"
     [ -f "$APP" ] || die "container build produced no AppImage"

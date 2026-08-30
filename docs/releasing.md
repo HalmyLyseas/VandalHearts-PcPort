@@ -63,6 +63,9 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
   `DATA_PLAIN` + the `foreach` stems in CMake), not whole-file mentions — a comment naming a file is
   not a compile. It fails closed if either parse yields implausibly few entries, so a list-format
   change cannot silently disable it. `src/test_*.c` harnesses are exempt.
+- **Both shipped binaries are PII-gated.** The Windows exe is stripped; the Linux binary loses its
+  DWARF (`strip --strip-debug` — the symbol table stays so crash backtraces still resolve) before
+  linuxdeploy packages it, and each is grepped for `/home/` and the login name; a hit fails the build.
 - **The script refuses to run while user data sits in `build-uni/`** (disc `.bin`s, `saves/`,
   `hdpacks/`, `langpacks/`): the AppImage stage runs `rm -rf build-uni*`, which would delete a test
   deployment parked there. Keep deployments in `platform/pc/deploy/` (gitignored) instead.
