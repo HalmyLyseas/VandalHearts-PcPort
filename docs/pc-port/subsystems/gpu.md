@@ -178,6 +178,11 @@ access compile unchanged) with these deliberate departures:
 - **`TIM_IMAGE`** holds real pointers (`paddr`/`caddr`) into the caller's file
   buffer, which is why it is wider than the PS1 struct on a 64-bit host.
 
+`LoadImage`/`StoreImage` clip both VRAM edges (not just the upper bound) so a
+garbage destination rect can never index before `vram[]`, and `ParseTimSection`
+rejects an implausible section size or rect (leaving `ReadTIM`'s `prect`
+NULL/zero-size) instead of parsing off into memory outside the TIM buffer.
+
 ### Presentation
 
 The game renders a native **320×240** frame. `PC_GpuPresent`

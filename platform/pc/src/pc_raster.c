@@ -286,10 +286,13 @@ typedef struct {
 } DdaCtx;
 #define HD_SC 16
 
-static long long dda_makefp(int x)  { return ((long long)x << 32) + ((1LL << 32) - (1 << 11)); }
+/* Left-shifting a negative long long by 32 is UB in C even though every current toolchain wraps
+ * it (codex 1.7); go through an unsigned intermediate so the intended wraparound is well-defined,
+ * with no change in the resulting bit pattern on two's-complement hosts. */
+static long long dda_makefp(int x)  { return (long long)((unsigned long long)(long long)x << 32) + ((1LL << 32) - (1 << 11)); }
 static long long dda_makestep(int dx, int dy) {
     long long bias = (dx < 0) ? -(long long)(dy - 1) : ((dx > 0) ? (long long)(dy - 1) : 0);
-    return (((long long)dx << 32) + bias) / dy;
+    return ((long long)((unsigned long long)(long long)dx << 32) + bias) / dy;
 }
 static int dda_unfp(long long xfp) { return (int)((unsigned long long)xfp >> 32); }
 static void dda_uv_init(DdaUV *s, int us, int vs) {
@@ -298,11 +301,15 @@ static void dda_uv_init(DdaUV *s, int us, int vs) {
 }
 static int dda_getu(const DdaUV *s) { return (int)((s->u >> (DDA_ASHIFT + DDA_APOST)) & 0xFF); }
 static int dda_getv(const DdaUV *s) { return (int)((s->v >> (DDA_ASHIFT + DDA_APOST)) & 0xFF); }
+/* The (int) cast of an unsigned dudx/dudy near UINT_MAX (a negative fixed-point step,
+ * reinterpreted) times n can exceed INT_MAX -- signed-overflow UB (codex 1.7). Unsigned
+ * multiplication wraps mod 2^32 by definition, giving the same bit pattern GCC's wrapping
+ * signed overflow already produces, so this is a well-definedness fix, not a logic change. */
 static void dda_stepx_n(DdaUV *s, const DdaUVStep *st, int n) {
-    s->u += (unsigned)((int)st->dudx * n); s->v += (unsigned)((int)st->dvdx * n);
+    s->u += (unsigned)st->dudx * (unsigned)n; s->v += (unsigned)st->dvdx * (unsigned)n;
 }
 static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
-    s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
+    s->u += (unsigned)st->dudy * (unsigned)n; s->v += (unsigned)st->dvdy * (unsigned)n;
 }
 
 /* HD asset replacement lives in pc_hdpack.c -- LoadImage and the DDA below are its hooks

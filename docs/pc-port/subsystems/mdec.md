@@ -211,3 +211,6 @@ a pixel short of the burned-in text.
   garbage). Real playback runs through the demux + overlay path, not through these calls.
 - **Stage-2 backend only.** `pc_mdec.c` is part of the native port, not the byte-exact matching
   build. See the top-level [architecture](../../architecture.md) for the Layer 1 / Layer 2 split.
+- **HD-pack video decode (`pc_hdvideo.c`) tolerates a mid-stream geometry change.** When a decoded
+  frame's width, height, or pixel format differs from the cached triple, it rebuilds the `SwsContext`
+  and output buffer for the new geometry instead of scaling into one sized for the old.
