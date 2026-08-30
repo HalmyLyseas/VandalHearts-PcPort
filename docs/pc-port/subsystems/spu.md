@@ -185,12 +185,23 @@ resume state to keep).
 
 ### Runaway-delta watchdog
 
-A SEQ carries no length field, so `Seq.end` is a fixed `SEQ_MAX_BYTES` (0x40000) cap, not the
+A SEQ carries no length field, so `Seq.end` is the `SEQ_MAX_BYTES` (0x40000) cap (or `gSeqData`'s
+generated size when the song lives there), not the
 true end. If the parser runs past real track data it reads a garbage VLQ delta that `tickBudget`
 can never reach, and the sequence freezes holding its last chord. `SeqAdvanceByUsec` treats any
 inter-event delta above 32 quarter-notes (`ppqn * 32`, far beyond any real gap) as end-of-track.
 That path also drops held notes when looping (the chord is stale), whereas a clean `0x2F` loop
 keeps a note legitimately sustained across the seam.
+**Lifecycle and bounds are disc-derived-data-hostile.** `SsVabClose` hard-stops (not key-offs — a
+releasing voice still reads its PCM each render) every software-SPU voice pointing at the bank's
+decoded samples before freeing them, so swapping a bank while one of its voices is still
+sustaining/releasing can't read freed memory. `SsVabTransBodyPartly`'s decode loop checks each VAG's
+`offset + size` against the staged body's real length before calling `DecodeVag`, stopping that
+bank's decode (and logging once) rather than reading past a malformed VAB's size table. `SsSeqOpen`
+bounds a song against the real size the data-segment generator gave `gSeqData`
+(`PC_GenSize_gSeqData`) when the blob lives there, instead of the `SEQ_MAX_BYTES` safety cap alone;
+`SeqProcessEvent` additionally checks its bound before every fixed-width read (status byte, 1/2/3
+data bytes), so a song missing its `FF 2F` terminator stops cleanly at the buffer edge.
 
 ## The PsyQ volume law
 
