@@ -185,6 +185,11 @@ def main():
         text=True, check=True).stdout.strip()
     files = [os.path.relpath(os.path.abspath(f), root) for f in args.files] or tracked_files(root)
     total = 0
+    # An explicitly named file that does not exist is a caller error, never a silent pass.
+    for rel in files if args.files else []:
+        if not os.path.isfile(os.path.join(root, rel)):
+            print(f"{rel}: no such file (paths resolve against the current directory)", file=sys.stderr)
+            return 2
     for rel in files:
         for line, msg in sorted(check_file(root, rel)):
             print(f"{rel}:{line}: {msg}")
