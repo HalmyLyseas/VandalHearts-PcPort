@@ -42,6 +42,9 @@ Options, Save, Load).
 | Enter | Start | Battle menu / options; skips an intro movie |
 | Space | Select | Select — used only for the overlay chord below |
 | **Space + Enter** (chord) | — | **(PC)** Open / close the in-game options overlay |
+| **Esc** | — | **(PC)** Quit prompt (No / Yes) — No is the default |
+
+The window close button quits immediately, with no prompt.
 
 ## Camera (PC addition)
 

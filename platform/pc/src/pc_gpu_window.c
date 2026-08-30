@@ -358,6 +358,9 @@ static int ovlFitScale(int w, int base) {
  * own footers swap PlayStation symbols for Xbox letters; the game's prompts are untouched. */
 extern int PC_ButtonLabelStyle(void);
 extern const char *PC_OverlayItemWidestValue(int i);
+/* Escape's quit confirmation (pc_overlay.c): opens the overlay on a CONF_QUIT prompt, or -- if the
+ * overlay is already open -- closes it (Escape as Back). Used by PC_GpuPumpEvents below. */
+extern void PC_OverlayRequestQuit(void);
 #define OVL_LABELS_XBOX (PC_ButtonLabelStyle() == 1)
 
 /* ALL overlay screens share ONE glyph scale, so a sub-window never renders at a different size than
@@ -724,15 +727,16 @@ static int s_movieOvW = 0, s_movieOvH = 0;
 void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h) {
     s_movieOverlay = bgr555; s_movieOverlayRGB = NULL; s_movieOvW = w; s_movieOvH = h;
 }
-/* Pump + drain SDL events (SDL_QUIT from the close button or SDL's own Ctrl+C handler, and Escape,
- * exit cleanly; polling also refreshes SDL_GetKeyboardState for PadRead). Called from the present path
- * AND every VSync so the compositor's responsiveness ping is answered during the long boot loads. */
+/* Pump + drain SDL events -- SDL_QUIT (close button / Ctrl+C) exits immediately; Escape asks first
+ * via the overlay's quit confirm (PC_OverlayRequestQuit). Polling also refreshes
+ * SDL_GetKeyboardState for PadRead; called from the present path AND every VSync. */
 void PC_GpuPumpEvents(void) {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
-        if (ev.type == SDL_QUIT ||
-            (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE)) {
+        if (ev.type == SDL_QUIT) {
             exit(0);
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE && ev.key.repeat == 0) {
+            PC_OverlayRequestQuit();
         }
     }
 }

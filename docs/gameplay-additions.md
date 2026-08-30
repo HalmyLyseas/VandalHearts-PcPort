@@ -111,6 +111,9 @@ accessor functions. Four screens: MAIN (the settings list), SAVES (the archive b
 
 - **No "Close" item.** The SELECT+START chord is the only way to show or hide the overlay: a
   face-button close would leak the still-held press to the game underneath.
+- **Escape asks before quitting.** Pressing Escape opens the overlay straight on a CONFIRM screen
+  reusing the RETURN TO TITLE plumbing (`CONF_QUIT`, `PC_OverlayRequestQuit()`), defaulting to NO;
+  Escape again while the overlay is open just closes it, same as Back.
 - **MAIN is a data-driven table** (`s_items[]`): each row is a toggle, a choice or an action with
   an optional `apply` callback, an ini section/key to persist to, and two predicates —
   `disabled` (greyed, visual only) and `locked` (read-only). Window Scale and Fullscreen are
