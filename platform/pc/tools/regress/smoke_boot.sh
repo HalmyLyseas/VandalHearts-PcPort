@@ -12,6 +12,14 @@ if env VH_SMOKE=1 SDL_VIDEODRIVER=dummy ALSOFT_DRIVERS=null \
        VH_FULLSCREEN=0 VH_HDPACK=0 \
        "$EXE" > /tmp/vh_smoke_$$.log 2>&1; then
     grep -E "^SMOKE:" /tmp/vh_smoke_$$.log || true
+    # A zero exit alone is not proof of a real boot: require the title marker so a
+    # regression that exits cleanly early, or a wrong binary, cannot pass vacuously.
+    if ! grep -qE '^SMOKE: reached the title' /tmp/vh_smoke_$$.log; then
+        echo "smoke: FAIL (exit 0 but no title marker)" >&2
+        tail -15 /tmp/vh_smoke_$$.log >&2
+        rm -f /tmp/vh_smoke_$$.log
+        exit 1
+    fi
     rm -f /tmp/vh_smoke_$$.log
     echo "smoke: PASS"
 else

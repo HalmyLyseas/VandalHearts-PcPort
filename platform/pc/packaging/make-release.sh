@@ -15,8 +15,13 @@
 set -euo pipefail
 
 # ---- args -------------------------------------------------------------------
+usage() { echo "usage: $0 <version-tag> [--windows-only|--linux-only] [--no-publish] [--hdpack=<dir>]" >&2; exit 2; }
 TAG="${1:-}"
-[ -n "$TAG" ] || { echo "usage: $0 <version-tag> [--windows-only|--linux-only] [--no-publish] [--hdpack=<dir>]" >&2; exit 2; }
+[ -n "$TAG" ] || usage
+# The tag becomes a path component below ($STAGE) that gets rm -rf'd; reject anything that
+# isn't a plain vX.Y.Z(-suffix) before it can be used in a path (operator typo protection,
+# not an attacker boundary -- this script only ever runs locally by a maintainer).
+[[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9]+)*$ ]] || usage
 shift || true
 DO_WIN=1 DO_LINUX=1 PUBLISH=1 CONTAINER="vh-deb12"
 HDPACK_SRC="${VH_HDPACK_DIR:-}"      # optional assembled hdpacks/ folder -> extra release asset
@@ -41,12 +46,29 @@ INI="$PC_DIR/vandalhearts.ini"
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# Belt-and-braces on top of the tag regex above: refuse to rm -rf anything the tag validation
+# didn't actually keep inside dist/release/.
+case "$STAGE" in
+    "$PC_DIR/dist/release/"*) ;;
+    *) die "refusing to remove '$STAGE' -- outside $PC_DIR/dist/release/" ;;
+esac
 rm -rf "$STAGE"; mkdir -p "$STAGE"
 [ -f "$INI" ] || die "missing $INI"
+
+cp "$INI" "$STAGE/vandalhearts.ini"
 
 # Guard: Makefile <-> CMakeLists source-list drift breaks exactly one platform's build (the 1.6
 # pc_hdvideo incident). Catch it before spending minutes on either build.
 "$PC_DIR/tools/check_build_parity.sh" || die "build-system parity check failed (see above)"
+
+# Guard: both build systems compile the JP-shared TUs from the US tree (gated fixes land once).
+# A diverged shared TU would ship silently otherwise -- this is the release-time enforcement of
+# the manual docs/releasing.md checklist item.
+( cd "$PC_DIR" && make check-shared ) || die "check-shared failed -- a shared TU has diverged between regions (see above)"
+
+# VH_RELEASE_DRY_RUN=1: exit right after the guards above, before any build/publish side effect.
+# Lets the regression test exercise tag validation + the parity/check-shared gates without a build.
+[ -z "${VH_RELEASE_DRY_RUN:-}" ] || { log "dry run: guards passed, stopping before any build"; exit 0; }
 
 # The AppImage stage runs `rm -rf build-uni*` (clean builds are required); a live
 # test deployment (discs, hdpacks/langpacks, saves) parked there would be deleted
@@ -149,7 +171,6 @@ if [ "$DO_LINUX" = 1 ]; then
     APP="$PC_DIR/dist/VandalHearts-x86_64.AppImage"
     [ -f "$APP" ] || die "container build produced no AppImage"
     cp "$APP" "$STAGE/VandalHearts-$TAG-linux-x86_64.AppImage"
-    cp "$INI" "$STAGE/vandalhearts.ini"
     log "  -> VandalHearts-$TAG-linux-x86_64.AppImage + vandalhearts.ini"
 fi
 
@@ -159,22 +180,58 @@ log "Manual: building the Player Manual PDF"
     || die "manual build failed (pandoc + chromium needed -- see tools/build-manual.sh)"
 
 # ---- optional HD pack (a SEPARATE release asset, not embedded in any binary) -------------------
-
-# --hdpack=<dir> (or VH_HDPACK_DIR) points at an assembled hdpacks/ folder: backgrounds/*.webp +
-# videos/<sector>.mp4 + manifest.json -- upscaled derivative art (see NOTICE) that you assemble
-# yourself; the zip name below is what the checksum/upload steps expect.
+# --hdpack=<dir> (or VH_HDPACK_DIR): an assembled hdpacks/ root -- per-game <game-id>/manifest.json
+# subfolders (see docs/hd-pack.md) or the legacy flat layout (root manifest.json, US only). The art
+# is supplied finished and metadata-stripped (see NOTICE); one zip per game id, or one legacy zip.
+HDPACK_ROWS=()   # "zipname|game-id" per zip actually produced, for the notes table below
+hdpack_symlink_guard() {   # refuse a symlink under $1 whose real target escapes $1
+    local root="$1" real link target
+    real="$(readlink -f "$root")"
+    while IFS= read -r -d '' link; do
+        target="$(readlink -f "$link")"
+        case "$target" in
+            "$real"|"$real"/*) ;;
+            *) die "--hdpack: symlink '$link' points outside the pack ('$target')" ;;
+        esac
+    done < <(find "$root" -type l -print0)
+}
+hdpack_zip_one() {   # hdpack_zip_one <src-dir> <hdpacks-subdir-name> <zip-basename>
+    local src="$1" sub="$2" zipname="$3" nbg nvid pkgtmp
+    nbg=$(ls -1 "$src"/backgrounds/*.webp 2>/dev/null | wc -l)
+    nvid=$(ls -1 "$src"/videos/*.mp4 2>/dev/null | wc -l)
+    pkgtmp="$STAGE/_hdpack_${sub:-legacy}"; rm -rf "$pkgtmp"
+    mkdir -p "$pkgtmp/hdpacks${sub:+/$sub}"
+    cp -rL "$src"/. "$pkgtmp/hdpacks${sub:+/$sub}/"      # -L: dereference symlinks -> real bytes in the asset
+    ( cd "$pkgtmp" && zip -q -r "$STAGE/$zipname" hdpacks )
+    rm -rf "$pkgtmp"
+    log "  -> $zipname ($nbg backgrounds + $nvid movies)"
+}
 if [ -n "$HDPACK_SRC" ]; then
-    [ -d "$HDPACK_SRC" ]              || die "--hdpack: '$HDPACK_SRC' is not a directory"
-    [ -f "$HDPACK_SRC/manifest.json" ] || die "--hdpack: no manifest.json in '$HDPACK_SRC' (assemble the pack first)"
-    log "HD pack: packaging $HDPACK_SRC"
-    nbg=$(ls -1 "$HDPACK_SRC"/backgrounds/*.webp 2>/dev/null | wc -l)
-    nvid=$(ls -1 "$HDPACK_SRC"/videos/*.mp4 2>/dev/null | wc -l)
-    PKGTMP="$STAGE/_hdpack"; rm -rf "$PKGTMP"; mkdir -p "$PKGTMP/hdpacks"
-    cp -rL "$HDPACK_SRC"/. "$PKGTMP/hdpacks/"      # -L: dereference symlinks -> real bytes in the asset
-    ( cd "$PKGTMP" && zip -q -r "$STAGE/VandalHearts-$TAG-hdpack.zip" hdpacks )
-    rm -rf "$PKGTMP"
-    log "  -> VandalHearts-$TAG-hdpack.zip ($nbg backgrounds + $nvid movies)"
-    HDPACK_DONE=1
+    [ -d "$HDPACK_SRC" ] || die "--hdpack: '$HDPACK_SRC' is not a directory"
+    hdpack_symlink_guard "$HDPACK_SRC"
+
+    GAME_DIRS=()
+    for d in "$HDPACK_SRC"/*/; do
+        [ -f "${d}manifest.json" ] || continue
+        GAME_DIRS+=("$(basename "$d")")
+    done
+
+    if [ "${#GAME_DIRS[@]}" -gt 0 ]; then
+        log "HD pack: per-game layout, packaging ${#GAME_DIRS[@]} game folder(s)"
+        for gid in "${GAME_DIRS[@]}"; do
+            zipname="VandalHearts-$TAG-hdpack-$gid.zip"
+            hdpack_zip_one "$HDPACK_SRC/$gid" "$gid" "$zipname"
+            HDPACK_ROWS+=("$zipname|$gid")
+        done
+    elif [ -f "$HDPACK_SRC/manifest.json" ]; then
+        log "WARN: '$HDPACK_SRC' uses the pre-2.0 flat hdpack layout (no <game-id>/ subfolder)."
+        log "WARN: deprecated -- see docs/hd-pack.md; move contents into hdpacks/<game-id>/ (e.g. SLUS-00447)."
+        zipname="VandalHearts-$TAG-hdpack.zip"
+        hdpack_zip_one "$HDPACK_SRC" "" "$zipname"
+        HDPACK_ROWS+=("$zipname|legacy")
+    else
+        die "--hdpack: '$HDPACK_SRC' has no <game-id>/manifest.json subfolder and no root manifest.json"
+    fi
 fi
 
 # ---- checksums --------------------------------------------------------------
@@ -217,11 +274,18 @@ cat >> "$NOTES" <<NOTE
 | Windows 10/11 | \`VandalHearts-$TAG-windows-x64.zip\` | Unzip; put your disc in a \`game\\\` folder next to \`vandalhearts_pc.exe\`; run it. |
 | Linux (glibc ≥ 2.34) | \`VandalHearts-$TAG-linux-x86_64.AppImage\` + \`vandalhearts.ini\` | Put both together; put your disc in a \`game/\` folder beside the \`.AppImage\`; \`chmod +x\` and run. Needs FUSE2. |
 | Any | \`VandalHearts-$TAG-Manual.pdf\` | The Player Manual: setup, controls, features, troubleshooting. |
-| Optional | \`VandalHearts-$TAG-hdpack-SLUS-00447.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable. Loaded on **US/Asia discs**. |
-| Optional | \`VandalHearts-$TAG-hdpack-SLPM-86007.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable. Loaded on **Japan**. |
 NOTE
-# HD packs are standing per-game release assets, so the rows above are unconditional;
-# HDPACK_DONE still gates the validation/zip flow for a supplied --hdpack.
+# HD-pack rows are built from HDPACK_ROWS -- the zips this run actually produced, not a fixed
+# guess -- so the table never advertises a game id that was not packaged.
+for row in "${HDPACK_ROWS[@]+"${HDPACK_ROWS[@]}"}"; do
+    zipname="${row%%|*}"; gid="${row#*|}"
+    case "$gid" in
+        legacy) label="US/Asia discs (legacy flat layout)" ;;
+        *)      label="**$gid**" ;;
+    esac
+    printf '| Optional | `%s` | HD backgrounds + movies. Unzip so `hdpacks/` sits beside the executable. Loaded on %s. |\n' \
+        "$zipname" "$label" >> "$NOTES"
+done
 cat >> "$NOTES" <<NOTE
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).

@@ -44,12 +44,16 @@ Releases are built locally, never CI (the data-segment generator needs the byte-
 platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled hdpacks dir>]
 ```
 
+- The tag must match `vX.Y.Z` or `vX.Y.Z-suffix` (e.g. `v1.6.2`, `v2.0.0-rc1`) — the script
+  rejects anything else before touching the filesystem, since the tag becomes the staging path
+  it wipes with `rm -rf`.
 - The script builds **from clean** (it wipes `build_win`/`build_deb` first — incremental objects
   compiled against a different library era have shipped a crash before), front-loads the
-  **build-parity check** (Makefile ↔ CMake source lists), and builds
-  Windows (MinGW cross, **static libav** — cached at `platform/pc/ffmpeg-mingw-static/`, rebuilt
-  by the script if missing) and the Linux AppImage (the `vh-deb12` container; the script verifies
-  its HD dev packages).
+  **build-parity check** (Makefile ↔ CMake source lists) and **`make check-shared`** (the
+  shared-region identity gate — a diverged shared TU fails the release here, not silently), and
+  builds Windows (MinGW cross, **static libav** — cached at `platform/pc/ffmpeg-mingw-static/`,
+  rebuilt by the script if missing) and the Linux AppImage (the `vh-deb12` container; the script
+  verifies its HD dev packages).
 - **Why clean builds are a hard rule:** neither build system tracks compiler-flag or include-path
   changes, so an incremental build can link objects compiled against one library era with archives
   from another (a `pc_hdvideo.o` compiled against the container's shared libav headers linked into
@@ -73,8 +77,12 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
 - [ ] Both packaged binaries are the **unified** build (all supported discs; the script's
       Windows path runs `build-unified-win.sh`, the Linux path `make unified` from clean) — boot
       each against a US **and** a JP disc.
-- [ ] With `--hdpack`: the zip holds the per-game layout `hdpacks/<game-id>/{backgrounds,videos}/`
-      + manifest (one zip per game id — `SLUS-00447`, `SLPM-86007`), and the pack art is
+- [ ] With `--hdpack=<hdpacks root>`: the script packages one zip per `<game-id>/manifest.json`
+      subfolder it finds (`VandalHearts-<tag>-hdpack-<GAME-ID>.zip`, holding `hdpacks/<game-id>/…`)
+      — the release notes' Downloads table lists exactly the zips this run produced, never a fixed
+      guess. The pre-2.0 flat layout (a root `manifest.json`, no per-game subfolder) still packages
+      as a single `…-hdpack.zip` with a deprecation warning. A symlink inside the pack pointing
+      outside it is refused rather than dereferenced into the asset. The pack art is
       metadata-stripped (PII scan below covers it). Re-upload the packs on every release (users
       download from the latest release page, not old ones).
 
