@@ -85,6 +85,10 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
       outside it is refused rather than dereferenced into the asset. The pack art is
       metadata-stripped (PII scan below covers it). Re-upload the packs on every release (users
       download from the latest release page, not old ones).
+- [ ] **No pack packaged this run?** Pass `--hdpack-note="<text>"` — when no `--hdpack` zip was
+      produced, the Downloads table gets one standing row (`| Optional | HD packs | <text> |`)
+      instead of silently omitting HD packs. Used when a release's packs are unchanged, e.g.
+      `--hdpack-note="Unchanged since 2.0.0 -- download the 2.0.0 release's hdpack zips"`.
 
 ## 4. Publication hygiene (public repo)
 

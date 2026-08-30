@@ -159,11 +159,20 @@ pre-logo load runs accelerated; in-game loads stay hardware-exact — and the US
 is now exact too, closing a historical −5%), window-manager responsiveness during loads, and a
 set of long-standing fixes (details in the [changelog](../CHANGELOG.md)).
 
+### 2.1 — Maintenance: robustness fixes ✅ (current release)
+
+The **current release**. Two small conveniences — a message box when no disc is found (including
+on a plain double-click launch) and an Escape-key quit confirmation — plus a large batch of
+robustness fixes from an independent code review of the port (bounds/lifecycle hardening across
+audio, image and video loading, GTE math, the fault handler, and the release tooling). Normal mode
+stays byte-for-byte the retail game throughout. Details in the [changelog](../CHANGELOG.md).
+
 ## Beyond
 
 The originally planned feature arc (Stages 1–3, **v1.0–v1.6**) is complete, and the project has
 kept moving where it matters: **v1.7** answered the most-requested community feature, **v2.0**
 brought the Japanese release and its own decompilation under the same roof, macOS support
-arrived as the first community contribution, and fixes land as issues are reported
-([known_issues.md](known_issues.md)). There is no fixed roadmap beyond the next release — direction
-comes from what players and translators actually need.
+arrived as the first community contribution, and **v2.1** closed out an independent code
+review's findings. Fixes land as issues are reported ([known_issues.md](known_issues.md)). There
+is no fixed roadmap beyond the next release — direction comes from what players and translators
+actually need.

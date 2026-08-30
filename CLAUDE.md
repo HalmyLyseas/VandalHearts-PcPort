@@ -75,6 +75,8 @@ are **complete**; a third (gameplay/QoL) is **underway** (first release shipped)
    (file maps in [`docs/pc-port/subsystems/gpu.md`](docs/pc-port/subsystems/gpu.md) and
    [`kernel.md`](docs/pc-port/subsystems/kernel.md)). **Active development concluded 2026-08-04**:
    the project is in maintenance — fixes for reported issues, no new feature tracks planned.
+   **v2.1.0** (maintenance — fixes from an independent code review plus two conveniences: a
+   missing-disc dialog and an Esc quit confirmation).
 
 **Do not "clean up" or restructure the decompiled `src/`/`include/` toward port concerns.** Stage 1's
 job is byte-exact matching, not readability or portability; all port-side changes live behind gates

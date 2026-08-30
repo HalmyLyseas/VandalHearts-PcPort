@@ -74,6 +74,14 @@ are only actionable from a normal boot (no `VH_DEBUG_MENU`).
 Advanced GTE/GPU render probes (developer, mostly gated by `SPRITE_LOG=1`): `VH_MTX_LOG`,
 `VH_OBJPRIM4_LOG`, `VH_SPRITE_QUAD_LOG`, `VH_TERRAINPROJ_LOG`.
 
+**Exact-integer `RotMatrix` path** (measurement aid, off by default): `VH_GTE_EXACT=<table>`
+switches `RotMatrix` from the port's default `double` path to a transcription of the original
+PlayStation integer routine; `VH_GTE_EXACT_CHECK=<table>` stays on the float path and reports the
+worst disagreement on stderr; `VH_GTE_AB=<table>` + `VH_GTE_AB_USE=float|exact` runs both every
+call for an equal-cost A/B. `<table>` is the path to the packed sin/cos table, which is game data
+— extract it from your own disc with `platform/pc/tools/gen_gte_table.py`; it is never compiled
+in or committed. Full detail: [gte.md](../../docs/pc-port/subsystems/gte.md#rotmatrix-float-vs-psyq-integer-path).
+
 ## Diagnostics — audio isolation
 
 For chasing a single instrument in the music mix — spectral attribution alone can misidentify

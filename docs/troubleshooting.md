@@ -9,10 +9,11 @@ details that make a problem findable.
 **"No usable disc image found."** The port needs your own *Vandal Hearts* disc dump as a raw
 `.bin` — USA (`SLUS-00447`), Asia (`SCPS-45183`) or Japan (`SLPM-86007`). Put it in a `game/`
 folder next to the executable (or directly beside it), or set the path explicitly with
-`VH_DISC_IMAGE` in `vandalhearts.ini`. The error message lists what it looked for. If the message
-says a specific region was requested but not found, a `VH_REGION`/`VH_DISC_ID` setting (written by
-the overlay's DISC row) points at a disc that is no longer there — remove the keys from
-`vandalhearts.ini` or put the disc back.
+`VH_DISC_IMAGE` in `vandalhearts.ini`. Since **v2.1.0** a dialog box says this too — including on
+a plain double-click launch, which used to just open and close with no explanation — naming what
+it looked for and where to put the `.bin`. If the message says a specific region was requested but
+not found, a `VH_REGION`/`VH_DISC_ID` setting (written by the overlay's DISC row) points at a disc
+that is no longer there — remove the keys from `vandalhearts.ini` or put the disc back.
 
 **"Wrong disc" error.** The port verifies each disc's boot signature before starting. If it
 refuses your image, it is not a dump of a supported release (the Europe `SLES-00204` is a

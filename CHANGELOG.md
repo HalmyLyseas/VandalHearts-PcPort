@@ -4,6 +4,68 @@ Notable changes to the **Vandal Hearts PC port**. This tracks the port layer (St
 packaging); the underlying decompilation stays byte-for-byte faithful to the retail game, and the normal
 mode is unaffected by any of it. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.1.0] — Maintenance: robustness fixes
+
+A maintenance release: two small conveniences, and a large batch of robustness fixes from an
+independent code review of the port. As always, normal mode is unaffected — still byte-for-byte
+the retail game.
+
+### Added
+
+- **A message box when no disc is found.** Launching by double-click with no `game/` folder set
+  up used to open a window and close it again with no explanation. It now shows a dialog
+  explaining what it looked for and where to put your disc `.bin`, on top of the existing console
+  message.
+- **Escape asks before quitting.** Pressing Escape now opens a confirmation ("QUIT THE GAME?")
+  with **NO** selected by default, so an accidental press can't lose unsaved progress — the
+  same confirm the overlay's RETURN TO TITLE uses. The window's close button still quits
+  immediately, as before.
+
+### Fixed
+
+Eighteen issues found by an independent code review of the port, none reachable in normal play
+with an unmodified disc:
+
+- **A rare audio crackle/crash on scene change** — a sound bank could be freed while a fading-out
+  sound effect was still playing from it. Voices using a bank are now stopped before it's freed.
+- **Windows and Linux now compute identical geometry for large camera/object translations** — a
+  32-bit-vs-64-bit arithmetic difference in the GTE math (invisible in ordinary play, where the
+  values involved stay small) meant the two platforms could diverge in principle. Both now use
+  the same wide arithmetic.
+- **Corrupt or hand-modified game data can no longer crash the port** — out-of-bounds reads and
+  unbounded parsing were closed across TIM/VRAM image loading, VAB/SEQ sound-bank loading, HD
+  video (a mid-file resolution/format change), an oversized HD image, and hand-edited subtitle
+  cue files. All require a damaged or deliberately modified disc image or add-on file — an
+  unmodified disc was never affected.
+- **A genuine crash now fails loudly instead of being silently "repaired."** A safety net meant
+  for one specific startup case had grown to catch stray memory writes anywhere, turning some
+  real bugs into silent corruption instead of a clean crash. It's now scoped back to its
+  original job.
+
+### Changed
+
+- **Headless launches now explain themselves in the log** *(advanced)* — if the game can't open a
+  window, the log names the reason instead of just noting that it's running without one.
+- **An optional exact-integer camera-math path** *(advanced, off by default)* — `VH_GTE_EXACT`
+  switches the GTE's rotation-matrix math to a bit-for-bit transcription of the original PlayStation
+  integer routine, for comparing against the port's default floating-point path. See
+  [OPTIONS.md](https://github.com/HalmyLyseas/VandalHearts-PcPort/blob/master/platform/pc/OPTIONS.md).
+
+### Developer
+
+- Comment hygiene enforced tree-wide (`make check-comments`); the data-segment generator now
+  refuses a wrong-region or truncated game executable instead of silently mis-building; ten new
+  regression harnesses under `platform/pc/tools/regress/`; release-script hardening (a bad
+  version tag is refused before anything is deleted, the shared-region identity check is now
+  enforced, per-game HD-pack packaging, a Windows-only publish no longer references a missing
+  file).
+
+### Compatibility
+
+- Saves, `vandalhearts.ini` and language packs all keep working untouched.
+- **HD packs are unchanged since 2.0.0** — keep the one you already have, or download it from the
+  [2.0.0 release page](https://github.com/HalmyLyseas/VandalHearts-PcPort/releases/tag/v2.0.0).
+
 ## [2.0.0] — One executable, three regions
 
 A region barrier falls. This release adds a **second complete matching decompilation** — the
