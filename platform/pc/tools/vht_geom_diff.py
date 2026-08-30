@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare the GEOMETRY of two VHT1 GPU traces, primitive for primitive.
 
-exchange/110 item 2c, step-1. Both traces must come from the SAME binary and the same scripted
+Both traces must come from the SAME binary and the same scripted
 scene, so primitive N of frame F corresponds on both sides by construction and no alignment
 search is needed. Reports the screen-space displacement of every vertex.
 

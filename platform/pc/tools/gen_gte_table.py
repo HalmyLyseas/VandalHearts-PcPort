@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract the PsyQ packed sin/cos table from a retail Vandal Hearts executable.
 
-exchange/110 item 2c, step-1 measurement harness. The real PsyQ RotMatrix (US: 0x800d0aa8) reads a
+Measurement harness for the exact RotMatrix path. The real PsyQ RotMatrix (US: 0x800d0aa8) reads a
 4096-entry table at US VRAM 0x8011C6C0: entry i = (cos_i << 16) | sin_i, both 4096 fixed point.
 Verified layout: hi[i] == lo[(i+1024) % 4096] for all 4096 entries (the classic rsin/rcos packing).
 
