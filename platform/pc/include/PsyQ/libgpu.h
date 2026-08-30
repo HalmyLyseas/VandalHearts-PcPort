@@ -1,48 +1,11 @@
-/*
- * PC-backend replacement for the PSX SDK's libgpu.h GPU (rendering) interface.
- *
- * Clean-room reimplementation: struct layouts and function signatures are
- * functional facts already legitimately extracted via
- * exchange/02-phase-c-interface-contract.md -- no text from Sony's original
- * header. Scope covers only what the game's source actually calls (30 files,
- * 41 symbols; only 4 primitive types confirmed used: POLY_F4, POLY_FT4,
- * SPRT, TILE).
- *
- * `tag`'s representation: real hardware packs a primitive's "next" pointer
- * into a 24-bit bitfield (`P_TAG.addr:24`) sharing a 32-bit word with
- * `len:8`, because real PS1 addresses fit in 21 bits. `Graphics.ot` is
- * declared `u32 ot[OT_SIZE]` in include/graphics.h -- a REAL project struct
- * we can't resize, fixed at 4 bytes/slot, matching the original
- * 32-bit-pointer PS1 memory model. Two representations were tried and
- * rejected before landing here (see exchange/12-phase-c-bootstrap.md):
- *   1. Widen `tag` to a full 64-bit `unsigned int` holding a real host pointer --
- *      overran the real 4-byte-wide `Graphics.ot` array by 2x (found via
- *      AddressSanitizer, not standalone testing against our own
- *      self-declared OT arrays).
- *   2. A small-integer handle registry (PC_GPU_RegisterHandle/
- *      PC_GPU_ResolveHandle) mapping handle<->pointer, reset each
- *      ClearOTag call -- fit the 4-byte slot, but broke PS1-style
- *      double buffering: the game builds next frame's OT while drawing the
- *      previous frame's already-built one, and the registry's single
- *      global counter is shared across both, so clearing the *next* OT
- *      silently invalidated every handle already registered in the
- *      *previous* one before DrawOTag ever walked it -- every OT came up
- *      empty (confirmed via gdb: PC_GPU_RegisterHandle hit 300+ times over
- *      12s, FillQuad/FillRect hit zero times), a permanent black screen.
- * This build is `-m32` (see exchange/12-phase-c-bootstrap.md's "32-bit
- * decision") -- host pointers are already 4 bytes here, the same width as
- * `tag`, so the simplest and most literal option is to store the pointer
- * directly, exactly like the original 32-bit game/hardware assumed. This
- * stops working the moment the project migrates to 64-bit (pointers won't
- * fit in `tag` again) -- whichever of the two rejected approaches gets
- * revived then must also solve the double-buffering lifetime problem this
- * one exposed, not just the 4-byte-width one.
- */
+/* Clean-room PC replacement for the PsyQ libgpu.h interface: struct layouts and signatures only, for the
+ * surface the game references. `tag` holds a 32-bit TOKEN into libgpu.c's per-frame OT registry, never a
+ * host pointer. See docs/pc-port/subsystems/gpu.md, "Primitive packet layout in the clean-room header". */
 #ifndef PLATFORM_PC_PSYQ_LIBGPU_H
 #define PLATFORM_PC_PSYQ_LIBGPU_H
 
 #include "sys/types.h"
-#include "types.h" /* u32, for P_TAG.tag -- see the file-header comment on tag's width */
+#include "types.h" /* u32, for the 32-bit P_TAG.tag token */
 
 typedef struct {
     short x, y;
@@ -74,10 +37,9 @@ typedef struct {
     u_char pad0, pad1;
 } DISPENV;
 
-/* P_TAG's addr is widened from the real 24-bit bitfield -- see file header
- * comment. Every primitive struct below starts with the same tag/r0/g0/b0/
- * code layout so a `(P_TAG *)p` cast works uniformly, matching the real
- * header's design intent even though the field width differs. */
+/* P_TAG.tag replaces the hardware's 24-bit addr / 8-bit len word with a 32-bit token. Every primitive
+ * struct below starts with the same tag/r0/g0/b0/code layout so a `(P_TAG *)p` cast works uniformly,
+ * as in the real header. */
 typedef struct {
     u32 tag;
     u_char r0, g0, b0, code;
@@ -120,14 +82,9 @@ typedef struct {
     short  w, h;
 } TILE; /* free-size Tile (solid-color rect, no texture) */
 
-/* Real hardware's DR_MODE is `{unsigned int tag; unsigned int code[2];}` -- code[0]/
- * code[1] are the raw GP0(E1h)/GP0(E2h) command words, never inspected by
- * game code directly (only ever built by SetDrawMode() and consumed by our
- * own DrawOTag()). We give it the same tag/r0/g0/b0/code header every other
- * primitive struct has instead, so DrawOTag's generic P_TAG-cast type
- * dispatch (getcode()) works uniformly -- the real code[2] payload doesn't
- * leave room for that header without colliding, and nothing outside
- * libgpu.c reads these fields to notice the difference. */
+/* Hardware DR_MODE is `{tag; code[2]}` (raw GP0(E1h)/GP0(E2h) words). It gets the common
+ * tag/r0/g0/b0/code header instead so DrawOTag's generic getcode() dispatch works; only SetDrawMode
+ * builds it and only DrawOTag reads it (r0/g0/b0 carry dtd + the texture window, see libgpu.c). */
 typedef struct {
     u32 tag;
     u_char r0, g0, b0, code;
@@ -142,11 +99,9 @@ typedef struct {
     unsigned int *paddr;
 } TIM_IMAGE;
 
-/* Our own internal primitive-type discriminators, stored in the `code` byte
- * by SetPolyF4/SetPolyFT4/SetSprt/SetTile/SetDrawMode. Since these are all
- * real functions (not macros) we implement ourselves, we're free to pick our
- * own scheme rather than replicate Sony's raw GP0 command byte values --
- * nothing outside libgpu.c ever reads `code` directly. */
+/* Internal primitive-type discriminators stored in the `code` byte by SetPolyF4/SetPolyFT4/SetSprt/
+ * SetTile/SetDrawMode. These are real functions here, so the scheme need not match Sony's GP0 command
+ * bytes; nothing outside libgpu.c reads `code` directly (but see PC_GPU_PRIM_TYPE below). */
 #define PC_GPU_PRIM_POLY_F4  1
 #define PC_GPU_PRIM_POLY_FT4 2
 #define PC_GPU_PRIM_SPRT     3
@@ -182,17 +137,9 @@ typedef struct {
 #define setTPage(p, tp, abr, x, y) ((p)->tpage = GetTPage(tp, abr, x, y))
 #define setClut(p, x, y)           ((p)->clut = GetClut(x, y))
 
-/* ⚠️ Stage 2.3: `tag` holds a TOKEN (an index into libgpu.c's per-frame OT registry), NOT an
- * address -- see the token-bridge comment in platform/pc/src/libgpu.c. Only AddPrim/ClearOTag/
- * DrawOTag may mint or resolve tokens, so these two macros must NEVER be used to build an OT
- * link: storing a raw pointer through setaddr() produces a value DrawOTag resolves to NULL,
- * which TERMINATES the whole walk and silently drops every primitive after it in the chain.
- *
- * That is exactly what happened when the token bridge first landed: `addPrim` below was left as
- * a raw setaddr/getaddr pair while `AddPrim` was converted, so core/engine.c's compass
- * (ot[OT_SIZE-5]) and core/screen_effects.c's overlays poisoned the tail of the walk -- killing the
- * compass, the logo and every textbox, while 3D geometry (earlier buckets, walked first) looked
- * perfect. Kept only for raw tag inspection; `nextPrim`/`isendprim` are likewise token-domain. */
+/* `tag` holds a TOKEN, not an address: only AddPrim/ClearOTag/DrawOTag may mint or resolve one. A raw
+ * pointer stored through setaddr() resolves to NULL in DrawOTag, which TERMINATES the walk and drops
+ * every later primitive. Kept for raw tag inspection only; nextPrim/isendprim are token-domain too. */
 #define setaddr(p, _addr) (((P_TAG *)(p))->tag = (u32)(size_t)(_addr))
 #define getaddr(p)        ((unsigned int)(size_t)(((P_TAG *)(p))->tag))
 #define setlen(p, _len)   ((void)(p), (void)(_len)) /* no length field to set -- kept for source compatibility */
@@ -209,23 +156,9 @@ typedef struct {
 
 #define setPolyF4(p)  SetPolyF4(p)
 
-/* `code`'s low nibble is our primitive-type tag (PC_GPU_PRIM_*); bit 0x80 is
- * free for the real semi-transparency flag since our tags only use 1-5.
- *
- * BUT: not all game code builds a primitive via our SetPolyF4/SetPolyFT4/
- * etc setters (which are the only place that writes our PC_GPU_PRIM_* tag).
- * AddObjPrim_Gui and friends (core/object.c, used across 10 files -- the
- * primary way most sprites in this game actually get drawn) set `.code`
- * directly to the real hardware GP0 command byte instead:
- * `poly->code = GPU_CODE_POLY_FT4` (0x2c, optionally |GPU_CODE_SEMI_TRANS
- * =0x02) -- confirmed via grep to be the ONLY raw `.code =` assignment
- * anywhere in src (any .c), always for POLY_FT4. Primitives built this way
- * never carried our discriminator at all, so DrawOTag's dispatch silently
- * skipped them -- found from a real screenshot (a splash-screen sprite
- * never drew, leaving stale VRAM content visible instead), not a
- * hypothetical. PC_GPU_PRIM_TYPE/PC_GPU_IS_SEMI now recognize the real
- * 0x2c-based code (masking out its own semi-trans bit) as POLY_FT4 in
- * addition to our own 1-5 scheme -- see exchange/12-phase-c-bootstrap.md. */
+/* `code`'s low nibble is the PC_GPU_PRIM_* tag; bit 0x80 is the semi-transparency flag. AddObjPrim_Gui
+ * and friends (core/object.c) instead write the real GP0 byte, `poly->code = GPU_CODE_POLY_FT4` (0x2c,
+ * optionally | 0x02 semi-trans), so the decoders below accept both schemes. See gpu.md, "Gotchas". */
 #define PC_GPU_REAL_CODE_POLY_FT4 0x2c
 #define setSemiTrans(p, abe) \
     ((abe) ? setcode(p, getcode(p) | 0x80) : setcode(p, getcode(p) & ~0x80))

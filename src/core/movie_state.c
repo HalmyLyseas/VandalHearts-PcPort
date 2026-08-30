@@ -1,21 +1,6 @@
-/* Two top-level game states and the display-mode reset they share (segment 0x37758).
- *
- * State_Movie is the STR playback state, dispatched from core/main.c. A static 17-entry table
- * gives each movie its CD sector, frame count, skip policy (1 = START-skippable, 2 = wait
- * for O/X at the end, 0 = automatic), the gState.secondary to transition to when it ends,
- * and its XA volume. gState.secondary sequences it: 0/1 set up (24-bit mode, XA
- * attributes), 10/11 start and pump frames, 12 waits for confirm, 20 and 30/31 chain into
- * a follow-up movie, 99/100 restore 16-bit mode and pick the next primary state from
- * gState.movieIdxToPlay (logo -> title, the *BU/EPI chapter movies -> STATE_26 at a
- * specific scene, 6BU -> the town, END1 -> the ending).
- *
- * ClearScreen(is24bit) clears both framebuffers and rebuilds their draw envs at 16bpp or
- * 24bpp width; State_Movie is its only caller (24-bit on entry, 16-bit on the way out).
- * The PC port hooks it as the point where a finished movie's held last frame is dropped.
- *
- * State_ChapterComplete is the between-chapter still: it loads USEND_n.TIM per
- * gState.chapterOutro, spawns the fullscreen-image object, and on O sends the player into
- * the matching chapter movie. */
+/* Two top-level game states and the display-mode reset they share (segment 0x37758): State_Movie
+ * (STR playback, driven by a 17-entry per-movie table and gState.secondary), ClearScreen(is24bit)
+ * (its 16/24bpp framebuffer reset) and State_ChapterComplete (the between-chapter USEND_n.TIM still). */
 #include "common.h"
 #include "state.h"
 #include "object.h"
@@ -89,11 +74,9 @@ void State_Movie(void) {
              (movies[s_movieIdx_8012327c].skip == 2) ? 12 : movies[s_movieIdx_8012327c].transition;
       }
 #ifdef PERMUTER
-      /* PC-port QoL (PERMUTER is defined only by the platform/pc build, so the matching build is
-       * byte-identical): player-1 START skips ANY movie straight to its transition -- the game
-       * itself already does exactly this for debug (the gPad2/gState.debug branch just below), we
-       * just expose it on player-1 START without needing debug mode. Makes long story movies
-       * (1BU_WS etc.) skippable like the intro logos, speeding up debug iteration a lot. */
+      /* PC-port QoL: player-1 START skips ANY movie straight to its transition. The game already
+       * does exactly this for debug (the gPad2/gState.debug branch just below); this exposes it
+       * without debug mode. PERMUTER is defined only by the platform/pc build. */
       if (gPadStateNewPresses & PAD_START) {
          SsSetSerialVol(SS_SERIAL_A, 0, 0);
          Movie_Finish();
@@ -212,10 +195,9 @@ void ClearScreen(s32 is24bit) {
    SetDefDrawEnv(&gGraphicBuffers[1].drawEnv, 0, 272,
                  (is24bit ? SCREEN_WIDTH * 3 / 2 : SCREEN_WIDTH), SCREEN_HEIGHT);
 #ifdef PERMUTER
-   /* PC port (matching build unaffected): a finished movie keeps its last decoded frame on the
-    * fullscreen overlay through any wait-for-button end, so the screen shows the final image
-    * instead of going black (which looked like a freeze). ClearScreen means the game is redrawing
-    * the next scene, so drop the overlay now and let normal VRAM rendering resume. */
+   /* PC port: a finished movie keeps its last decoded frame on the fullscreen overlay through any
+    * wait-for-button end (so the screen shows the final image, not black). ClearScreen means the
+    * game is redrawing the next scene, so drop the overlay now and let VRAM rendering resume. */
    { extern void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h);
      PC_GpuSetMovieOverlay((const unsigned short *)0, 0, 0); }
 #endif

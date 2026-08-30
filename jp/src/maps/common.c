@@ -1,22 +1,6 @@
-/* Entry point and shared geometry toolkit for the map_effects_*.c corpus.
- *
- * SetupMapExtras() is the hub: called once per field/battle init from states/game_setup.c, right
- * after the OBJF_SETUP_MAP_OBJECTS pass over maps/setup_objects.c's per-map chest/scenery
- * tables. It switches on gState.mapNum and spawns that map's scripted-scenery driver
- * (drawbridges, buttons, floodgates, the sand pit, the lava-pit platform, the car release,
- * the barricade...) plus ambient objects -- rain, chimney smoke, Map 38's seven torch
- * flames -- and the camera-zoom service object kept in gCameraZoomObj. InEventScene() picks the
- * cutscene vs. battle variant and gates the battle-only drivers.
- *
- * The rest is the toolkit every other map_effects file builds on: tile-model elevation
- * edits (AdjustTileElevation, AdjustFaceElevation[2], SetFaceElevation), the matrix
- * versions (RotateMapTile, RotTransMapTile), and the direct camera pokes (PositionCamera,
- * PanCamera).
- *
- * Local handlers: Objf399_Map11, the Map 11 drawbridge-lever cutaway (pans to the lever,
- * sinks it, and hands mapState 1->2 to Objf362_DrawbridgeButton), and
- * Objf753_IncrementMapState0, a one-shot event-script helper. Unreferenced leftovers kept
- * byte-exact: func_80095128, RotateMapTile, AdjustAreaElevation_FromOrigin. */
+/* Entry point and shared geometry toolkit for maps/: SetupMapExtras() (called once per
+ * field/battle init from states/game_setup.c) spawns each map's scripted-scenery driver and
+ * ambience; the rest is tile-model elevation edits, the matrix variants and camera pokes. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

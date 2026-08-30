@@ -1,25 +1,6 @@
-/* Battle front-end and turn driver (segment 0x201b8): the player-facing battle field --
- * input, cameras, menus, info windows, scripted per-map events -- plus Objf013_BattleMgr,
- * the object that drives the whole turn loop.
- *
- * Field services: UpdateInput (pad edges + DPAD auto-repeat), CenterCamera / UpdateCamera /
- * UpdatePlayerCamera / UpdateNonPlayerCamera, the item-received dialogs and the spell/item
- * status windows. Objects: Objf597_BattleIntro (opening swoop + battle conditions),
- * Objf425_BattleOptions (the idle field cursor -- unit cycling, turn counter, zoom/options,
- * end turn), Objf003_BattleActions (a selected player unit: move grid, path walk, then the
- * Attack/Magic/Item/Wait menu; spawns OBJF_TARGETING_ATTACK/_SPELL), Objf030_FieldInfo
- * (terrain/unit inspection), Objf586_BattleMsgBox with its SetupBattleMsgBox helpers, and
- * the scripted-event drivers Objf585_BattlePlayerEvent / Objf587_BattleEnemyEvent (per-map
- * dialogue and reinforcement spawns; win/lose rules live in battle/evaluators.c).
- *
- * Objf013_BattleMgr (~:3200) is the turn state machine: 0 wait for gIsEnemyTurn -> 13
- * "ENEMY TURN" banner, enemy event, upkeep -> 2..7 per-unit loop (pick the next enemy or
- * AI ally, spawn OBJF_AI_CHOOSE_ACTION (battle/ai.c), wait on gAiPlanReady, walk the unit to
- * gX/gZ_801233d8) -> 8..12 dispatch the planned action per gAiActionType (wait/face,
- * OBJF_UNIT_ATTACKING, OBJF_UNIT_CASTING) -> 99/100 cleanup -> 14 "PLAYER TURN" banner,
- * ticker, player event, upkeep, camera restore. States 101-105 are the map-40 scripted
- * spawn; map 8 is the attract-mode demo path; the block after the switch is the enemy-turn
- * follow camera. */
+/* Battle front-end and turn driver (segment 0x201b8): input, cameras, menus, info windows, the
+ * scripted per-map events, and Objf013_BattleMgr, the turn state machine (0 wait -> 13 enemy banner
+ * and upkeep -> 2..7 per-unit AI loop -> 8..12 dispatch -> 99/100 cleanup -> 14 player turn). */
 #include "common.h"
 #include "object.h"
 #include "battle.h"
@@ -255,14 +236,9 @@ void UpdatePlayerCamera(void) {
    }
 
 #ifdef PC_FEAT
-   /* Stage-3 (1.4 F6): 5-stop elevation. Rest points vx = 0x80 + k*0xC0 (k=0..4) =
-    * 11.25 / 28.125 / 45 / 61.875 / 78.75 deg -- the clamped 11.25..78.75 range split into 4 equal
-    * 16.875-deg (0xC0) intervals. Every stop lands exactly on the 1/4096-deg angle grid and it includes
-    * a clean 45. (A 0x80 bitmask gives 7 stops -- too many, near-redundant; a 5-stop split needs an
-    * explicit interval, since the retail `(vx+0x80)&mask` trick only produces power-of-2 spacing.)
-    * Pitch (vx) is NOT quadrant-coupled (only yaw is), and every auto-camera (cutscene/SFX) drives vx by
-    * raw values + save/restore, so this stays isolated to player control. Speed 0x20 divides 0xC0, so
-    * taps land exactly on the stops. */
+   /* Five elevation stops at vx = 0x80 + k*0xC0 (k=0..4): 11.25..78.75 deg in equal 16.875-deg
+    * steps, including a clean 45. Pitch is not quadrant-coupled and every auto-camera drives vx by
+    * raw values, so this stays player-only; speed 0x20 divides 0xC0, so taps land on the stops. */
    gCameraRotation.vx += mapXRotationSpeed;
    if (((gCameraRotation.vx - 0x80) % 0xC0) == 0) {
       mapXRotationSpeed = 0;
@@ -1731,9 +1707,7 @@ u8 s_hiddenItemSentToDepot_801231f4;
 #define OBJF 003
 void Objf003_BattleActions(Object *obj) {
    // TODO: Eliminate gotos?
-   // obj->state3: cursorState
-   // obj->x3: unitX
-   // obj->z3: unitZ
+   // obj->state3: cursorState; obj->x3: unitX; obj->z3: unitZ
    UnitStatus *unit, *cursorUnit;
    Object *obj1, *obj2;
    s32 i; // iz, mapNum
@@ -2501,19 +2475,15 @@ void Objf425_BattleOptions(Object *obj) {
       s_menuMem_battleOptions_801231fc = 0;
       if (gSignal1 == 0) {
 #ifdef PC_FEAT
-         /* Stage 3 (1.1B): Square toggles the enemy threat overlay -- the union of every living
-          * enemy's move+attack reach, drawn purple. Square was freed by the 1.1A control change
-          * (ally-cycle moved to the shoulders). Rebuilt once on enable (positions are static during
-          * the player turn). See exchange/62. */
+         /* Square toggles the enemy threat overlay -- the union of every living enemy's move+attack
+          * reach, drawn purple. See docs/gameplay-additions.md, "Enemy threat overlay". */
          if ((gSavedPadStateNewPresses & PAD_SQUARE) && !gPlayerControlSuppressed &&
              !gClearSavedPadState) {
             gShowThreatGrid = !gShowThreatGrid;
          }
-         /* Refresh the overlay when the board changed (unit/crate moved, a death). This is done HERE,
-          * in the idle field-cursor state, NOT per-frame in UpdateInput: ComputeThreatGrid clobbers
-          * the shared pathfinding scratch (grids 3/4 + gImpededSteps), so running it while the game
-          * is mid-action corrupts that logic -- it broke crate pushes (bugreport-03). The idle phase
-          * has no pathfinding in flight, so it's safe. Cost: only recomputes on an actual change. */
+         /* Rebuild the overlay only when the board changes, and only here in the idle field-cursor
+          * state: ComputeThreatGrid clobbers the shared pathfinding scratch (grids 3/4 + gImpededSteps),
+          * so running it mid-action (a crate push, say) corrupts that logic. */
          if (gShowThreatGrid && !gPlayerControlSuppressed) {
             static u32 s_threatSig = 0;
             u32 sig = 0;
@@ -2536,18 +2506,16 @@ void Objf425_BattleOptions(Object *obj) {
                s_threatSig = sig;
             }
          }
-         /* Stage 3 (1.1A): bidirectional ally-cycle on the shoulder buttons. The PC backend
-          * routes the physical L1/R1 to pad 2 (gPad2State), leaving the camera (right stick
-          * -> pad 1) untouched. R1 = next unit (the original Square behaviour), L1 = previous. */
+         /* Bidirectional ally-cycle on the shoulder buttons. The PC backend routes the physical
+          * L1/R1 to pad 2 (gPad2State), leaving the camera (right stick -> pad 1) untouched.
+          * R1 = next unit (the retail Square behaviour), L1 = previous. */
          {
             s32 cycleDir = (gSavedPad2StateNewPresses & PAD_R1) ?  1 :
                            (gSavedPad2StateNewPresses & PAD_L1) ? -1 : 0;
             if (cycleDir != 0 && !gPlayerControlSuppressed && !gClearSavedPadState) {
-               /* Step ONE unit in the press direction, THEN find the next selectable unit,
-                * and store the SELECTED index (not one past it). The original forward-only
-                * Square cycle advanced lastSelectedUnit one past the selection; that +1/-1
-                * offset was invisible in a single direction but mis-stepped for ~2 presses
-                * when REVERSING (bugreport-01). This do-while keeps it symmetric. */
+               /* Step ONE unit in the press direction, THEN find the next selectable unit, and
+                * store the SELECTED index. The retail forward-only cycle stores one past it; that
+                * offset is invisible in one direction but mis-steps for ~2 presses on a reversal. */
                i = 0;
                do {
                   gState.lastSelectedUnit += cycleDir;
@@ -2918,10 +2886,9 @@ void FieldInfo_HandleCursorUnit(Object *obj) {
       // Bug: cursorUnit is uninitialized here; presumably because this function's code was lifted
       // from Objf003_BattleActions
 #ifdef PC_PORT
-      /* PC_PORT: cursorUnit is uninitialised (the dev-acknowledged bug above), so
-       * cursorUnit->idx is a read through a garbage low-address pointer. Mirror the PSX
-       * fault behaviour deterministically (read-0), reducing the compare to "is the cursor
-       * tile empty?" -- same gated guard as the US tree (src/battle/field.c). */
+      /* cursorUnit is uninitialised (the retail bug above), so cursorUnit->idx reads through a
+       * garbage low-address pointer. PSX reads 0 there; mirror that deterministically, which reduces
+       * the compare to "is the cursor tile empty?". NULL site: FieldInfo_HandleCursorUnit+0x7d. */
       if (gMapUnitsPtr[gMapCursorZ][gMapCursorX].s.unitIdx == 0) {
          break;
       }
@@ -3909,10 +3876,9 @@ void Objf013_BattleMgr(Object *obj) {
    if (!gPlayerControlSuppressed) {
       s16 a, b;
 #ifdef PC_PORT
-      /* PC_PORT: unitSprite can be NULL here when no unit occupies the followed tile
-       * (crashed the JP demo battle on map 8 at exactly this line). On PSX these reads
-       * yield 0; mirror that exactly (read-0, NOT skip -- the camera still eases toward
-       * origin) -- same gated guard as the US tree (src/battle/field.c). */
+      /* unitSprite is NULL when no unit occupies the followed tile. PSX reads 0 through NULL, so
+       * mirror that exactly (read-0, NOT skip: the camera still eases toward origin) and the math
+       * stays bit-identical. See docs/memory-safety.md, "How the port handles them". */
       if (OBJ.followUnit) {
          s32 sx = unitSprite ? unitSprite->x1.n : 0;
          s32 sz = unitSprite ? unitSprite->z1.n : 0;

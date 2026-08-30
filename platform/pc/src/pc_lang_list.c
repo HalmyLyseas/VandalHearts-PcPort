@@ -1,12 +1,6 @@
-/* pc_lang_list.c -- language-pack ENUMERATION, split out of pc_lang.c (2026-08-22) so it
- * compiles in BOTH region cores. The langpack ENGINE stays US-only (JP links pc_lang_stub.c),
- * but the overlay's LANGUAGE picklist must be able to list installed packs on a JP session
- * too: with the DISC row pending a US-family disc, the user may queue a pack for the restart
- * (it persists as VH_LANG and loads on the next, US, boot). Listing is pure file I/O --
- * manifest.json reads under <deploy>/langpacks/ -- with no dependency on the US text path.
- *
- * PC_LangManifestCheck is THE ONE MANIFEST READER: the loader (pc_lang.c) and the picklist
- * both go through it, so the accept rule cannot drift between them. */
+/* pc_lang_list.c -- language-pack enumeration, compiled in both region cores: pure file I/O so a
+ * JP session can list installed packs and queue one for a pending US-disc restart. Owns the one
+ * manifest reader the loader and the picklist share. See docs/language-packs.md, "Runtime layout". */
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,15 +41,11 @@ static int MiniJsonInt(const char *buf, const char *key, int *out) {
 }
 
 #define LANG_GAME_ID "vandal-hearts-usa"
-#define LANG_FORMAT  2      /* v2 adds 1-byte/16-char item names (exchange/91); v1 packs still load */
+#define LANG_FORMAT  2      /* format 2 adds 1-byte/16-char item names; format-1 packs still load */
 
-/* The manifest is LOAD-BEARING (packaging decision, 2026-08-07): the folder name is a human
- * convention, the manifest is the machine truth. A pack with a missing/foreign/newer manifest is
- * refused LOUDLY and the game continues in English -- a renamed folder must never smuggle a pack
- * past identification. Returns 1 if the pack may load.
- *
- * `quiet` suppresses the stderr chatter for the picklist -- listing is not loading.
- * nameOut (may be NULL) gets the display name, "" when the manifest carries none. */
+/* The manifest is the pack's identity (the folder name is a human convention): a missing, foreign
+ * or newer manifest is refused loudly and the game continues in English. Returns 1 if the pack may
+ * load. `quiet` silences stderr for the picklist; nameOut (optional) gets the display name or "". */
 int PC_LangManifestCheck(const char *dir, int *formatOut, char *nameOut, size_t nameN,
                          int quiet) {
     char path[640], buf[2048], game[64], name[96], version[32];
@@ -98,9 +88,8 @@ int PC_LangManifestCheck(const char *dir, int *formatOut, char *nameOut, size_t 
 }
 
 /* Enumerate installed packs for the overlay picklist: every <deploy>/langpacks/<folder> that
- * PC_LangManifestCheck accepts -- the SAME gate the loader applies, called quietly (listing is
- * not loading), so the picklist can never offer a pack the loader would then refuse at boot.
- * Returns the count; folders and display names are parallel arrays. */
+ * PC_LangManifestCheck accepts (the loader's gate, applied quietly), so the picklist never offers
+ * a pack the loader would refuse at boot. Returns the count; folders/names are parallel arrays. */
 int PC_LangListPacks(char folders[][64], char names[][64], int max) {
     char deploy[512], root[560], pdir[640];
     DIR *d;

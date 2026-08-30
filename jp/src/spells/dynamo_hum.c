@@ -1,8 +1,6 @@
-/* Dynamo Hum spell effects (Objf395 electric orb, Objf396, Objf394 driver) and Flame
- * Breath, the monster melee attack (Objf375/382). Dispatched via gSpellsEx (see
- * spells/casting_main.c); drivers own the gSignal3 completion handshake, children do not.
- * Objf397/398 (explosion-burst pair) are cut content -- reachable from no spell table,
- * event script, or code path -- suffixed _Unused, kept byte-exact. */
+/* Dynamo Hum spell effects (Objf395 electric orb, Objf396, Objf394 driver) and Flame Breath,
+ * the monster melee attack (Objf375/382), dispatched via gSpellsEx
+ * (docs/decomp/spell-fx-dispatch.md). Objf397/398 are cut content, kept byte-exact. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

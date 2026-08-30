@@ -9,7 +9,7 @@ this tool a translator editing the grouped files changed nothing. The pipeline i
         -> lang_validate.py <disc> <workdir>
         -> lang_build.py <disc> <workdir> <outdir>
 
-Direction is ONE-WAY, translate/ -> strings/: the grouped view is the human-facing layer, so where
+Direction is ONE-WAY, translate/ -> strings/: the grouped view is the translator-facing layer, so where
 both carry a (different) translation, translate/ wins and the conflict is REPORTED, never silent.
 Dialogue has no grouped view (its files are already entity-shaped) and is untouched here.
 
@@ -57,10 +57,9 @@ def merge(work, revert_cleared=False):
     stats, conflicts, reverts = {}, [], []
 
     def put(table, idx, text, src):
-        # translate/ is the human layer and now round-trips (lang_group carries the existing
-        # translation into the view), so an EMPTY field where strings/ has text is a deliberate
-        # clear -- reverting to English. Silently keeping the old text would ship a translation the
-        # author removed. Report it always; apply it only with --revert-cleared.
+        # translate/ is the translator's working copy and round-trips (lang_group carries the
+        # existing translation into the view); an empty field where strings/ has text is a
+        # deliberate clear to English. Report it always; apply it only with --revert-cleared.
         ents = T[table]["entries"]
         if idx >= len(ents):
             return                       # this group row has no slot in this table (they differ in

@@ -35,11 +35,8 @@ u8 gCardFilePath[] = "bu00:BASLUS-00447VH";
 // Could be defined here, but leaving external since it contains image data:
 extern CardFileData_Header gCardFileHeader;
 
-/* .sdata (definitions moved further down for proper ordering)
-u8 *gCardFilenameBufferPtr;
-u8 *gCardFileBufferPtr;
-u8 *gCardFileVerifyBufferPtr;
-*/
+/* .sdata: gCardFilenameBufferPtr / gCardFileBufferPtr / gCardFileVerifyBufferPtr are defined
+ * further down so the section ordering matches. */
 
 /* .sbss */
 s32 gEventSwCardIOE;
@@ -71,27 +68,9 @@ typedef struct {
 #ifdef PC_PORT
 #include <stddef.h> /* offsetof */
 
-/* PC_PORT (Stage 2.3): the in-battle save is the ONE save record whose in-memory layout is not
- * width-stable, because UnitStatus embeds two live runtime pointers (`struct Object *battler`
- * and `*sprite`). On the PSX those are 4 bytes each; at LP64 they are 8, plus a 4-byte alignment
- * hole ahead of them and 4 bytes of tail padding -- so sizeof(UnitStatus) goes 120 -> 136 and
- * sizeof(CardFileData_InBattleSave) goes 0x16cc -> 0x1950 (+644).
- *
- * Two things break as a result, and BOTH are silent:
- *   1. CalculateChecksum(sizeof(CardFileData_InBattleSave) - 4, ...) runs 592 bytes past the end
- *      of the 0x1700 card buffer, into unrelated memory that differs between the write and the
- *      read -- so the checksum never matches and the load reports "Load unsuccessful".
- *   2. The `*(RawInBattleSaveData *)` blit only moves 0x16cc of the struct's 0x1950 bytes, so
- *      everything from `chests` onward (map state, depot, gold, slain units, camera) would be
- *      truncated even if the checksum did match.
- * The regular save and the file listing are unaffected -- neither contains a UnitStatus, which is
- * why chapter saves have always worked and only the in-battle slot fails.
- *
- * Fix: serialize through the PSX layout explicitly instead of blitting the host struct. The card
- * image stays byte-identical to what real hardware writes, so saves remain interchangeable
- * between the 32- and 64-bit builds. battler/sprite are stored as zero: they are re-assigned
- * during battle setup (src/states/game_setup.c) and restoring a stale address would be meaningless on
- * hardware too. */
+/* PC_PORT: the in-battle save embeds UnitStatus, whose two live Object pointers make its layout
+ * width-dependent (sizeof 120 on PSX/-m32, 136 on LP64), so it is serialized through the PSX
+ * layout explicitly, never blitted. See docs/width-bugs.md, "The catalogue" (#7). */
 #define PSX_UNITSTATUS_SIZE 120
 #define PSX_UNITSTATUS_TAIL_OFF 12 /* PSX offsetof(UnitStatus, experience) */
 #define PSX_IBS_UNITS_OFF 448
@@ -99,7 +78,7 @@ typedef struct {
 #define PSX_IBS_SIZE 0x16cc
 
 /* If any of these ever trips, another member of the save record has started diverging by width
- * and the offsets below are no longer the PSX layout -- fix that before trusting a save file. */
+ * and the offsets below stop describing the PSX layout -- fix that before trusting a save file. */
 typedef char Pc_InBattleSaveLayoutAssert
     [(offsetof(CardFileData_InBattleSave, units) == PSX_IBS_UNITS_OFF && sizeof(PartyMember) == 34 &&
       sizeof(MapObject2) == 2 && sizeof(MapObject3) == 3 && sizeof(SlainUnit) == 6 &&

@@ -23,7 +23,7 @@ NULL entries (88..99), plus the PC port's added sentinel entry 100, are normaliz
 string. This matches the zero read produced by the Linux i386 fault fixup without relying on
 architecture-specific fault decoding, and makes every in-range table lookup safe on all PC targets.
 
-Stage-2 PC-port backend file only; the matching build never sees it.
+PC-port backend file only; the matching build never sees it.
 """
 import os
 import re
@@ -36,8 +36,8 @@ OUT = os.environ.get("VH_GENERATED_OUT",
                      os.path.join(VH, "platform", "pc", "src", "pc_string_table.c"))
 
 COUNT = 100
-# Region switch (exchange/102 P1): same table, region-specific address (both 100 entries;
-# entry 100 is the PC-added dojo sentinel in both regions).
+# Same table at a region-specific address (100 entries in both regions; entry 100 is the
+# PC-added dojo sentinel in both).
 REGION = os.environ.get("VH_REGION", "us")
 TABLE_ADDR = {"us": 0x8010102c, "jp": 0x80103530}[REGION]
 LOAD_ADDR = 0x80010000

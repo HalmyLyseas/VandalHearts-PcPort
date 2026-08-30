@@ -166,7 +166,11 @@ row inside the band.
 - The build gate guarantees coverage: a subtitle letter that appears nowhere else in your
   translation is added to the pack's font by codepoint (costing NO glyph slots), synthesised where
   possible, and a letter that cannot be drawn is a build error naming the file, cue, and
-  character. `lang_template.py` counts cue letters too, so the art report is complete up front.
+  character. `lang_template.py` counts cue letters too, so the art report is complete up front. It
+  mirrors the builder's own folding rule when it counts them: a krom-synthesizable character
+  (accented Latin) is counted as itself, and everything else as its Unicode uppercase, because the
+  builder folds a glyphless letter before erroring and a script sheet is capitals-only -- so the
+  report names exactly the art the build gate will demand.
 - Timings and cover rects are maintainer-validated per frame against the retail videos —
   translators normally never edit them.
 
@@ -390,7 +394,112 @@ Two layers:
   codes are free, `#N` insertions are measured at their referenced string's width. Over-budget lines
   are warnings by default, errors with `--strict`.
 
+The dry-run build behind layer 1 needs `--packart` for a non-Latin working set — without it the
+builder rejects every non-Latin string as a bad Latin one — and runs with `allow_incomplete` so an
+unfinished script pack surfaces its other errors (glyph capacity, collisions, budgets) instead of
+hard-failing on incompleteness, which is reported separately. Its internal pack name must itself
+pass the naming check ("Pack naming"), or the dry run bails before a single hard rule runs.
+
 ## Other tools
 
 - `lang_probe.py` — builds a labelled test pack (one marker per text source) for engine verification.
 - `en_audit.py` — scans the exported English for defects provable from the game's own data.
+
+---
+
+# 3. Pipeline internals
+
+Design facts a maintainer of the tools needs; translators can stop reading here. The runtime side
+(the `strings.bin` format, glyph slots, hostile-input rules) is in
+[`docs/language-packs.md`](../../../../docs/language-packs.md), "Developer reference".
+
+## Scope: the US retail disc is the universe
+
+Anything the US build never reaches does not exist for translation purposes — no PAL/JP
+consideration, no "might be used". Six on-disc files still carry Japanese (`SIBAI5`, `SIBAI7`,
+`SIBAIA`, `SIBAIE`, `SIBAIF`, `EVDEMO7`); they are exactly the six absent from `gEvtTextFiles[95]`
+(the event → text-file map), and their only references in `src/` are the `gCdFiles[]` disc-table
+entries in `core/cd.c`, which record every file's LBA — no `LoadText` call names them. Unreachable
+on both counts, so the exporter drops them. The same rule governs code literals: a Japanese literal
+is either **proven** dead (listed in `lang_export_literals.py`'s `DEAD` with its proof) or an
+unresolved question for a maintainer that stops the export — never something handed to a translator
+or dropped silently.
+
+Retail text is never spelled out in the tools. Exceptions keyed to a specific line (dead literals,
+dialogue lines proven not to render through the message box) are keyed by the FNV-1a hash of the
+line's bytes, with a proof that says *where* the line is, not what it says.
+
+## Text sources the draw-call sweep cannot see
+
+`lang_export_literals.py` sweeps `src/` for string literals passed straight to a draw call. Three
+kinds of text are reachable by a pack but invisible to that sweep, so they are curated by hand and
+guarded by a self-check that fails the export if one disappears or grows:
+
+- **Composed prefixes** — a literal built into a buffer before drawing (`"You got "` + a number,
+  `"TURN"` + a number), wrapped in `PC_LANGSTR` at the composition site (`WRAPPED_LITERAL_FILES`).
+- **Arrays of strings** — the title screen, memory-card prompts, the party list. The code that
+  consumes the array is wrapped, and `PC_LangStr` hashes whatever it is handed at run time, so one
+  wrap covers every entry (`ARRAY_SOURCES`).
+- **A string held in a char array** reached only through a pointer (`sEmptyFileCaption`), which
+  neither the literal sweep nor the pointer-array scan matches (`CHAR_ARRAY_LITERALS`).
+
+Three name tables — `gUnitTypeNames`, `gItemNames`, `gClassAdvancementNames` — draw through a third
+mechanism, `StringToGlyphs` into a sprite glyph strip, neither `DrawText` nor `DrawSjisText`.
+`gItemNames` is a second, longer item-name table (139 entries against `gItemNamesSjis`'s 101): the
+equip/status panel uses it, the shop and field use the Shift-JIS one.
+
+## On-screen budgets
+
+Budgets come from the real call sites in `src/`, and the disc is the oracle: a rule that fails
+retail's own shipped text is the rule being wrong.
+
+- **Pointer tables** — the column budget is the 3rd argument of `DrawText` at each call site.
+  `DrawText_Internal` **wraps** at the budget (column resets, row++) and does not clip, so exceeding
+  it costs extra rows and risks overflowing the window vertically, not losing characters.
+  `gStringTable` 20 columns at all its call sites; `gSpellDescriptions` and `gItemDescriptions`
+  35 (a 288×36 bar); `gItemDescriptions2` 29 (the safe minimum of 29–35 across its screens).
+- **Dialogue files** — stored bitwise-inverted with CRLF lines; `LoadText` walks them as up to 100
+  entries, a blank line toggling entry start/end and `END` terminating. `SHOP_T` draws through
+  `DrawText` in `ui/supplies.c` at 30 columns and wraps; every other file goes through the message
+  box, which **hard-clips** at 26 columns (the tail is silently lost). Entry 1 of every battle file is
+  the victory/defeat condition panel, drawn by `battle/field.c` with `DrawText` at 40 and 34 columns
+  (wrapping) — it is budgeted at the tighter of the two, not the message box's 26.
+- **`gText`** — `LoadText` unpacks a whole file into one shared 10928-byte buffer (`symbol_addrs.txt`:
+  `gText` size `0x2ab0`), a second budget independent of the on-disc size. The builder measures it by
+  simulating `LoadText` on the patched bytes, so it charges the encoding a script pack really writes
+  (1-byte codes, not UTF-8 lengths).
+- **Fixed tables** — the record width, with the padding read off the disc rather than assumed:
+  character and spell names are plain ASCII padded with NUL; item names are full-width Shift-JIS
+  padded with `0x8140`. Each table's slot 0 is an all-filler "empty" record, which is why unedited
+  records are kept verbatim rather than re-synthesised. `terrainText`'s column alignment is literal
+  spaces inside the string (`"Plains   0%"` vs `"Thicket 15%"`) — never trim or normalise it.
+
+## How glyph synthesis works
+
+Accented Latin is composed from the disc's own letterforms: the US font holds lowercase `a`–`z` at
+glyph indices 13–38 and uppercase at 68–93, and a mark is a few pixels OR'd into rows the base
+letter leaves blank. In the 8×9 font marks occupy rows 0–1, which lowercase leaves empty;
+**uppercase ink starts at row 1**, so uppercase accents cannot be synthesised at 8×9 and are
+reported as "needs pack art" rather than merged into the letter. Cedilla uses row 8, blank in every
+US letterform. An above-mark on `i`/`j` **replaces** the dot (`î` is dotless-i + circumflex): rows
+0–3 are cleared and the mark seats one row lower so it does not float over the empty dot row.
+
+The 16×15 krom font (item names, the TURN banner, the dojo YES/NO) has room to shift: an uppercase
+letterform moves down one row to free the top for the mark, so that path supports true uppercase
+accents. Base letterforms come from the BIOS charset parsed out of `pc_kanji_font.c`.
+
+## Fixed-width tables and the charmap
+
+Fixed records keep byte = char = column, so a non-ASCII character there gets a free 1-byte **pack
+code** assigned by the builder; the retail code→glyph map is rewritten so that code names a free
+glyph slot, and the synthesised bitmap is written into that slot — all through the `K_CHARMAP`
+section and `core/text.c`'s hand-off hook. The tables that carry pack codes are `gSpellNames`,
+`gClassAdvancementNames`, `terrainText`, `gCharacterNames`, `gUnitTypeNames` and `gItemNames`; the
+same records feed both the bitmap store and the glyph-sheet cells the strip path blits from. Pointer
+strings and dialogue carry real UTF-8 instead: the engine draws any codepoint the pack ships a glyph
+for, with no index space and no character-count ceiling. The slot pool, the code pool and script
+mode are described in the runtime reference.
+
+`lang_validate` mirrors the builder's rules rather than importing its results: the format-2 record
+width (16 one-byte chars when `bytes_per_char` is 1), the cue-letter case folding, and the `#N`
+cycle check all exist so that validate and build can never disagree.

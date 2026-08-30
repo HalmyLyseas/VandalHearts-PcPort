@@ -54,7 +54,10 @@ Every audio bug that survived the first "sounds right" sign-off lived in layer 2
   decoded into attack (shift/step/exponential), decay (exponential to the sustain target
   `min(0x7fff,(SL+1)<<11)`), sustain (shift/step/exp/direction) and release fields, and the envelope
   is advanced **once per 44.1 kHz output sample** — the sample-accurate transient shaping that a
-  60 Hz per-source gain update (the earlier OpenAL approach) physically could not reproduce.
+  60 Hz per-source gain update (the earlier OpenAL approach) physically could not reproduce. A
+  sustain phase in *decrease* mode that reaches 0 frees the voice: most SFX end this way rather
+  than by key-off (an SFX log shows ~90 looping key-ons against ~14 key-offs), and a voice left
+  active at level 0 would hog the pool.
 - **Reverb** (`RevProcess` and helpers). The game selects `SPU_REV_MODE_STUDIO_C`, so only that
   preset is embedded (32 registers + the 39-tap FIR). The comb/all-pass network runs over a
   `0x37F0`-sample work buffer at **22.05 kHz** (every other output sample), with the FIR resampling
@@ -115,6 +118,80 @@ SMF-style length field**. A tempo event is `FF 51 tt tt tt` (three raw bytes), n
 byte as a length, skipped into a note-on, and desynced the whole stream — the "stuck chord after a
 scene transition" bug.
 
+### VAB body transfer and CD completion accounting
+
+`SsVabTransBodyPartly` is called once per CD chunk, not once with the whole body:
+`ContinueLoadingVab` (`src/core/cd.c`) streams the `.VB` in fixed 90-sector (184320-byte) chunks
+through the same buffer address, mirroring the SPU-DMA partial transfers of real hardware. The
+backend stages each chunk and returns `-2` ("need more") until the full body has arrived, then
+decodes every VAG in one pass. Reporting completion after the first chunk leaves the caller's
+chunk loop with no way to request the next one, and `gCdLoader.state` never advances.
+
+The body size to wait for is `gCdFiles[gVabLoader.bodyCdf].sectorCt * 2048` — `cd.c`'s own
+notion of "done" — **not** the sum of the VAG size table. The two legitimately differ (a body can
+occupy more sectors than its samples need), and a smaller VAG-sum total makes the transfer report
+"done" before the loader has read every sector it expects, stalling it permanently. The `size`
+argument is the caller's fixed maximum chunk size, so it is clamped to the bytes still outstanding.
+Reaching from the audio backend into `gCdFiles` / `gVabLoader` is a deliberate, narrow layering
+exception; `gVabLoader` is an anonymous struct in `cd.c` and is mirrored field-for-field as an
+`extern struct {...}` in `libsnd.c`.
+
+### Tone selection
+
+`SeqPickTone` first looks for a key-range match inside the requested program (a bank authored
+as real multi-program instruments), then falls back to a global search: an exact key anywhere in
+the bank, else the nearest key overall. The fallback serves banks laid out as **one multisample
+tiled across programs** — each tone keyed to a single note (`min == max`) and the programs'
+key-blocks tiling the keyboard (prog 0: 24–31, prog 1: 32–39, … prog 9: 96–103) — where the note,
+not the program change, selects the sample.
+
+### SFX voices and hold loops
+
+SFX tones carry a degenerate, never-fading ADSR and most get no key-off. Their VAGs end in a
+one-block (~28-sample) sustain loop that decodes to a flat `+28672` DC — a **parking spot**, not
+part of the sound: hardware sits there at full envelope (constant DC, inaudible) until the ADSR
+release ramps it away. Looping it in the port keeps the voice active forever and starves the
+allocator, so a loop shorter than `SFX_HOLD_LOOP_MAX` (128 samples) is treated as one-shot and
+the sample is truncated **at `loopS`**, where the real audio ends cleanly (last samples −17 / 1 / 4).
+Truncating anywhere inside the DC block emits a rectangular pulse — the menu "pop". Genuine
+sustain loops (spell casting sounds) are 900–8500 samples, so the threshold separates them
+cleanly; those ring until the game's `SFX_ROLE_RELEASE` key-off. Music notes are untouched: they
+get real note-offs.
+
+### Voice ownership and the stuck-note reaper
+
+`libsnd.c` keeps a 32-slot bookkeeping pool (`s_voices`) beside the software SPU's voices:
+`active`, the `(vabId, prog)` pair `SsVoKeyOff` looks up, and for SEQ notes the owner
+`(ownSeq, ownCh, ownNote)`; each sequence holds the back-reference `noteVoice[ch][note]`. SEQ
+notes use voices 0–19 (idle first, then round-robin steal); `SsUtKeyOnV` SFX use 20–23. When a
+note-on steals an in-use SEQ voice, the previous owner's `noteVoice` entry is cleared so its later
+note-off cannot release the reassigned voice.
+
+The invariant that closes the whole hung-note class: **a live SEQ voice must belong to a playing
+sequence that still back-references it.** Two mechanisms enforce it:
+
+- `SeqReleaseOrphanVoices` (on stop, close and pause) force-releases every voice owned by the
+  sequence whether or not `noteVoice` still tracks it — the per-note `SeqNoteOff` loop misses
+  voices orphaned by a steal chain, and those sustain forever after a scene transition.
+- The reaper in `SwSpuSyncActive` (once per rendered audio block) force-releases a still-*held*
+  SEQ voice whose owning sequence no longer references it. It is safe by construction: SFX voices
+  (`ownSeq < 0`) are skipped, a correctly held note always satisfies
+  `noteVoice[ownCh][ownNote] == voice`, and a normally releasing voice is skipped via
+  `PC_SpuVoiceReleasing`.
+
+`SsSeqPlay` with any mode other than `SSPLAY_PLAY` freezes the sequencer and releases held notes
+(defensive — the game only passes `SSPLAY_PLAY`; play restarts from the top, so there is no
+resume state to keep).
+
+### Runaway-delta watchdog
+
+A SEQ carries no length field, so `Seq.end` is a fixed `SEQ_MAX_BYTES` (0x40000) cap, not the
+true end. If the parser runs past real track data it reads a garbage VLQ delta that `tickBudget`
+can never reach, and the sequence freezes holding its last chord. `SeqAdvanceByUsec` treats any
+inter-event delta above 32 quarter-notes (`ppqn * 32`, far beyond any real gap) as end-of-track.
+That path also drops held notes when looping (the chord is stale), whereas a clean `0x2F` loop
+keeps a note legitimately sustained across the seam.
+
 ## The PsyQ volume law
 
 Getting a note's loudness right required disassembling PsyQ's real key-on volume path out of the
@@ -158,10 +235,26 @@ context: our linear chain was already algebraically identical to PsyQ's `lin`, a
 `ProgAtr.mvol` had also been skipped entirely (the latter is what keeps the bass, program 0 at
 `mvol 127`, above the rest of the bank at `mvol 85–104`).
 
-Fixing the law made the mix ~3× quieter, so the master trim was re-derived from the **rendered
-output** (not from a model of the inputs, which was wrong by ~5 dB): `SpuSeqGain()` = **1.012**,
-giving RMS within 0.01 dB and peak within 0.3 dB of the octoshock reference. `VH_SPU_SQUARE=0`
-reverts to the linear law for A/B.
+### SFX key-on volume
+
+`SsUtKeyOnV` and `SsVoKeyOn` (`PlayOnVoice` in `libsnd.c`) run the **same chain** — PsyQ's
+`0x800d6d8c` serves all three key-on entry points — with one difference: hardware skips the
+per-channel volume stage for SFX (`0x800d6e7c` tests a flag byte for `0x21`, which `SsUtKeyOnV`
+sets). So `lin = (V/127)·(M/127)·(P/127)·(T/127)` with `V` the caller's `voll`/`volr`, fed to the
+voice's L and R gains separately rather than averaged to mono, then the square law. With typical
+`P, T ≈ 100/127` the two bank factors contribute `(0.787·0.787)² ≈ 0.38` (about 8 dB); without
+them full-volume SFX such as menu beeps sit near 0 dBFS and the voice cut-off pops.
+
+### Master trim
+
+`SpuSeqGain()` = **1.012** is the single output trim multiplied into every voice gain (music and
+SFX). It is derived from the **rendered output** against the octoshock reference: a per-voice
+gain × ADSR model predicts a 2.380× compensation for the square law, but the rendered mix still
+lands 4.97 dB low (RMS 1295.5 vs 2296.7, ×1.773) because that model ignores voice summation and the
+reverb send; the true factor is 2.380 × 1.773 = 4.22 and the trim 0.24 × 4.22 = 1.012. That puts
+the port's peak at −5.6 dBFS against the reference's −5.9 dBFS — the same headroom hardware leaves
+for SFX — with RMS within 0.01 dB. Rule: derive a *level* trim from rendered output, never from a
+model of the inputs.
 
 ## VAB tone-block packing
 
@@ -223,21 +316,17 @@ they cover A/B toggling, per-instrument isolation, and capture.
 
 | Variable | Effect |
 |---|---|
-| `VH_SPU_SQUARE=0` | Revert the square volume law to the old linear behaviour (A/B the law) |
-| `VH_SPU_GAIN=x` | Override the master output trim (default `1.012`; `0` mutes the whole SPU, leaving only XA) |
-| `VH_SEQ_MUTE=1` | Silence only the SEQ **music**, leaving VAG SFX and XA audible |
-| `VH_SPU_SOLOPROG=N` | Play only program `N` (isolate one instrument by ear) |
+| `VH_SEQ_MUTE=1` | Silence only the SEQ **music** (note-ons with an owning sequence), leaving VAG SFX and XA audible — a capture then has SFX without the music masking them |
+| `VH_SPU_SOLOPROG=N` | Play only program `N` (isolate one instrument by ear; spectral attribution alone misidentifies instruments, soloing settles it in one run) |
 | `VH_SPU_MUTEPROG=N` | Silence program `N` |
-| `VH_SPU_ANALOG=1` | Enable the reference-matching EQ tilt (**default OFF** — see notes); tunable via `VH_SPU_BASS`/`VH_SPU_TREB`/`VH_SPU_BASSFC`/`VH_SPU_TREBFC` |
-| `VH_SPU_REVOFF=1` | Disable reverb entirely (isolate its contribution) |
-| `VH_SPU_REVDEPTH=x` | Force the reverb wet mix to `x`, overriding `SsUtSetReverbDepth` |
-| `VH_SPU_DUMPVAG=1` | Dump every decoded VAG as `vh_vag_<vab>_<n>.wav` + a manifest CSV |
-| `VH_SPU_TRACE=1` | Per-voice CSV trace (`vh_spu_voices_ours.csv` / `vh_spu_globals_ours.csv`) for field-by-field diffing against a hardware capture |
-| `VH_SEQ_LOG=1` | SEQ diagnostic log (`vh_seq_log.txt`): open/note/voices/reaper lines |
+| `VH_SPU_DUMPVAG=1` | Dump every decoded VAG as `vh_vag_<vab>_<n>.wav` (44.1 kHz mono) plus `vh_vag_manifest.csv` (`vab,vag,len,loopS,loopE`; append-only, since several VABs load and each restarts its VAG numbering at 1) |
+| `VH_SPU_TRACE=1` | Per-voice CSV trace (`vh_spu_voices_ours.csv` / `vh_spu_globals_ours.csv`), one row per active voice per rendered block, laid out to diff field-for-field against a per-voice hardware capture. `block` is a render-block counter, not a video frame — align to a hardware trace by elapsed time. `sampleHz = 44100 · step / 4096`, the same scale as the hardware pitch register. SFX voices are tagged too, otherwise their zero-initialised ids look like a phantom "VAG 0" instrument |
+| `VH_SEQ_LOG` | SEQ diagnostic log (`vh_seq_log.txt`). Set to anything: `[open]` (bound VAB, header hexdump), the first 96 `[note]` events, `[watchdog]`, `[stall?]` (a wait over 8 quarter-notes, rate-limited ~1/s), `[reaper]`, `SsSeqStop`. `=1` also adds a ~6×/s `[voices]` census — active-voice count, note-on/off balance, master volume, reverb, wall-clock — plus a per-voice roster; a voice that stays `HELD` across many dumps is a stuck note (`ownSeq<0` = SFX, `ownSeq>=0` = a stalled sequence), and a jumping timestamp during a silence means the game thread blocked rather than muting |
 | `VH_SFX_LOG=1` | SFX key-on/off log (`vh_sfx_log.txt`) |
+| `VH_SPU_BASS` / `VH_SPU_TREB` / `VH_SPU_BASSFC` / `VH_SPU_TREBFC` | Parameters of the EQ tilt in `pc_spu.c`, which is compiled but **unreachable** (`s_analogOn` is fixed at 0) — see the gotcha below. Setting them has no audible effect |
 
-(The historical `VH_SWSPU` toggle is gone — the software SPU is now the only path; there is no OpenAL
-per-voice fallback.)
+The software SPU is the only rendering path; there is no OpenAL per-voice fallback, and no
+environment toggle for the volume law, master trim or reverb.
 
 ## Gotchas / notes
 
@@ -247,18 +336,18 @@ per-voice fallback.)
   the square law, and tone-block packing. No emulator covers that layer, because emulators run
   Sony's real `libsnd` code. When audio is wrong, suspect layer 2 first, and recover ground truth by
   disassembling the real PsyQ routine from `SLUS_004.47`.
-- **`VH_SPU_ANALOG` is a compensation, not a model.** It was originally believed to model the PS1
-  analog output stage, but octoshock's reference is raw digital (no analog filter). It is a fitted
-  spectral tilt that compensated for the *missing square law*; once the law was implemented it
-  **over-corrects** (measured worse than the raw mix), so it now defaults **OFF**. Kept only as a
-  tuning knob.
+- **The EQ tilt in `pc_spu.c` (`AnalogCh`) is a compensation, not a model, and is hardwired
+  off.** octoshock's reference output is raw digital — it sums voices and reverb, applies main
+  volume, clamps and scales ×0.75, with no analog or low-pass stage — so there is no analog output
+  stage to model. The filter is a spectral tilt fitted to a mix that lacked the square law; with
+  the law in place it over-corrects (mean |error| vs the reference over 30 Hz–12 kHz: raw mix
+  2.20 dB, raw mix + tilt 4.27 dB). Any residual spectral error belongs in the raw mix itself
+  (interpolation aliasing, ADSR attack brightness, reverb balance), not in a post-filter.
 - **VAG size table is in 8-byte units**, not bytes. Treating the entries as bytes decodes 1/8 of
   each sample and reads every later VAG from an 8×-too-small offset — right notes, wrong data.
-- **SFX have a degenerate, never-fading ADSR** and most get no key-off; they rely on a tiny
-  ~28-sample "hold" loop (a flat DC tail) as a parking spot. `libsnd.c` treats a loop shorter than
-  `SFX_HOLD_LOOP_MAX` (128 samples) as one-shot and truncates at `loopS`, so the hit plays out and
-  frees its voice — but truncating in the *wrong* place emits a rectangular DC pulse (the menu
-  "pop"), so the truncation point matters.
+- **SFX have a degenerate, never-fading ADSR** and park on a ~28-sample DC "hold" loop; the port
+  truncates them at `loopS`, and truncating anywhere else emits the menu "pop" — see
+  [SFX voices and hold loops](#sfx-voices-and-hold-loops).
 - **Offline VAB analysis from the ISO is unreliable** — the body offset there is not the one the
   game actually transfers, and it reads all samples as non-looping. When a sample's timbre is in
   question, dump what the game really plays (`VH_SPU_DUMPVAG`) rather than reasoning about the disc

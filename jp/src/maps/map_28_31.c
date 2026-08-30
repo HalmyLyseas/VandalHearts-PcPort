@@ -1,18 +1,6 @@
-/* Map 28's gate, plus the generic flame sprite and its Map 31 cutscene user.
- *
- * Objf663_Map28_Button (spawned by SetupMapExtras()) waits on gState.mapState, runs the
- * shared OBJF_BUTTON_DEPRESS cutaway, then spawns Objf662_Map28_OpenDoor, which sinks the
- * three gate tiles while shaking the camera, venting OBJF_SMOKE and fading the door
- * textures in. Map28_RemoveDoor() is the instant version used on reload.
- *
- * Objf304_661_Flame is the shared flame sprite, registered at both OBJF_FLAME (661) and
- * OBJF_MAP31_SCN61_XENO_FLAME (304), branching on its own functionIndex: as OBJF_FLAME a
- * static semi-transparent torch (SetupMapExtras() plants seven on Map 38); as the Xeno
- * flame it orbits a stored origin at a shrinking radius and fades out on mapState.
- * Objf303_Map31_Scn61_XenoFlames is the ring emitter -- spawned by the event script around
- * an entity sprite, it lays one flame per 8.4375 degrees through a full circle while
- * jittering the camera height. Its unused smaller quad and smoke animation table are cut
- * content kept byte-exact. */
+/* Map 28's gate (Objf663 button -> Objf662 door; Map28_RemoveDoor() on reload) and the shared
+ * flame sprite Objf304_661_Flame: a static torch as OBJF_FLAME, or the orbiting Xeno flame that
+ * Objf303_Map31_Scn61_XenoFlames rings around an entity sprite (one per 8.4375 degrees). */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

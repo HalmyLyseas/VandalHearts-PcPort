@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# build-manual.sh [version] [outfile] -- render docs/manual/manual.md to a PDF.
-#
-# Chain: pandoc (markdown -> standalone HTML, images embedded as data URIs) -> headless Chromium
-# (print-to-pdf). Chosen because it needs no LaTeX/weasyprint/typst install -- pandoc + a browser
-# are enough -- and CSS gives full control of the print layout. make-release.sh calls this and
-# stages the result as VandalHearts-<tag>-Manual.pdf (a release asset, not a committed binary).
+# build-manual.sh [version] [outfile] -- renders docs/manual/manual.md to a PDF: pandoc to
+# standalone HTML (images embedded as data URIs), then headless Chromium print-to-pdf --
+# no LaTeX/weasyprint/typst needed. Output is a release asset, never committed.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"

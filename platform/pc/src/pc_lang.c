@@ -1,26 +1,6 @@
-/* pc_lang.c -- language pack: WHAT THE TEXT SAYS.
- *
- * Pack discovery, the strings.bin format, and applying content. How the text LOOKS is a separate
- * translation unit -- see the file map in pc_lang.h, and keep the boundary.
- *
- * A PACK IS A DIFF. It carries only what the translator changed, so an unedited working set compiles
- * to an empty pack and loading it is provably a no-op. Three section kinds:
- *
- *   FIXED  a whole rebuilt table blob (gCharacterNames / gItemNamesSjis / gSpellNames) -> memcpy;
- *          the game indexes these records directly, so they must keep their exact width and filler.
- *   PTR    only the edited slots of a pointer table -> we allocate the new string and repoint that
- *          slot alone. A translation is therefore NOT bounded by the original string's length.
- *   TEXT   a whole patched on-disc dialogue file, keyed by its ISO LBA.
- *
- * WHY THE DIALOGUE PATH NEEDS NO src/ EDIT. LoadText -> LoadCdFile -> CdRead, and for a text file
- * that is ONE contiguous read of the file's own LBA (core/cd.c:985 reads gCdFiles[cdf].sectorCt sectors
- * from gCdFiles[cdf].startingSector, which is the plain ISO9660 LBA). So substituting the buffer
- * right after the read, keyed by LBA, is indistinguishable from the disc having held our bytes --
- * the game parses them with its own unmodified LoadText.
- *
- * NOT COVERED YET: the 8x9 glyph bitmaps and the ASCII->glyph map are private to src/core/text.c and need
- * gated hooks. Until then a pack is limited to the glyphs the US font already has.
- */
+/* pc_lang.c -- language pack: what the text says. Pack discovery, parsing strings.bin (a diff: an
+ * unedited working set builds to an empty pack) and applying its sections. How the text looks is
+ * pc_lang_font.c. Format + contracts: docs/language-packs.md, "Developer reference". */
 #include <dirent.h>          /* pack enumeration for the overlay picklist (portable; MinGW has it) */
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,9 +13,8 @@
 extern signed char gCharacterNames[35][7];
 extern unsigned char gItemNamesSjis[101][17];
 extern signed char gSpellNames[72][21];
-/* Drawn through StringToGlyphs (a sprite glyph strip), not DrawText -- which is why the first
- * coverage pass missed them; the step-1 probe run found them. gItemNames is a SECOND item-name
- * table used by the equip/status panel, longer than the Shift-JIS one the shop and field use. */
+/* Drawn through StringToGlyphs (a sprite glyph strip), not DrawText. gItemNames is a second
+ * item-name table used by the equip/status panel, longer than the SJIS one the shop and field use. */
 extern signed char gUnitTypeNames[86][11];
 extern signed char gItemNames[139][13];
 extern unsigned char gClassAdvancementNames[18][17];
@@ -57,7 +36,7 @@ extern char *gItemDescriptions2[101];
 #define K_CHARMAP 5
 #define K_KROM  6
 #define K_LITERAL 7
-#define K_CUES  8   /* F3 movie subtitles -- handed to pc_movie_subs.c */
+#define K_CUES  8   /* movie subtitles -- handed to pc_movie_subs.c */
 #define K_FONT16 9  /* codepoint-keyed 16x15 glyphs for the subtitle renderer (pc_lang_font.c) */
 #define MAX_TEXT_FILES 200
 
@@ -87,12 +66,9 @@ static struct {
     int loaded;                       /* 0 = not tried, 1 = tried (with or without a pack) */
     int active;                       /* a pack was found and applied */
     int mfOk;                         /* manifest passed the game/format gate (set before apply) */
-    int item1b;                       /* format 2: item names are 1-byte/16-char (exchange/91).
-                                       * Latched ONLY at load-success AND only if the pack's
-                                       * gItemNamesSjis table actually applied -- every earlier
-                                       * bail-out must leave the retail SJIS draw path in force,
-                                       * or a broken pack turns item names into mojibake instead
-                                       * of falling back to English. */
+    int item1b;                       /* format 2: item names are 1-byte/16-char. Latched only at
+                                       * load success and only if gItemNamesSjis applied, so a
+                                       * broken pack falls back to English, never mojibake. */
     int itemNamesApplied;             /* the gItemNamesSjis K_FIXED section landed (see item1b) */
     LangText text[MAX_TEXT_FILES];
     int textN;
@@ -123,23 +99,16 @@ static int LangPackDir(char *out, size_t n) {
         return 0;
     }
     if (!PC_GetDeployDir(deploy, sizeof deploy)) return 0;
-    /* Precision caps make the worst case (400+11+64+NUL = 476) provably fit the callers'
-     * 512-byte buffers, which is also what silences MinGW GCC's -Wformat-truncation (it
-     * reasons from the format string alone). Sized to the buffers, not below them: a deploy
-     * path that fits in `deploy` must come through untruncated. */
+    /* Precision caps make the worst case (400+11+64+NUL = 476) provably fit the callers' 512-byte
+     * buffers, which also silences MinGW GCC's -Wformat-truncation (it reasons from the format
+     * alone). Sized to the buffers, not below: a deploy path that fits must come through whole. */
     snprintf(out, n, "%.400s/langpacks/%.64s", deploy, lang);
     return 1;
 }
 
-/* F2 (exchange/92): the active language pack's backgrounds/ directory -- localized HD backgrounds as
- * <hash>.webp, the SAME convention as the HD pack. Returns NULL when no pack is selected or it ships
- * none. pc_hdpack.c resolves this source BEFORE the HD pack, so a translated background overrides the
- * HD (untranslated) one. Resolved once; the path is a process-lifetime static, safe to store.
- *
- * Gated on MANIFEST ACCEPTANCE (s_lang.mfOk): a pack the loader refuses -- foreign game id, newer
- * format, no manifest -- must not smuggle its backgrounds in either; the refusal contract is "the
- * game continues in English", visuals included. LangLoad() is idempotent and documented safe after
- * main() starts, which is earlier than any LoadImage upload can reach us. */
+/* The accepted pack's backgrounds/ dir (<hash>.webp, the HD-pack convention) or NULL; resolved once
+ * into a process-lifetime static. Gated on manifest acceptance (mfOk): a refused pack must not
+ * smuggle visuals in. See docs/language-packs.md, "Load timing and the boot latch". */
 const char *PC_LangBgDir(void) {
     static char dir[600];
     static int resolved;               /* 0 = not yet, 1 = present, -1 = none */
@@ -164,9 +133,8 @@ static void ApplyFixed(int id, const unsigned char *p, unsigned len) {
         if (PC_Verbose()) fprintf(stderr, "[lang] %-18s %5u B held for the battle hook\n", kTables[id].name, len);
         return;
     }
-    /* id is a pack-supplied u32 cast to int: >= 0x80000000 arrives NEGATIVE and would sail past a
-     * one-sided >= NTABLES test into kTables[id] -- here that garbage entry supplies a memcpy
-     * DESTINATION. Both bounds, always. */
+    /* id is a pack-supplied u32 cast to int: >= 0x80000000 arrives negative and would sail past a
+     * one-sided >= NTABLES test into kTables[id], a garbage memcpy destination. Both bounds, always. */
     if (id < 0 || id >= NTABLES || !kTables[id].fixed) { fprintf(stderr, "[lang] bad FIXED id %d\n", id); return; }
     if (len != kTables[id].bytes) {
         fprintf(stderr, "[lang] %s: pack has %u B, the table is %zu B -- skipped (rebuild the pack)\n",
@@ -224,11 +192,8 @@ static void AddText(int lba, const unsigned char *p, unsigned len) {
     s_lang.textN++;
 }
 
-/* Manifest reading + pack enumeration (MiniJson*, PC_LangManifestCheck, PC_LangListPacks) moved
- * to pc_lang_list.c (2026-08-22) -- it compiles in BOTH region cores so the overlay's LANGUAGE
- * picklist can enumerate installed packs on a JP session too (queueing a pack for a pending
- * US-disc restart). PC_LangManifestCheck remains THE ONE MANIFEST READER: the loader below and
- * the picklist share the same accept rule. */
+/* Manifest reading + pack enumeration live in pc_lang_list.c (compiled in both region cores);
+ * PC_LangManifestCheck is the one manifest reader the loader and the picklist share. */
 
 /* The folder name selected at boot ("" when no pack loaded) -- the overlay's picklist compares its
  * pending selection against this to show the restart marker. */
@@ -239,8 +204,8 @@ const char *PC_LangBootFolder(void) {
     return s_bootFolder;
 }
 
-/* exchange/91: the loaded pack encodes item names as 1-byte/16-char (format 2). ui/supplies.c asks this
- * to draw the shop/depot/inventory item lists through the small font instead of the wide SJIS one. */
+/* The loaded pack encodes item names as 1-byte/16-char (format 2): the gated item-list draw sites
+ * then use the small font instead of the wide SJIS one. */
 int PC_LangItemNames1Byte(void) {
     if (!s_lang.loaded) LangLoad();
     return s_lang.item1b;
@@ -272,9 +237,9 @@ static void LangLoad(void) {
     if (!f) { fprintf(stderr, "[lang] no pack at %s\n", path); return; }
     fseek(f, 0, SEEK_END); size = ftell(f); fseek(f, 0, SEEK_SET);
     if (size < 12) { fclose(f); fprintf(stderr, "[lang] %s is too small to be a pack\n", path); return; }
-    /* A pack is a third-party download: every number in it is hostile until checked. First line of
-     * defence is a size cap -- it keeps all the u32 offset arithmetic below well below wrap range
-     * (a full translation measures in hundreds of KB; 128 MB is absurd headroom). */
+    /* A pack is a third-party download: every number in it is hostile until checked. The size cap
+     * keeps all the u32 offset arithmetic below well clear of wrap range (a full translation
+     * measures in hundreds of KB; 128 MB is absurd headroom). */
     if (size > 0x08000000L) {
         fclose(f);
         fprintf(stderr, "[lang] %s is %ld B -- not plausibly a language pack, refused\n", path, size);
@@ -299,9 +264,8 @@ static void LangLoad(void) {
     for (i = 0; i < nsec; i++) {
         unsigned kind, id, len;
         /* Subtraction form on both checks: `len` comes straight from the pack, so `off + len` can
-         * wrap u32 and pass an addition-form test with len bytes then read off the end of buf.
-         * Invariant: off <= size at the top of every iteration (12 <= size checked at open; each
-         * pass advances off by 12 + len only after both checks). */
+         * wrap u32 and pass an addition-form test, then read off the end of buf. Invariant:
+         * off <= size at the top of every iteration (off advances by 12 + len only after both). */
         if ((unsigned)size - off < 12) break;
         kind = RdU32(buf + off); id = RdU32(buf + off + 4); len = RdU32(buf + off + 8);
         off += 12;
@@ -312,7 +276,7 @@ static void LangLoad(void) {
         else if (kind == K_FONT)  PC_LangFontLoad(buf + off, len);   /* pc_lang_font.c */
         else if (kind == K_KROM)  PC_LangKromLoad(buf + off, len);   /* pc_lang_font.c */
         else if (kind == K_LITERAL) LitLoad(buf + off, len);   /* consumed by PC_LangStr */
-        else if (kind == K_CUES) {                   /* F3 movie subtitles (pc_movie_subs.c) */
+        else if (kind == K_CUES) {                   /* movie subtitles (pc_movie_subs.c) */
             extern void PC_MovieSubsLoadPack(const unsigned char *p, unsigned len);
             PC_MovieSubsLoadPack(buf + off, len);
         }
@@ -330,12 +294,9 @@ static void LangLoad(void) {
         off += len;
     }
     s_lang.active = 1;
-    /* format 2 (exchange/91) == 1-byte item names -> ui/supplies.c/ui/window.c/battle/field.c draw the
-     * item lists through the small-font path instead of the wide SJIS one. Latched HERE, at load
-     * success, and only if the pack's gItemNamesSjis table actually landed: on any earlier bail-out
-     * (or a format-2 pack missing the table) gItemNamesSjis still holds retail 2-byte SJIS, and
-     * routing THAT through the 1-byte path renders every item screen as garbage glyphs -- the
-     * fallback must be English, never mojibake. */
+    /* Format 2 = 1-byte item names through the small-font path. Latched here, at load success, and
+     * only if gItemNamesSjis actually landed: otherwise the table still holds retail 2-byte SJIS and
+     * the 1-byte path would draw garbage. See docs/language-packs.md, "Format 2: 1-byte item names". */
     if (fmt >= 2) {
         s_lang.item1b = s_lang.itemNamesApplied;
         if (!s_lang.itemNamesApplied)
@@ -384,10 +345,9 @@ static void LitLoad(const unsigned char *p, unsigned len) {
     if (PC_Verbose()) fprintf(stderr, "[lang] %d code literal(s) replaced\n", s_lang.litsN);
 }
 
-/* Called (via the PC_LANGSTR macro, PC_FEAT builds only) wherever game code passes a string
- * literal straight to a text-draw call. Identity is the literal's own CONTENT -- an FNV-1a hash,
- * matching the exporter's -- so no id table exists to drift. Returns the pack's replacement, or
- * the literal itself untouched (no pack / no entry): retail behaviour is the fallthrough. */
+/* Called via the PC_LANGSTR macro (PC_FEAT builds) wherever game code passes a string literal to a
+ * text-draw call. Identity is the literal's content -- an FNV-1a hash matching the exporter's -- so
+ * no id table exists to drift. Returns the pack's replacement or the literal itself untouched. */
 unsigned char *PC_LangStr(const char *lit) {
     if (!s_lang.loaded) LangLoad();
     if (s_lang.litsN) {
@@ -409,19 +369,16 @@ const unsigned char *PC_LangCharmapBlob(unsigned *len) {
     return s_lang.charmap;
 }
 
-/* Called once from src/core/text.c's PC_FEAT hook in GetGlyphIdxForAsciiChar, with the addresses of its
- * function-static code->glyph map and the file-static bitmap array -- neither has external linkage,
- * so like terrainText below this hand-off is the only route in. Applies the pack's K_CHARMAP blob:
- * per 11-byte record (code, slot, rows[9]): map[code] = slot, and a non-blank bitmap is written
- * into that glyph slot. All-zero rows mean "map only" -- the mixed-case option remaps a-z onto the
- * lowercase art already present at slots 13-38 without shipping any art. */
-/* Langpack F3 movie subtitles: the hand-off below is also the ONLY route to the game's live
- * code->glyph map and bitmap store, so capture the pointers for the subtitle renderer -- it then
- * draws from the exact store the game draws from, pack patches (charmap, mixed-case) included. */
+/* The charmap hand-off (src/core/text.c's PC_FEAT hook in GetGlyphIdxForAsciiChar) is the only
+ * route to the game's live code->glyph map and bitmap store, so the pointers are captured for the
+ * subtitle renderer: it then draws from the exact store the game draws from, pack patches included. */
 static unsigned char *s_subsMap = NULL;
 static unsigned char (*s_subsGlyphs)[9] = NULL;
 static int s_subsGlyphN = 0;
 
+/* Applies the pack's K_CHARMAP blob: per 11-byte record (code, slot, rows[9]), map[code] = slot and
+ * a non-blank bitmap is written into that slot. All-zero rows mean "map only" (mixed case remaps a-z
+ * onto the lowercase art already at slots 13-38). Static map + bitmaps have no external linkage. */
 void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int glyphCount) {
     unsigned n, i;
     const unsigned char *p;
@@ -440,11 +397,9 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
         const unsigned char *r = p + 4 + i * 11;
         unsigned code = r[0], slot = r[1];
         int z, blank = 1;
-        /* Slots 1 and 128 are inside glyphCount but FORBIDDEN, exactly as lang_build.py excludes
-         * them: 1 is GLYPH_BG -- in the F_WD sheet it is the window-background tile, and stamping
-         * it tiles every window in the game with a letter (witnessed regression); 128 is where the
-         * retail map sends NUL and space and must stay blank. The builder never emits them, but a
-         * pack is a third-party download: every number in it is hostile until checked. */
+        /* Slots 1 and 128 are inside glyphCount but forbidden: 1 is GLYPH_BG, the window-background
+         * tile in the F_WD sheet (stamping it tiles every window with a letter); 128 is where the
+         * retail map sends NUL and space. The builder never emits them; a pack is hostile input. */
         if (code >= 128 || (int)slot >= glyphCount || slot == 1 || slot == 128) {
             fprintf(stderr, "[lang] charmap: bad record code=%u slot=%u -- skipped\n", code, slot);
             continue;
@@ -461,11 +416,9 @@ void PC_LangApplyCharmap(unsigned char *map128, unsigned char (*glyphs)[9], int 
     if (PC_Verbose()) fprintf(stderr, "[lang] charmap: %d code(s) mapped, %d glyph slot(s) written\n", mapped, drawn);
 }
 
-/* Movie-subtitle glyph resolution (langpack F3): pack codepoint glyphs first (non-Latin +
- * synthesized accents from K_FONT), then the game's own ASCII path through the captured live
- * map+bitmaps. Movies can play before the game's first text draw (the hand-off is lazy), so
- * force it once if needed. Returns 9 bitmap rows (8x1bpp, MSB left) or NULL (renderer draws
- * a tofu box -- visible, never a silent skip). */
+/* Movie-subtitle glyph (8x9 tier): pack K_FONT by codepoint first, then the game's own ASCII path
+ * through the captured live map+bitmaps. Movies can play before the game's first text draw (the
+ * hand-off is lazy), so force it once if needed. NULL = renderer draws a tofu box, never a skip. */
 const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
     const unsigned char *g = PC_LangFontGlyph(cp);
     if (g) return g;
@@ -475,19 +428,17 @@ const unsigned char *PC_LangSubtitleGlyph(unsigned cp) {
     }
     if (cp < 128 && s_subsMap && s_subsGlyphs) {
         unsigned slot = s_subsMap[cp];
-        /* Slot 0 is how the game's map spells "unassigned" (core/text.c mappings[] defaults to 0;
-         * glyph 0 is real art -- a solid block). Returning it would silently draw a filled
-         * rectangle for an unmapped character; fall through to NULL so the renderer's tofu
-         * box stays the one visible signal for "letter not in the font". */
+        /* Slot 0 is how the game's map spells "unassigned" (core/text.c mappings[] defaults to 0),
+         * and glyph 0 is real art -- a solid block. Fall through to NULL instead, so the renderer's
+         * tofu box stays the one visible signal for "letter not in the font". */
         if (slot != 0 && (int)slot < s_subsGlyphN) return s_subsGlyphs[slot];
     }
     return NULL;
 }
 
-/* Wide (16x15) subtitle glyph: the pack's codepoint-keyed K_FONT16 first, then the built-in BIOS
- * charset for ASCII via the Krom2RawAdd path (which itself consults pack krom glyphs first).
- * NO case logic here -- pack cue text arrives pre-folded from the builder; a dev VH_MOVIE_SUBS
- * file must match the pack's alphabet. Returns 30 bytes (15 rows x u16, MSB left) or NULL. */
+/* Wide (16x15) subtitle glyph: the pack's K_FONT16 by codepoint, then the BIOS charset for ASCII
+ * via Krom2RawAdd (which consults pack krom glyphs first). No case logic: cue text arrives
+ * pre-folded from the builder, and a dev VH_MOVIE_SUBS file must match the pack's alphabet. */
 static unsigned AsciiToWideSjis(unsigned cp) {
     if (cp == ' ') return 0x8140;
     if (cp >= '0' && cp <= '9') return 0x824F + (cp - '0');
@@ -525,9 +476,8 @@ const unsigned char *PC_LangSubtitleGlyph16(unsigned cp) {
     return NULL;
 }
 
-/* Called once from src/battle/field.c's Objf030_FieldInfo (PC_FEAT-gated) with the address of its
- * function-static terrainText -- the battle terrain info box, "Plains   0%" and friends. That table
- * has no external linkage, so this hand-off is the only way a pack can reach it. */
+/* Called once from src/battle/field.c's Objf030_FieldInfo (PC_FEAT-gated) with its function-static
+ * terrainText (the battle terrain info box). No external linkage, so this hand-off is the only way in. */
 void PC_LangApplyTerrainText(void *table, int bytes) {
     if (!s_lang.loaded) LangLoad();
     if (!s_lang.terrain || bytes <= 0) return;

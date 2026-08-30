@@ -1,20 +1,6 @@
-/* Spell casting effects, part 9 of the FX corpus (segment 0x6e9c4) -- a short code split
- * carrying a large shared data block.
- *
- * Code: the Faerie spell (Objf115_Faerie_FX2 drives the faerie sprite orbiting in toward
- * the target, spawning Objf116_Faerie_Sparkle every frame and Objf117_Faerie_SparkleTrail
- * every few, planting Objf118_Faerie_Target on arrival, then raising gSignal3 when it
- * withdraws) and Objf211_Avalanche_Boulder (an 11x9 vertex shell rotated per frame and
- * drawn as textured quads with per-face directional shading). Both are dispatched
- * data-driven through gSpellsEx -- see spells/casting_main.c for the model.
- *
- * Data: the block at 0x800ff18c holds shared sprite animation tables -- impact, smoke,
- * salamander, flame, two explosions, faerie and two sparkle loops. Only the faerie and
- * sparkle tables are used by this file; the rest are consumed by neighbouring FX units,
- * and gSmokeAnimData_800ff1b0 had to be made non-static for spells/dark_fire.c: the code split at
- * Objf211 is provisional and cuts across the shared block (see the in-file comment).
- *
- * The PC_FEAT gate in the boulder is the Tactical-only ice re-skin. */
+/* The Faerie spell (Objf115 driver with Objf116/117/118 children) and Objf211, Avalanche's
+ * rotating boulder shell, dispatched via gSpellsEx (docs/decomp/spell-fx-dispatch.md), plus
+ * the shared anim-table block at 0x800ff18c that neighbouring FX units also read. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -23,7 +9,7 @@
 
 extern void ApplyMaskEffect(s16, s16, s16, s16, s16, s16, s16, s16, s16, s16);
 #ifdef PC_FEAT
-extern int gTacticalMode;   /* Stage 3 1.3 -- Tactical-only Avalanche ice re-skin (pc_balance.c) */
+extern int gTacticalMode;   /* Tactical-only Avalanche ice re-skin (pc_balance.c) */
 #endif
 
 static s16 sImpactAnimData_800ff18c[18] = {5, GFX_IMPACT_1, 2, GFX_IMPACT_2, 2, GFX_IMPACT_3,
@@ -472,13 +458,9 @@ void Objf211_Avalanche_Boulder(Object *obj) {
       obj_s2->d.sprite.gfxIdx = GFX_TILED_STONE;
       obj_s2->d.sprite.clut = CLUT_GRAYS;
 #ifdef PC_FEAT
-      /* Tactical cosmetic re-skin: turn Avalanche's boulder to ice. Texture -> GFX_TILED_ICE (the
-       * crystalline pattern Ice Storm uses, Objf189), palette -> CLUT_GRAYS for a frosty WHITE read
-       * (Ice Storm pairs it with CLUT_BLUES, but at boulder scale blue looked like water; there is no
-       * CLUT_WHITES, and GRAYS is the white/light ramp -- same one the retail stone used). Retail stays
-       * grey stone (GFX_TILED_STONE + CLUT_GRAYS) in Normal mode. NOTE: only the boulder recolors -- the
-       * tumbling GFX_ROCK_* debris and GFX_PUFF dust are baked-palette sprites with no settable CLUT, so
-       * they stay rocky until snow sprites are drawn. */
+      /* Tactical re-skin: Avalanche's boulder becomes ice -- GFX_TILED_ICE (Ice Storm's pattern,
+       * Objf189) with CLUT_GRAYS, the white/light ramp (CLUT_BLUES reads as water at boulder scale).
+       * Only the boulder recolors: the GFX_ROCK_n and GFX_PUFF debris sprites have no settable CLUT. */
       if (gTacticalMode) {
          obj_s2->d.sprite.gfxIdx = GFX_TILED_ICE;
          obj_s2->d.sprite.clut = CLUT_GRAYS;
@@ -542,11 +524,9 @@ void Objf211_Avalanche_Boulder(Object *obj) {
             AddObjPrim4(gGraphicsPtr->ot, obj_s2);
             poly = &gGraphicsPtr->quads[gQuadIndex - 1];
 #ifdef PC_FEAT
-            /* Tactical ice re-skin: lift the boulder's grey directional shading toward white so the ice
-             * reads snowier. Retail shades faces in [32..128] (128 = GPU-neutral, darker faces down to
-             * 32); +64 pushes lit faces above neutral (~192) while keeping the per-face contrast. iVar10s
-             * is recomputed to 128 each face, so this never accumulates. Boulder-only + Tactical-only --
-             * no other SFX or Normal-mode Avalanche is touched (pairs with the gfxIdx/clut swap above). */
+            /* Tactical re-skin: lift the boulder's directional shading toward white. Retail shades faces
+             * in [32..128] (128 = GPU-neutral); +64 pushes lit faces to ~192 while keeping the per-face
+             * contrast. iVar10s is recomputed to 128 for each face, so this never accumulates. */
             if (gTacticalMode) {
                iVar10s += 64;
             }

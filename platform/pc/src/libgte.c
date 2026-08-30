@@ -1,34 +1,6 @@
-/*
- * PC backend for the GTE (Geometry Transformation Engine).
- *
- * A single software model of the PS1 GTE coprocessor's register state and
- * opcodes, built from the public Nocash PSX Specifications hardware
- * reference (psx-spx.github.io/docs/geometrytransformationenginegte.md)
- * -- register numbering, RTPS/RTPT/NCLIP/AVSZ4/OP/NCCS formulas, saturation
- * rules, and the exact Unsigned Newton-Raphson (UNR) hardware division
- * algorithm (including its 257-entry lookup table, generated here from the
- * documented formula rather than hand-transcribed) are all taken from there,
- * not guessed.
- *
- * Two entry points share this one core, matching how the real SDK's
- * high-level RotTrans and SetRotMatrix functions are themselves presumably
- * built on top of the same raw coprocessor opcodes core/graphics.c calls
- * directly:
- *   - PC_GTE_ functions, called by the gte_ macros in
- *     platform/pc/include/inline_gte.h (core/graphics.c only -- the one file
- *     needing real coprocessor-level fidelity).
- *   - The high-level PsyQ/libgte.h SDK wrappers below (RotTrans, SetRotMatrix,
- *     PushMatrix, rcos/rsin, ...), used by the other 37 GTE-touching files,
- *     which only need geometrically correct results.
- *
- * SDK-library-level routines that aren't raw GTE opcodes (rcos, rsin, ratan2,
- * SquareRoot0, SquareRoot12, csqrt, RotMatrix's Euler axis order) have no
- * hardware formula to cite -- psx-spx documents the coprocessor, not Sony's
- * SDK library internals. These are reasoned standard-math implementations,
- * flagged as such here and in exchange 08-phase-c-gte-backend.md, same as
- * this project's prior flagged approximations (Audio's ADSR and pitch table,
- * Kernel's RCNT1 tick rate).
- */
+/* PC backend for the PS1 GTE: one software model of the coprocessor's registers and opcodes
+ * (psx-spx formulas, saturation rules, UNR divide), entered both by the raw gte_* macros of
+ * inline_gte.h and by the PsyQ/libgte.h SDK wrappers. See docs/pc-port/subsystems/gte.md. */
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -75,20 +47,9 @@ static struct {
     int   dqb;
     short  zsf3, zsf4;
 
-    /* push/pop matrix stack. Originally a single saved slot -- wrong: real
-     * PS1-era rendering code nests PushMatrix()/PopMatrix() calls (e.g. a
-     * per-frame camera push, with individual objects/sprites pushing again
-     * around their own local transform before popping back to the camera's),
-     * and a single slot silently gets clobbered by the second push instead
-     * of erroring, corrupting whichever matrix the first, still-unpopped
-     * push was trying to preserve. Found via a real symptom: unit sprites'
-     * computed screen coordinates (RenderUnitSprite, src/core/object.c) started
-     * sane but degraded into wild garbage (thousands of pixels off-screen)
-     * over successive frames of the same battle scene, despite stable
-     * per-call input data -- exactly the signature of a matrix stack losing
-     * saved state under nesting. 16 is a generous bound for this era's
-     * scene-graph depth, not a hardware-mandated number (the GTE itself has
-     * no native stack; PushMatrix/PopMatrix are SDK-level software only). */
+    /* PushMatrix/PopMatrix software stack (the GTE has none). The game nests pushes -- a camera
+     * push with per-object pushes inside -- so a single slot is silently clobbered; 16 is a scene-
+     * graph bound, not a hardware number. See docs/pc-port/subsystems/gte.md, "Gotchas / notes". */
     MATRIX savedRt[16];
     int   savedTr[16][3];
     int    savedDepth;
@@ -154,17 +115,15 @@ static unsigned int UnrDivide(unsigned short H, unsigned short SZ3) {
     u = s_unrTable[(d - 0x7FC0) >> 7] + 0x101;
     d = (0x2000080UL - (d * u)) >> 8;
     d = (0x80UL + (d * u)) >> 8;
-    /* MUST be a 64-bit product: on the -m32 build `unsigned int` is 32-bit, and n*d overflows it
-     * whenever the division result exceeds 0x10000 (i.e. whenever SZ3 < H) -- the wrapped garbage
-     * gave those (nearer-than-H) vertices a tiny `n`, projecting them onto OFX/OFY and collapsing
-     * all near geometry to the screen centre. The GTE does this division in hardware without a
-     * C-width limit; do the multiply in 64-bit so it's correct at any `unsigned int` width. */
+    /* 64-bit product: n*d exceeds 32 bits whenever the quotient exceeds 0x10000 (SZ3 < H), and a
+     * wrapped n projects all near geometry onto (OFX,OFY). The GTE divides at full width.
+     * See docs/pc-port/subsystems/gte.md, "Two fixed-point bugs worth knowing". */
     n = (unsigned int)((((unsigned long long)n * d) + 0x8000) >> 16);
     if (n > 0x1FFFF) n = 0x1FFFF;
     return n;
 }
 
-/* Projection diagnostic ring: last 8 TransformOne results (terrain-collapse investigation). */
+/* Projection diagnostic ring: the last 8 TransformOne results, read back via PC_GteProjEntry. */
 static struct { int sx, sy, ir1, ir2, ir3, sz3, n; } s_projRing[8];
 static int s_projRingHead;
 
@@ -191,21 +150,9 @@ static void TransformOne(short vx, short vy, short vz) {
 
     n = UnrDivide((unsigned short)g.h, g.sz3);
 
-    /* psx-spx: "MAC0=(((H*20000h/SZ3)+1)/2)*IR1+OFX" -- a SIGNED multiply. IR1/
-     * IR2/DQA are signed 16-bit interpolation registers (legitimately negative
-     * for any point left of/above the projection center -- routine, not an
-     * edge case), while n (the division result) is always non-negative. Casting
-     * ir1/ir2/dqa to (unsigned short) before the multiply, as this used to do,
-     * reinterprets a negative value as a huge positive one (e.g. -166 becomes
-     * 65370), producing wildly wrong screen coordinates -- found via a real,
-     * bit-exact-reproduced bug: RenderUnitSprite's (src/core/object.c) computed
-     * quad corners matched real hardware whenever every ir1/ir2 for that
-     * sprite happened to be positive, and went to tens-of-thousands-off-screen
-     * garbage the moment any of them went negative, which is routine (facing
-     * left of the camera's projection center), not rare -- exactly matching
-     * the alternating sane/garbage pattern observed. Verified against a
-     * captured real (buggy) run: replacing the unsigned cast with a plain
-     * signed widen reproduces the actual captured output bit-for-bit. */
+    /* psx-spx: MAC0 = (((H*20000h/SZ3)+1)/2)*IR1+OFX is a SIGNED multiply. IR1/IR2/DQA are
+     * signed 16-bit (negative for any point left of/above the projection centre); an unsigned
+     * widen turns -166 into 65370 and throws the vertex tens of thousands of pixels off-screen. */
     g.mac0 = (int)n * (int)g.ir1 + g.ofx;
     {
         int sx = g.mac0 >> 16;
@@ -213,13 +160,9 @@ static void TransformOne(short vx, short vy, short vz) {
         g.mac0 = (int)n * (int)g.ir2 + g.ofy;
         sy = g.mac0 >> 16;
 
-        /* Real GTE SATURATES SX2/SY2 to -0x400..+0x3FF (psx-spx: RTPS "ScrX/ScrY FIFO
-         * -400h..+3FFh", FLAG.14/13). Geometry near the near-clip plane (n = H/SZ3 blows up as
-         * SZ3->0) or far off the projection centre projects to huge screen coords that hardware
-         * clamps to the screen edge; without this clamp our (short) cast WRAPS them (e.g. +40000
-         * -> -25536), tearing projected quads across the frame -- most visibly a vertical seam at
-         * the projection centre where IR1 flips sign. UI uses direct coords (no projection) so it's
-         * unaffected, matching the symptom. Set the saturation flags too, as hardware does. */
+        /* Hardware saturates SX2/SY2 to -0x400..+0x3FF (psx-spx RTPS, FLAG.14/13). Near-plane
+         * geometry (n = H/SZ3 grows as SZ3 -> 0) projects to huge coords that clamp to the screen
+         * edge; a bare (short) cast would wrap them (+40000 -> -25536) and tear quads. */
         if (sx < -0x400) { sx = -0x400; g.flag |= 1u << 14; }
         else if (sx > 0x3FF) { sx = 0x3FF; g.flag |= 1u << 14; }
         if (sy < -0x400) { sy = -0x400; g.flag |= 1u << 13; }
@@ -229,9 +172,8 @@ static void TransformOne(short vx, short vy, short vz) {
         g.sxy1[0] = g.sxy2[0]; g.sxy1[1] = g.sxy2[1];
         g.sxy2[0] = (short)sx; g.sxy2[1] = (short)sy;
 
-        /* Projection diagnostic ring (terrain-collapse investigation): record what each vertex
-         * projected to + the inputs, so the terrain path can dump a tile's 4 corners and we can
-         * compute the exact spread = SX-OFX = H*IR1/SZ3 and see which term is deficient. */
+        /* Record result + inputs so pc_diag.c can dump a tile's 4 corners and break the spread
+         * SX-OFX = H*IR1/SZ3 down term by term. */
         s_projRing[s_projRingHead & 7].sx = sx;
         s_projRing[s_projRingHead & 7].sy = sy;
         s_projRing[s_projRingHead & 7].ir1 = g.ir1;
@@ -278,11 +220,9 @@ void PC_GTE_LoadRGB(void *rgbc) {
 }
 
 void PC_GTE_LoadOPV1(void *v) {
-    /* Real hardware ctc2's 3 words into control regs 0/2/4 (RT11/RT13/RT22),
-     * "misusing" the RT matrix diagonal as a vector (see psx-spx OP command).
-     * We model the functional effect (D1,D2,D3 feeding into OP0) directly
-     * rather than the bit-packing, since nothing else reads the RT matrix
-     * between this and gte_op0(). */
+    /* Hardware ctc2's the 3 words into control regs 0/2/4 (RT11/RT13/RT22), using the RT diagonal
+     * as a vector (psx-spx OP). Model the functional effect (D1..D3 feeding OP0) instead of the
+     * bit-packing: nothing reads RT between this and gte_op0(). */
     int *src = (int *)v;
     g.opvD[0] = src[0];
     g.opvD[1] = src[1];
@@ -379,16 +319,9 @@ void PC_GTE_StoreSXY3(void *out0, void *out1, void *out2) {
 }
 
 void PC_GTE_StoreOTZ(void *out) {
-    /* Real hardware's gte_stotz (include/PsyQ/inline.h) is a raw SWC2 (Store Word from
-     * Coprocessor 2) -- always a full 32-bit store, never 16-bit, regardless of OTZ's
-     * value range. The PS1 GTE's OTZ register (cop2r7) is a saturated 16-bit unsigned
-     * value zero-extended into its full 32-bit register, so real hardware always leaves
-     * the upper 16 bits of the destination at zero. Writing only 16 bits here left the
-     * caller's full-width `int otz` variable (src/core/graphics.c's RenderMapTile and friends)
-     * with its upper 16 bits as whatever uninitialized stack garbage preceded the call --
-     * usually harmless (otz normally small), but a real, reported SIGSEGV once garbage
-     * upper bits made otz large enough to push `ot + OT_SIZE - otz` (AddPrim's target)
-     * wildly out of bounds. */
+    /* gte_stotz is a raw SWC2: always a full 32-bit store. OTZ (cop2r7) is a saturated u16
+     * zero-extended into its register, so hardware clears the top half of the caller's `int otz`;
+     * a 16-bit store leaves stack garbage there and can push AddPrim's OT index out of bounds. */
     *(unsigned int *)out = (unsigned int)g.otz;
 }
 
@@ -412,17 +345,9 @@ void InitGeom(void) {
     g.rt.m[0][0] = g.rt.m[1][1] = g.rt.m[2][2] = ONE;
     g.light.m[0][0] = g.light.m[1][1] = g.light.m[2][2] = ONE;
     g.colorMat.m[0][0] = g.colorMat.m[1][1] = g.colorMat.m[2][2] = ONE;
-    /* GTE control-register defaults, taken byte-for-byte from the REAL PsyQ InitGeom disassembled
-     * out of SLUS_004.47 (0x800d04a8: `li t0,imm; ctc2 t0,$reg`) -- NOT guessed. The whole set was
-     * previously either left 0 or estimated from the psx-spx "normally 1/3, 1/4" note, which is
-     * wrong for this library:
-     *   $29 ZSF3 = 0x155,  $30 ZSF4 = 0x100   (Z-average scale factors; OTZ = ZSF * sum(SZ) >> 12)
-     *   $26 H    = 1000    (overridden by SetGeomScreen(0x200) before rendering, kept for fidelity)
-     *   $27 DQA  = -4194,  $28 DQB = 0x1400000 (depth-cue interpolation -> IR0)
-     * The earlier 0x555/0x400 guess (feedback-16) was exactly 4x too large, so terrain OTZ (via
-     * gte_avsz4) came out ~4x inflated (nearest tile ~472 instead of ~118), pushing essentially all
-     * terrain past core/graphics.c's distance-darkening black threshold (otz>=406) -- the "black terrain"
-     * symptom. 0x100 is the ground-truth value; verified by disassembly, matches real hardware. */
+    /* Control-register defaults from the PsyQ InitGeom disassembled out of SLUS_004.47 (0x800d04a8:
+     * `li t0,imm; ctc2 t0,$reg`): OTZ = ZSF * sum(SZ) >> 12, IR0 from DQA/DQB, H is overridden by
+     * SetGeomScreen. See docs/pc-port/subsystems/gte.md, "Recovering the real constants". */
     g.zsf3 = 0x0155;
     g.zsf4 = 0x0100;
     g.h    = 1000;
@@ -430,18 +355,14 @@ void InitGeom(void) {
     g.dqb  = 0x1400000;
 }
 
-/* The GTE OFX/OFY registers are 1.15.16 fixed-point (TransformOne adds them in that scale then
- * >>16), so the screen-pixel arguments must be shifted <<16. Storing them raw collapsed the
- * projection centre to (0,0), translating all 3D-projected content up-left by (ofx,ofy) -- which
- * pushed unit sprites off-screen while leaving the (larger) terrain partly visible. See
- * exchange/feedback-15.md / the sprite-fate GTE-state log. */
+/* OFX/OFY are 1.15.16 fixed-point (TransformOne adds them at that scale before the >>16), so the
+ * pixel arguments are shifted <<16; stored raw they put the projection centre at (0,0). */
 void SetGeomOffset(int ofx, int ofy) { g.ofx = ofx << 16; g.ofy = ofy << 16; }
 void SetGeomScreen(int h) { g.h = (short)h; }
 
-/* Debug (feedback-15 follow-up): expose the projection state used by the last TransformOne, so
- * the sprite log can tell whether missing units are mis-projected by a wrong geom offset
- * (ofx/ofy/h -- the "vector translation" theory) or by the leaked facing matrix (rt = scaled
- * identity {4096,.,0;...;0,.,4096} vs a rotated camera matrix). */
+/* Diagnostic: the projection state used by the last TransformOne, read by pc_diag.c's sprite log
+ * to tell a wrong geom offset (ofx/ofy/h) from a stale facing matrix (rt = scaled identity
+ * instead of the rotated camera matrix). */
 void PC_GteDebugState(int *ofx, int *ofy, int *h, int *rt00, int *rt02, int *rt22,
                       int *trx, int *trz) {
     *ofx = g.ofx; *ofy = g.ofy; *h = g.h;
@@ -449,8 +370,7 @@ void PC_GteDebugState(int *ofx, int *ofy, int *h, int *rt00, int *rt02, int *rt2
     *trx = g.tr[0]; *trz = g.tr[2];
 }
 
-/* g.otz = last AVSZ4 result (terrain OTZ); zsf4 = the Z-scale factor. Used to verify the
- * zsf4 fix -- terrain OTZ should now land in the sprite SZ3 range, not 0/5. */
+/* Diagnostic accessors for pc_diag.c: the last AVSZ4 result (terrain OTZ) and the ZSF4 scale. */
 int PC_GteLastOtz(void) { return g.otz; }
 int PC_GteZsf4(void) { return g.zsf4; }
 
@@ -478,41 +398,13 @@ void PopMatrix(void) {
     g.tr[2] = g.savedTr[g.savedDepth][2];
 }
 
-/* Euler angle order (Rz * Ry * Rx applied to column vectors) is an SDK
- * library convention, not a raw GTE opcode -- psx-spx doesn't cover it.
- * VERIFIED (2026-08-23) against the real PsyQ RotMatrix disassembled out of the
- * byte-exact SLUS_004.47 at 0x800d0aa8 (symbol_addrs.txt): all nine entries
- * match the terms below one for one, signs included. The reasoned choice was
- * right; this is no longer pending.
- *
- * The ORDER is confirmed -- the ARITHMETIC is not the same. The original is
- * pure integer: a packed sin/cos table at 0x8011C6C0 (entry i = (cos<<16)|sin,
- * 4096 fixed point) with `multu` + `sra ,0xc`, re-quantising the triple
- * products at each stage. This double-precision version differs from it in
- * ~83% of matrix entries, by up to 15/4096 (~0.37%) -- dominated by the
- * table's own ~6.8-unit deviation from ideal sin/cos, NOT by rounding mode
- * (measured: lrint and floor both change essentially nothing). See
- * exchange/110, and RotMatrixExact below for the A/B harness. */
-/* ---- exchange/110 item 2c, step-1 measurement harness -------------------------------------
- * Two runtime switches, both MEASUREMENT AIDS, both off by default:
- *   VH_GTE_EXACT=<path>       RotMatrix uses the integer algorithm transcribed from the real
- *                             PsyQ routine at 0x800d0aa8, reading the 4096-entry packed sin/cos
- *                             table the retail executable keeps at 0x8011C6C0 (16 KB;
- *                             entry i = (cos_i << 16) | sin_i, 4096 fixed point).
- *   VH_GTE_EXACT_CHECK=<path> stay on the float path, but compute the exact matrix alongside and
- *                             report how far the two disagree. Answers "is the transcription sane
- *                             on the angles the game really uses?" without perturbing the run.
- *   VH_GTE_AB=<path> + VH_GTE_AB_USE=float|exact
- *                             EQUAL-COST A/B. Both matrices are computed on every call in BOTH
- *                             runs; only which one is kept differs. Needed because RotMatrix runs
- *                             ~92x/frame, so simply switching implementations changes how long a
- *                             frame takes -- enough to shift scene-load completion by one frame,
- *                             which desynchronises rand() and makes the two runs show different
- *                             battles. Equalising the cost removes that confound, so any surviving
- *                             divergence is attributable to the matrix values themselves.
- * The table is game data: read from a file at runtime, never compiled in, never committed.
- * Extract it from your own copy with tools/gen_gte_table.py. */
+/* Euler order Rz*Ry*Rx on column vectors matches PsyQ's RotMatrix (0x800d0aa8) term for term.
+ * PsyQ computes it in integer over a packed sin/cos table; the double path here differs from it
+ * by up to 15/4096. See docs/pc-port/subsystems/gte.md, "RotMatrix: float vs PsyQ integer path". */
 static int s_gteTbl[4096];
+/* Measurement switches, all off by default: VH_GTE_EXACT=<table> (integer path),
+ * VH_GTE_EXACT_CHECK=<table> (float path, report the disagreement), VH_GTE_AB=<table> +
+ * VH_GTE_AB_USE=float|exact (equal-cost A/B). The table is game data (tools/gen_gte_table.py). */
 static int s_gteTblOk = -1;
 static int s_gteExact = -1;
 static int s_gteCheck = -1;
@@ -536,13 +428,9 @@ static int GteLoadTable(const char *path) {
     return s_gteTblOk;
 }
 
-/* Transcription of 0x800d0aa8. The two details that are easy to get wrong:
- *   - `sra` is a floor shift and the negation happens BEFORE it (`negu` then `sra`), so the
- *     negated terms are floor(-x/4096), not -floor(x/4096).
- *   - the triple products are re-quantised at each stage: P and Q are taken to 12-bit fixed
- *     point first, then multiplied again. Doing the product at full width and shifting once
- *     does NOT reproduce it.
- * m[0][2] is stored raw and unshifted -- it is sy straight out of the table. */
+/* Transcription of PsyQ RotMatrix (0x800d0aa8). `sra` floors and the negation happens before it,
+ * so negated terms are floor(-x/4096); P and Q are re-quantised to Q12 before the second multiply
+ * (a full-width product shifted once does not match); m[0][2] is sy raw from the table. */
 static void RotMatrixExact(SVECTOR *r, MATRIX *m) {
     int sx, cx, sy, nsy, cy, sz, cz, t, P, Q;
     if (r->vx >= 0) { t = s_gteTbl[r->vx & 0xfff];    sx =  (short)(t & 0xffff); cx = t >> 16; }
@@ -669,14 +557,9 @@ int RotTransPers(SVECTOR *v0, int *sxy, int *p, int *flag) {
     if (sxy) *sxy = PackSXY(g.sxy2[0], g.sxy2[1]);
     if (p) *p = g.ir0;
     if (flag) *flag = (int)g.flag;
-    /* Real PsyQ RotTransPers returns SZ3 >> 2 (÷4), NOT raw SZ3. Disassembled from the byte-exact
-     * SLUS_004.47 @ 0x800d0178:  mfc2 v0,$19 (SZ3) ; jr ra ; sra v0,v0,0x2 (delay slot). This puts
-     * the returned otz on the SAME scale as the terrain's AVSZ path (gte_stotz = zsf4·ΣSZ>>12 =
-     * sz3/4 with zsf4=0x100), so RotTransPers-drawn sprites interleave with terrain in the OT instead
-     * of sitting ~4x too deep and being painted over. We previously returned raw g.sz3, which made
-     * the demo-opening units render behind the terrain (Thread 3 occlusion); the VH_SPRITE_OTZ_DIV=4
-     * validation hack was accidentally replicating this exact >>2. Callers use the return ONLY as the
-     * OT index; screen X/Y (*sxy) is stored above and unaffected. */
+    /* PsyQ RotTransPers (0x800d0178: mfc2 v0,$19; jr ra; sra v0,v0,2) returns SZ3 >> 2, the same
+     * scale as the AVSZ4 path (ZSF4*sum(SZ)>>12 = SZ3/4 with ZSF4=0x100), so sprites interleave
+     * with terrain in the OT instead of sinking behind it. Callers use it only as the OT index. */
     return g.sz3 >> 2;
 }
 
@@ -703,11 +586,9 @@ int RotAverage4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
                   int *sxy0, int *sxy1, int *sxy2, int *sxy3,
                   int *p, int *flag) {
     int r = RotTransPers4(v0, v1, v2, v3, sxy0, sxy1, sxy2, sxy3, p, flag);
-    /* VH_GTE_LOG=1: for each AddObjPrim4 quad, dump the input SVECTOR height (vy) of the bottom
-     * (v0) and top (v2) verts vs the projected screen Y. bugreport-02: the thunder-ray cylinder
-     * wall has Δvy≈256 (0x800>>3) between bottom/top and should give a tall on-screen wall; if the
-     * output Δsy stays ~0 while a comparable Δsx is large, the GTE is collapsing the height. Screen
-     * coords are PackSXY(x=lo16, y=hi16), both signed shorts. Env checked once. */
+    /* VH_GTE_LOG=1: per AddObjPrim4 quad, dump the input vy of the bottom (v0) and top (v2) verts
+     * against the projected screen Y; a tall wall whose dSy stays ~0 while dSx is large means the
+     * GTE is collapsing its height. Screen coords are PackSXY(x=lo16, y=hi16), signed shorts. */
     {
         static int s_gteLog = -1;
         if (s_gteLog < 0) s_gteLog = getenv("VH_GTE_LOG") ? 1 : 0;
@@ -737,10 +618,9 @@ int VectorNormalS(VECTOR *v0, SVECTOR *v1) {
     return (int)len;
 }
 
-/* SquareRoot0/SquareRoot12/csqrt are SDK library routines, not raw GTE
- * opcodes -- no hardware formula exists to cite. "0"/"12" name the assumed
- * fixed-point scale of the input/output (unscaled vs. Q12); implemented via
- * standard sqrt(), flagged as a reasoned choice like RotMatrix's axis order. */
+/* SquareRoot0/SquareRoot12/csqrt: "0"/"12" name the fixed-point scale of input and output
+ * (unscaled vs Q12). PsyQ uses a coarse lookup table; true sqrt() here is the finer of the two.
+ * See docs/pc-port/subsystems/gte.md, "SDK routines, verified against the binary". */
 int SquareRoot0(int a) {
     if (a <= 0) return 0;
     return (int)sqrt((double)a);

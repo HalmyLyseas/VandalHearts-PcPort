@@ -1,27 +1,6 @@
-/* Battle action executors (segment 0x13b94): the objects that carry a chosen action from
- * confirmation through animation, damage, XP and level-up, plus the per-turn upkeep pass.
- *
- *   Objf015_TargetingAttack -- the attack-side cursor/confirm step (twin of
- *     Objf027_TargetingSpell in battle_012dcc.c) and the treasure-chest prompt; spawns
- *     OBJF_UNIT_ATTACKING / OBJF_OPENING_CHEST and reports via gSignal2 (1 cancel,
- *     2 commit, 99 executor done).
- *   Objf021_UnitAttacking -- physical attack: attack camera, facing, supporter markers,
- *     CalculateAttackDamage (battle/math.c), counterattack, then XP and level-up.
- *   Objf028_UnitCasting -- spell executor. Collects targets into gTargetCoords, plays the
- *     cast animation, then dispatches the visuals data-driven out of
- *     gSpellsEx[gCurrentSpell]: SPELL_EX_OBJF_MAIN at :1162, and per target
- *     SPELL_EX_OBJF_TARGET/_DEFEAT at :1252+ (handlers live in the fx_* units -- see
- *     spells/casting_main.c). SPELL_EX_EFFECT picks the rule applied.
- *   Objf567_OpeningChest, Objf007_ApplyPoison -- small one-shot executors.
- *   Objf592_BattleTurnStart -- start-of-turn upkeep for one team: clear buffs, healing
- *     circles, paralysis recovery rolls, poison damage, per-map respawns.
- *   ClearBattlePortraits -- tears down every OBJF_BATTLE_PORTRAIT object.
- *
- * Handshakes: gSignal3/gSignal4 are the "step finished" replies from the unit sprite
- * action and the spawned FX objects; gSignal5 is the camera protocol with
- * Objf017_AttackCamera / Objf571_LevelUp (battle/presentation.c) -- camera raises 1 when in
- * place, the executor raises 99 to release it, the camera answers 100. Callers are the
- * player menus (battle/field.c) and the enemy-turn manager Objf013_BattleMgr. */
+/* Battle action executors (segment 0x13b94): the attack, spell, chest and poison executors plus
+ * the start-of-turn upkeep pass. gSignal3/4 are the "step finished" replies from the sprite and FX
+ * objects; gSignal5 is the camera handshake (camera raises 1 in place, executor 99, camera 100). */
 #include "common.h"
 #include "object.h"
 #include "battle.h"
@@ -33,11 +12,9 @@
 #include "graphics.h"
 
 #ifdef PC_DEBUG_SPELLFX_LOG
-/* Witness-pass hook (exchange decomp-improvement track): logs every gSpellsEx dispatch --
- * spell id/name, which slot fired (main/target/defeat), and the handler actually invoked
- * (symbol resolved at runtime) -- so one Vandalier cast-everything session validates the
- * table-derived FX handler names in-game. Build: make link SPELLFX_LOG=1; run with
- * VH_SPELLFX_LOG=1. The matching build never defines this. */
+/* Logs every gSpellsEx dispatch (spell id/name, the slot that fired -- main/target/defeat -- and the
+ * handler symbol resolved at runtime) to validate the table-derived FX handler names in-game.
+ * Build: make link SPELLFX_LOG=1; run with VH_SPELLFX_LOG=1. The matching build never defines this. */
 extern void PC_DiagSpellFxLog(int spellId, int slot, int objf);
 #define SPELLFX_LOG(slot, objf) PC_DiagSpellFxLog(gCurrentSpell, slot, objf)
 #else
@@ -56,8 +33,8 @@ extern u8 *PC_LangStr(const char *lit);
 
 
 #ifdef PC_FEAT
-/* Stage-3 1.3: pc_balance.c -- the per-chapter Tactical level cap (GAP 1, returns 50 in Normal so the
- * XP-award guards are retail-identical until Tactical is on) + the mode flag (GAP 5 MYSTIC_ENERGY v3). */
+/* pc_balance.c: the per-chapter Tactical level cap (returns 50 in Normal, so the XP-award guards
+ * stay retail-identical until Tactical is on) and the mode flag. */
 extern int TacticalCap(int chapter);
 extern int gTacticalMode;
 #endif
@@ -330,12 +307,9 @@ void Objf021_UnitAttacking(Object *obj) {
          // ?: LO byte of camSavedX doubles as a caller-set arg for specifying melee/ranged
          // LO(obj1->d.objf017.camSavedX) = 1;
          #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-          * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-          * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-          * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-          * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-          * as the field access the decompiler's own comment documents as the real intent. */
+         /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+          * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+          * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
          LO(obj1->d.objf017.camSavedX) = 1;
          #else
          obj1->d.bytes[4] = 1;
@@ -797,12 +771,9 @@ void Objf567_OpeningChest(Object *obj) {
       obj1->d.objf017.sprite = obj2 = opener->sprite;
       if (opener->class != CLASS_ARCHER) {
          #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-          * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-          * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-          * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-          * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-          * as the field access the decompiler's own comment documents as the real intent. */
+         /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+          * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+          * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
          LO(obj1->d.objf017.camSavedX) = 1;
          #else
          obj1->d.bytes[4] = 1;
@@ -1096,12 +1067,9 @@ void Objf028_UnitCasting(Object *obj) {
       obj_s1 = Obj_GetUnused();
       obj_s1->functionIndex = OBJF_ATTACK_CAMERA;
       #ifdef PC_PORT
-      /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-       * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-       * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-       * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-       * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-       * as the field access the decompiler's own comment documents as the real intent. */
+      /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+       * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+       * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
       LO(obj_s1->d.objf017.camSavedX) = 0;
       #else
       obj_s1->d.bytes[4] = 0;
@@ -1391,10 +1359,9 @@ void Objf028_UnitCasting(Object *obj) {
                CalculateSupportSpellExp(s_targetUnit_801231a8);
             }
 #ifdef PC_FEAT
-            /* GAP 5 B2: MYSTIC_ENERGY v3 (spell 32) in Tactical is a defensive-only group buff -- a big
-             * defBoosted (3, vs the usual 1) covering physical damage, plus magSusc=1 covering magic;
-             * the atk boost is dropped. Keyed on gCurrentSpell so any other BOOST_ATK_AND_DEF spell (and
-             * MYSTIC_SHIELD, which is a separate BOOST_DEF case) keeps retail behaviour. */
+            /* Tactical MYSTIC_ENERGY is a defensive-only group buff: defBoosted 3 (retail 1) plus
+             * magSusc=1, and no atk boost. Keyed on gCurrentSpell so any other BOOST_ATK_AND_DEF spell
+             * keeps retail behaviour. See docs/tactical-mode.md, "Monk & Ninja". */
             if (gTacticalMode && gCurrentSpell == SPELL_MYSTIC_ENERGY) {
                s_targetUnit_801231a8->defBoosted = 3;
                s_targetUnit_801231a8->magicSusceptibility = 1;
@@ -1422,11 +1389,9 @@ void Objf028_UnitCasting(Object *obj) {
             }
             s_targetUnit_801231a8->aglBoosted = 1;
 #ifdef PC_FEAT
-            /* Tactical: PERFECT_GUARD (an agility/evasion buff) ALSO grants magic resistance
-             * (magSusc=1) to its single target -- a niche "dodge + anti-magic" shield for a key or
-             * exposed unit (its description is already "Protect Magic"). Keyed on gCurrentSpell so any
-             * other BOOST_AGL spell keeps retail behaviour. No reset hook needed: the same team-turn
-             * clear loop that restores MYSTIC_ENERGY's magSusc (from gUnitInfo) covers this too. */
+            /* Tactical PERFECT_GUARD also grants magic resistance (magSusc=1) to its single target.
+             * Keyed on gCurrentSpell so any other BOOST_AGL spell keeps retail behaviour; the team-turn
+             * clear loop that restores magSusc from gUnitInfo covers the reset. */
             if (gTacticalMode && gCurrentSpell == SPELL_PERFECT_GUARD) {
                s_targetUnit_801231a8->magicSusceptibility = 1;
             }
@@ -1597,8 +1562,8 @@ void Objf592_BattleTurnStart(Object *obj) {
             s_unit_801231c0->atkBoosted = 0;
             s_unit_801231c0->defBoosted = 0;
 #ifdef PC_FEAT
-            /* GAP 5 B2: MYSTIC_ENERGY set magSusc=1 for a turn; restore each team unit's real value
-             * (in Tactical that's the A1-adjusted gUnitInfo value) as its buffs clear at turn start. */
+            /* MYSTIC_ENERGY / PERFECT_GUARD set magSusc=1 for a turn; restore each team unit's real
+             * value (in Tactical the rebalanced gUnitInfo value) as its buffs clear at turn start. */
             if (gTacticalMode) {
                s_unit_801231c0->magicSusceptibility = gUnitInfo[s_unit_801231c0->unitId].magicSusceptibility;
             }
@@ -1644,12 +1609,9 @@ void Objf592_BattleTurnStart(Object *obj) {
             obj_v1 = Obj_GetUnused();
             obj_v1->functionIndex = OBJF_ATTACK_CAMERA;
             #ifdef PC_PORT
-            /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-             * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-             * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-             * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-             * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-             * as the field access the decompiler's own comment documents as the real intent. */
+            /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+             * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+             * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
             LO(obj_v1->d.objf017.camSavedX) = 0;
             #else
             obj_v1->d.bytes[4] = 0;
@@ -1776,12 +1738,9 @@ void Objf592_BattleTurnStart(Object *obj) {
             obj_v1 = Obj_GetUnused();
             obj_v1->functionIndex = OBJF_ATTACK_CAMERA;
             #ifdef PC_PORT
-            /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-             * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-             * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-             * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-             * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-             * as the field access the decompiler's own comment documents as the real intent. */
+            /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+             * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+             * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
             LO(obj_v1->d.objf017.camSavedX) = 0;
             #else
             obj_v1->d.bytes[4] = 0;
@@ -1885,12 +1844,9 @@ void Objf592_BattleTurnStart(Object *obj) {
             obj_v1 = Obj_GetUnused();
             obj_v1->functionIndex = OBJF_ATTACK_CAMERA;
             #ifdef PC_PORT
-            /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-             * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-             * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-             * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-             * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-             * as the field access the decompiler's own comment documents as the real intent. */
+            /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+             * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+             * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
             LO(obj_v1->d.objf017.camSavedX) = 0;
             #else
             obj_v1->d.bytes[4] = 0;
@@ -2049,12 +2005,9 @@ void Objf592_BattleTurnStart(Object *obj) {
          obj_v1 = Obj_GetUnused();
          obj_v1->functionIndex = OBJF_ATTACK_CAMERA;
          #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): `d.bytes[4]` is a RAW BYTE OFFSET into the Object data union and
-          * assumes a 4-byte `sprite` pointer -- Object_017 is { struct Object *sprite; s16 camSavedX;
-          * ... }, so at -m32 byte 4 is the low byte of camSavedX (the caller-set melee/ranged flag
-          * Objf017_AttackCamera reads). Under -m64 `sprite` is 8 bytes, so byte 4 lands INSIDE the
-          * pointer and corrupts it -- the SIGSEGV in Objf017_AttackCamera on the first attack. Written
-          * as the field access the decompiler's own comment documents as the real intent. */
+         /* `d.bytes[4]` is a raw byte offset into the Object union assuming a 4-byte `sprite`
+          * pointer; on LP64 it lands inside the pointer (docs/width-bugs.md). Write the meant field
+          * instead: the low byte of camSavedX, the melee/ranged flag Objf017_AttackCamera reads. */
          LO(obj_v1->d.objf017.camSavedX) = 0;
          #else
          obj_v1->d.bytes[4] = 0;

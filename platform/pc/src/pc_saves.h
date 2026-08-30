@@ -1,23 +1,15 @@
-/*
- * Stage-3 (1.2b) save management -- file-level card archiving.
- *
- * Vandal Hearts uses ONE memory-card file, "BASLUS-00447VH" (core/card.c), holding all 3 in-game slots.
- * To beat the 3-slot limit *without* diverging the save format (each archive stays a byte-identical,
- * real-hardware-valid card), this backend keeps whole-card snapshots in a hidden "<saves>/.archive/"
- * folder -- dot-prefixed so the game's own firstfile("bu00:*") enumeration skips it.
- *
- * Archives are auto-named "BASLUS-00447VH.<YYYYMMDD-HHMMSS>" (PC clock; no gamepad text entry). This
- * layer is pure file I/O; the options overlay (pc_overlay.c) drives it and owns the UI + confirms.
- */
+/* Save management: file-level card archiving. The game keeps ONE memory-card file per region id
+ * holding all 3 slots; whole-card snapshots in the hidden "<saves>/.archive/" folder beat the 3-slot
+ * limit without diverging the save format. See docs/gameplay-additions.md, "Save-file internals". */
 #ifndef PLATFORM_PC_SAVES_H
 #define PLATFORM_PC_SAVES_H
 
 typedef struct {
-    char file[64];    /* archive filename within .archive/ (e.g. BASLUS-00447VH.20260725-153045) */
-    char label[24];   /* human display, parsed from the name: "2026-07-25 15:30"                 */
+    char file[64];    /* archive filename within .archive/ (e.g. BASLUS-00447VH.YYYYMMDD-HHMMSS) */
+    char label[24];   /* human display, parsed from the name: "YYYY-MM-DD HH:MM"                 */
     long long mtime;  /* modification time (seconds); tie-breaker / fallback ordering. 64-bit:
-                       * `long` is 32-bit on Windows (LLP64) and st_mtime is 64-bit there -- the
-                       * truncation would scramble backup ordering after 2038 (audit 2026-08-22) */
+                       * `long` is 32-bit on Windows (LLP64) while st_mtime is 64-bit there, and
+                       * the truncation would scramble backup ordering after 2038 */
     int  active;      /* 1 if byte-identical to the current active card (i.e. this IS the loaded state) */
 } PC_SaveArchive;
 

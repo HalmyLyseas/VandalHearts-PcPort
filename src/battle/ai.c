@@ -1,27 +1,6 @@
-/* Enemy/ally battle AI (segment 0x560f8 region).
- *
- * Flow: the battle manager (battle/field.c, enemy-turn state 5) spawns
- * Objf570_AI_ChooseAction on the acting unit's tile. 570 picks a plan from the unit's
- * spells, MP, class and HP (plus per-map specials: map 21 = retreat-only, Leena/map 26 =
- * escape-point movement) and spawns one planner:
- *   Objf402_AI_PlanSpellCast  -- damage or support spell: builds movement grids, spawns
- *                                Objf400 (spell value grid) + Objf401 (enemy proximity),
- *                                then searches every reachable cell x castable cell for
- *                                the best (move, target) pair.
- *   Objf403_AI_PlanAttack     -- physical attack: same shape, per-target scoring in
- *                                AI_ScoreAttackOption (facing/back-attack bonus, path
- *                                cost, elevation, archer kiting, Leena priority).
- *   Objf404_AI_PlanRetreat    -- reposition away from enemies onto preferred terrain
- *                                (also the self-heal positioning step).
- *   Objf589_AI_MoveToEscapePoint -- scripted goal cells (map 39) or the map edge.
- * Planners publish: gX/gZ_801233d8 (move destination), gTargetX/Z_80123414 (action
- * target), gAiActionType (0 move/wait + optional facing, 1 attack, 2 cast), then raise
- * gAiPlanDone; 570 finishes and raises gAiPlanReady for the battle manager.
- *
- * All planners yield on IsLagging() (GetRCnt(RCntCNT1) > 450) so the AI spreads its grid
- * sweeps across frames -- the port's pacing model for this lives in
- * platform/pc/src/libkernel.c (per-call-site synthetic counter; see its long comment).
- * The Tactical-mode magic-susceptibility term (PC_FEAT) hooks AI_ScoreSpellTargets. */
+/* Enemy/ally battle AI (segment 0x560f8): Objf570_AI_ChooseAction picks a plan and spawns one
+ * planner (Objf402 spell, 403 attack, 404 retreat, 589 escape point) that publishes the move/target
+ * cells and gAiActionType, then raises gAiPlanDone. See docs/game-mechanics/ai-decision-making.md. */
 #include "common.h"
 #include "object.h"
 #include "field.h"
@@ -32,12 +11,10 @@
 #include "PsyQ/kernel.h"
 
 #ifdef PC_FEAT
-extern int gTacticalMode;   /* Stage 3 1.4 -- F3 AI magic-susceptibility awareness */
-/* F3 tuning constant: weight for the AI magic-susceptibility term in AI_ScoreSpellTargets. K=30 tuned in-game
- * (2026-07-30; fixture + validation in the 1.4 scope doc). At K=30 the per-magSusc-tier step is 30 pts:
- * resistant (magSusc 1/2) get -60/-30 and are reliably avoided; weak (4/5) get +30/+60 and are preferred
- * -- but only by a 30-pt edge over neutral (3), so base factors (advantage/HP/terrain) stay live as
- * tiebreakers (a well-matched neutral can still be picked over a weak unit). Re-tune here + rebuild. */
+extern int gTacticalMode;   /* Tactical: AI magic-susceptibility awareness */
+/* Weight of the magic-susceptibility term in AI_ScoreSpellTargets, tuned in-game. Each magSusc tier
+ * steps the score by K: resistant (1/2) get -60/-30, weak (4/5) +30/+60 -- a 30-pt edge over neutral,
+ * so advantage/HP/terrain stay live as tiebreakers. Re-tune here and rebuild. */
 #define PC_AI_MAGSUSC_K 30
 #endif
 
@@ -57,27 +34,9 @@ void Objf589_AI_MoveToEscapePoint(Object *);
 
 extern u8 gAiSelfCastFallback, gAiPlanDone, gAiSubtaskDone;
 extern s16 gAiTargetScores[40];
-/* AI casting-score grid, indexed gAiCastValueGrid[iz][ix] where iz is an ABSOLUTE map-Z coordinate
- * (gMapMinZ..gMapMaxZ), not a 0-based index. gMapSizeZ caps at 16 but gMapMinZ can be large, so on
- * tall maps gMapMaxZ reaches 27 -- one row past this [27] declaration. Found by the ASAN sweep on a
- * chapter-4 map (Objf400_AI_BuildSpellValueGrid, battle/ai.c:381/383/411, and the read at 613).
- *
- * The retail game writes that row too; it is safe on hardware because gAiCastValueGrid (0x8017df50) has
- * 3600 bytes of real allocation before gSlainUnits (0x8017ed60) -- 144 bytes more than this
- * [27][64]=3456 decl -- so row 27 lands in slack. In the PC build the generator emits exactly 3456
- * bytes and the next global (D_801801B0) sits only 32 bytes later, so the same write corrupts it.
- *
- * Widen the OUTER dimension so the PC allocation covers the SAME range hardware's 3600 bytes do:
- * 3600 bytes = 1800 s16 = up to element [28][7], i.e. the retail array is really sized for
- * gMapMaxZ = 28 (that is why it has slack, not zero, before gSlainUnits). gMapMaxZ = gMapMinZ +
- * gMapSizeZ - 1, gMapSizeZ caps at 16 and gMapMinZ comes from map data, so tall maps genuinely
- * reach 27 (observed, ch4) and can reach 28. [29][64] = 3712 bytes covers iz 0..28 fully, i.e. >=
- * the hardware footprint, so the port never overflows where hardware does not. (An earlier fix used
- * [28] = row-27-only, sized to the first observed map; grown to match the hardware allocation
- * before the ch6 huge-terrain stress map.) Only the INNER dimension (64) enters the address
- * computation `base + (iz*64 + ix)*2`, so this does not change battle/ai.c codegen; PERMUTER-gated
- * regardless, so the matching build's declaration stays identical and the generator sizes the PC
- * global correctly. See exchange/58. */
+/* AI casting-score grid, indexed [iz][ix] with iz an ABSOLUTE map-Z (gMapMinZ..gMapMaxZ), which
+ * reaches 27..28 on tall maps. Retail's allocation carries 3600 bytes of slack-backed rows; the PC
+ * generator sizes exactly, so widen the outer bound (codegen-neutral: only 64 enters addressing). */
 #ifdef PERMUTER
 extern s16 gAiCastValueGrid[29][64];
 #else
@@ -572,11 +531,9 @@ void AI_ScoreSpellTargets(UnitStatus *unit) {
                sVar4 -= gAdvantage[unit->advantage][otherUnit->advantage];
                sVar4 -= gTerrainPreference[OBJ_TERRAIN(sprite).s.terrain] / 100;
 #ifdef PC_FEAT
-               /* F3 (Tactical): magic-susceptibility awareness. magSusc 1 = resistant -> LOWER score,
-                * 5 = weak -> RAISE, so the AI prefers magic-weak targets and avoids resistant ones.
-                * No magic-only gate needed: this DAMAGE branch is reached only for magic spells (physical
-                * uses AI_ScoreAttackOption, and every SPELL_EFFECT_DAMAGE already scales with magSusc in the
-                * damage formula). Weight PC_AI_MAGSUSC_K is defined above. */
+               /* Tactical: magic-susceptibility awareness -- magSusc 1 (resistant) lowers the score,
+                * 5 (weak) raises it. No magic-only gate is needed: this DAMAGE branch is reached only for
+                * magic spells. See docs/tactical-mode.md, "Magic-aware enemy casters". */
                magTerm = 0;
                if (gTacticalMode) {
                   magTerm = (s16)((otherUnit->magicSusceptibility - 3) * PC_AI_MAGSUSC_K);

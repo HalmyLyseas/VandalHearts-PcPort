@@ -1,20 +1,6 @@
-/* Spell casting effects, part 9 of the FX corpus (segment 0x6e9c4) -- a short code split
- * carrying a large shared data block.
- *
- * Code: the Faerie spell (Objf115_Faerie_FX2 drives the faerie sprite orbiting in toward
- * the target, spawning Objf116_Faerie_Sparkle every frame and Objf117_Faerie_SparkleTrail
- * every few, planting Objf118_Faerie_Target on arrival, then raising gSignal3 when it
- * withdraws) and Objf211_Avalanche_Boulder (an 11x9 vertex shell rotated per frame and
- * drawn as textured quads with per-face directional shading). Both are dispatched
- * data-driven through gSpellsEx -- see spells/casting_main.c for the model.
- *
- * Data: the block at 0x800ff18c holds shared sprite animation tables -- impact, smoke,
- * salamander, flame, two explosions, faerie and two sparkle loops. Only the faerie and
- * sparkle tables are used by this file; the rest are consumed by neighbouring FX units,
- * and gSmokeAnimData_800ff1b0 had to be made non-static for spells/dark_fire.c: the code split at
- * Objf211 is provisional and cuts across the shared block (see the in-file comment).
- *
- */
+/* The Faerie spell (Objf115 driver with Objf116/117/118 children) and Objf211, Avalanche's
+ * rotating boulder shell, dispatched via gSpellsEx (docs/decomp/spell-fx-dispatch.md), plus
+ * the shared anim-table block at 0x800ff18c that neighbouring FX units also read. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

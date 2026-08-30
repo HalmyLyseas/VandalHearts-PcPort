@@ -1,25 +1,6 @@
-/* Battle state entry point and the per-map win/lose evaluators (segment 0x30c9c).
- *
- * State_Battle is the in-battle state driver called from core/main.c: loads the map's text,
- * units, portraits, textures and BGM, sets up field and map, restores a deferred in-battle
- * save when there is one, then spawns the battle-ender object (Objf424, states/game_setup.c)
- * and this map's evaluator before handing control to the intro (battle/field.c).
- * PlayBattleBGM / PlayCurrentBattleBGM pick the track, incl. the map 28 / map 40 overrides.
- *
- * gBattleEvaluator[mapNum] maps each battle to one Objf4xx_EvaluateMapNN_<objective>
- * object -- that object IS the map's scripted rule set, polled through gState.needEval
- * (re-evaluate the board) and gState.signal (a search/switch/event trigger raised by the
- * field). NN is the MAP number; the displayed battle number is mapNum - 9. Plain maps
- * use Objf434_EvaluateStandardBattle (all enemies dead = victory, Ash lost = defeat); the
- * named ones add arrival/escape zones, boss or unit-type kill counts, protect clauses, and
- * some drive gState.mapState for the map_effects_* set pieces. The verdict is published as
- * gState.battleEval (BATTLE_EVAL_VICTORY/_DEFEAT), which every other battle object polls.
- *
- * Objf420_BattleVictory / Objf423_BattleDefeat (one handler, two slots) play the YOU WIN /
- * YOU LOSE letter sprites with Objf446_BattleVictoryParticle, then hand off to the results
- * screen (OBJF_BATTLE_RESULTS, battle/results.c) or raise gSignal2 for the defeat path.
- * FindUnitByNameIdx / CountUnitsOfType / CountUnitsOfTeam are the shared board queries.
- * PC_FEAT gates cover the Tactical trial XP/gold scaling. */
+/* Battle state entry point and the per-map win/lose evaluators (segment 0x30c9c). State_Battle
+ * loads and sets up a battle; gBattleEvaluator[mapNum] names the Objf4xx object that IS the map's
+ * rule set (polled via gState.needEval/signal, verdict in gState.battleEval); battle no. = NN - 9. */
 #include "common.h"
 #include "units.h"
 #include "object.h"
@@ -33,8 +14,8 @@
 #include "window.h"
 
 #ifdef PC_FEAT
-/* Stage 3 1.3 GAP 9/10 -- Trial rewards (pc_balance.c). Applied only to trial maps (mapNum <= 5) in
- * Tactical mode; Normal keeps the retail per-map tables verbatim. */
+/* Trial rewards (pc_balance.c), applied only to trial maps (mapNum <= 5) in Tactical mode; Normal
+ * keeps the retail per-map tables verbatim. */
 extern int gTacticalMode;
 extern int TrialExpScalingLevel(int chapter);
 extern int TrialGoldReward(int chapter);
@@ -176,9 +157,9 @@ s32 State_Battle(void) {
          gState.mapCursorOutOfRange = 0;
          gState.expScalingLevel = gBattleExpScalingLevels[gState.mapNum];
 #ifdef PC_FEAT
-         /* GAP 9: trial attack-XP scales with the chapter (retail trial expScalingLevel is a flat 10,
-          * and trial enemies carry expMulti 0 -> attacks paid nothing). Pairs with the expMulti set in
-          * the trial spawn hook (states/game_setup.c). */
+         /* Tactical: trial attack-XP scales with the chapter (retail trial expScalingLevel is a flat
+          * 10, and trial enemies carry expMulti 0, so attacks pay nothing). Pairs with the expMulti
+          * set in the trial spawn hook (states/game_setup.c). */
          if (gTacticalMode && gState.mapNum <= 5) {
             gState.expScalingLevel = TrialExpScalingLevel(gState.chapter);
          }
@@ -203,8 +184,8 @@ s32 State_Battle(void) {
          for (i = 0; i < ARRAY_COUNT(gSlainUnits); i++) {
             if (gSpriteStripUnitIds[i] > UNIT_ID_END_OF_PARTY) {
 #ifdef PC_FEAT
-               /* GAP 10: trial gold scales per-chapter (retail flat 10). Every trial kill, boss
-                * included, uses the regular per-chapter value (no 2x boss tier -- user's call). */
+               /* Tactical: trial gold scales per chapter (retail: a flat 10). Every trial kill, boss
+                * included, uses the regular per-chapter value. */
                if (gTacticalMode && gState.mapNum <= 5) {
                   gSlainUnits[ct].reward = TrialGoldReward(gState.chapter);
                } else {

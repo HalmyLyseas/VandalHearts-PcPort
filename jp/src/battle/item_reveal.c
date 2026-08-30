@@ -1,8 +1,6 @@
-/* The treasure/item-reveal cluster: Objf292 blue sparkle, Objf290_294_761 the reveal
- * driver, Objf295 the item icon, Objf385 the mimic, plus Map32's smokestacks
- * (Objf301/300, strays kept by address contiguity). Spawned from the battle reward flow
- * and event scripts. Handlers reachable from no spell table, no event script and no code
- * path are cut content, suffixed _Unused. */
+/* Treasure/item-reveal cluster: Objf292 blue sparkle, Objf290_294_761 the reveal driver, Objf295
+ * the item icon, Objf385 the mimic, plus Map32's smokestacks (Objf301/300, strays kept by address
+ * contiguity). Handlers reachable from no table, script or code path are cut content (_Unused). */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

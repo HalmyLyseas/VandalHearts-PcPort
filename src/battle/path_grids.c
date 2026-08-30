@@ -1,24 +1,6 @@
-/* Path/range grid floods -- the tactical layer's spatial queries.
- *
- * Storage: gPathGrid0..6 + gPathGrid10 (u8[30][65], accessed via the &grid[1] *_Ptr
- * aliases; a 0xff border ring is installed by states/game_setup.c and ClearGrid only clears
- * inside gMapMin/Max). One u8 per cell serves four value flavours:
- *   breadcrumbs (PATH_STEP_SOUTH/WEST/NORTH/EAST; INVALID marks the origin)  --
- *     PopulateMovementGrid, walked back by PlotPathBackToUnit;
- *   ascending accumulated move cost (1-based)  -- PopulateMoveCostGrid;
- *   descending remaining range (a distance potential field)  --
- *     PopulateReachGradientGrid[From], AccumulateProximityGrid, PopulateCastingGrid;
- *   flat coverage masks  -- MarkSpellFieldCoverage, Populate{Ranged,Melee}AttackGrid.
- *
- * Grid roles across the codebase: 0 = red attack range + general scratch; 1 = yellow
- * target/AoE display; 2 = AI path breadcrumbs / player remaining-move cost; 3 = AI
- * multi-turn reach horizon; 4 = AI reachable-this-turn mask; 5 = AI per-candidate
- * casting/attack scratch; 6 = AI scoring field (AoE coverage, enemy proximity via
- * AccumulateProximityGrid's max-accumulator, escape gradient); 10 = the blue movement
- * grid the player sees. The movement cost model (gTravelTerrainCost + ascent/descent by
- * the mover's step profile, own team passable, enemies block, CLASS_AIRMAN remaps enemy
- * tiles to obstacles for the flood) is shared by every flood through the rotating
- * gImpededStepsQueue bucket queue. */
+/* Path/range grid floods -- the tactical layer's spatial queries. gPathGrid0..6/10 are u8[30][65]
+ * with a 0xff border ring, addressed through the &grid[1] *_Ptr aliases; a cell holds breadcrumbs,
+ * accumulated cost, remaining range or a coverage mask. See docs/game-mechanics/classes.md. */
 #include "common.h"
 #include "battle.h"
 #include "units.h"
@@ -30,15 +12,9 @@
 #endif
 
 #ifdef PC_DEBUG_PATH_STEP
-/* Two probes for the gTravelAscentCost/DescentCost overrun the ASAN sweep found (exchange/58,
- * battle 5). The overrun is gTravelAscentCost[stepType][diff]; the open question is which index is
- * out of range:
- *   (a) stepType > 13  -> a garbage/uninitialised gUnits entry (a real state bug), or
- *   (b) |diff| >= 20   -> a genuinely steep elevation step. Battle 5's boss reshapes the terrain
- *       into a tall sand pyramid, so adjacent-tile elevation differences really can be large; on
- *       hardware the [14][20] tables are contiguous with the next table, so this reads real data.
- * PcPathStepProbe catches (a); PcTravelDiffProbe catches (b). Both are deduplicated, print only on
- * the anomaly, and only read -- behaviour-neutral, and gated out of the matching build entirely. */
+/* Two probes for the gTravelAscentCost/DescentCost[stepType][diff] overrun: PcPathStepProbe catches
+ * stepType > 13 (a garbage gUnits entry), PcTravelDiffProbe |diff| >= 20 (a genuinely steep step,
+ * e.g. battle 5's sand pyramid). Read-only and deduplicated; never in the matching build. */
 #include <stdio.h>
 static void PcPathStepProbe(const char *fn, s32 z, s32 x, s32 unitIdx, s32 step) {
    static struct { s16 idx; s16 step; } seen[64];
@@ -1710,13 +1686,9 @@ void NoopForever_8002f9b0(void) {
 }
 
 #ifdef PC_FEAT
-/* Stage 3 (1.1): enemy threat overlay -- the union of every living enemy's move+attack reach.
- * Rebuilt on demand (Square toggles it; NOT per frame -- unit positions are static during the
- * player's turn). Scratch grids 3 and 4 are free in the player field phase (the AI uses 2/6, and
- * the blue/red/yellow display grids are 10/0/1). All grids use the &grid[1] logical-origin alias,
- * so gThreatGridPtr matches the coordinate system RenderField reads. A reachable move tile is
- * itself threatened; each such tile's attack range (computed exactly as the game does for a unit's
- * own preview -- ranged vs melee by attackRange) is unioned in. */
+/* Enemy threat overlay: the union of every living enemy's move+attack reach, rebuilt on demand.
+ * Scratch grids 3/4 are free in the player field phase (the AI uses 2/6; display grids are 10/0/1);
+ * the &grid[1] alias matches RenderField's coordinates. See docs/gameplay-additions.md. */
 PathGridRow  gThreatGrid[30];
 PathGridRow *gThreatGridPtr = &gThreatGrid[1];
 u8           gShowThreatGrid;
@@ -1742,11 +1714,9 @@ void ComputeThreatGrid(void) {
       /* enemy move range into scratch grid 3 (same call the AI makes on enemies) */
       PopulateMovementGrid(ez, ex, e->travelRange, 3);
 
-      /* Iterate ONLY the playable area [gMapMin..gMapMax] -- the same range ClearGrid clears.
-       * ClearGrid never touches the 1-tile border ring outside those bounds, so reading the full
-       * grid array there picks up STALE, never-cleared path-steps from earlier calls and unions them
-       * in as phantom threat (bugreport-01: melee-only enemies "threatening" far border water). Real
-       * reach is always inside the playable field, so nothing real is lost. */
+      /* Iterate ONLY the playable area [gMapMin..gMapMax], the range ClearGrid clears: the 1-tile
+       * border ring outside it is never cleared, so reading it unions stale path-steps from earlier
+       * calls in as phantom threat. Real reach is always inside the playable field. */
       for (z = gMapMinZ; z <= gMapMaxZ; z++) {
          for (x = gMapMinX; x <= gMapMaxX; x++) {
             if (pMove[z][x] == PATH_STEP_UNSET)

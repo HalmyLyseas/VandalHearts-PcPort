@@ -1,18 +1,6 @@
-/* platform/pc/src/pc_mdec.c -- PS1 MDEC / STR (BS v2 & v3) video decoder.
- * Reimplemented from psx-spx (cdromfileformats.md BS Compression + macroblockdecodermdec.md);
- * ffmpeg's mdec.c consulted only to cross-check the algorithm. Validated to pixel-parity with
- * ffmpeg on both BS versions the intro FMVs use (Konami logo = v3, TITLE_WS = v2), 100%% of
- * pixels within 8/255 (residual = float-vs-integer IDCT rounding, which psx-spx notes is
- * hardware-unspecified). Entry point: PC_MdecDecodeBS(bs, bsLen, w, h, outBGR555). */
-/* Standalone PS1 MDEC / STR (BS v2 & v3) decoder -- reimplemented from psx-spx
- * (cdromfileformats.md BS Compression + macroblockdecodermdec.md). Offline test build;
- * the core (everything except main()) lifts into platform/pc/src/pc_mdec.c.
- *
- * Pipeline: STR demux (9 sectors/frame, 0x20-byte STR hdr + 0x7E0 payload each) ->
- * BS frame (8-byte hdr: MDECsize/4, ID 0x3800, q_scale, version) -> Huffman decode
- * (per-block DC + AC halfwords, block order Cr,Cb,Y1,Y2,Y3,Y4; macroblocks column-major)
- * -> rl_decode (dequant * default_quant * q_scale, zigzag) -> IDCT -> YUV->RGB -> BGR555.
- */
+/* pc_mdec.c -- PS1 MDEC / STR (BS v2 & v3) video decoder, reimplemented from psx-spx (BS Compression
+ * + macroblockdecodermdec). Pixel-parity with ffmpeg within 8/255 (float-vs-integer IDCT rounding).
+ * Entry point: PC_MdecDecodeBS(bs, bsLen, w, h, outBGR555). See docs/pc-port/subsystems/mdec.md. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

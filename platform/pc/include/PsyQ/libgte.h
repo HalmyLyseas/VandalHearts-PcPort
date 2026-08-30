@@ -1,27 +1,6 @@
-/*
- * ⚠️ WIDTH RULE (Stage 2.3, 2026-07-21): PSX `int` is ALWAYS 32-bit. On an LP64 host `int`
- * is 64-bit, which silently changed MATRIX from 32 to 48 bytes (t[3] moving from offset 20 to
- * 24) and made every `int *` out-parameter write 8 bytes into the 4-byte `int` locals that
- * src/ passes -- a stack smash that killed the -m64 build before the first MDEC frame.
- * Every `int` here is therefore `int` / `unsigned int`. Do NOT reintroduce `int` in this or any other
- * PC-owned PsyQ header.
- *
- * PC-backend replacement for the PSX SDK's libgte.h GTE (Geometry Transformation
- * Engine) interface.
- *
- * Clean-room reimplementation: struct layouts and function signatures are
- * functional facts (already known precisely from the Phase B byte-exact
- * decompile of src/core/text.c, which reconstructed MATRIX/VECTOR/SVECTOR from real
- * data) -- no text from Sony's original header. Behavior is implemented against
- * the public Nocash PSX Specifications hardware reference (psx-spx), not
- * against any Sony documentation.
- *
- * Scope: the ~25 high-level functions used by 37 of 38 GTE-touching files (per
- * exchange/02-phase-c-interface-contract.md). These only need to be
- * geometrically correct, not cycle/bit-exact -- backed by the same software
- * GTE core as the raw gte_* macros (see platform/pc/include/inline_gte.h),
- * just entered through a friendlier API.
- */
+/* Clean-room PC replacement for the PSX SDK libgte.h: layouts and signatures as recovered by the
+ * byte-exact decompile, behaviour from psx-spx. Every integer is `int`, never `long` -- LP64 `long`
+ * grows MATRIX to 48 bytes and smashes 4-byte `int` locals. See docs/pc-port/subsystems/gte.md. */
 #ifndef PLATFORM_PC_PSYQ_LIBGTE_H
 #define PLATFORM_PC_PSYQ_LIBGTE_H
 
@@ -40,16 +19,12 @@ typedef struct {
     short vx, vy, vz, pad;
 } SVECTOR;
 
-/* Not part of the confirmed-used function contract (no CVECTOR-typed GTE
- * function is actually called), but project headers (graphics.h/object.h)
- * reference the type directly for struct fields -- surfaced only once real
- * src .c compilation was attempted, not by the header-symbol contract scan. */
+/* No GTE function here takes a CVECTOR, but graphics.h/object.h use the type for struct fields. */
 typedef struct {
     unsigned char r, g, b, cd;
 } CVECTOR;
 
-/* Same story as CVECTOR above: not part of the confirmed-used function
- * contract, but referenced directly as a field/local type by game code. */
+/* Likewise DVECTOR: no function here takes it, but game code uses it as a field/local type. */
 typedef struct {
     short vx, vy;
 } DVECTOR;

@@ -22,22 +22,17 @@ from lang_io import fnv1a, write_json
 SECTOR, DOFF, EXE_LBA, EXE_SIZE = 2352, 24, 23, 1996800
 LOAD, HDR = 0x80010000, 0x800
 
-# name, vram, kind, count, record width (fixed tables) / None (pointer tables), limit note
-# ⭐ The three StringToGlyphs tables (gUnitTypeNames / gItemNames / gClassAdvancementNames) were MISSED
-# by the first pass and found by the step-1 probe run (exchange/80): they are drawn through a THIRD
-# mechanism -- StringToGlyphs into a sprite glyph strip -- not DrawText and not DrawSjisText, so a
-# sweep of DrawText call sites alone never saw them. gItemNames is a SECOND, longer item-name table
-# (139 entries vs gItemNamesSjis's 101): the equip/status panel uses it, the shop and field use the
-# Shift-JIS one. All three are plain ASCII, NUL-padded.
+# name, vram, kind, count, width (fixed) / None (pointer), limit note. Three tables draw through
+# StringToGlyphs, not DrawText/DrawSjisText (gUnitTypeNames, gItemNames, gClassAdvancementNames).
+# See platform/pc/tools/langpack/README.md, "Text sources the draw-call sweep cannot see".
 TABLES = [
     ("gCharacterNames",    0x800eaf58, "fixed",   35,  7, "character name"),
     ("gUnitTypeNames",     0x800eb050, "fixed",   86, 11, "class name (status panel)"),
     ("gItemNames",         0x800eb404, "fixed",  139, 13, "item name, equip/status panel"),
     ("gClassAdvancementNames", 0x801f6a34, "fixed", 18, 17, "class name in the dojo"),
-    # A FUNCTION-STATIC in battle/field.c (Objf030_FieldInfo) -- no external linkage, so unlike every
-    # other table the runtime cannot reach it without a PC_FEAT hook in that file. Exported here all
-    # the same: it is real on-screen text. ⚠️ Its column alignment is literal spaces inside the string
-    # ("Plains   0%" vs "Thicket 15%") so the % figures line up -- never trim or normalise it.
+    # terrainText is a function-static in battle/field.c (Objf030_FieldInfo), no external linkage,
+    # so it needs a PC_FEAT hook there rather than a normal accessor -- see docs/language-packs.md,
+    # "Runtime layout". Column alignment is literal spaces ("Plains   0%") -- never trim/normalise.
     ("terrainText",        0x800f29f4, "fixed",   10, 12, "battle terrain info box (bottom-left)"),
     ("gItemNamesSjis",     0x800eed20, "fixed",  101, 17, "item name, shop/field (2-byte SJIS)"),
     ("gSpellNames",        0x800ee410, "fixed",   72, 21, "spell name"),
@@ -133,10 +128,9 @@ def export(disc, outdir):
                     txt = unicodedata.normalize("NFKC", txt)
                 encs.add(enc); longest = max(longest, len(txt))
                 entries.append({"key": f"{name}[{i}]", "en": txt, "text": "", **markup(txt)})
-            # Column budgets are the 3rd argument of DrawText/DrawText_Internal at each call site,
-            # harvested from src/. DrawText_Internal WRAPS at the budget (column resets, row++), it
-            # does NOT clip -- unlike the message-box path. So exceeding it costs extra ROWS, and the
-            # risk is overflowing the window vertically, not losing characters.
+            # Column budgets are the 3rd argument of DrawText at each call site, harvested from
+            # src/; this path wraps rather than clips. See
+            # platform/pc/tools/langpack/README.md, "On-screen budgets".
             COLS = {"gStringTable":       (20, "20 cols at all 74 call sites"),
                     "gSpellDescriptions": (35, "ui/window.c:2292, a 288x36 bar"),
                     "gItemDescriptions":  (35, "ui/window.c:2105, same bar"),
@@ -154,21 +148,15 @@ def export(disc, outdir):
 
 
 # ---------------------------------------------------------------------------------------------
-# Dialogue: the on-disc text files. Stored BITWISE-INVERTED with CRLF lines (DecodeLineOfText reads
-# ~src[0]); LoadText then walks them as <=100 entries, a blank line toggling entry start/end and
-# "END" terminating. Budgets differ by RENDER PATH, traced in src/:
-#   * SHOP_T  -> DrawText(gTextPointers) in ui/supplies.c (65 sites) -> 30 cols, WRAPS
-#   * all others -> the message box -> 26 cols, HARD CLIP (tail silently lost)
+# Dialogue: the on-disc text files, stored bitwise-inverted with CRLF lines. See
+# platform/pc/tools/langpack/README.md, "On-screen budgets" for the per-path column limits.
 import re as _re
 
 TEXT_RX = _re.compile(r"(B_TXT\d+|EVENT\d+|SIBAI[\w]*|EVDEMO\d+|TOWN_T|SHOP_T|SAKABA_T|TENS_T)\.DAT")
 
-# SCOPING RULE (committed 2026-08-06): the US retail disc is the universe. Anything the US build never
-# reaches DOES NOT EXIST for translation purposes -- no PAL/JP consideration, no "might be used".
-# These six are the only text files still carrying Japanese, and they are exactly the six absent from
-# gEvtTextFiles[95] (the event -> text-file map, 0x80102c18). Their only references anywhere in src/
-# are the gCdFiles[] disc table entries in core/cd.c, which merely record every file's LBA -- NO LoadText
-# call names them. Unreachable on both counts, so they are dropped rather than handed to a translator.
+# Scoping rule: the US retail disc is the universe -- unreachable text does not exist for
+# translation purposes. These six still carry Japanese; see platform/pc/tools/langpack/README.md,
+# "Scope: the US retail disc is the universe", for why they are dropped.
 DEAD_FILES = {"SIBAI5", "SIBAI7", "SIBAIA", "SIBAIE", "SIBAIF", "EVDEMO7"}
 def _budget(stem):
     if stem == "SHOP_T":
@@ -178,17 +166,12 @@ def _budget(stem):
             "note": "drawn by the message box -- HARD CLIP past 26 columns, tail is lost"}
 
 
-# ENTRY-LEVEL exception. Budgets are per FILE except here: entry 1 of every battle file is the
-# victory/defeat condition panel, and it does NOT go through the message box at all --
-# battle/field.c draws it with DrawText at 40 columns (line 340) and 34 columns (line 2784), which
-# WRAPS. Charging it the message box's 26-column hard clip flagged 41 lines of Konami's own shipped
-# text, and the disc is the oracle: a rule that fails retail is our rule being wrong. Budget is the
-# tighter of the two real call sites.
-# Lines PROVEN not to render through the message box. Keyed by the FNV-1a hash of the line's own
-# bytes -- NOT the text itself, so no retail dialogue is committed to the repo (same reason and same
-# discipline as lang_export_literals.py's DEAD list; each still needs a PROOF, never a hunch). The
-# proof describes WHERE the line is (event/index), it does not quote it. Rebuild a hash for a new
-# entry with `fnv_hex("<the line>")`.
+# Entry-level exception: entry 1 of every battle file is the condition panel and does not go
+# through the message box. See platform/pc/tools/langpack/README.md, "On-screen budgets".
+
+# Lines proven not to render through the message box, keyed by the line's own FNV-1a hash (not the
+# text), so no retail dialogue is committed here. See platform/pc/tools/langpack/README.md,
+# "Scope: the US retail disc is the universe". Rebuild with fnv_hex("<line>").
 def fnv_hex(s):
     return f"{fnv1a(s):016x}"   # the one shared implementation lives in lang_io (see its docstring)
 

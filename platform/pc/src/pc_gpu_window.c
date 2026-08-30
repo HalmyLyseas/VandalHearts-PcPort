@@ -1,9 +1,6 @@
-/* SDL2 windowing/presentation glue for the GPU backend -- kept separate from
- * libgpu.c (the actual VRAM/rasterizer/OT hardware model) the same way
- * libspu.c is kept separate from libsnd.c: one file understands PSX
- * semantics, the other understands the host windowing API. Deliberately
- * The PS1 rasterizer remains software-only. SDL presents its completed RGB
- * framebuffer through Metal on macOS and OpenGL on the other desktop targets. */
+/* SDL2 windowing + presentation for the software GPU backend. libgpu.c/pc_raster.c model the PSX
+ * VRAM and rasterizer; this file only knows the host window API. The rasterizer stays software-only:
+ * SDL presents the finished RGB frame through Metal on macOS and OpenGL on the other desktops. */
 #include <SDL2/SDL.h>
 #if !defined(__APPLE__)
 #include <SDL2/SDL_opengl.h>
@@ -14,7 +11,7 @@
 #include "pc_platform.h"
 #include "pc_overlay.h"
 #include "pc_movie_subs.h"
-#include "pc_lang.h"       /* PC_LangSubtitleGlyph / PC_LangUtf8Decode (F3 subtitle renderer) */
+#include "pc_lang.h"       /* PC_LangSubtitleGlyph / PC_LangUtf8Decode (movie subtitle renderer) */
 
 static SDL_Window *s_window;
 #if defined(__APPLE__)
@@ -26,21 +23,20 @@ static SDL_GLContext s_glCtx;
 #endif
 static int s_winW, s_winH;               /* actual (scaled) window size */
 
-/* Overlay-facing video settings (Stage-3 1.2a). g_vhScale is the VH_SCALE integer factor (1..8);
- * g_vhFullscreen is 0/1. Written by PC_GpuSetScale/SetFullscreen (from the options overlay) and read
- * for display; initialised from VH_SCALE / VH_FULLSCREEN in PC_GpuInit. */
+/* Overlay-facing video settings. g_vhScale is the VH_SCALE integer factor (1..8); g_vhFullscreen is
+ * 0/1. Written by PC_GpuSetScale/SetFullscreen (from the options overlay) and read for display;
+ * initialised from VH_SCALE / VH_FULLSCREEN in PC_GpuInit. */
 int g_vhScale = 2;
 int g_vhFullscreen = 0;
-/* 1.6 HD PACK toggle (VH_HDPACK). 0 until a valid pack is auto-detected; libgpu's HdDetect() then sets it
- * (persisted VH_HDPACK, or auto-ON on first detect). The overlay binds it directly; libgpu reads it. */
+/* HD PACK toggle (VH_HDPACK). 0 until a valid pack is auto-detected; pc_hdpack.c's HdDetect() then sets
+ * it (persisted VH_HDPACK, or auto-ON on first detect). The overlay binds it directly; libgpu reads it. */
 int g_vhHdPack = 0;
 static unsigned char *s_rgbaScratch;
 static int s_scratchCap;
 
-/* --- Debug camera OSD (feedback-11 follow-up) ------------------------------
- * A tiny self-contained 5x7 bitmap font (subset: 0-9, '-', ' ', ':', ',', '(',
- * ')', and the letters used in the label) blitted straight into s_rgbaScratch
- * before host presentation, so no platform text stack is needed. Enabled via VH_CAM_OSD. */
+/* --- Debug camera OSD ------------------------------------------------------
+ * A tiny self-contained 5x7 bitmap font (digits, a few punctuation marks and the letters the labels
+ * need) blitted straight into s_rgbaScratch before host presentation. Enabled via VH_CAM_OSD. */
 char g_camOsdText[96] = "";
 
 /* Each glyph: 7 rows, low 5 bits = columns (bit4 = leftmost). */
@@ -62,7 +58,7 @@ static void glyphRows(char c, unsigned char out[7]) {
         {'.', {0, 0, 0, 0, 0, 0, 0x04}},        {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
         {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
         {'?', {0x0E, 0x11, 0x01, 0x06, 0x04, 0, 0x04}},
-        /* 1.4 F2: PlayStation face-button glyphs (sentinel ASCII -> icon), used by the overlay footers:
+        /* PlayStation face-button glyphs (sentinel ASCII -> icon), used by the overlay footers:
          * '$'=Square, '@'=Circle, '^'=Triangle, '~'=Cross. Monochrome outlines (the font is 1-colour). */
         {'$', {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F}},   /* square */
         {'@', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},   /* circle */
@@ -141,11 +137,9 @@ static void osdDrawText(int w, int h, int sx, int sy, int scale, const char *tex
     }
 }
 
-/* --- Stage-3 (1.1C) in-game options overlay renderer ---------------------------
+/* --- In-game options overlay renderer ------------------------------------------------------------
  * Paints the pc_overlay.c menu over the presented frame, into the same bottom-up RGB scratch as the
- * debug OSD. Deliberately plain/neutral (user direction): a semi-transparent dark-grey panel, a
- * light-grey/light-blue clean bitmap font (the shared 5x7 glyphs), a light-blue selection -- nothing
- * that competes with the game's own art. Sizes itself from the longest line so it always fits. */
+ * debug OSD: a translucent dark-grey panel, the shared 5x7 font, a light-blue selection, sized to fit. */
 
 /* Blend (r,g,b) at alpha a/255 into the scratch pixel at screen (X,Y) (top-left origin; the scratch
  * is bottom-up, so flip Y here as osdDrawText does). Out-of-bounds is a no-op. */
@@ -190,15 +184,9 @@ static int ovlTextPx(const char *s, int scale) {   /* rendered width; last cell 
     return n > 0 ? (n * 6 - 1) * scale : 0;
 }
 
-/* --- Langpack F3 movie subtitles: proportional rendering, two font tiers ----------------------
- * PRIMARY = the 16x15 wide font (PC_LangSubtitleGlyph16: pack K_FONT16, then the built-in BIOS
- * charset for ASCII) -- clean letterforms at subtitle sizes; the native MDEC scratch is upscaled
- * at present time precisely so this font has the pixels to land on (factor lives in
- * PC_GpuPresent's movie branch, keyed on cues being loaded). FALLBACK = the
- * 8x9 small font (PC_LangSubtitleGlyph), chosen PER CUE when any wide glyph is missing, so a cue
- * never mixes fonts. Advance is proportional (ink + gap); a line that overflows its cover rect
- * auto-wraps at word boundaries. A codepoint missing from BOTH tiers draws a tofu box (visible,
- * never a silent skip -- the langpack build gate makes that unreachable for packs). */
+/* --- Langpack movie subtitles: proportional rendering, two font tiers ---------------------------
+ * PRIMARY = the 16x15 wide font (PC_LangSubtitleGlyph16), FALLBACK = the 8x9 small font, chosen PER
+ * CUE so a cue never mixes fonts. See docs/pc-port/subsystems/mdec.md, "Movie subtitles". */
 #define SUBS_MAX_CPS   192
 #define SUBS_MAX_ROWS  8
 
@@ -366,18 +354,15 @@ static int ovlFitScale(int w, int base) {
     return s;
 }
 
-/* 1.4 F2: overlay button-label style (1 == XBOX; see libetc.c PC_ButtonLabelStyle). Only the port
- * overlay's own footers swap PlayStation symbols for Xbox letters; the game's prompts are untouched. */
+/* Overlay button-label style (1 == XBOX; see libetc.c PC_ButtonLabelStyle). Only the port overlay's
+ * own footers swap PlayStation symbols for Xbox letters; the game's prompts are untouched. */
 extern int PC_ButtonLabelStyle(void);
 extern const char *PC_OverlayItemWidestValue(int i);
 #define OVL_LABELS_XBOX (PC_ButtonLabelStyle() == 1)
 
-/* ALL overlay screens share ONE glyph scale so a sub-window (return-to-title confirm, save
- * management, detail) never renders at a different size than the main settings list it opened from.
- * The scale TRACKS the internal resolution: the presented buffer is 320 * VH_INTERNAL_SCALE wide, so
- * scaling the overlay by that same factor keeps it the SAME relative size at every internal res
- * (otherwise it stayed at scale 2 and shrank at x3/x4). The reference is the MAIN list (the widest
- * panel, and computable on every sub-screen); we clamp DOWN only in the rare case it wouldn't fit. */
+/* ALL overlay screens share ONE glyph scale, so a sub-window never renders at a different size than
+ * the list it opened from. The scale tracks the internal resolution (the presented buffer is
+ * 320 * VH_INTERNAL_SCALE wide), sized from the MAIN list and clamped DOWN only if it would not fit. */
 static int ovlSharedScale(int w) {
     int i, count = PC_OverlayCount(), base = 0, want, fit;
     for (i = 0; i < count; i++) {
@@ -403,7 +388,7 @@ static void drawMain(int w, int h) {
         const char *label, *wv;
         int lw;
         PC_OverlayItem(i, &label, NULL);
-        wv = PC_OverlayItemWidestValue(i);   /* size to the widest value, not the current one (1.4 F2 #4) */
+        wv = PC_OverlayItemWidestValue(i);   /* size to the widest value, not the current one */
         lw = ovlTextPx(label, 1) + (wv ? 12 + ovlTextPx(wv, 1) : 0);
         if (lw > base) base = lw;
     }
@@ -593,37 +578,23 @@ void PC_GpuDrawOverlay(int w, int h) {
 
 int PC_GpuInit(int width, int height, const char *title) {
 #if defined(_WIN32)
-    /* The Windows build defines SDL_MAIN_HANDLED (the real entry point is the game's own main(),
-     * not SDL_main), so SDL's normal startup hook never runs -- tell SDL we've handled main before
-     * the first init, or SDL_Init warns and skips some Windows-specific setup. Idempotent/harmless
-     * if the window is re-opened. */
+    /* The Windows build defines SDL_MAIN_HANDLED (the entry point is the game's own main(), not
+     * SDL_main), so SDL's startup hook never runs -- tell SDL main is handled before the first init,
+     * or SDL_Init warns and skips some Windows-specific setup. Idempotent if the window is re-opened. */
     SDL_SetMainReady();
 #endif
     if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
         /* No forced video driver -- SDL auto-picks (Wayland on a Wayland session, X11 on X11,
-         * "windows"/"cocoa" elsewhere). An explicit SDL_VIDEODRIVER env var still overrides.
-         *
-         * HISTORY (removed Stage 2.4, 2026-07-23): early in the project we force-set "x11" because
-         * SDL2's native Wayland backend crashed during EGL setup ("Proxy and queue point to
-         * different wl_displays") -- but ONLY while pc_bootstrap.c mapped page 0
-         * (PSX_NULL_MIRROR_BASE) to absorb transient NULL reads. Stage 2.2/2.3 removed that mapping
-         * (known NULL reads have per-site PC_PORT guards; Linux i386 also has a fault-handler net),
-         * so the trigger is gone: verified by running native Wayland with the current build, full
-         * speed, no crash. */
+         * "windows"/"cocoa" elsewhere) and an explicit SDL_VIDEODRIVER env var still overrides.
+         * Native Wayland runs at full speed, so nothing here needs to force "x11". */
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
             fprintf(stderr, "PC_Gpu: SDL video init failed (no display?): %s\n", SDL_GetError());
             return 0;
         }
     }
-    /* Display-resolution scaling: the game renders a native 320x240 framebuffer;
-     * we open the window at native*scale and upscale the blit (nearest-neighbour,
-     * so pixel art stays crisp). VH_SCALE overrides the integer factor (default 2
-     * = 640x480). The window is resizable and the present path recomputes a
-     * letterboxed, aspect-preserved viewport each frame, so live resize / maximise
-     * also work. This is DISPLAY resolution; true INTERNAL-resolution supersampling
-     * (rendering the software GPU at a denser sample rate) is the separate
-     * VH_INTERNAL_SCALE / "INTERNAL RES" option (1.5/G2), resolved here so the
-     * overlay setting is valid before the first frame. */
+    /* Display scale: the game renders a native 320x240 framebuffer; the window opens at native*VH_SCALE
+     * (default 2, nearest-neighbour) and the present path re-letterboxes to any window size each frame.
+     * Distinct from VH_INTERNAL_SCALE (render supersampling), resolved here so the overlay sees a value. */
     {
         int scale = 2;
         const char *env = getenv("VH_SCALE");
@@ -680,24 +651,13 @@ int PC_GpuInit(int width, int height, const char *title) {
         fprintf(stderr, "PC_Gpu: OpenGL context creation failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(s_window); s_window = NULL; return 0;
     }
-    /* Explicitly OFF, not on. The game's own VSync() (src/libetc.c) already
-     * paces frames in software, matching real hardware's ~60Hz timing --
-     * this project's own reference PC port of another PS1 decomp
-     * (CTR-native, vandalHearts_decomp/ctr-native/platform/native_platform.c)
-     * hit this exact question and documented why they land on interval 0:
-     * "some GL drivers charge that wait to the next frame's first clear
-     * instead of SDL_GL_SwapWindow" -- a second, driver-side wait stacked
-     * on top of the game's own pacing rather than replacing it, landing at
-     * an unpredictable point in the frame. Particularly relevant here since
-     * this build runs on llvmpipe (software Mesa, confirmed via the
-     * "driver (null)" EGL warnings at startup) rather than a real GPU
-     * driver, where swap-interval behavior is known to be inconsistent
-     * under a compositor. */
+    /* Explicitly OFF: the game's own VSync() (src/libetc.c) already paces frames in software to the
+     * hardware's ~60Hz, and a driver-side swap wait would stack a second wait on top of it at an
+     * unpredictable point in the frame. See docs/performance.md, "Frame pacing and the display path". */
     SDL_GL_SetSwapInterval(0);
-    /* Name the driver in the log, mirroring the Metal branch's "presentation renderer=" line.
-     * Every "black screen" / "slow on my machine" report needs this and it is unrecoverable
-     * afterwards; it also makes a stale assumption about which renderer is in use (see the
-     * swap-interval note above) visible instead of inherited. */
+    /* Name the GL driver in the log, mirroring the Metal branch's "presentation renderer=" line: every
+     * "black screen" / "slow on my machine" report needs it, and it makes the renderer actually in use
+     * visible instead of assumed (see the swap-interval note above). */
     {
         const GLubyte *ven = glGetString(GL_VENDOR);
         const GLubyte *ren = glGetString(GL_RENDERER);
@@ -721,11 +681,9 @@ void PC_GpuGetWindowSize(int *w, int *h, int *scale) {
     if (scale) *scale = g_vhScale;
 }
 
-/* Modal error dialog for fatal, user-actionable failures (PC_FatalDiscError). SDL documents this as
- * callable at ANY time, even before SDL_Init -- which matters, because disc validation fails before
- * the window exists. On Linux this is what a double-click AppImage launch shows instead of dying
- * silently with the message only on a terminal nobody opened; headless runs (SDL_VIDEODRIVER=dummy,
- * regress harness) just get SDL's error return, which we ignore -- stderr already has the text. */
+/* Modal error dialog for fatal, user-actionable failures (PC_FatalDiscError). SDL allows it at ANY
+ * time, even before SDL_Init -- disc validation fails before the window exists. A double-click launch
+ * shows this instead of dying silently; headless runs (SDL_VIDEODRIVER=dummy) get an ignored error. */
 void PC_ShowErrorBox(const char *title, const char *body) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, body, NULL);
 }
@@ -738,8 +696,8 @@ int PC_CpuCount(void) {
     return (n > 0) ? n : 1;
 }
 
-/* Stage-3 (1.2a) options-overlay setters. The present path already re-letterboxes to any window size
- * each frame, so these just resize / toggle the window -- no render changes. */
+/* Options-overlay setters. The present path already re-letterboxes to any window size each frame,
+ * so these just resize / toggle the window -- no render changes. */
 void PC_GpuSetScale(int scale) {
     if (scale < 1) { scale = 1; } if (scale > 8) { scale = 8; }
     g_vhScale = scale;
@@ -761,23 +719,14 @@ void PC_GpuSetFullscreen(int on) {
  * to a 320x240 BGR555 buffer and registers it here; PC_GpuPresent then shows that instead of the
  * VRAM region, sidestepping the movie's 24bpp VRAM packing (the present path reads 16bpp only). */
 static const unsigned short *s_movieOverlay = NULL;
-static const unsigned char  *s_movieOverlayRGB = NULL;   /* 1.6 HD video: direct RGB24 (w*h*3, top-down) */
+static const unsigned char  *s_movieOverlayRGB = NULL;   /* HD video: direct RGB24 (w*h*3, top-down) */
 static int s_movieOvW = 0, s_movieOvH = 0;
 void PC_GpuSetMovieOverlay(const unsigned short *bgr555, int w, int h) {
     s_movieOverlay = bgr555; s_movieOverlayRGB = NULL; s_movieOvW = w; s_movieOvH = h;
 }
-/* Pump + drain the SDL event queue. Initializing SDL_INIT_VIDEO installs SDL's own
- * SIGINT/SIGTERM handlers, which translate Ctrl+C into an SDL_QUIT event instead of terminating
- * the process; the window manager's close button posts the same SDL_QUIT. Handle SDL_QUIT and
- * Escape by exiting cleanly. (SDL_GetKeyboardState in PadRead still works -- polling here also
- * refreshes that internal key state.)
- *
- * Called from the present path AND from every VSync (2026-08-22): processing events is also what
- * answers the compositor's responsiveness ping. The boot loads run at hardware-exact CD timing
- * (~5-8s in LoadCdFile's VSync spin) with nothing presented and no PadRead -- the ping went
- * unanswered and GNOME intermittently raised its "not responding" kill/wait dialog (its
- * threshold sits right inside that window), and a close-button click sat queued until the first
- * present. Safe when the window failed to open (SDL_PollEvent is a no-op then). */
+/* Pump + drain SDL events (SDL_QUIT from the close button or SDL's own Ctrl+C handler, and Escape,
+ * exit cleanly; polling also refreshes SDL_GetKeyboardState for PadRead). Called from the present path
+ * AND every VSync so the compositor's responsiveness ping is answered during the long boot loads. */
 void PC_GpuPumpEvents(void) {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -788,7 +737,7 @@ void PC_GpuPumpEvents(void) {
     }
 }
 
-/* 1.6 HD FMV: present a decoded HD frame directly at 24-bit (no 15-bit banding). Mutually exclusive with
+/* HD FMV: present a decoded HD frame directly at 24-bit (no 15-bit banding). Mutually exclusive with
  * the native BGR555 overlay; the frame is scaled to the window aspect-preserved like the native one. */
 void PC_GpuSetMovieOverlayRGB(const unsigned char *rgb, int w, int h) {
     s_movieOverlayRGB = rgb; s_movieOverlay = NULL; s_movieOvW = w; s_movieOvH = h;
@@ -815,14 +764,9 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     if (s_ptTime < 0) s_ptTime = getenv("VH_PRESENT_TIME") ? 1 : 0;
     if (s_ptTime) pt0 = presentNowMs();
 
-    /* A movie is playing -> present its decoded frame as a fullscreen overlay (native BGR555, or
-     * HD RGB24). When this movie has subtitle cues, the native MDEC frame is presented at 4x
-     * (nearest-neighbour -- movie pixels look identical) so the wide subtitle font has real
-     * pixels to land on AND the native scratch matches the HD one (1280x960): subtitle metrics
-     * are identical on both paths by construction. Without cues (no pack / no dev override --
-     * the common case) the frame presents at its own size: the 16x convert+upload cost is only
-     * paid when subtitles actually render. The cue set is fixed at PC_MovieSubsOpen, so the
-     * factor never flips mid-movie. */
+    /* A movie is playing -> present its decoded frame as a fullscreen overlay (native BGR555, or HD
+     * RGB24). With subtitle cues loaded the native frame presents at 4x (nearest-neighbour) so the wide
+     * font has pixels to land on; the cue set is fixed at PC_MovieSubsOpen, so the factor never flips. */
     int msubs = PC_MovieSubsLoaded() ? 4 : 1;
     if ((s_movieOverlay || s_movieOverlayRGB) && s_movieOvW > 0 && s_movieOvH > 0) {
         vram = (unsigned short *)s_movieOverlay;   /* NULL on the RGB path (used only by the BGR555 convert) */
@@ -857,10 +801,9 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         for (px = 0; px < w; px++) {
             unsigned short c = vram[(y + (py >> mshift)) * vramW + (x + (px >> mshift))];
             unsigned char *out = &s_rgbaScratch[((h - 1 - py) * w + px) * 3];
-            /* Display expansion 5-bit -> 8-bit by BIT-REPLICATION ((v<<3)|(v>>2)), matching real
-             * hardware / DuckStation's output: a full 5-bit channel (31) maps to 255, not 248, so
-             * whites reach full brightness. Purely a screen-output convention -- the internal render
-             * (s_vram, UnpackColor, blends) stays native 5-bit and is unaffected. */
+            /* 5-bit -> 8-bit by BIT-REPLICATION ((v<<3)|(v>>2)), matching real hardware and
+             * DuckStation: a full channel (31) maps to 255, not 248. Screen-output only -- the
+             * internal render (s_vram, UnpackColor, blends) stays native 5-bit. */
             int r5 = c & 0x1F, g5 = (c >> 5) & 0x1F, b5 = (c >> 10) & 0x1F;
             out[0] = (unsigned char)((r5 << 3) | (r5 >> 2));
             out[1] = (unsigned char)((g5 << 3) | (g5 >> 2));
@@ -869,10 +812,9 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
     }
     }
 
-    /* Langpack F3 movie subtitles: paint each active cue's opaque cover over the burned-in text
-     * region, then the translated text centered inside it. Coordinates in the cue are native
-     * 320x240; the scratch is at the movie's own resolution (native or HD), so scale rects and
-     * pick an integer font scale from the frame height. Inert unless cues are loaded. */
+    /* Langpack movie subtitles: paint each active cue's opaque cover over the burned-in text region,
+     * then the translated text centered inside it. Cue coordinates are native 320x240; the scratch is
+     * at the movie's own resolution (native x4 or HD), so rects scale. Inert unless cues are loaded. */
     if (s_movieOverlay || s_movieOverlayRGB) {
         const PC_MovieCue *cues[2];
         int nc = PC_MovieSubsActive(cues, 2), ci;
@@ -896,8 +838,8 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         if (s_osdEnabled && g_camOsdText[0]) osdDrawText(w, h, 2, 2, 1, g_camOsdText, 0x20, 0xFF, 0x20, 1);
     }
 
-    /* Stage-3 (1.4 F1): battle fast-forward readout. PC_BattleSpeedGet() returns 1 outside a battle, so
-     * the "BATTLE SPEED X2" tag only shows while fast-forward is active. Uppercase (the OSD font has no
+    /* Battle fast-forward readout. PC_BattleSpeedGet() returns 1 outside a battle, so the
+     * "BATTLE SPEED X2" tag only shows while fast-forward is active. Uppercase (the OSD font has no
      * lowercase glyphs). Top-right, scale 2. */
     {
         extern int PC_BattleSpeedGet(void);
@@ -913,7 +855,7 @@ void PC_GpuPresent(unsigned short *vram, int vramW, int vramH,
         }
     }
 
-    if (PC_OverlayIsOpen()) PC_GpuDrawOverlay(w, h);   /* Stage-3 (1.1C) options overlay, on top */
+    if (PC_OverlayIsOpen()) PC_GpuDrawOverlay(w, h);   /* options overlay, on top */
 
     /* Scale the native w*h framebuffer up to fill the current window, preserving
      * the source aspect ratio (letterboxed with black bars). Recomputed every

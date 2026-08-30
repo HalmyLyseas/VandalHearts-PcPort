@@ -1,23 +1,6 @@
-/* The post-battle results screen and the slain-unit tally that feeds it (segment
- * 0x38148).
- *
- * TallySlainUnit is called from every death path of Objf014_BattleUnit (units/actor.c):
- * party members set a flag in gPartyMemberSlain, everyone else bumps the matching
- * gSlainUnits count. Both arrays are zeroed per battle by battle/evaluators.c and mirrored into
- * the in-battle save by core/card.c. CommitPartyStatus flushes every live gUnits entry back
- * into gPartyMembers; the results object runs it first, and Objf424_BattleEnder's debug
- * skip reuses it.
- *
- * Objf594_BattleResults is spawned by battle/evaluators.c once the victory banner finishes, and
- * runs three concurrent lanes over the shared s_* statics: obj->state draws the windows;
- * obj->state2 walks the kill list and then the lost-party list, spawning one Objf593 child
- * every 10 frames and moving to a fresh row when the first penalty entry appears (a
- * negative gBattleUnitRewards value, or any lost party member); obj->state3 is the gold
- * counter, re-rendering the SJIS total whenever a child posts a reward and adding it to
- * gState.gold at the end. Slots wrap at 8 per row; the grid restarts past 32.
- *
- * Objf593_BattleResultsUnit draws one slot: the unit's strip sprite, with GFX_RED_X laid
- * under it when the entry is a penalty. */
+/* Post-battle results screen and the slain-unit tally that feeds it (segment 0x38148).
+ * TallySlainUnit runs on every death path of Objf014_BattleUnit; Objf594_BattleResults drives three
+ * lanes over shared statics (windows; the kill/lost list, one Objf593 slot per 10 frames; gold). */
 #include "common.h"
 #include "units.h"
 #include "object.h"
@@ -29,8 +12,8 @@
 
 
 #ifdef PC_FEAT
-/* Stage 3 1.3 GAP 10 -- Trial rewards (pc_balance.c): per-chapter gold penalty per lost unit on trial
- * maps (mapNum <= 5) in Tactical. Normal keeps the retail gBattlePenalties table. */
+/* Trial rewards (pc_balance.c): per-chapter gold penalty per lost unit on trial maps (mapNum <= 5)
+ * in Tactical. Normal keeps the retail gBattlePenalties table. */
 extern int gTacticalMode;
 extern int TrialGoldPenalty(int chapter);
 #endif
@@ -165,8 +148,8 @@ void Objf594_BattleResults(Object *obj) {
          rewardObj->d.objf593.slot = s_slot_80123288++;
          rewardObj->d.objf593.isPenalty = 1;
 #ifdef PC_FEAT
-         /* GAP 10: a careless trial run now costs gold per lost unit, scaled per chapter (retail trial
-          * penalty is a flat 10). Matches the raised trial reward so trials carry real stakes. */
+         /* Tactical: a lost unit on a trial map costs gold scaled per chapter (retail: a flat 10),
+          * matching the raised trial reward. See docs/tactical-mode.md, "Trials of Toroah". */
          if (gTacticalMode && gState.mapNum <= 5) {
             s_currentReward_80123298 -= TrialGoldPenalty(gState.chapter);
          } else {

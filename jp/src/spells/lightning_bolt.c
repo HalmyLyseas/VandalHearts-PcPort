@@ -1,7 +1,6 @@
-/* The generic sky lightning bolt: Objf147_LightningBolt, spawned by
- * Objf148_ThunderStrike (spells/casting_main.c), plus DrawLightningBoltSegment, which
- * renders one jagged segment of the bolt. Dispatched data-driven via gSpellsEx (see
- * spells/casting_main.c's header for the model). */
+/* The generic sky lightning bolt: Objf147_LightningBolt, spawned by Objf148_ThunderStrike
+ * (spells/casting_main.c), plus DrawLightningBoltSegment, which renders one jagged segment.
+ * Dispatched via gSpellsEx (docs/decomp/spell-fx-dispatch.md). */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

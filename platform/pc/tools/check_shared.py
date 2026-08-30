@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard for the region shared-source scheme (exchange/102 §4).
+"""Guard for the region shared-source scheme.
 
 The port compiles the game TUs listed in platform/pc/shared_tus.txt from
 ../../src for BOTH regions (US and JP), because those files are byte-identical

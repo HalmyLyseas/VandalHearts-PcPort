@@ -19,10 +19,9 @@ void Objf414_DebugMenu(Object *obj) {
       gWindowActiveIdx = 0x34;
       DrawWindow(0x34, 0, 0, 200, 225, 100, 4, WBS_CROSSED, 9);
 #ifdef PC_FEAT
-      /* exchange/107: retail feeds an ASCII literal to the SJIS renderer, which consumes TWO
-       * bytes per glyph -- the pairs decode as invalid SJIS and NOTHING draws (Konami's US menu
-       * text was blank on real hardware too). Full-width SJIS renders natively -- and avoids
-       * DrawText's bare-'U'/'D' control codes, which ate letters on the first ASCII attempt. */
+      /* Retail feeds an ASCII literal to the SJIS renderer, which consumes two bytes per glyph and
+       * decodes invalid SJIS, so nothing draws (blank on real hardware too). Full-width SJIS
+       * renders natively. See docs/gameplay-additions.md, "The debug menu". */
       DrawSjisText(12, 11, 20, 2, 0,
                "\x82\x61\x82\x60\x82\x73\x82\x73\x82\x6b\x82\x64\n\x82\x65\x82\x6e\x82\x6d\x82\x73\x81\x40\x82\x6e\x82\x65\x82\x65\n\x82\x63\x82\x64\x82\x61\x82\x74\x82\x66\x81\x40\x82\x6c\x82\x6e\x82\x63\x82\x64\n\n\x82\x68\x82\x75\x82\x64\x82\x6d\x82\x73\x81\x40\x82\x6c\x82\x60\x82\x6f\n\x82\x66\x82\x60\x82\x6c\x82\x64\x81\x40\x82\x72\x82\x73\x82\x60\x82\x71\x82\x73\n\x82\x74\x82\x6d\x82\x68\x82\x73\x81\x40\x82\x72\x82\x64\x82\x6b\x82\x64\x82\x62\x82\x73\n\n\x82\x72\x82\x64\x82\x6b\x82\x64\x82\x62\x82\x73\x81\x40\x82\x61");
 #else
@@ -76,8 +75,8 @@ void Objf414_DebugMenu(Object *obj) {
          DrawWindow(0x34, 0, 0, 136, 190, 150, 10, WBS_CROSSED, 10);
          // Test, 1-8
 #ifdef PC_FEAT
-         /* exchange/107: the retail テスト header is katakana -- outside the US font's 209
-          * glyphs, so it rendered BLANK on US hardware too. Full-width TEST instead. */
+         /* The retail katakana header sits outside the US font's glyph set, so it rendered blank
+          * on US hardware too. Full-width TEST instead. */
          DrawSjisText(12, 11, 10, 2, 0,
                       "\x82\x73\x82\x64\x82\x72\x82\x73\n\x82\x50\n\x82\x51\n\x82\x52\n\x82\x53\n\x82\x54\n\x82\x55\n\x82\x56\n\x82\x57");
 #else
@@ -266,11 +265,9 @@ void Objf414_DebugMenu(Object *obj) {
       break;
 
 #ifdef PC_FEAT
-   /* exchange/107: the states below exist in the JP build's hub but were stripped from US
-    * retail (the hub's own routing still points at them -- FONT OFF/DEBUG MODE/UNIT SELECT/
-    * IVENT MAP/GAME START/SELECT B were dead). Ported from jp/src/states/debug_menu.c with the
-    * SJIS lists as ASCII; logic unchanged. (JP's state 8 -- an unreachable settings preview no
-    * choice routes to -- is deliberately not ported.) */
+   /* The states below exist in the JP build's hub but were stripped from US retail, though the
+    * hub's own routing still points at them. Ported from jp/src/states/debug_menu.c with the SJIS
+    * lists as ASCII; logic unchanged. See docs/gameplay-additions.md, "The debug menu". */
    case 6:   /* FONT OFF: toggle the map-font flag and return to the hub */
       gState.field_0xa7 = 1;
       obj->state = 1;

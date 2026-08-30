@@ -71,12 +71,9 @@ NOTES = {
          "20-column line with the number, which is placed right after whatever you write here."),
 }
 
-# PC_LANGSTR-wrapped literals that are NOT a draw-call argument -- a prefix composed into a buffer
-# before drawing (ShowExpDialog builds "You got <N>"; Objf425 builds "TURN <n>"), so the number can
-# follow a translated prefix of any length. The draw-call sweep below cannot see these -- the exact
-# blind spot that let the experience popup go untranslated through a whole UAT. Keyed per file by the
-# {content hash: what it is} of the composed literal, so a removed or changed wrap fails the export
-# PRECISELY (the hash is the literal's identity, so no retail bytes are spelled out here).
+# PC_LANGSTR-wrapped literals that are not a draw-call argument -- composed prefixes invisible to
+# the sweep below. See platform/pc/tools/langpack/README.md, "Text sources the draw-call sweep
+# cannot see". Keyed per file by content hash; a changed wrap fails the export.
 WRAPPED_LITERAL_FILES = {
     "battle/math.c": {"a06b1d432c61c1d6": "the after-battle experience-popup prefix ('You got ')"},
     "battle/field.c": {"a06466fe43a3714c": "the battle turn-counter prefix ('TURN')"},
@@ -110,11 +107,9 @@ def scan_wrapped(srcdir):
     return out
 
 
-# A single string held in a char ARRAY (not a pointer array), reached only through a pointer to it:
-# sEmptyFileCaption, the "Empty" placeholder for an unused save/load slot. The draw-call sweep sees a
-# variable, and scan_arrays matches pointer arrays -- so neither finds it. Its draws are wrapped
-# (DrawTextWindow, and the load-menu DrawText calls), so a pack can replace it once it is exported.
-# Curated by (file, symbol); a rename or removal fails the self-check below.
+# A single string held in a char array, reached only through a pointer, invisible to the sweep.
+# See platform/pc/tools/langpack/README.md, "Text sources the draw-call sweep cannot see". A
+# rename or removal fails the self-check below.
 CHAR_ARRAY_LITERALS = {
     "states/main_menu.c": ["sEmptyFileCaption"],
 }
@@ -187,14 +182,9 @@ def decode(raw):
     return unicodedata.normalize("NFKC", text), enc
 
 
-# Text held in ARRAYS rather than written at the draw call. The sweep above matches literals in the
-# draw call's argument list, so it cannot see these -- which is how the entire title screen, every
-# memory-card prompt and the party list stayed untranslated through a whole UAT pass.
-#
-# They are reachable anyway, because the code that CONSUMES the array can be wrapped: PC_LangStr
-# hashes whatever string it is handed at run time, so one wrap where the array is read covers every
-# entry in it. Curated rather than swept, because a blind scan for "array of char*" also matches
-# data tables; the self-check below fails the export if one of these disappears or grows.
+# Text held in ARRAYS rather than written at the draw call, invisible to the sweep above. See
+# README.md, "Text sources the draw-call sweep cannot see". Curated, not swept: the self-check
+# below fails the export if one disappears or grows.
 ARRAY_SOURCES = {
     # file            array prefix or exact name      why it is reachable
     "states/main_menu.c":   ("sText_",
@@ -248,10 +238,9 @@ def export(srcdir, workdir):
             if len(args) <= si:
                 continue
             arg = args[si].strip()
-            # The game's literals are wrapped in PC_LANGSTR(...) so a pack can replace them at
-            # run time. Unwrap before the literal test -- otherwise this exporter silently stops
-            # seeing the very strings it exists to find, and a fresh working set comes out with
-            # zero literals. (That regression shipped once: the wrap landed without this.)
+            # The game's literals are wrapped in PC_LANGSTR(...) so a pack can replace them at run
+            # time. Unwrap before the literal test, or this exporter silently stops seeing the
+            # strings it exists to find and a fresh working set comes out with zero literals.
             unwrapped = re.match(r'PC_LANGSTR\s*\((.*)\)\s*$', arg, re.S)
             if unwrapped:
                 arg = unwrapped.group(1).strip()
@@ -359,10 +348,10 @@ def export(srcdir, workdir):
     write_json(doc, p)
 
     # Translator view: same content, split into what a person recognises, options presented as lists.
-    # SCOPING RULE (committed 2026-08-06): the US retail disc is the universe -- no PAL/JP
-    # consideration, and anything the US build never reaches does not exist. So there is no "confirm
-    # later" limbo: a Japanese literal is either PROVEN dead (listed in DEAD, with its proof) or it is
-    # an unresolved question for a MAINTAINER, never something to hand a translator or drop silently.
+
+    # Scoping rule: the US retail disc is the universe. A Japanese literal is proven dead or
+    # an open question for a maintainer -- never handed to a translator. See
+    # platform/pc/tools/langpack/README.md, "Scope: the US retail disc is the universe".
     unresolved = [e for e in entries if e.get("japanese")]
     if unresolved:
         raise SystemExit("unresolved Japanese literal(s) -- prove reachable (keep) or unreachable "

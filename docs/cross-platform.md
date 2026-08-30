@@ -26,7 +26,7 @@ entry-100 sentinel to a stable empty string on every host. That removes the know
 crash, but any other unguarded low-pointer path will still crash on macOS. See
 [memory-safety.md](memory-safety.md) and [known_issues.md](known_issues.md).
 
-The host-backed sound work RAM, scratchpad, movie ring, and string-table changes are gated by
+The host-backed sound work RAM, 1 KB PS1 Scratchpad RAM, movie ring, and string-table changes are gated by
 `PC_PORT`, not by `__APPLE__`: they therefore change native runtime behavior on Linux and Windows as
 well as macOS. The matching PS1 branches remain separate and byte-identical.
 
@@ -60,6 +60,14 @@ cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake \
       -DCMAKE_PREFIX_PATH="$PWD/ffmpeg-mingw-static"
 cmake --build build_win
 ```
+
+The static libav is found through the toolchain file's `CMAKE_FIND_ROOT_PATH`: with find-root mode
+`ONLY`, `find_library`/`find_path` ignore a host `CMAKE_PREFIX_PATH`, so the prefix is appended there
+(`-DVH_MINGW_FFMPEG=<prefix>` or the `VH_MINGW_FFMPEG` environment variable, which `make-release.sh`
+sets). At link time the four archives cross-reference each other, so they go inside a
+`--start-group`/`--end-group` (static archives resolve left-to-right), plus `bcrypt` for avutil's
+`BCryptGenRandom`. The generator's probe link gets the same `-L<prefix>/lib` (see
+[building.md](building.md#the-data-segment-generators-width)).
 
 The toolchain file (`cmake/toolchain-mingw-w64.cmake`) points CMake at the `x86_64-w64-mingw32`
 compilers and their sysroot. Its Linux default remains `/usr/x86_64-w64-mingw32`; on Homebrew it asks

@@ -837,11 +837,9 @@ void LoadCdFile(s32 cdfIdx, s32 showLoadingScreen) {
    gCdLoader.sector = gCdFiles[cdfIdx].startingSector;
 
 #ifdef PC_DEBUG_NO_LOADING
-   /* Debug-only (exchange/feedback-10 follow-up): force the loading screen off so the field
-    * becomes visible from the field-enable frame (pitch 128) instead of being covered by
-    * "Now Loading" -- lets us compare our raw first rendered frame against real hardware's
-    * (also loading-suppressed via 30-disable-fade-bizhawk.lua) at identical camera pose.
-    * Compiled out of the matching build; enabled only via `make link NO_LOADING=1`. */
+   /* Debug-only: force the loading screen off so the field is visible from the field-enable frame
+    * (pitch 128) instead of under "Now Loading", for comparing the first rendered frame against a
+    * loading-suppressed hardware capture at the same camera pose. `make link NO_LOADING=1` only. */
    if (1) {
 #else
    if (gState.suppressLoadingScreen || !showLoadingScreen) {
@@ -1228,12 +1226,9 @@ void Movie_Finish(void) {
 }
 
 #ifdef PC_PORT
-/* Overlay RETURN TO TITLE (platform pc_balance.c): tear down an in-flight movie exactly like the
- * START skip does (movie_state.c case 11: mute serial A, Movie_Finish -- whose CdlPause the PC
- * backend uses to close the frame overlay / HD video / subtitles). No-op when no stream is armed
- * (sMovieSectorHeader is this subsystem's own active predicate, see Movie_GetFrameNum). Without
- * this the state flip left the stream running: frozen frame, audio playing on, and the movie's
- * transition later clobbered the jump (user repro 2026-08-22, Konami logo movie). */
+/* Overlay RETURN TO TITLE (pc_balance.c): tear down an in-flight movie exactly like the START skip
+ * (movie_state.c case 11: mute serial A, Movie_Finish, whose CdlPause closes the PC frame overlay /
+ * HD video / subtitles), else the stream runs on and its transition clobbers the jump. No-op if unarmed. */
 void Movie_AbortForReturnToTitle(void) {
    extern void SsSetSerialVol(char, short, short);   /* PsyQ libsnd; cd.c doesn't include it */
    if (sMovieSectorHeader == NULL) return;

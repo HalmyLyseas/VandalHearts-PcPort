@@ -1,17 +1,6 @@
-/* pc_hdvideo.c -- HD FMV replacement decoder (1.6 HD pack, videos).
- *
- * Decodes an H.264/HEVC .mp4 (produced offline by upscaling the disc STR frames) and hands back the RGB24
- * frame for a requested frame INDEX. The game plays each movie forward at a steady rate, advancing its
- * own frame counter; libcd's movie path asks this module for "the picture for game frame N" and presents
- * it fullscreen instead of the 320x240 MDEC frame. The game keeps reading the STR for audio (XA) and
- * timing, so audio + sync are untouched -- only the picture is swapped. The mp4's own audio track (if any)
- * is ignored.
- *
- * Mapping: the HD frames are 1:1 with the STR frames (one upscaled frame each), so game frame N == mp4
- * frame N. We decode sequentially and clamp to the last frame if the mp4 is a little short.
- *
- * Gated by VH_HD_VIDEO (libav present). Entry points are no-ops / return failure when built without it.
- */
+/* pc_hdvideo.c -- HD FMV replacement decoder. Decodes an H.264/HEVC .mp4 (upscaled STR frames, 1:1
+ * with the game's frame counter) via libav and hands back RGB24 for game frame N; the STR still
+ * supplies audio + timing. No-op stubs without VH_HD_VIDEO. See docs/pc-port/subsystems/mdec.md. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

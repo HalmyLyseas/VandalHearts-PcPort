@@ -1,13 +1,6 @@
-/* Lightning-family spell effects: Holy Lightning (Objf146/144/145 -- FX1 and the casting
- * bolt are in spells/summon_crest.c), Thunder Ball (Objf224/225/226 with the Objf128/129
- * wrappers' family), and Rolling Thunder (Objf200/195/196), dispatched via gSpellsEx
- * (model described in spells/casting_main.c's header).
- *
- * Cut content in this file (in gObjFunctionPointers but referenced by no spell's gSpellsEx
- * triple, no event script on the retail disc, and no code path): the quick thunder-strike
- * damage/slay pair (Objf120/121 -- shaped exactly like Thunder Ball's Objf128/129 wrappers)
- * and the lobbed energy-ball attack (Objf222/223, camera-following orb with a full-screen
- * flash and the gSignal3 main-handler handshake). Suffixed _Unused, kept byte-exact. */
+/* Lightning-family spell effects: Holy Lightning (Objf146/144/145), Thunder Ball
+ * (Objf224/225/226 + the Objf128/129 wrappers) and Rolling Thunder (Objf200/195/196), dispatched
+ * via gSpellsEx (docs/decomp/spell-fx-dispatch.md). _Unused handlers are cut content. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

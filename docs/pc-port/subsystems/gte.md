@@ -69,13 +69,14 @@ are legitimately negative for anything left of / above the projection centre, so
 coordinates tens of thousands of pixels off-screen.
 
 Matrix builders (`RotMatrix`, `ScaleMatrix`) and the scalar transcendentals (`rcos`, `rsin`,
-`ratan2`, the square roots) are SDK-library routines with no coprocessor formula — but they were
-**checked against the real PsyQ routines disassembled from `SLUS_004.47`** (2026-07-23), and the
-results are reassuring rather than a source of risk (see [SDK routines, verified](#sdk-routines-verified-against-the-binary)).
-In short: our `rsin`/`rcos` are **bit-identical** to PsyQ's, `RotMatrix`'s axis order **matches**, and
-`ratan2`/the square roots are *more* accurate than PsyQ's table approximations. None of them needs
-"hardening"; the C here is standard math where PsyQ used a table, and the two agree (or ours is the
-finer of the two).
+`ratan2`, the square roots) are SDK-library routines with no coprocessor formula — but they are
+**checked against the real PsyQ routines disassembled from `SLUS_004.47`**, and the results are
+reassuring rather than a source of risk (see [SDK routines, verified](#sdk-routines-verified-against-the-binary)).
+In short: our `rsin`/`rcos` are **bit-identical** to PsyQ's, `RotMatrix`'s axis order **matches**
+(its integer arithmetic does not — see [RotMatrix: float vs PsyQ integer path](#rotmatrix-float-vs-psyq-integer-path)),
+and `ratan2`/the square roots are *more* accurate than PsyQ's table approximations. None of them
+needs "hardening"; the C here is standard math where PsyQ used a table, and the two agree (or ours
+is the finer of the two).
 
 ## Recovering the real constants (don't guess PsyQ)
 
@@ -151,18 +152,38 @@ correct. The sibling routines match: real `RotTransPers4` (`0x800d0428`) and `Ro
 - **Two entry paths, one core.** The `gte_*` macros and the SDK wrappers both mutate the same `g`
   state; keep any new opcode consistent across both so `core/graphics.c` and the other 37 files stay in
   sync.
+- **`gte_ldopv1` is modelled functionally.** Hardware `ctc2`s the three words into control registers
+  0/2/4 (`RT11`/`RT13`/`RT22`), using the RT diagonal as the `OP` vector (psx-spx). The backend keeps
+  them in a separate `opvD[3]` scratch that only `OP0` reads — nothing touches RT between `gte_ldopv1`
+  and `gte_op0`, and the scratch can never collide with the `PushMatrix`/`PopMatrix` stack.
+
+### Diagnostic hooks
+
+All read-only, consumed by `platform/pc/src/pc_diag.c` (declared in `pc_platform.h`):
+
+- `PC_GteProjEntry(back, …)` — a ring of the last 8 `TransformOne` results (`SX`, `SY`, `IR1..3`,
+  `SZ3`, `n`), `back=0` most recent. A quad's four corners are `back` 3,2,1,0 (v0..v2 from `RTPT`,
+  then v3 from `RTPS`); the spread `SX − OFX = H · IR1 / SZ3` can then be broken down term by term.
+- `PC_GteDebugState` — `OFX`/`OFY`/`H`, three `RT` samples and `TRX`/`TRZ` as used by the last
+  transform, so the sprite log can tell a wrong geometry offset from a stale facing matrix
+  (`rt` = scaled identity instead of the rotated camera matrix).
+- `PC_GteLastOtz` / `PC_GteZsf4` — the last `AVSZ4` result (terrain OTZ) and the `ZSF4` scale.
+- `VH_GTE_LOG=1` — `RotAverage4` prints, per `AddObjPrim4` quad, the input `vy` of the bottom (v0)
+  and top (v2) vertices against the projected screen Y; a tall wall whose `dSy` stays ~0 while `dSx`
+  is large means the height is being collapsed. Screen coordinates are `PackSXY` (x = low 16 bits,
+  y = high 16 bits, both signed shorts).
 
 ## SDK routines, verified against the binary
 
 `RotMatrix` and the scalar transcendentals have no COP2 formula to disassemble the way `InitGeom`'s
 constants did — they are SDK library code. To retire the earlier "reasoned choice, not ground truth"
-caveat, all of them were disassembled from `SLUS_004.47` (2026-07-23) and compared to the C here. The
-outcome: the C is faithful, and where it deviates it is *deliberately more accurate*.
+caveat, all of them are disassembled from `SLUS_004.47` and compared to the C here. The outcome: the
+C is faithful, and where it deviates it is *deliberately more accurate*.
 
 | Routine | PsyQ implementation | This backend | Result |
 |---|---|---|---|
 | `rsin` / `rcos` | quarter-wave sine table at `0x801206C0` (4096 = 360°), quadrant-folded | `sin`/`cos` × `ONE`, rounded | **Bit-identical** — zero difference across all 4096 angles. |
-| `RotMatrix` | fixed-point compose; the `rz`-independent third column (`sy`, `-sx·cy`, `cx·cy`) is written first | `double` compose, same third column | **Axis order matches** (`Rx·Ry·Rz`). A ≤1-LSB per-element difference can arise from `double`-vs-fixed-point rounding; the order — the only real correctness risk — is correct. |
+| `RotMatrix` | pure-integer compose over a packed sin/cos table; the `rz`-independent third column (`sy`, `-sx·cy`, `cx·cy`) is written first | `double` compose, same third column | **Axis order matches**, all nine terms and signs. Values differ by up to 15/4096 because PsyQ's table and re-quantisation are coarser — see [RotMatrix: float vs PsyQ integer path](#rotmatrix-float-vs-psyq-integer-path). |
 | `SquareRoot0` / `SquareRoot12` / `csqrt` | GTE leading-zero normalise (`mtc2 $30`/`mfc2 $31`) + a **coarse table** (`~0x8011C3D0`) + shift — an approximation | true `(int)sqrt` | Differ, but **ours is the more accurate**. |
 | `ratan2` | integer `div` ratio into an **arctangent table** (`~0x8011BB0C`) | libm `atan2`, scaled to 4096 = 360° | Differ in the low bits; ours is the more accurate. |
 
@@ -171,3 +192,37 @@ confirmed faithful; `sqrt`/`ratan2` are intentional accuracy refinements of PsyQ
 Extracting PsyQ's `sqrt`/`ratan2` tables to bit-match the console is possible with the same technique,
 but it would trade accuracy for exact-hardware reproduction — only worth it if strict PSX determinism
 becomes a goal, and there is no symptom motivating it today.
+
+## RotMatrix: float vs PsyQ integer path
+
+The PsyQ `RotMatrix` at `0x800d0aa8` is pure integer arithmetic over a **packed sin/cos table at
+`0x8011C6C0`** (4096 entries, 16 KB; entry *i* = `(cos_i << 16) | sin_i`, Q12), composed with
+`multu` + `sra ,0xc`. `libgte.c` carries a transcription of it (`RotMatrixExact`) alongside the
+default `double` path. Three details of the integer routine are easy to get wrong:
+
+- `sra` is a floor shift and the negation happens *before* it (`negu` then `sra`), so the negated
+  terms are `floor(-x/4096)`, not `-floor(x/4096)`.
+- The triple products are re-quantised at each stage: `P = (-sy·cz) >> 12` and `Q = (-sy·sz) >> 12`
+  are taken to Q12 first, then multiplied again. A full-width product shifted once does not match.
+- `m[0][2]` is stored raw and unshifted — it is `sy` straight out of the table.
+
+Measured over the angles the game uses, the `double` path differs from the integer one in ~83% of
+matrix entries, by up to 15/4096 (~0.37%). The gap is dominated by the table's own deviation from
+ideal sin/cos (~6.8 units), not by rounding mode — `lrint` and `floor` change essentially nothing.
+The order — the only real correctness risk — is identical.
+
+Three runtime switches, all measurement aids and all off by default, select between the paths. Each
+takes the path of the table file, which is **game data**: extract it from your own copy with
+`platform/pc/tools/gen_gte_table.py`; it is read at runtime, never compiled in or committed.
+
+| Variable | Effect |
+|---|---|
+| `VH_GTE_EXACT=<table>` | `RotMatrix` uses the integer transcription. |
+| `VH_GTE_EXACT_CHECK=<table>` | Stay on the float path, compute the exact matrix alongside, and report the worst disagreement on stderr — checks the transcription on real angles without perturbing the run. |
+| `VH_GTE_AB=<table>` + `VH_GTE_AB_USE=float\|exact` | **Equal-cost A/B**: both matrices are computed on every call in *both* runs; only which one is kept differs. |
+
+The equal-cost form exists because `RotMatrix` runs ~92× per frame: simply switching
+implementations changes frame time enough to shift scene-load completion by a frame, which
+desynchronises `rand()` and makes the two runs play different battles. Equalising the cost removes
+that confound, so any surviving divergence is attributable to the matrix values themselves. Only
+`m[][]` is copied from the exact result — neither path writes the translation `t[]`.

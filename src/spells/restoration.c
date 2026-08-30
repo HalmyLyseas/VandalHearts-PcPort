@@ -1,8 +1,6 @@
-/* Spell casting effects, part 5 (segment 0x76e14): FX1 drivers for the magic-restoration
- * family (Magic Charge / Mage Oil / Mage Gem) and Healing Circle/Wave, plus the shared
- * sparkle child. Dispatched via gSpellsEx (see spells/casting_main.c). Objf384 (a skull rising
- * row-by-row over the target, sharing Evil Stream's GFX_SKULL asset) is cut content;
- * Objf_Unk_80087b58 is not even in gObjFunctionPointers -- an unreachable test handler. */
+/* FX1 drivers for the magic-restoration family (Magic Charge / Mage Oil / Mage Gem) and
+ * Healing Circle/Wave, plus the shared sparkle child; dispatched via gSpellsEx
+ * (docs/decomp/spell-fx-dispatch.md). Objf384 and Objf_Unk_80087b58 are unreachable. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

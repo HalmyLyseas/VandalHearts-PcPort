@@ -1,23 +1,12 @@
-/*
- * Stage-3 in-game options overlay -- menu model + state machine. See pc_overlay.h for the API.
- *
- * MAIN: a data-driven settings list (camera invert, video scale/fullscreen) + a "SAVE MANAGEMENT"
- *       entry. Toggle/choice changes apply immediately and persist to vandalhearts.ini.
- * SAVES: a browser over the whole-card archives (pc_saves.c). Flat list + face-button actions:
- *        Square = back up current, Circle = restore, Triangle = delete, Cross = back. Restore/Delete
- *        route through CONFIRM.
- * CONFIRM: a small prompt. Restore is a 3-way ("back up then restore" is the safe default) so the
- *          current card is never lost by surprise; Delete is Yes/No.
- *
- * There is no "Close" item: the SELECT+START chord is the sole show/hide (a face-button close would
- * leak the held press to the game behind -- see libetc.c's pad filter).
- */
+/* In-game options overlay: menu model + state machine (MAIN settings list, SAVES archive browser,
+ * CONFIRM prompt, DETAIL slot view). No "Close" item: the SELECT+START chord is the sole show/hide
+ * (a face-button close would leak the held press). See docs/gameplay-additions.md, "Overlay internals". */
 #include "pc_overlay.h"
 #include "pc_platform.h"   /* PC_SaveIniConfig, PC_GpuSetScale/SetFullscreen, g_vhScale/g_vhFullscreen */
 #include "pc_saves.h"      /* archive list + backup/restore/delete */
 #include "pc_balance.h"    /* gTacticalMode, PC_SyncBalance, PC_AtTitleMenu */
-/* Game headers for the RETURN TO TITLE action (moved here from pc_balance.c 2026-08-22): the menu
- * MODEL stays game-agnostic, but this one action rewrites engine state directly. */
+/* Game headers for the RETURN TO TITLE action: the menu MODEL stays game-agnostic, but this one
+ * action rewrites engine state directly. */
 #include "common.h"        /* s16, gPlayerControlSuppressed */
 #include "state.h"         /* gState, STATE_TITLE_SCREEN */
 #include "audio.h"         /* AUDIO_CMD_STOP_ALL */
@@ -31,26 +20,23 @@
  * mapping. Video (pc_gpu_window.c) is applied via the apply() callback below. */
 extern int g_camInvertX;
 extern int g_camInvertY;
-extern int g_btnLabels;   /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 1=XBOX) */
-extern int g_vhHdPack;    /* 1.6 HD PACK toggle (pc_gpu_window.c); libgpu's HdDetect() auto-ONs it */
-extern int PC_HdPackAvailable(void);   /* 1.6 (libgpu.c): 1 if a valid HD pack is installed beside the exe */
-extern const char *PC_HdPackStatusShort(void);   /* 1.6.1: why the pack is unusable, for the value column */
+extern int g_btnLabels;   /* overlay button-label style (0=PLAYSTATION, 1=XBOX) */
+extern int g_vhHdPack;    /* HD PACK toggle (pc_gpu_window.c); libgpu's HdDetect() auto-ONs it */
+extern int PC_HdPackAvailable(void);   /* libgpu.c: 1 if a valid HD pack is installed beside the exe */
+extern const char *PC_HdPackStatusShort(void);   /* why the pack is unusable, for the value column */
 
 /* CHOICE value labels for BUTTON LABELS, indexed by g_btnLabels. */
 static const char *const s_btnLabelText[] = { "PLAYSTATION", "XBOX" };
 /* INTERNAL RES labels, indexed by value (1..4). Index 0 unused (minv is 1). X1 reads as OFF. */
 static const char *const s_internalResText[] = { "", "OFF", "X2", "X3", "X4" };
 
-/* Stage-3 1.3: applying the Tactical Mode toggle -- set the mode and re-sync the balance patch
- * (idempotent). The save folder follows automatically (PC_SaveDir reads gTacticalMode). */
+/* Applying the Tactical Mode toggle: set the mode and re-sync the balance patch (idempotent). The
+ * save folder follows automatically (PC_SaveDir reads gTacticalMode). */
 static void apply_tactical(int nv) { gTacticalMode = nv; PC_SyncBalance(); }
 
-/* 1.6 HD PACK coupling. HD renders only at INTERNAL RES > 1 (the hi-res pass); windowed, it's only
- * VISIBLE at WINDOW SCALE > 1 (else the hi-res buffer downsamples back to the 320 native window). So
- * enabling HD bumps those to a minimum of 2 (leaving 3/4 as-is; fullscreen ignores window scale). The
- * inverse -- dropping either back to 1 -- disables HD (reconcileHdPack, run from setValue). s_inHdApply
- * suppresses that reconcile WHILE we bump, so a half-set intermediate state can't spuriously flip HD off.
- * setItemByValue is defined below (needs the item table + setValue). */
+/* HD PACK coupling: HD renders only at INTERNAL RES > 1 and, windowed, is only VISIBLE at WINDOW
+ * SCALE > 1, so enabling HD bumps both to at least 2; dropping either back to 1 disables HD again
+ * (reconcileHdPack, run from setValue). s_inHdApply suppresses that reconcile during the bump. */
 static int s_inHdApply = 0;
 static void setItemByValue(int *value, int nv);   /* fwd */
 extern int g_vhInternalScale;                      /* video (pc_gpu_window.c); also used in the item table */
@@ -87,14 +73,12 @@ typedef struct {
 static int dis_whenFullscreen(void) { return g_vhFullscreen; }
 static int dis_whenWindowed(void)   { return !g_vhFullscreen; }
 
-/* 1.6: HD PACK is greyed AND locked (read-only) unless a valid pack is auto-detected beside the exe. */
+/* HD PACK is greyed AND locked (read-only) unless a valid pack is auto-detected beside the exe. */
 static int dis_noHdPack(void)       { return !PC_HdPackAvailable(); }
 
-/* ---- LANGUAGE picklist (v1.7 language packs) ---------------------------------------------------
- * Lists every valid pack under <deploy>/langpacks/ by its MANIFEST display name; OFF = retail text.
- * NO auto-select by design (a picklist is not a binary state -- user decision, exchange/80): nothing
- * loads until chosen here (or via VH_LANG in the ini, which this row persists to). A pack applies at
- * BOOT, so a pending change shows a '*' and takes effect on the next launch -- never a live swap. */
+/* ---- LANGUAGE picklist: every valid pack under <deploy>/langpacks/ by manifest name; OFF = retail.
+ * NO auto-select (a picklist is not a binary state): nothing loads until chosen here or via VH_LANG
+ * in the ini, which this row persists. A pack applies at BOOT, so a pending change shows '*'. ---- */
 #include "pc_lang.h"
 #define LANG_MAX 12
 static int  g_langSel;                          /* 0 = OFF, 1..N = s_langFolders[sel-1] */
@@ -104,10 +88,9 @@ static char s_langNames[LANG_MAX][64];
 static char s_langLabelBuf[LANG_MAX + 1][32];   /* uppercased, ascii-folded, '*' when pending */
 static const char *s_langChoice[LANG_MAX + 1 + 1];
 
-/* OSD-safe fold: the 5x7 font is caps-only ASCII, but a pack's manifest name may carry accents --
- * fold Latin-1-range codepoints to their base letter instead of dropping them ("FRANCAIS", not
- * "FRANAIS"). This is the ONLY place pack-supplied text reaches the overlay; the overlay's own
- * labels are English and stay that way (see the note at the top of PC_OverlayTitle). */
+/* OSD-safe fold: the 5x7 font is caps-only ASCII, but a pack's manifest name may carry accents, so
+ * Latin-1-range codepoints fold to their base letter ("FRANCAIS", not "FRANAIS"). This is the ONLY
+ * place pack text reaches the overlay; its own labels stay English (see PC_OverlayTitle). */
 static void langFoldName(const char *in, char *out, int cap) {
     static const char *fold = "AAAAAAACEEEEIIIIDNOOOOO*OUUUUY__aaaaaaaceeeeiiiidnooooo/ouuuuy_y";
     int o = 0;
@@ -167,14 +150,9 @@ static void apply_language(int v) {
     langRefreshLabels();
 }
 
-/* ---- DISC picklist (P5 unified binary) ---------------------------------------------------------
- * Offers every disc the unified launcher found -- ONE ENTRY PER RELEASE ID (pc_region_main.c
- * publishes VH_DISC_ID_US/ASIA/JP before dispatch; SLUS-00447 and SCPS-45183 are the same master
- * but distinct discs and list separately). Selecting another disc persists VH_REGION + VH_DISC_ID
- * to the ini; the running blob IS its region, so the switch applies at the NEXT launch -- ' *'
- * marks the pending restart, exactly like LANGUAGE. The no-'*' baseline is VH_DISC_BOOTED (the
- * exact disc the launcher picked). With a single disc (or in a per-region dev build, where the
- * launcher env is absent) the row is greyed+locked and just states what is running. */
+/* ---- DISC picklist: every disc the unified launcher found, ONE ENTRY PER RELEASE ID (the
+ * VH_DISC_ID_US/ASIA/JP env from pc_region_main.c). Selecting another persists VH_REGION + VH_DISC_ID;
+ * the running blob IS its region, so ' *' marks a pending restart (baseline VH_DISC_BOOTED). ------ */
 #define DISC_MAX 3
 static int  g_discSel;                          /* index into the parallel arrays below */
 static int  s_discCount;
@@ -248,14 +226,13 @@ static void apply_disc(int v) {
 static int dis_oneDisc(void)        { return s_discCount < 2; }
 
 /* LANGUAGE is greyed+locked when the SELECTED disc is the Japanese game (running it, or a pending
- * restart into it) -- langpacks are US-only by design (the JP core links pc_lang_stub.c, which also
- * reports 0 installed packs, so the JP case greys through both terms) -- and when no pack is
- * installed, as before. */
+ * restart into it) -- langpacks are US-only; the JP core links pc_lang_stub.c, which also reports
+ * 0 installed packs, so JP greys through both terms -- and when no pack is installed. */
 static int dis_langRow(void) {
     return (s_discCount > 0 && strcmp(s_discTag[g_discSel], "jp") == 0) || s_langCount == 0;
 }
 
-/* Tactical Mode is editable ONLY at the main title menu (a run's mode is fixed -- GAP 4). Greyed
+/* Tactical Mode is editable ONLY at the main title menu (a run's mode is fixed). Greyed
  * (read-only) during a run, where it just reflects the current run's mode. */
 static int dis_notAtTitle(void)     { return !PC_AtTitleMenu(); }
 /* RETURN TO TITLE is the opposite -- only meaningful during a run, so greyed AT the title menu. */
@@ -273,8 +250,8 @@ static Item s_items[] = {
      * how you switch to it (locked = NULL). Return to Title is greyed AND locked at the title. */
     { "TACTICAL MODE",   OVL_TOGGLE, &gTacticalMode,  "tactical", "VH_TACTICAL",
       "OFF", "ON",            0, 0, 0, NULL, apply_tactical,      NULL,           dis_notAtTitle, dis_notAtTitle },
-    /* 1.6: greyed+locked with no valid pack; toggleable + auto-ON when one is installed. GRAD 3 adds an
-     * apply() for the internal-res/window coupling; for now setValue writes g_vhHdPack (libgpu reads it). */
+    /* Greyed+locked with no valid pack; toggleable + auto-ON when one is installed. apply_hdpack
+     * couples it to INTERNAL RES / WINDOW SCALE (see above). */
     { "HD PACK",         OVL_TOGGLE, &g_vhHdPack,     "video",  "VH_HDPACK",
       "OFF", "ON",            0, 0, 0, NULL, apply_hdpack,        NULL,           dis_noHdPack, dis_noHdPack },
     { "INTERNAL RES",    OVL_CHOICE, &g_vhInternalScale, "video", "VH_INTERNAL_SCALE",
@@ -289,14 +266,13 @@ static Item s_items[] = {
       "NORMAL", "INVERTED",   0, 0, 0, NULL, NULL,                NULL,           NULL, NULL },
     { "BUTTON LABELS",   OVL_CHOICE, &g_btnLabels,    "controls", "VH_BUTTON_LABELS",
       NULL, NULL,             0, 1, 1, NULL, NULL,                NULL,           NULL, NULL, s_btnLabelText },
-    /* P5: which disc the unified binary boots. Persists VH_REGION (its own apply -- iniKey NULL
+    /* Which disc the unified binary boots. Persists VH_REGION (its own apply -- iniKey NULL
      * skips the numeric persist); ' *' = applies on next launch. Greyed+locked with one disc. */
     { "DISC",            OVL_CHOICE, &g_discSel,      NULL, NULL,
       NULL, NULL,             0, DISC_MAX - 1, 1, NULL, apply_disc, NULL,         dis_oneDisc, dis_oneDisc, s_discChoice },
-    /* v1.7 language packs: picklist of installed packs by manifest name; persists VH_LANG (its own
+    /* Language packs: picklist of installed packs by manifest name; persists VH_LANG (its own
      * apply -- iniKey NULL skips the numeric persist); '*' = applies on next launch. Greyed+locked
-     * with no valid pack -- and whenever the selected DISC is the Japanese game, where langpacks
-     * do not apply (visible-but-greyed on JP since the DISC row exists to explain it). */
+     * with no valid pack, and whenever the selected DISC is the Japanese game (packs are US-only). */
     { "LANGUAGE",        OVL_CHOICE, &g_langSel,      NULL, NULL,
       NULL, NULL,             0, LANG_MAX, 1, NULL, apply_language, NULL,         dis_langRow, dis_langRow, s_langChoice },
     { "SAVE MANAGEMENT", OVL_ACTION, NULL, NULL, NULL,
@@ -383,7 +359,7 @@ static void setValue(const Item *it, int nv) {
         for (i = 0; i < N_ITEMS; i++)
             if (s_items[i].value == &g_vhFullscreen) { setValue(&s_items[i], 0); break; }
     }
-    reconcileHdPack();   /* 1.6: internal<=1, or (windowed) window<=1, turns HD PACK off */
+    reconcileHdPack();   /* internal<=1, or (windowed) window<=1, turns HD PACK off */
 }
 
 /* Find the MAIN item bound to *value and set it (applies + persists + re-runs cross-item rules). */
@@ -392,7 +368,7 @@ static void setItemByValue(int *value, int nv) {
     for (i = 0; i < N_ITEMS; i++)
         if (s_items[i].value == value) { setValue(&s_items[i], nv); return; }
 }
-/* 1.6: HD renders only at INTERNAL RES > 1, and windowed only shows at WINDOW SCALE > 1. If HD is on but
+/* HD renders only at INTERNAL RES > 1, and windowed only shows at WINDOW SCALE > 1. If HD is on but
  * a mode dropped below that, turn it off. No-op while apply_hdpack is mid-bump (s_inHdApply) or HD is off. */
 static void reconcileHdPack(void) {
     if (s_inHdApply || !g_vhHdPack) return;
@@ -447,20 +423,9 @@ static void act_returnToTitle(void) {
     s_confLabel[sizeof(s_confLabel) - 1] = '\0';
 }
 
-/* ---- RETURN TO TITLE: the jump itself (GAP 8; moved here from pc_balance.c 2026-08-22) --------
- * Jump straight to the title menu from anywhere, skipping the intro videos, by replicating the
- * game-over teardown (battle/evaluators.c). The title -> New/Load flow re-establishes run state,
- * so leftover party/chapter/objects don't need clearing. Mode stays as-is (toggle editable at
- * title).
- *
- * DEFERRED since 2026-08-22 (crash: RETURN TO TITLE during the demo-event load): the overlay runs
- * from the pad path, which fires inside NESTED VSync wait loops too (LoadCdFile spins VSync
- * mid-LoadEvent). Flipping gState from there let the live loader's tail re-write gState right
- * back (crash dump showed primary=52 after the flip) and race the title re-init until the object
- * pool overflowed. So the confirm only REQUESTS the jump; PC_ApplyReturnToTitle performs it at
- * the top of the main loop (main.c, before UpdateState's dispatch) -- the one point where no game
- * code is mid-frame, so the flip is atomic: the title state's own Obj_ResetFromIdx10 then clears
- * every leftover object before Obj_Execute can run one. */
+/* ---- RETURN TO TITLE. The confirm only REQUESTS the jump; PC_ApplyReturnToTitle performs it at
+ * the top of the main loop (main.c, before UpdateState) -- the one point where no game code is
+ * mid-frame, unlike the pad path. See docs/gameplay-additions.md, "Overlay internals". ---------- */
 static int s_returnToTitlePending;
 
 static void PC_ReturnToTitle(void) {
@@ -471,14 +436,9 @@ void PC_ApplyReturnToTitle(void) {
     if (!s_returnToTitlePending) return;
     s_returnToTitlePending = 0;
     {
-        /* A movie stream is NOT object-driven: without this, the flip left the stream armed
-         * (user repro 2026-08-22, intro logo). Same teardown as the START skip; no-op when idle.
-         * Then DROP the held final frame: the backend's CdlPause deliberately keeps the last
-         * decoded frame on the overlay (wait-for-button movie ends) and relies on the movie
-         * flow's ClearScreen to remove it -- a path our jump never reaches, so without these the
-         * title menu ran INVISIBLY under the frozen frame (round-2 repro: [r2t] diagnostics
-         * showed the flip applying; the "2nd intro" was the title's own 25s attract timer).
-         * Same trio the backend's CdlReset hard-stop uses. */
+        /* A movie stream is NOT object-driven, so abort it explicitly (the START-skip teardown;
+         * no-op when idle), then DROP the held final frame: CdlPause keeps the last decoded frame
+         * on the overlay until the movie flow's ClearScreen, which this jump never reaches. */
         extern void Movie_AbortForReturnToTitle(void);
         extern void PC_MovieSubsClose(void);
         Movie_AbortForReturnToTitle();
@@ -603,10 +563,9 @@ void PC_OverlayInput(int b) {
 
 /* ---- renderer accessors ------------------------------------------------------------------------ */
 
-/* The overlay's own text is ENGLISH and is deliberately not translatable: language packs cover the
- * GAME's content, not the port's UI. This renderer's 5x7 font is caps-only Latin, so a pack for a
- * non-Latin script could not render here anyway -- keeping it English means every language has the
- * same, predictable behaviour instead of one script-dependent exception. */
+/* The overlay's own text is ENGLISH and deliberately not translatable: language packs cover the
+ * GAME's content, not the port's UI. The 5x7 font is caps-only Latin, so a non-Latin pack could not
+ * render here anyway; English keeps every language's behaviour identical. */
 const char *PC_OverlayTitle(void) {
     if (s_screen == OVL_SCREEN_SAVES) return "SAVE MANAGEMENT";
     /* CONFIRM: save-mgmt confirms belong to that screen; the return-to-title confirm is an OPTIONS action. */
@@ -624,10 +583,9 @@ int PC_OverlayItem(int i, const char **label, const char **valueText) {
     if (i < 0 || i >= N_ITEMS) { if (label) *label = ""; if (valueText) *valueText = NULL; return 0; }
     it = &s_items[i];
     if (label) *label = it->label;
-    /* 1.6.1: when the HD PACK row is unusable, its value says WHY ("NO PACK" / "OUTDATED PACK" /
-     * "WRONG GAME") instead of a meaningless OFF. With a valid pack it stays a plain ON/OFF -- the
-     * content counts (75 BG, 16 FMV) are console-only ([HD] detect log): in-menu they were clutter,
-     * and the OSD font has no '+' glyph anyway. */
+    /* When the HD PACK row is unusable, its value says WHY ("NO PACK" / "OUTDATED PACK" / "WRONG
+     * GAME") instead of a meaningless OFF. With a valid pack it stays a plain ON/OFF: the content
+     * counts (75 BG, 16 FMV) are console-only ([HD] detect log), and the OSD font has no '+'. */
     if (it->value == &g_vhHdPack && valueText) {
         const char *st = PC_HdPackStatusShort();
         if (st) { *valueText = st; return 1; }
@@ -649,8 +607,8 @@ int PC_OverlayItem(int i, const char **label, const char **valueText) {
 }
 
 /* Widest value string an item can display -- used ONLY to size the MAIN panel so it doesn't jump scale
- * (or shrink into a blocky 2x) when a text-choice cycles between a long and short value (1.4 F2 #4). For
- * a text-labelled CHOICE this is the longest choiceText entry; otherwise it's just the current value. */
+ * (or shrink into a blocky 2x) when a text-choice cycles between a long and short value. For a
+ * text-labelled CHOICE this is the longest choiceText entry; otherwise it's just the current value. */
 const char *PC_OverlayItemWidestValue(int i) {
     const Item *it;
     if (i < 0 || i >= N_ITEMS) return NULL;
@@ -693,11 +651,9 @@ const char *PC_OverlayConfirmMsg(void) {
 int PC_OverlayConfirmCount(void) { return confCount(); }
 int PC_OverlayConfirmSelected(void) { return s_confSel; }
 const char *PC_OverlayConfirmTarget(void) { return s_confLabel; }   /* the archive label being acted on */
-/* A destructive confirm gets ONE red "eye-catch" line, on the element that matters most:
- *  - DELETE / RESTORE -> the QUESTION line; the target is the backup date (neutral). DELETE removes a
- *    backup for good; RESTORE overwrites the current card ("Restore only" loses it if not backed up --
- *    the back-up-then-restore default mitigates but doesn't remove the risk).
- *  - RETURN TO TITLE  -> the TARGET line, which is itself the stakes warning ("UNSAVED PROGRESS LOST"). */
+/* A destructive confirm gets ONE red "eye-catch" line, on the element that matters most: DELETE /
+ * RESTORE -> the QUESTION line (the target is a neutral backup date; delete is permanent, restore
+ * overwrites the current card); RETURN TO TITLE -> the TARGET line, itself the stakes warning. */
 int PC_OverlayConfirmMsgWarn(void)    { return s_confKind == CONF_DELETE || s_confKind == CONF_RESTORE; }
 int PC_OverlayConfirmTargetWarn(void) { return s_confKind == CONF_RETURN_TITLE; }  /* red = a warning line */
 const char *PC_OverlayConfirmOption(int i) {

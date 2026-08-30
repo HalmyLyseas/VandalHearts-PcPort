@@ -1,25 +1,17 @@
 #!/usr/bin/env bash
-#
+
 # make-release.sh <version-tag> [--windows-only|--linux-only] [--no-publish] [--hdpack=<dir>]
-#
-#   ./make-release.sh v1.0.0
-#   ./make-release.sh v1.6.0 --hdpack=/path/to/assembled/hdpacks   # + optional HD pack asset
-#
 # Builds the Windows + Linux release artifacts and publishes a GitHub release.
-#
-# WHY THIS IS A LOCAL SCRIPT, NOT A GITHUB ACTIONS BUILD: the data-segment
-# generator needs the byte-exact SLUS_004.47(.elf) + the PsyQ KROMDAT.BIN at
-# build time to reconstruct the embedded game data. Those are copyrighted and
-# cannot live on GitHub's runners, so the binaries MUST be built on a machine
-# that has the user's own disc/BIOS (i.e. here). Automation covers packaging +
-# upload only. See docs/cross-platform.md and NOTICE (release binaries embed a
-# portion of game-derived data).
-#
+# Example: ./make-release.sh vX.Y.Z --hdpack=<assembled hdpacks dir>
+
+# Runs locally, not in CI -- the data-segment generator needs the byte-exact
+# game files, which cannot live on a public runner. See docs/releasing.md,
+# "5. Publish".
+
 # Build environments (each artifact in the one that gives the right result):
-#   * Windows .exe  -> host MinGW-w64 cross-compile (CMake toolchain file)
-#   * Linux AppImage -> the pinned Debian 12 distrobox container 'vh-deb12'
-#                       (sets the glibc floor low; a host-built AppImage would
-#                        only run on distros as new as this host)
+#   * Windows .exe   -> host MinGW-w64 cross-compile (CMake toolchain file)
+#   * Linux AppImage -> the Debian 12 distrobox container 'vh-deb12'
+
 set -euo pipefail
 
 # ---- args -------------------------------------------------------------------
@@ -36,7 +28,7 @@ for a in "$@"; do case "$a" in
   --container=*)  CONTAINER="${a#*=}" ;;
   --hdpack=*)     HDPACK_SRC="${a#*=}" ;;
   --hdpack-note=*) HDPACK_NOTE="${a#*=}" ;;   # release-specific suffix for the Downloads-table row
-                                              # (e.g. "Unchanged since v1.6.1 — keep yours.")
+                                              # (e.g. "Unchanged since last release -- keep yours.")
   *) echo "unknown flag: $a" >&2; exit 2 ;;
 esac; done
 
@@ -56,10 +48,9 @@ rm -rf "$STAGE"; mkdir -p "$STAGE"
 # pc_hdvideo incident). Catch it before spending minutes on either build.
 "$PC_DIR/tools/check_build_parity.sh" || die "build-system parity check failed (see above)"
 
-# The AppImage stage runs `rm -rf build-uni*` (clean builds are a hard release rule). A live test
-# DEPLOYMENT (disc images, hdpacks/langpacks, saves) parked inside build-uni/ would be deleted
-# with it -- which happened once (2026-08-22, v2.0.0 staging: the dev deployment was wiped and had
-# to be restored from external/ + work-dir copies). Refuse to run while user data sits there.
+# The AppImage stage runs `rm -rf build-uni*` (clean builds are required); a live
+# test deployment (discs, hdpacks/langpacks, saves) parked there would be deleted
+# with it. See docs/releasing.md, "3. Stage-build BOTH platforms first — always".
 for d in "$PC_DIR"/build-uni; do
     [ -d "$d" ] || continue
     if compgen -G "$d/*.bin" >/dev/null || [ -d "$d/saves" ] || [ -d "$d/saves_tactical" ] \
@@ -82,28 +73,28 @@ if [ "$DO_WIN" = 1 ]; then
         [ -f "$FFPREFIX/lib/libavcodec.a" ] || die "static libav build failed (see tools/build-ffmpeg-static.sh)"
     fi
     log "Windows: cross-compiling with MinGW-w64 (-O2)"
-    # Release binaries are optimized (-O2, matching the validated `build_opt`). The default CMake/Make
-    # build is -O0 -g for debugging; the internal-resolution rasterizer (1.5) needs -O2 to hold 30 fps,
-    # so the release MUST override it. -DCMAKE_C_FLAGS=-O2 adds -O2 on top of the default -g.
-    # VH_MINGW_FFMPEG points the toolchain's CMAKE_FIND_ROOT_PATH at the static libav prefix (a host
-    # CMAKE_PREFIX_PATH is ignored under MinGW's find-root mode ONLY).
-    # Release builds are CLEAN builds. Plain Make does not track compiler-flag/include-path changes,
-    # so an incremental build can silently link objects compiled against one library era with
-    # archives from another -- exactly the 1.6.1 AppImage crash: a build_deb pc_hdvideo.o compiled
-    # against the container's shared libav-59 headers got linked into the static libav-61 binary
-    # (mismatched struct offsets -> SEGV in avcodec_parameters_to_context). Never ship incremental.
-    # P5 (exchange/104): the shipped Windows exe is the UNIFIED binary (both regions, runtime
-    # disc selection). build-unified-win.sh does the three clean CMake stages (us core, jp core,
-    # final link) with these exact toolchain conventions.
+    # Release binaries add -O2 on top of the default debug build (-O0 -g); the
+    # internal-resolution rasterizer needs it to hold 30 fps. See docs/building.md,
+    # "Optimization".
+
+    # VH_MINGW_FFMPEG points the toolchain's CMAKE_FIND_ROOT_PATH at the static libav
+    # prefix -- a plain CMAKE_PREFIX_PATH is ignored under MinGW's find-root mode.
+
+    # Release builds are clean builds: an incremental build can link objects compiled
+    # against one library era with archives from another. See docs/releasing.md,
+    # "3. Stage-build BOTH platforms first — always".
+
+    # The shipped Windows exe is the unified binary (both regions, runtime disc
+    # selection); build-unified-win.sh runs the three clean CMake stages (us core,
+    # jp core, final link) with these exact toolchain conventions.
     VH_MINGW_FFMPEG="$FFPREFIX" "$PC_DIR/packaging/build-unified-win.sh" >/dev/null
     WIN_EXE="$PC_DIR/build_win_uni/vandalhearts_pc.exe"
     [ -f "$WIN_EXE" ] || die "Windows build produced no .exe"
     WZIP_DIR="$STAGE/win"; mkdir -p "$WZIP_DIR"
     cp "$WIN_EXE" "$WZIP_DIR/"
-    # Ship the exe stripped: debug info has no runtime use on Windows (no backtrace machinery)
-    # and needlessly embeds local build metadata; stripping also cuts the download size. The
-    # unstripped exe stays in build_win/ for local debugging. The guard keeps the shipped copy
-    # free of local paths permanently.
+    # Ship the exe stripped (no backtrace machinery on Windows, and it embeds local
+    # build paths otherwise); the unstripped copy stays in build_win_uni/ for
+    # debugging. See docs/releasing.md, "3. Stage-build BOTH platforms first — always".
     x86_64-w64-mingw32-strip "$WZIP_DIR/vandalhearts_pc.exe" \
         || die "strip failed on the Windows exe"
     if strings "$WZIP_DIR/vandalhearts_pc.exe" | grep -qE "/home/|$(id -un)"; then
@@ -125,10 +116,9 @@ fi
 if [ "$DO_LINUX" = 1 ]; then
     command -v distrobox >/dev/null || die "distrobox not found"
     distrobox list 2>/dev/null | grep -q "$CONTAINER" || die "container '$CONTAINER' not found (see docs/cross-platform.md)"
-    # 1.6 libav: link a minimal STATIC libav (same as Windows) instead of the distro's shared ffmpeg.
-    # A shared libav drags its full codec closure into the AppImage (100+ .so, ~65MB vs ~20MB) for a
-    # 15fps movie decode. Built once inside the container (its gcc sets the ABI floor) from a source
-    # tree cloned on the HOST (the container has no git); cached at ffmpeg-linux-static/.
+    # Links a minimal static libav (same as Windows) instead of the distro's shared
+    # ffmpeg, built inside the container from a source tree cloned on the host (the
+    # container has no git). See docs/cross-platform.md, "Building a release".
     FF_LINUX="$PC_DIR/ffmpeg-linux-static"
     FF_SRC="$PC_DIR/build/ffmpeg-src"
     if [ ! -f "$FF_LINUX/lib/libavcodec.a" ]; then
@@ -152,7 +142,7 @@ if [ "$DO_LINUX" = 1 ]; then
         pkg-config --exists libwebp || { echo \"ERROR: libwebp-dev missing in container '$CONTAINER'.\"; \
               echo \"  fix: distrobox enter $CONTAINER -- sudo apt-get install -y libwebp-dev\"; exit 1; }
         export PKG_CONFIG_PATH='$FF_LINUX/lib/pkgconfig'\${PKG_CONFIG_PATH:+:\$PKG_CONFIG_PATH}
-        # P5 (exchange/104): ship the UNIFIED binary (both regions). Clean all three stages.
+        # Ship the unified binary (both regions); clean all three build stages.
         rm -rf build-uni-us build-uni-jp build-uni
         make unified CC='cc -O2' >/dev/null
         packaging/appimage/build-appimage.sh build-uni/vandalhearts_pc >/dev/null"
@@ -169,10 +159,10 @@ log "Manual: building the Player Manual PDF"
     || die "manual build failed (pandoc + chromium needed -- see tools/build-manual.sh)"
 
 # ---- optional HD pack (a SEPARATE release asset, not embedded in any binary) -------------------
+
 # --hdpack=<dir> (or VH_HDPACK_DIR) points at an assembled hdpacks/ folder: backgrounds/*.webp +
-# videos/<sector>.mp4 + manifest.json. The pack is upscaled DERIVATIVE art (see NOTICE); it is NOT
-# built here -- you supply the finished, metadata-stripped folder. Named VandalHearts-$TAG-hdpack.zip
-# so the checksum + upload globs below include it automatically.
+# videos/<sector>.mp4 + manifest.json -- upscaled derivative art (see NOTICE) that you assemble
+# yourself; the zip name below is what the checksum/upload steps expect.
 if [ -n "$HDPACK_SRC" ]; then
     [ -d "$HDPACK_SRC" ]              || die "--hdpack: '$HDPACK_SRC' is not a directory"
     [ -f "$HDPACK_SRC/manifest.json" ] || die "--hdpack: no manifest.json in '$HDPACK_SRC' (assemble the pack first)"
@@ -230,8 +220,8 @@ cat >> "$NOTES" <<NOTE
 | Optional | \`VandalHearts-$TAG-hdpack-SLUS-00447.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable. Loaded on **US/Asia discs**. |
 | Optional | \`VandalHearts-$TAG-hdpack-SLPM-86007.zip\` | HD backgrounds + movies. Unzip so \`hdpacks/\` sits beside the executable. Loaded on **Japan**. |
 NOTE
-# (2.0: HD packs are standing per-game release assets -- the rows above are unconditional. The
-# legacy --hdpack single-zip row is retired; HDPACK_DONE still gates the validation/zip flow.)
+# HD packs are standing per-game release assets, so the rows above are unconditional;
+# HDPACK_DONE still gates the validation/zip flow for a supplied --hdpack.
 cat >> "$NOTES" <<NOTE
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).

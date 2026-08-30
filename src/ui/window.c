@@ -10,12 +10,12 @@
 #include "battle.h"
 
 #ifdef PC_FEAT
-/* Stage-3 1.3 (GAP 3): in Tactical, the promoted Vandal Heart no longer opens the all-spells/all-items
- * "god" spell menu -- the 5 guards below neutralise the `weapon == V_HEART_2` term so Ash falls to his
- * real gSpellLists kit. Normal mode keeps the retail god-path. pc_balance.c owns gTacticalMode. */
+/* Tactical prevents the promoted Vandal Heart from opening the all-spells/all-items "god" spell
+ * menu: the guards below neutralise the weapon == V_HEART_2 term so Ash falls back to his real
+ * spell list. See docs/tactical-mode.md, "Vandalier — reined in". */
 extern int gTacticalMode;
-/* exchange/91: a format-2 language pack stores item names as 1-byte ASCII (16 chars) instead of
- * 2-byte SJIS, so they must draw through the small font (DrawText) rather than DrawSjisText. */
+/* A format-2 language pack stores item names as 1-byte ASCII (16 chars) instead of 2-byte SJIS, so
+ * they draw through the small font (DrawText) rather than DrawSjisText. */
 extern int PC_LangItemNames1Byte(void);
 #endif
 
@@ -1346,17 +1346,15 @@ void SlideWindowTo(s32 windowId, s16 x, s16 y) {
 #define OBJF 004
 void Objf004_005_408_Window(Object *obj) {
 #ifdef PC_DEBUG_UI_LOG
-   /* Stage 2.3 (-m64 UI-invisibility probe): does the window object run at all, and with what
-    * state / child-object pointers? A window never draws directly -- it spawns child sprites --
-    * so "no rows here" means the object is dead, while "rows here but no matching prim2 rows"
-    * means the children are never submitted. See PC_DebugUiLog in pc_bootstrap.c. */
+   /* UI-invisibility probe (PC_DebugUiLog in pc_bootstrap.c): does the window object run at all,
+    * and with what state / child-object pointers? A window spawns child sprites rather than
+    * drawing directly, so "no rows" means the object is dead, "rows but no prim2" means no submit. */
    { extern void PC_DebugUiLog(const char *, int, int, int, int, int, int, int, int);
      PC_DebugUiLog("window", obj->state, obj->d.objf004.windowId, obj->d.objf004.otOfs,
                    obj->d.objf004.effect, obj->d.objf004.halfWidth, obj->d.objf004.halfHeight,
                    obj->d.objf004.window != 0, obj->d.objf004.highlight != 0); }
 #endif
-   // TODO: todo_x2c, todo_x30 (highlight location)
-   // obj->state3: effectState
+   // TODO: todo_x2c, todo_x30 (highlight location); obj->state3: effectState
    // obj->x3: destX
    // obj->y3: destY
    Object *window;
@@ -1613,11 +1611,9 @@ void Objf004_005_408_Window(Object *obj) {
          obj->state3 = 0;
          obj->functionIndex = OBJF_NULL;
 #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): window/highlight can be NULL here (highlight is already
-          * NULL-checked at the `if (highlight)` above; these two teardown writes were not).
-          * NULL writes to functionIndex (@0x8); the 2.2 fault handler discarded them, so guard
-          * each -- bit-identical to the validated build (no effect on a NULL sprite). NULL sites:
-          * Objf004_005_408_Window +0xcd0/0xcd9. See exchange/56. */
+         /* window/highlight can be NULL here (only highlight is NULL-checked above); guard both
+          * teardown writes to functionIndex rather than faulting a NULL sprite. See
+          * docs/memory-safety.md, "How the port handles them". */
          if (window) window->functionIndex = OBJF_NULL;
          if (highlight) highlight->functionIndex = OBJF_NULL;
 #else
@@ -2024,7 +2020,7 @@ void Objf421_UpperMsgBoxTail(Object *obj) {
 #ifdef PC_FEAT
 /* Draw a 1-byte item name in the small font, hard-truncated to a per-box cap (this battle item box
  * is sized for 8 SJIS chars -> 12 small chars). One shared implementation lives in
- * platform/pc/src/pc_lang_font.c; inline extern per the src/ house style. exchange/91, feedback-36. */
+ * platform/pc/src/pc_lang_font.c; inline extern per the src/ house style. */
 extern void PC_LangDrawItemName1Byte(s32 x, s32 y, s32 color, const u8 *name, s32 cap);
 #endif
 

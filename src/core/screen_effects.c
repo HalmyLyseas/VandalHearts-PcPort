@@ -152,10 +152,9 @@ void Objf369_ScreenEffect(Object *obj) {
       pPoly = &s_polys_801247d4[obj->mem];
       intensity = OBJ.intensity;
 #ifdef PC_DEBUG_DISABLE_FADE
-      /* Debug-only (exchange/30-* study): force the fade overlay fully transparent so the
-       * scene renders at final brightness from its first frame -- lets us see exactly what the
-       * battle-entry camera frames without the fade-in ambiguity. Compiled out of the matching
-       * build; enabled only via `make link NO_FADE=1` in platform/pc. */
+      /* Debug-only: force the fade overlay fully transparent so the scene renders at final
+       * brightness from its first frame (shows what the battle-entry camera frames, without the
+       * fade-in). Compiled out of the matching build; enabled only via `make link NO_FADE=1`. */
       intensity = 0;
 #endif
       setRGB0(pPoly, intensity, intensity, intensity);
@@ -185,7 +184,7 @@ void Objf369_ScreenEffect(Object *obj) {
       g2 = OBJ.color.g;
       b2 = OBJ.color.b;
 #ifdef PC_DEBUG_DISABLE_FADE
-      /* Debug-only (exchange/30-* study): the battle FadeIn/FadeOut (FadeInScreen ->
+      /* Debug-only: the battle FadeIn/FadeOut (FadeInScreen ->
        * state 7) drives THIS color-overlay path (subtractive blend; color ramps to 0 = full
        * bright). Force it to 0 so the scene shows at final brightness from its first frame. */
       r2 = g2 = b2 = 0;

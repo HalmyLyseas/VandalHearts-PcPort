@@ -32,8 +32,7 @@ directory (`vh_*.csv` / `.txt` / `.log`, all gitignored).
 > the authentic values, so there are no tuning env vars — the settings are fixed in code: master trim
 > `1.012` (RMS-matched to the octoshock reference within 0.01 dB); PsyQ's square volume law
 > `VolL=L*L/16383` (`0x800d6d8c`) always on (the reason the mix has the right dynamic range); the legacy
-> EQ tilt off (it over-corrects once the square law is present, 2.20 → 4.27 dB mean error). Derivation:
-> `exchange/57`.
+> EQ tilt off (it over-corrects once the square law is present, 2.20 → 4.27 dB mean error).
 
 ## Compatibility
 
@@ -77,8 +76,8 @@ Advanced GTE/GPU render probes (developer, mostly gated by `SPRITE_LOG=1`): `VH_
 
 ## Diagnostics — audio isolation
 
-For chasing a single instrument in the music mix. Spectral attribution misidentified the culprit
-twice before these existed (`exchange/57`); soloing settles it in one run.
+For chasing a single instrument in the music mix — spectral attribution alone can misidentify
+the culprit; soloing an isolated program settles it in one run.
 
 | Variable | Effect |
 |---|---|

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prefix-rename a partial-linked region core (P5 unified binary, exchange/104).
+"""Prefix-rename a partial-linked region core for the unified binary.
 
 Renames every DEFINED external symbol in a relocatable object with a region prefix
 (us_/jp_) so two complete region cores can coexist in one executable. Includes weak and
@@ -11,7 +11,7 @@ MinGW/COFF `.refptr.X` auto-import thunks are renamed too -- symbol AND section 
 assumption that "each blob's copies are section-local"; that is FALSE at the final link:
 the thunks live in COMDAT sections keyed by their bare name, so the linker keeps ONE copy
 for both blobs -- whichever blob's slot survives, BOTH blobs then dereference it. Seen
-live (2026-08-22, v2.0.0 staging): the surviving `.refptr.gGraphicBuffers` pointed at
+live in the unified-binary build: the surviving `.refptr.gGraphicBuffers` pointed at
 us_gGraphicBuffers, so the JAPANESE game wrote the US blob's ordering table through the
 thunk while reading its own -- a split-brain OT that cycled, hanging DrawOTag on the
 first title-transition frame (Windows-only: ELF has no refptr thunks). Renaming both the

@@ -1,9 +1,5 @@
-/*
- * PC-backend replacement for the PSX SDK's own minimal strings.h (needed
- * because the real matching-decomp build is -nostdinc). Declares
- * strcpy/strcat/strlen/etc -- a real host libc already provides these
- * correctly, so this just forwards to it.
- */
+/* PC-backend replacement for the PSX SDK's minimal strings.h (the matching build is -nostdinc).
+ * The host libc provides strcpy/strcat/strlen/etc, so this forwards to it. */
 #ifndef PLATFORM_PC_PSYQ_STRINGS_H
 #define PLATFORM_PC_PSYQ_STRINGS_H
 

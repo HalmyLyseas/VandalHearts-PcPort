@@ -36,15 +36,14 @@ PROBES = [
      "world map destination panel; ALSO the payload the L13 dialogue probe splices via #33"),
     ("L5", "gSpellDescriptions",   1, "L5 spell desc MixedCase",
      "the description bar under the spell menu"),
-    # UTF-8 increment (D1, exchange/80): the e-acute renders through the pack's font engine.
+    # UTF-8 path: the e-acute renders through the pack's font engine.
     ("L6", "gItemDescriptions",    1, "L6 accent: cafe = caf\u00e9",
      "the 288x36 description bar -- the accented e proves the UTF-8 path"),
     ("L7", "gItemDescriptions2",   1, "L7 shop desc MixedCase",
      "the shop / transfer window (312x90)"),
-    # Round 2: the StringToGlyphs tables the first probe run uncovered.
-    # Deliberately index 13 (L.sword), not Herb: it is EQUIPPED, so it shows on the status panel
-    # immediately -- the same line that read "L.SWORD" in the L1 screenshot. Its shop counterpart
-    # gItemNamesSjis[13] is left untouched, so the shop still says "L. sword": one item, two tables.
+    # L9 targets index 13 (L.sword), not Herb: it is EQUIPPED, so it shows on the status panel
+    # immediately. Its shop counterpart gItemNamesSjis[13] stays untouched, so the shop still
+    # says "L. sword" -- one item, two tables.
     ("L9",  "gItemNames",            13, "L9 L.sw\u00f6rd",
      "status panel, the EQUIPPED weapon line (shop still shows 'L. sword' -- that is L2's table)"),
     ("L10", "gUnitTypeNames",         1, "L10 Hero",
@@ -59,14 +58,8 @@ PROBES = [
     ("L12", "terrainText",            0, "L12 Pla\u00eens",
      "battle: the terrain info box, bottom-left -- accent via charmap + deferred hook"),
 ]
-# Increment 2 (msgbox UTF-8): the second line carries accents through the message-box parser.
-# Final combination round (L13/L14): the two validated-pieces-but-untested PAIRINGS --
-#   L13: a #N insertion whose referenced menu string is ACCENTED (parser resume bookkeeping around
-#        a multi-byte inserted string; L4's probe text is made accented for this)
-#   L14: accented SUBSTITUTED dialogue rendered by the DrawText route (SHOP_T wraps at 30 cols,
-#        never sees the message box) -- the shop clerk's greeting
-# Increment 5 (PC_LANGSTR literals): replacements matched by the entry's own `literal:<hash>` key,
-# so the retail English is not embedded here (it lives only on the player's disc, hashed at export).
+# Literal probes are matched by the entry's own `literal:<hash>` key, so retail English is not
+# embedded here -- it lives only on the player's disc, hashed at export.
 LITERALS = [
     ("L15", "literal:ea126cddb07855e5", "L15 R\u00e9sultats",
      "the battle-results banner after a battle ends -- a replaced CODE literal, with an accent"),
@@ -78,6 +71,8 @@ LITERALS = [
 # TACTICAL MODE ON, item 88 (Mad Book) highlighted in the items list.
 TACTICAL = [("L17", "Casts Spellbind", "L17 Sortil\u00e8ge")]
 
+# L13's #N insert exercises parser resume bookkeeping around a multi-byte inserted string. L14
+# exercises the DrawText/SHOP_T route rather than the message box.
 DIALOGUES = [
     ("L8", "EVENT01", 0, ["L8 DIALOGUE PROBE", "café déjà reçu éèêë"],
      "the opening scene, first message box -- line 2 is the UTF-8 probe"),

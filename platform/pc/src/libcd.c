@@ -1,61 +1,6 @@
-/*
- * PC backend for PsyQ/libcd.h, backed by a raw 2352-byte/sector disc image
- * (the .bin produced by `chdman extractcd` from the user's own CHD).
- *
- * The real PSX CD-ROM API is asynchronous: CdControl/CdRead issue a command
- * and return immediately ("accepted" or not), and the caller polls CdSync/
- * CdReadSync until it completes. This implementation does the actual data
- * transfer synchronously inside CdRead (a local disc image has no real
- * seek/read latency to hide at the I/O level), but gates *when CdReadSync
- * reports completion* behind a simulated wall-clock delay -- see "CD-ROM
- * seek/transfer timing simulation" below. Real hardware's read pacing turns
- * out to matter beyond just "the loading screen takes the right amount of
- * time": several battle-start camera/pan effects run their own interpolation
- * throughout the loading period, so a loading screen that's dramatically
- * shorter than real hardware's leaves those effects far short of where real
- * hardware's equivalent moment finds them once the scene becomes visible
- * (see exchange/12-phase-c-bootstrap.md's Bug 19 writeup) -- this isn't just
- * a cosmetic timing nicety, it's load-bearing for matching real hardware's
- * visible behavior at scene start.
- *
- * Sector addressing: verified against the actual disc (2026-07-10) --
- * gCdFiles[]'s baked-in startingSector values are plain ISO9660 LBAs
- * (confirmed by cross-checking gCdFiles[CDF_SIBAI1_1_DAT] == 0x27e8 against
- * the real ISO9660 directory entry for SIBAI1_1.DAT, LBA 10216 == 0x27e8),
- * and this project's extracted .bin has zero pregap: raw sector N in the
- * file *is* LBA N (file_byte_offset = N * 2352 + 24, confirmed by locating
- * SLUS_004.47's "PS-X EXE" header at exactly sector 23, matching its own
- * ISO9660 LBA). CdIntToPos/CdControl(CdlSetloc) apply the standard Red
- * Book 150-sector (00:02:00) MSF offset symmetrically, so the round trip
- * reproduces the original LBA regardless.
- *
- * CD-ROM seek/transfer timing simulation (2026-07-11): ported from
- * BizHawk's octoshock PS1 core (BizHawk/psx/octoshock/psx/cdc.cpp,
- * PS_CDC::CalcSeekTime(), ~line 1687), the only one of BizHawk's two PS1
- * cores that actually models drive timing (mednadisc's CD layer is pure
- * disc-image file I/O, no timing at all). Octoshock's own model is itself a
- * hand-tuned empirical approximation reverse-engineered from real hardware
- * (its own comments say as much), not a physical seek-curve derivation --
- * ported here as a piecewise-linear distance-based estimate in milliseconds
- * (their cycle-clock unit, 33868800 Hz, divided out) rather than their
- * native CPU-cycle units, since this backend has no cycle-exact clock, just
- * SDL_GetTicks() wall-clock ms (same clock VSync() already paces against).
- * Simplifications versus the source model: no motor-off/re-spin-up penalty
- * beyond a single one-time cost on this process's first ever CdRead (real
- * hardware's per-session disc-insert delay isn't meaningfully re-triggered
- * within one game session the way it can be on real hardware), and no
- * separate "resume from pause" bonus (this game's CD access pattern here is
- * plain sequential file loads, not CD-DA/XA playback pause/resume). Only
- * CdRead()/CdReadSync() (used by core/cd.c's LoadCdFile/ContinueLoadingCdFile
- * for regular file loads) are covered -- core/audio.c's ExecuteCdControl-driven
- * CdlSeekL/CdlReadN XA-streaming path is a separate, currently-unexercised
- * command sequence (CdControl() has never recognized those command codes;
- * this predates the timing work and is out of scope for it).
- *
- * Not yet implemented: CdRead2 (streaming/XA mode) and the DecDCT* (MDEC)
- * functions -- FMV/movie playback is deferred as a separate follow-up, see
- * the checkpoint doc. CdMix is a no-op until the Audio subsystem exists.
- */
+/* PC backend for PsyQ libcd: file loads, CdControl, XA streaming and STR movie demux over a raw
+ * 2352-byte/sector disc image. Transfers run synchronously; only completion is paced to hardware.
+ * See docs/pc-port/subsystems/cd-xa.md. */
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,18 +16,9 @@
 #define SECTOR_DATA_SIZE 2048
 #define MSF_PREGAP_SECTORS 150 /* Red Book: LBA 0 == MSF 00:02:00 */
 
-/* Private PRNG for CalcSeekTimeMs()'s jitter term only (2026-07-12, exchange/
- * 20-camera-viewport-coordinates.md's "ROOT CAUSE FOUND" section). This used to call the
- * shared game-logic rand() (platform/pc/src/libkernel.c's byte-exact PS1 BIOS LCG) -- but real
- * hardware's physical seek jitter is actual mechanical/electronic timing variance, and never
- * touches the game's software RNG at all. Sharing that stream here injected an extra draw into
- * it on every single CdRead() (many per boot/menu/loading sequence, all before battle logic
- * ever runs), fully desyncing the LCG from real hardware's sequence -- confirmed empirically via
- * exchange/25-rand-seed-full-watch-log.lua: our build showed 1219 shared-rand() transitions in
- * the first 2000 frames vs. real hardware's 51. This is a separate, private LCG (same algorithm
- * shape, arbitrary fixed seed -- correctness here isn't about matching a real sequence, since
- * there's no real sequence to match; it's cosmetic simulated jitter nobody observes precisely,
- * so a fixed seed just keeps repeated debug runs consistent). */
+/* Private LCG for CalcSeekTimeMs()'s jitter term. Seek jitter is mechanical variance that never
+ * touches the game's software RNG, so it must not draw from the shared rand() (one extra draw per
+ * CdRead desyncs the LCG from hardware). A fixed seed keeps debug runs repeatable. */
 static unsigned int s_seekJitterSeed = 12345U;
 
 static unsigned int SeekJitterRand(void) {
@@ -90,9 +26,8 @@ static unsigned int SeekJitterRand(void) {
     return (s_seekJitterSeed >> 16) & 0x7fffU;
 }
 
-/* CD-ROM timing constants, ported from octoshock's cdc.cpp (see file header
- * comment) -- all originally in units of a 33868800Hz clock, converted here
- * to plain milliseconds. */
+/* CD-ROM timing constants ported from octoshock's cdc.cpp (PS_CDC::CalcSeekTime), converted from
+ * 33868800 Hz clock units to milliseconds. See cd-xa.md, "The seek/transfer model". */
 #define CDC_CLOCK_HZ 33868800.0
 #define SECTORS_PER_SEC_1X 75.0
 #define SEEK_BASE_DIVISOR (72.0 * 60.0 * 75.0) /* octoshock's crude "72x" coarse seek-speed assumption */
@@ -104,17 +39,15 @@ static unsigned int SeekJitterRand(void) {
 #define SEEK_JITTER_MAX_CYCLES 25000.0 /* up to ~0.74ms of jitter, matching octoshock's PSX_GetRandU32(0,25000) */
 #define MOTOR_STARTUP_PENALTY_MS 1000.0 /* one-time disc-spinup cost, this process's first CdRead only */
 
-/* MDEC FMV video state (used by CdRead2 above the definition; see the big comment at the
- * MovieRenderFrame definition below). */
+/* MDEC FMV video state, shared by CdRead2 and MovieRenderFrame below. */
 static void MovieRenderFrame(int frameNo);
 static int  s_movieActive    = 0;
 static int s_movieBaseLBA   = 0;
 static int s_movieScanLBA   = 0;   /* forward demux cursor (frames are stored in order) */
 static int  s_movieScanFrame = 0;   /* highest frame the cursor has passed */
 
-/* 1.6 HD FMV: when a movie has an HD replacement (hdpacks/videos/<baseLBA>.mp4), decode THAT instead of
- * the STR video. The game keeps reading the STR for its XA audio + frame timing, so we swap only the
- * picture -- audio and sync are untouched. Keyed by the movie's base LBA (== its start sector). */
+/* HD FMV: a movie with an HD replacement (hdpacks/videos/<baseLBA hex>.mp4) shows that picture
+ * instead of the STR video. The STR is still read for XA audio + frame timing, so sync is untouched. */
 extern int  PC_HdVideoOpen(const char *path);
 extern const unsigned char *PC_HdVideoFrame(int frameIdx, int *w, int *h);
 extern void PC_HdVideoClose(void);
@@ -154,10 +87,9 @@ static int s_lastReadResult = 0; /* 0 = idle/complete, -1 = error */
 static int s_motorStarted = 0;   /* set after the first-ever CdRead this process */
 static Uint32 s_pendingReadUntilMs = 0; /* 0 = no read pending; else SDL_GetTicks() target */
 
-/* Boot-grace fast loads: active from process start until the FIRST movie stream begins (one-way
- * latch, cleared at s_movieActive=1 -- the intro logo on the retail path). While active, the
- * CD delay model runs 16x scaled (see the CdRead scheduling block for the full rationale).
- * VH_FAST_BOOT=0 disables the grace entirely (full hardware timing from the first read). */
+/* Boot-grace fast loads: from process start until the first movie stream begins (one-way latch at
+ * s_movieActive=1) the CD delay model runs 16x scaled; VH_FAST_BOOT=0 disables it.
+ * See cd-xa.md, "Boot-grace fast loads". */
 static int s_bootGrace = -1;   /* -1 = env unresolved, 1 = active, 0 = over */
 static int BootGraceActive(void) {
     if (s_bootGrace < 0) {
@@ -168,10 +100,8 @@ static int BootGraceActive(void) {
 }
 static double s_pendingPerSectorMs = 0.0; /* for CdReadSync()'s remaining-sector estimate */
 
-/* Ported from octoshock's PS_CDC::CalcSeekTime() (BizHawk/psx/octoshock/
- * psx/cdc.cpp, ~line 1687) -- see the file header comment for the porting
- * notes (ms instead of cycles, no motor-off/pause bonuses beyond a one-time
- * startup cost handled by the caller). */
+/* Ported from octoshock's PS_CDC::CalcSeekTime() in milliseconds instead of cycles; no motor-off or
+ * pause bonuses beyond the one-time startup cost the caller adds. */
 static double CalcSeekTimeMs(int fromLBA, int toLBA) {
     int absDiff = abs(fromLBA - toLBA);
     int speed = (s_mode & CdlModeSpeed) ? 2 : 1;
@@ -200,15 +130,9 @@ static int fromBCD(unsigned char v) {
     return ((v >> 4) * 10) + (v & 0x0f);
 }
 
-/* Cheap wrong-disc guard (Stage 2.4 QoL): Vandal Hearts (USA)'s boot executable SLUS_004.47 begins
- * with the "PS-X EXE" magic at LBA 23 (see the file-layout note at the top of this file). A raw
- * 2352-byte sector carries its 2048 data bytes at offset 24. Catches the common mistakes -- a
- * different game (its exe won't be at LBA 23), the wrong region, a .cue/.iso/.mp3 chosen by mistake,
- * or a truncated image -- for the price of one sector read. The caller (pc_bootstrap.c) treats a
- * failure as fatal and tells the user to supply the right image, rather than booting into garbage.
- * (Region-EXACT verification would MD5 the boot exe from LBA 23 against 596bb082...; not done here
- * to keep mount instant and avoid rejecting valid alternate dumps -- this magic check passes for any
- * genuine Vandal Hearts (USA) .bin, since the ISO layout fixes SLUS_004.47 at LBA 23.) */
+/* Wrong-disc guard: each region's boot exe starts with the "PS-X EXE" magic at a fixed LBA. The
+ * probe costs one sector read and passes for any genuine dump of that region; it is a signature
+ * check, not an MD5, so valid alternate dumps are accepted. See cd-xa.md, "Region boot signatures". */
 #define SLUS_BOOT_LBA 23      /* US/Asia master */
 #define SLPM_BOOT_LBA 15200   /* Japan master (SLPM_860.07; 283,860-sector image) */
 
@@ -228,12 +152,9 @@ int PC_CdDiscSignatureOk(void) {
     return BootSigAtLba(VH_REGION_BOOT_LBA);
 }
 
-/* The game's memory-card save-file id is embedded in each boot exe ("BASLUS-00447VH" USA /
- * "BISCPS-45183VH" Asia at VRAM 0x800f5551 in SLUS_004.47; "BISLPM-86007VH" at VRAM 0x800f76a9
- * in SLPM_860.07) and is the canonical release tag. Each exe is pinned at its region's boot LBA
- * and stored in contiguous 2048-byte ISO sectors, so the id sits at a fixed raw-image offset
- * (verified: neither id crosses a sector boundary). Classification probes BOTH regions'
- * layouts, so a region build can NAME a wrong-region disc instead of just rejecting it. */
+/* The memory-card save id embedded in each boot exe is the canonical release tag ("BASLUS-00447VH"
+ * USA / "BISCPS-45183VH" Asia at VRAM 0x800f5551; "BISLPM-86007VH" at 0x800f76a9). Each sits at a
+ * fixed raw-image offset (contiguous ISO sectors, no boundary crossing); both layouts are probed. */
 #define VH_EXE_LOAD_VRAM 0x80010000
 #define VH_EXE_HDR_SIZE  0x800
 
@@ -284,18 +205,9 @@ long long PC_CdImageBytes(void) {
     return sz;
 }
 
-/* ---- corruption guards 2/3 + 3/3 (post-1.6.1, from a real user report) -------------------------
- * A corrupted .bin used to pass the one-sector LBA-23 signature check and then HANG the game with
- * no output at all: garbage sectors load as garbage (loader state machines spin forever), and reads
- * past a truncated image's end just reported failure the retry loops never escape. Both reproduced
- * with deliberately-corrupted images (zeroed 8-40MB span => hang right after the HD-pack banner;
- * truncation => hang when the intro movie's XA audio never arrives).
- *
- * Every raw 2352-byte sector starts with a fixed 12-byte sync pattern (00 FF x10 00) followed by
- * its own BCD minute/second/frame address -- so each read can prove the sector is intact and IS the
- * sector we asked for, for the price of a 15-byte compare. On mismatch (or a read past EOF on the
- * game-file/movie paths, which a complete dump never does) we stop with a message naming the sector
- * instead of hanging: the image is damaged and only a re-copy/re-dump fixes it. */
+/* Sector-integrity guards. Every raw sector starts with a 12-byte sync pattern (00 FF x10 00) and
+ * its own BCD MSF address, so a 15-byte compare proves the sector is intact and the one sought.
+ * A mismatch or EOF on a game-file/movie read is fatal (damaged image); see cd-xa.md. */
 static void CdFatalCorrupt(int lba, const char *why) {
     char body[512];
     snprintf(body, sizeof(body),
@@ -357,32 +269,21 @@ int CdControl(u_char com, u_char *param, u_char *result) {
         case CdlPause:
             s_lastReadResult = 0;
             s_pendingReadUntilMs = 0;
-            /* Soft-pause. The game's XA play/loop path (QueuePlayXa) pauses+replays the SAME
-             * track several times a second as it polls/loops; tearing the OpenAL stream down
-             * here caused a reset storm -> constant underrun -> silence. Just stop feeding new
-             * sectors and keep the source, its ~0.6s of queued audio, the base LBA and the
-             * ADPCM history, so the same-track resume (CdlSeekL/CdlReadN below) continues
-             * seamlessly. A genuinely int pause simply drains the queue and goes quiet. */
+            /* Soft-pause: the game's XA loop path pauses+replays the same track several times a
+             * second, so tearing the stream down here would underrun to silence. Keep the source,
+             * queued audio, base LBA and ADPCM history; only stop feeding sectors. */
             s_xaStreaming = 0;
-            /* Movie_Finish (src/core/cd.c) issues CdlPause at movie end -> stop decoding new movie
-             * frames, but LEAVE the last decoded frame on the overlay so a wait-for-button movie
-             * end shows the final image instead of black. The overlay is dropped by ClearScreen
-             * (PERMUTER hook in src/core/movie_state.c) when the game redraws the next scene. */
+            /* A movie's CdlPause stops decoding frames but leaves the last frame on the overlay
+             * (a wait-for-button ending shows it); ClearScreen drops the overlay later. */
             if (s_movieActive) {
-                /* Pausing a MOVIE (one-shot end or player START-skip) -- not the battle XA-loop's
-                 * rapid pause/replay polling (that runs with s_movieActive==0 and must stay a soft
-                 * pause to avoid the reset storm). A SKIPPED movie is cut mid-stream with ~1s of
-                 * decoded audio still queued; the soft-pause only mutes it via serial-volume=0, so
-                 * it becomes audible again when a later scene restores the serial volume ("last note
-                 * stuck in the buffer"). Flush the audio queue here so the movie's tail is truly
-                 * gone and the next XA user (battle hit sounds) inherits a clean stream. This does
-                 * NOT touch the video overlay -- that's dropped separately by ClearScreen. */
+                /* Movie pause (end or START-skip), not the XA loop's polling: flush the queued
+                 * audio tail, which a soft-pause would only mute and a later serial-volume
+                 * restore would replay. The video overlay is dropped separately by ClearScreen. */
                 PC_XaReset();
                 s_xaBaseLBA = -1;
                 s_movieActive = 0;
                 MovieHdClose();
-                /* Subtitle cues deliberately NOT closed here: the held final frame keeps its
-                 * cover until ClearScreen drops the overlay (else burned-in text pops back). */
+                /* Subtitle cues stay open: the held final frame keeps its cover until ClearScreen. */
             }
             return 1;
         case CdlReset:
@@ -404,9 +305,8 @@ int CdControl(u_char com, u_char *param, u_char *result) {
             return 1;
         case CdlSeekL:
         case CdlReadN:
-            /* Honor a location passed directly in the seek/read (core/audio.c's XA path does
-             * CdControl(CdlSeekL, &gXaCdlLOC) WITHOUT a preceding CdlSetloc). Was ignored ->
-             * XA seeked to a stale s_targetLBA. NULL param = use the last CdlSetloc (file reads). */
+            /* core/audio.c's XA path passes the CdlLOC directly to CdlSeekL with no preceding
+             * CdlSetloc, so honor it here; NULL param means use the last CdlSetloc (file reads). */
             if (param) s_targetLBA = CdPosToLBA((CdlLOC *)param);
             { static FILE *lg = NULL; static int tried = 0;   /* XA event log (set VH_XA_LOG=1) */
               extern unsigned int SDL_GetTicks(void);
@@ -416,9 +316,8 @@ int CdControl(u_char com, u_char *param, u_char *result) {
                         s_xaFile, s_xaChan, (s_mode & CdlModeRT) ? 1 : 0,
                         (s_mode & CdlModeRT) && s_xaBaseLBA == s_targetLBA ? "(same-track replay)" : "(new/seek)");
                         fflush(lg); } }
-            /* In real-time (RT) mode this begins/continues XA-ADPCM streaming from the
-             * seeked LBA. Only (re)start when the track's BASE changes -- the game re-issues
-             * these while polling, and resetting mid-stream would drop audio. */
+            /* In RT mode this begins/continues XA streaming from the seeked LBA. Only (re)start
+             * when the track base changes: the game re-issues these while polling. */
             if (s_mode & CdlModeRT) {
                 if (s_xaBaseLBA != s_targetLBA) {
                     /* New track (or restart after track-end, which sets base=-1): flush the
@@ -428,18 +327,9 @@ int CdControl(u_char com, u_char *param, u_char *result) {
                     s_xaMatchedYet = 0;   /* haven't seen this track's (file,chan) sectors yet */
                 }
                 if (com == CdlSeekL) {
-                    /* SEEKING: reposition the cursor and DO NOT feed audio yet. On real hardware a
-                     * CdlSeekL starts a physical seek during which no XA audio flows; audio only
-                     * begins at the following CdlReadN once the seek completes. The game's
-                     * AudioJob_PlayXa does SeekL(state5) -> CdSync-wait -> ReadN(state7) ~2.7s later
-                     * and captures gXaStartTime there, so the animation is timed to the ReadN.
-                     * Previously we started feeding right here at SeekL, so every spell SFX began
-                     * ~2.7s EARLY and finished ~2.7s before the impact ("Avalanche ends at apex",
-                     * climax shifted earlier) -- confirmed by diffing vh_xa_ours.csv (audio started
-                     * frame 6494/SeekL, gXaStartTime frame 6576/ReadN) against the real-HW capture.
-                     * Rewinding the cursor here is also what lets a loop restart replay from the
-                     * base. (Movies stream via CdRead2, unaffected; PrepareXa seeks with no ReadN so
-                     * it now correctly stays silent until the matching PLAY.) */
+                    /* Seek: reposition the cursor and stay silent. Hardware emits no XA during a
+                     * seek; audio begins at the following CdlReadN, where the game captures
+                     * gXaStartTime (~2.7s later). See cd-xa.md, "XA audio must start at CdlReadN". */
                     s_xaCursorLBA = s_targetLBA;
                     s_xaStreaming = 0;
                 } else {
@@ -454,32 +344,21 @@ int CdControl(u_char com, u_char *param, u_char *result) {
     }
 }
 
-/* XA streaming pump -- called once per VSync (from libetc.c). Reads raw sectors from the .bin
- * at the stream cursor and feeds channel-matching audio sectors to the decoder, flow-controlled
- * by the OpenAL queue depth so we never over-read (drop) or under-feed (underrun). */
+/* XA streaming pump, called once per VSync (libetc.c): reads raw sectors at the stream cursor and
+ * feeds channel-matching audio sectors to the decoder, flow-controlled by the OpenAL queue depth.
+ * See cd-xa.md, "Flow control and end-of-track". */
 #define XA_TARGET_BUFFERS 12    /* keep ~0.6s of stereo buffered (FMV: robust vs underrun) */
-/* The game mutes the shared XA source in realtime (SsSetSerialVol) on its own frame schedule, but
- * our OpenAL output lags by the buffer depth -- so a big read-ahead makes that mute land on audio
- * not yet played, cutting clip tails and swallowing hits. For the battle hit-sound clips (battle
- * music is SEQ, not XA -- so outside a movie the XA path carries only these short clips) a small
- * target keeps the buffered audio close to the playhead, minimising that desync. */
+/* Outside a movie XA carries only short hit-sound clips, and the game mutes the source on its own
+ * frame schedule; a small target keeps buffered audio near the playhead so the mute lands on time. */
 #define XA_TARGET_BUFFERS_CLIP 4
 #define XA_MAX_SECTORS_PER_PUMP 400 /* guard: don't scan the whole disc if starved   */
 
-/* Stop reading after this many consecutive sectors with no matching-channel audio -> the track's
- * interleaved data has ended (the CD would EOF/loop here). Well above the ~8-sector 1/8 interleave
- * gap so we don't cut a live track. Setting base=-1 lets the game's next (loop/new-track) seek restart.
- * IMPORTANT: only applied AFTER the first matching sector (s_xaMatchedYet). A track whose (file,chan)
- * stream begins deep inside a shared multi-song interleave (e.g. the epilogue ocarina, XA 187: its
- * (9,5) sectors don't start until ~400 sectors past its seek LBA -- everything before is other files'
- * audio) would otherwise hit this limit and give up BEFORE its data begins. Real hardware reads
- * through non-matching sectors until the filter matches; mirror that -- read through until we've seen
- * at least one matching sector, only then treat a int miss run as end-of-track. See bugreport-04. */
+/* Consecutive non-matching sectors that end a track: well above the ~8-sector interleave gap.
+ * Applied only after the first matching sector -- some tracks' (file,chan) data begins hundreds of
+ * sectors past the seek LBA inside a shared interleave, and hardware reads through until it matches. */
 #define XA_END_MISS_LIMIT 150
-/* Bounded search for the FIRST matching sector after a seek (before streaming has started). Real
- * hardware reads through non-matching sectors indefinitely, but we cap it so a genuinely bad
- * filter/LBA can't scan the whole disc forever. ~400 is the largest real lead-in seen (XA 187);
- * this leaves a wide margin yet ends within ~a dozen frames if nothing ever matches. */
+/* Bounded search for the first matching sector after a seek: hardware reads through indefinitely,
+ * but a bad filter/LBA must not scan the whole disc. ~400 is the largest real lead-in (XA 187). */
 #define XA_PREMATCH_SCAN_LIMIT 4500
 void PC_CdXaUpdate(void) {
     static int s_miss = 0;               /* consecutive non-matching sectors -> track end        */
@@ -492,11 +371,9 @@ void PC_CdXaUpdate(void) {
             if (fseek(s_disc, off, SEEK_SET) != 0 ||
                 fread(raw, 1, SECTOR_RAW_SIZE, s_disc) != (size_t)SECTOR_RAW_SIZE) {
                 if (s_movieActive && !s_xaMatchedYet) {
-                    /* An active movie's XA is its frame clock: if the stream lies entirely past the
-                     * image's end (not one sector ever matched), Movie_SyncFrame would busy-wait on
-                     * an audio position that can never advance -- the exact silent hang a truncated
-                     * image used to produce. A valid dump always contains its movies, so this only
-                     * fires on damage. (Mid-stream EOF stays graceful: legitimate end-of-track.) */
+                    /* A movie's XA is its frame clock: a stream entirely past the image's end
+                     * would make Movie_SyncFrame wait forever, so a truncated image fails loudly.
+                     * Mid-stream EOF stays graceful (legitimate end-of-track). */
                     CdFatalCorrupt(s_xaCursorLBA, "is missing (a movie's audio stream lies past the "
                                                   "image's end -- truncated)");
                 }
@@ -510,11 +387,9 @@ void PC_CdXaUpdate(void) {
             if (queued) s_xaMatchedYet = 1;
             s_miss = queued ? 0 : (s_miss + 1);
             if (s_miss >= (s_xaMatchedYet ? XA_END_MISS_LIMIT : XA_PREMATCH_SCAN_LIMIT)) {
-                /* track's interleaved data ended -- stop reading (let queued audio finish);
-                 * base=-1 so the game's next seek (loop or new track) restarts cleanly. Tell pc_xa the
-                 * stream ENDED (vs a momentary underrun) so PC_XaService stops re-issuing alSourcePlay
-                 * on the drained source -- that replay of the last stale buffer is the "afterhit" blip
-                 * train heard after each short spell-hit clip. */
+                /* Track ended: stop reading, let queued audio finish, base=-1 so the next seek
+                 * restarts cleanly. PC_XaEndStream distinguishes this from an underrun so the
+                 * drained source is not replayed (the "afterhit" blip train). */
                 s_xaStreaming = 0; s_xaBaseLBA = -1; s_miss = 0;
                 PC_XaEndStream();
                 break;
@@ -524,13 +399,9 @@ void PC_CdXaUpdate(void) {
     }
     PC_XaService();
 
-    /* --- XA runtime instrumentation (diff vs the real-hardware 45-xa-audio-track-map CSV) ---
-     * One row per VSync while a clip is playing or our stream is active. Lets us line up the game's
-     * intent (gXaCurrentID / gXaDuration / gXaStartTime -- identical to hardware, same game code)
-     * against what our BACKEND actually does (streaming flag, queued buffers, OpenAL source state).
-     * The tell for a "cut short" (e.g. Avalanche): gXaCurrentID still set + gXaDuration not yet
-     * elapsed, but srcState/queued have gone to 0 -> our audio stopped early. Columns mirror the
-     * hardware CSV's key fields plus ours. */
+    /* XA runtime instrumentation (VH_XA_CSV=1): one row per VSync while a clip plays or the stream
+     * is active, pairing the game's intent (gXaCurrentID/Duration/StartTime) with backend state
+     * (streaming, queued, source state) for diffing against a hardware track-map capture. */
     {
         extern unsigned char gXaCurrentID;
         extern int   gXaDuration, gXaStartTime;
@@ -560,15 +431,8 @@ int CdControlB(u_char com, u_char *param, u_char *result) {
 
 int CdSync(int mode, u_char *result) {
     (void)mode;
-    /* Previously ignored `result` entirely -- callers that read status bits
-     * out of it (e.g. AudioJob_PlayXa case 6 checking CdlStatSeek) were
-     * reading whatever was already in that memory. Happened to work only
-     * because BSS-zeroed static buffers start at 0, which coincidentally
-     * matches "idle, not seeking" -- but that was incidental, not
-     * guaranteed. Since this backend has no real background seek state (see
-     * CdRead's own comment: reads complete synchronously, only *reporting*
-     * completion is paced), explicitly reporting idle/no-flags-set is the
-     * correct, non-fragile value here, not just a leftover default. */
+    /* Callers read status bits out of `result` (AudioJob_PlayXa checks CdlStatSeek), so write it:
+     * this backend has no background seek state, so idle/no-flags is the correct value. */
     if (result) {
         result[0] = 0;
     }
@@ -576,27 +440,9 @@ int CdSync(int mode, u_char *result) {
 }
 
 int CdRead(int sectors, unsigned int *buf, int mode) {
-    /* Real PsyQ CdRead (disassembled from the byte-exact SLUS_004.47: wrapper @0x800d25a8,
-     * read kick @0x800d3da0) compares its mode ARGUMENT's low byte against the drive-mode
-     * shadow (0x80120f64, updated by every CD_cw CdlSetmode, incl. CdControl's) and issues
-     * CdlSetmode(arg) on mismatch before CdlReadN. The JP game depends on this: it passes
-     * CdlModeSpeed per read with NO separate Setmode step (jp/src/core/cd.c:948) -- ignoring
-     * the argument ran every JP load at 1x where hardware runs 2x.
-     *
-     * DELIBERATE DEVIATION for mode==0: faithfully applying a zero mode would drop the US
-     * drive to 1x mid-dance (US does CdlSetmode(0x80) then CdRead(...,0) -- src/core/cd.c:966
-     * /992), which contradicts the validated port-vs-hardware load timing (octoshock model
-     * ~5.36s vs HW ~5.08s => 2x-class transfer).
-     * ANSWERED by measurement (exchange/103 P4 D2, 2026-08-21): retail US hardware loads the
-     * demo battle in ~5.25s (BizHawk video capture) vs this port's ~4.98s natural run (-5%) --
-     * 2x-class either way, so the sticky-mode-on-zero behaviour is faithful IN OUTCOME and
-     * stays. (Whatever the BIOS-level shadow does with mode 0, no observable 1x drop exists.)
-     * The REMAINING regional timing question is different: the JP port loads ~1s (-18%) short
-     * of JP hardware -- see exchange/103 D3. Leading mechanism: this model charges seek +
-     * transfer only, never the drive's per-read START overhead; the US loader's per-file
-     * Setmode+CdSync+3-frame dance (src/core/cd.c:958-992) happens to absorb that overhead
-     * game-side, while the JP loader calls Setloc->CdRead back-to-back
-     * (jp/src/core/cd.c: no Setmode state, no wait) and exposes it. */
+    /* Real CdRead compares its mode argument with the drive-mode shadow and issues CdlSetmode on
+     * mismatch; the JP loader relies on it (per-read CdlModeSpeed, no separate Setmode). A zero mode
+     * keeps the current mode (US passes 0 after Setmode(0x80)). See cd-xa.md, "The mode argument". */
     if ((mode & 0xff) != 0 && (unsigned char)mode != s_mode) {
         s_mode = (unsigned char)mode;
     }
@@ -606,16 +452,12 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
         return 0;
     }
 
-    /* Real hardware returns immediately here and streams data in as the
-     * drive physically reads it; a local file has no such latency at the
-     * I/O level, so the actual transfer still happens synchronously right
-     * now -- only *reporting completion* (CdReadSync, below) is delayed to
-     * match real hardware's pacing. */
+    /* Hardware returns immediately and streams data in as the drive reads; here the transfer
+     * happens now and only completion reporting (CdReadSync) is paced. */
     unsigned char *out = (unsigned char *)buf;
     for (int i = 0; i < sectors; i++) {
-        /* Read the WHOLE raw sector (not just its 2048 data bytes) so the sync/address guard can
-         * prove it intact -- a game-file read past EOF or into garbage means a damaged image, and
-         * proceeding used to mean an unexplained hang (the loader retries forever). */
+        /* Read the whole raw sector so the sync/address guard can prove it intact: a game-file
+         * read past EOF or into garbage means a damaged image and otherwise hangs the loader. */
         unsigned char raw[SECTOR_RAW_SIZE];
         int lba = s_targetLBA + i;
         if (fseek(s_disc, (long)lba * SECTOR_RAW_SIZE, SEEK_SET) != 0 ||
@@ -626,10 +468,8 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
         memcpy(out + (size_t)i * SECTOR_DATA_SIZE, raw + SECTOR_DATA_OFFSET, SECTOR_DATA_SIZE);
     }
 
-    /* Language pack (pc_lang.c): a translated on-disc text file is substituted here, keyed by the
-     * read's LBA. core/cd.c reads a text file whole in one CdRead from gCdFiles[cdf].startingSector --
-     * the plain ISO9660 LBA -- so this is indistinguishable from the disc having held those bytes,
-     * and the game parses them with its own unmodified LoadText. No-op without a pack. */
+    /* Language pack (pc_lang.c): a translated text file is substituted here keyed by LBA. core/cd.c
+     * reads each text file whole in one CdRead, so this is indistinguishable from disc content. */
     PC_LangPatchRead(s_targetLBA, sectors, out);
 
     double seekMs = CalcSeekTimeMs(s_headLBA, s_targetLBA);
@@ -639,41 +479,16 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
     }
     int speed = (s_mode & CdlModeSpeed) ? 2 : 1;
     s_pendingPerSectorMs = 1000.0 / (SECTORS_PER_SEC_1X * speed);
-    /* Boot-grace fast loads (2026-08-22): the fresh-process boot spends 5-8s in the CD-timing
-     * simulation loading the boot files (LoadSoundSet etc.) behind a black window -- authentic
-     * mechanics, but on a console those seconds hid behind the BIOS boot animation. Until the
-     * FIRST movie stream starts (the intro logo -- see the one-way latch at s_movieActive=1),
-     * the composed delay is scaled down 16x and the READ_START inter-read charge skipped.
-     * Delays stay NONZERO, so completion still lands on a later VSync (the async-ordering
-     * contract). Provably safe scope: boot loads run no engine frames (rand() never ticks, so
-     * the RNG stream and the drift harness are untouched) and no XA/FMV stream can be active
-     * before the first movie by construction. Every load from the logo onward -- title, New
-     * Game, area transitions, the demo battle -- pays the hardware-exact model unchanged; a
-     * START mash cannot outrun the latch (the stream starts in movie-state case 10, the skip
-     * is read in case 11). Caveat: a VH_DEBUG_MENU=1 boot never plays a movie, so that dev
-     * path keeps fast loads for the whole session -- acceptable for a debug tool.
-     * VH_FAST_BOOT=0 (ini/env) restores full hardware timing for validation A/B. */
+    /* Boot-grace: until the first movie stream, scale the delay 16x (delays stay nonzero so
+     * completion still lands on a later VSync). See cd-xa.md, "Boot-grace fast loads". */
     if (BootGraceActive()) {
         seekMs /= 16.0;
         s_pendingPerSectorMs /= 16.0;
     }
     double startMs = 0.0;
-    /* Per-read START overhead (exchange/103 D3, 2026-08-21). The octoshock-derived model above
-     * charges seek + transfer only; the real drive also pays a pause->ReadN start cost on EVERY
-     * read (command processing + laser re-sync after the stream stopped). The US game never
-     * exposed the omission: its loader runs a Setmode+CdSync+3-frame dance between files
-     * (src/core/cd.c:958-992, measured ~84-139ms of game-side idle per file), which overlaps the
-     * drive's start work, so the US port lands within -5% of hardware with no start charge. The
-     * JP loader issues Setloc->CdRead back-to-back (measured ~3-31ms idle), serializing the cost
-     * on hardware -- omitting it ran the JP load ~1s (-18%) short of the BizHawk baseline.
-     *
-     * Model: the drive needs READ_START_MS after the previous read's completion before the next
-     * can stream; game-side idle counts toward it (that's the overlap). Fitted against BOTH
-     * hardware baselines from the natural-run logs (timing_runs/natural/, 2026-08-21):
-     * JP 8-read battle window 4.24s -> 5.33s vs BizHawk 5.33s (READ_START_MS retuned 158->145:
-     * the window's first read is charged too). REGION-BLIND since 2026-08-21 (user-approved
-     * change to shipped US pacing): the same charge lands the US load at the BizHawk baseline
-     * too (measured -- see exchange/103 D3), replacing the historical -5%. */
+    /* Per-read start overhead: the drive pays a pause->ReadN start cost on every read, and
+     * game-side idle since the previous read's completion counts toward it. READ_START_MS is
+     * fitted to both regions' BizHawk baselines. See cd-xa.md, "Per-read start overhead". */
     #define READ_START_MS 145.0
     {
         static Uint32 s_prevReadDoneMs = 0;
@@ -687,22 +502,16 @@ int CdRead(int sectors, unsigned int *buf, int mode) {
     }
     s_pendingReadUntilMs = SDL_GetTicks() + (Uint32)(seekMs + startMs + s_pendingPerSectorMs * sectors);
 
-    { /* CD load accounting (set VH_CD_LOG=1) -- exchange/103 D3: the JP demo-battle load completes
-       * ~1s faster than hardware while US matches, and the octoshock CalcSeekTime model was only ever
-       * calibrated against US. This separates the two candidate causes with data: a per-read dump of
-       * sector count / seek / transfer, plus running totals, so a JP vs US capture shows whether the
-       * regional difference is DATA VOLUME (fewer sectors) or RATE (mis-charged time). Read-only. */
+    { /* CD load accounting (VH_CD_LOG=1): per-read sector count / seek / start / transfer plus
+       * running totals, for comparing a capture against a hardware baseline. Read-only. */
       static FILE *lg = NULL; static int tried = 0;
       static double cumMs = 0.0; static long cumSectors = 0; static int nreads = 0;
       if (!tried) { tried = 1; if (getenv("VH_CD_LOG")) lg = fopen("vh_cd_log.txt", "w"); }
       if (lg) {
           double xferMs = s_pendingPerSectorMs * sectors;
           nreads++; cumSectors += sectors; cumMs += seekMs + startMs + xferMs;
-          /* t = wall-clock ms since startup, so a capture can be aligned against the gdb
-           * harness's own elapsed-time markers (e.g. "FORCED demo battle at 52.0s") and the
-           * battle-load window isolated from boot/movie reads. Without it the totals mix
-           * every read of the session together -- which is exactly how the first capture
-           * came out unusable. */
+          /* t = wall-clock ms since startup, so the battle-load window can be isolated from
+           * boot/movie reads when aligning against a harness's elapsed-time markers. */
           fprintf(lg, "t=%-8u #%-4d lba=%-7d sectors=%-5d speed=%dx seek=%7.2f start=%6.2f xfer=%8.2f read=%8.2f | "
                       "cum reads=%-4d sectors=%-7ld ms=%9.2f\n",
                   SDL_GetTicks(), nreads, s_targetLBA, sectors, speed, seekMs, startMs, xferMs,
@@ -740,17 +549,9 @@ int CdReadSync(int mode, u_char *result) {
 
 int CdRead2(int mode) {
     s_mode = (unsigned char)mode;
-    /* Real MDEC frame decode is still deferred (movies render black), but CdRead2 in
-     * Stream|RT mode is also what STARTS a movie's interleaved XA-ADPCM audio on real
-     * hardware -- and that we CAN do. Previously this was a pure no-op, so movie audio
-     * only ever streamed as a side effect of CdControl(CdlSeekL) seeing RT already set
-     * in s_mode. That left the FIRST movie silent: Movie_Start (src/core/cd.c) seeks (state 2)
-     * BEFORE it calls CdRead2(0x1c0) (state 6) that sets the RT bit, so the boot logo's
-     * seek ran with RT clear and never began streaming; every later movie inherited the
-     * now-stale RT s_mode and did stream. Hence "logo silent, intro plays." Start the
-     * stream here from the seeked LBA (s_targetLBA, set by that state-2 CdlSeekL), which
-     * fixes the logo without disturbing an already-running stream (cursor only rewinds
-     * when the track base actually changes). */
+    /* CdRead2(Stream|RT) is what starts a movie's interleaved XA audio on hardware. Movie_Start
+     * seeks (state 2) before this call sets the RT bit (state 6), so the stream must start here
+     * from s_targetLBA or the first movie plays silent. The cursor rewinds only on a base change. */
     if (s_mode & CdlModeRT) {
         if (s_xaBaseLBA != s_targetLBA) {
             PC_XaReset();
@@ -758,9 +559,8 @@ int CdRead2(int mode) {
             s_xaCursorLBA = s_targetLBA;
         }
         s_xaStreaming = 1;
-        /* CdRead2(Stream|RT) is issued only by Movie_Start (src/core/cd.c) -> this also marks the start
-         * of a .STR movie's VIDEO. Seed the demux cursor at the movie base (the just-seeked LBA)
-         * and show frame 1 immediately so the first tick isn't black. */
+        /* Only Movie_Start issues CdRead2(Stream|RT), so this also marks a .STR movie's video start:
+         * seed the demux cursor at the base LBA and show frame 1 immediately. */
         s_movieActive   = 1;
         s_bootGrace     = 0;   /* first movie stream = boot is over; one-way latch, every later
                                 * load pays the hardware-exact model (a START skip can't outrun
@@ -768,15 +568,12 @@ int CdRead2(int mode) {
         s_movieBaseLBA  = s_targetLBA;
         s_movieScanLBA  = s_targetLBA;
         s_movieScanFrame = 0;
-        /* Play the movie's own interleaved XA regardless of any stale CdlSetfilter left by prior
-         * gameplay (battle/spell XA sets s_xaFile/s_xaChan; a story movie's audio is a different
-         * file/chan and would be filtered out -> silent video). A movie's sectors carry only its
-         * own audio stream, so match-any is correct here -- this is why the boot logo (filter still
-         * -1 at boot) had sound but post-gameplay story movies didn't. */
+        /* Play the movie's own XA regardless of a stale CdlSetfilter left by spell XA: a movie's
+         * sectors carry only its own audio, so match-any is correct (else story movies go silent). */
         s_xaFile = -1;
         s_xaChan = -1;
-        MovieHdTryOpen(s_movieBaseLBA);   /* 1.6: use an HD replacement for this movie if one is installed */
-        PC_MovieSubsOpen(s_movieBaseLBA); /* langpack F3: subtitle cues for this movie, if provided */
+        MovieHdTryOpen(s_movieBaseLBA);   /* use an HD replacement for this movie if one is installed */
+        PC_MovieSubsOpen(s_movieBaseLBA); /* language-pack subtitle cues for this movie, if provided */
         MovieRenderFrame(1);
     }
     return 0;
@@ -808,15 +605,8 @@ void DecDCTin(unsigned int *buf, int mode) {
 }
 
 void DecDCTout(unsigned int *buf, int size) {
-    /* Real MDEC video decode is deferred (a real video codec undertaking,
-     * out of scope -- see the file header comment). Doing nothing here
-     * left the movie's on-screen region showing whatever was already in
-     * that VRAM area -- often visible as colorful "static" once real
-     * gameplay is reached (see exchange/12-phase-c-bootstrap.md), easy to
-     * mistake for a texture/CLUT bug rather than what it actually is: an
-     * unimplemented video frame. Zeroing it instead shows a clean black
-     * region for the movie's duration -- still not real video, but an
-     * honest "nothing rendered here" instead of misleading garbage. */
+    /* MDEC decode runs out-of-band (MovieRenderFrame -> pc_mdec.c); zeroing the buffer shows clean
+     * black in the movie region instead of stale VRAM garbage that looks like a CLUT bug. */
     if (buf) memset(buf, 0, (size_t)size * sizeof(unsigned int));
 }
 
@@ -825,65 +615,9 @@ unsigned int DecDCToutCallback(void (*func)()) {
     return 0;
 }
 
-/* Timing-accurate movie skip (2026-07-12, exchange/20-camera-viewport-coordinates.md's "ROOT
- * CAUSE FOUND" section). Real FMV/MDEC decode is still not implemented (see file header) -- but
- * StGetNext() used to always fail immediately, which skipped past core/cd.c's *own*, already-correct
- * completion-detection logic (Movie_GetNextFrame(), src/core/cd.c:1316-1321: `if
- * (sMovieSectorHeader->frameCount >= s_totalFrames_80123268) s_movieFinished_8012326c = 1;`)
- * entirely, so movies "finished" almost instantly regardless of their real length -- confirmed
- * via a dense per-tick trace on both platforms: real hardware spends 2556 ticks in STATE_MOVIE
- * (BizHawk capture, frames 1771-4326) vs. our build's 28. Since rand() gets called once per
- * tick throughout (src/core/engine.c's UpdateEngine()), that gap alone was enough to fully desync the
- * shared RNG stream before any gameplay logic ever runs, on top of the two RNG bugs fixed
- * alongside this investigation.
- *
- * Rather than reimplement that completion logic, this feeds it a paced sequence of fake
- * frame-header data instead -- no real video decode, just correct timing, so the *same* real
- * decompiled code naturally signals "finished" at roughly the right tick.
- *
- * THREE failed attempts before landing on the correct model -- worth recording all of them,
- * since the eventual fix only makes sense in contrast:
- *   1. A "succeed every Nth call" counter measured only 642 ticks total instead of the targeted
- *      ~2500: core/cd.c's Movie_GetNextFrame() retries StGetNext() in a tight, un-yielding
- *      `while (... != 0) { if (--tries==0) return NULL; }` loop (tries starts at 0x100000), so a
- *      call-counter gets exhausted within a single real tick's near-instant loop, never actually
- *      gating against real elapsed time.
- *   2. Calling SDL_GetTicks() directly inside this function (mirroring CdReadSync()'s pattern)
- *      caused a real, user-visible multi-second stall/catch-up -- that same up-to-0x100000-
- *      iteration retry loop calls StGetNext() over a million times in a single tick whenever the
- *      target hasn't been reached (nearly every tick), turning into 1M+ SDL_GetTicks() syscalls
- *      *per tick*, repeated every tick.
- *   3. Gating on a real-tick counter (incremented once per VSync() call, avoiding the syscall
- *      storm) fixed the responsiveness problem but reproduced attempt 1's original symptom (~28
- *      ticks total, effectively no pacing at all) via a DIFFERENT, more fundamental mechanism:
- *      Movie_DecodeNextFrame() only retries Movie_GetNextFrame() ONCE per call (`tries = 1`,
- *      not 0x100000 -- that budget belongs to StGetNext's own inner retry, one level down). So
- *      the FIRST time StGetNext() genuinely fails (correctly reporting "not paced yet"),
- *      Movie_DecodeNextFrame() immediately returns -1, and Movie_PlayNextFrame() hits its `if
- *      (Movie_DecodeNextFrame() == 0) {...} return 1;` fallback -- returning 1 unconditionally.
- *      State_Movie()'s case 11 treats ANY nonzero Movie_PlayNextFrame() result as "finished,"
- *      with zero distinction between "genuinely done" and "no new sector this tick, try later."
- *      Deliberately pacing StGetNext() to fail on most ticks was therefore never viable through
- *      this call path, regardless of what it's gated on.
- *
- * Correct model: real hardware's StGetNext() succeeds on essentially every call (sectors arrive
- * at the CD's own transfer rate, ~75-150/sec, far faster than the ~60 calls/sec this gets
- * invoked at) -- video frame rate isn't StGetNext() blocking, it's MULTIPLE sector-arrivals
- * accumulating before the frame counter advances (psx-spx, cdromfileformats.md, "STR Frame
- * Rate": frame rate = sector rate / sectors-per-frame). So StGetNext() here always succeeds
- * immediately (matching Movie_DecodeNextFrame()'s single-try expectation, and avoiding every
- * failure mode above), and only the reported frameCount is paced -- advanced once every
- * CALLS_PER_MOVIE_FRAME successful calls, not gated on real time or call-retry counts at all.
- * Since each successful call already corresponds to one real tick (case 11 calls
- * Movie_PlayNextFrame() once per tick, and it now always succeeds on the first inner try), a
- * plain per-call counter here IS a real-tick counter, safely this time.
- *
- * Pacing rate: 4 calls/frame (15fps at this backend's 60Hz tick rate) is psx-spx's cited
- * standard STR rate, and reproduces the measured 2556-tick span closely: this demo's intro
- * chains two movies via src/core/movie_state.c's case 100 re-entry logic (logo, frameCt=0x8f=143,
- * then title, frameCt=0x1db=475 -- 618 frames total), and `(2556 - ~20 known per-movie startup
- * delay ticks) / 618 frames ≈ 4.1 ticks/frame ≈ 14.6fps`, matching 15fps well within measurement
- * tolerance. */
+/* Movie frame pacing: StGetNext always succeeds and only the reported frameCount is paced, one
+ * frame per CALLS_PER_MOVIE_FRAME calls (15 fps at the 60 Hz tick; hardware spends 2556 ticks in
+ * STATE_MOVIE for the 618-frame intro pair). See cd-xa.md, "Movie frame pacing". */
 #define CALLS_PER_MOVIE_FRAME 4
 
 static unsigned int s_movieFrameCounter = 0;
@@ -891,18 +625,12 @@ static int s_movieCallsSinceFrame = 0;
 static StHEADER s_fakeMovieHeader;
 static unsigned int s_fakeMovieSectorData[2];
 
-/* ---- MDEC movie VIDEO decode (real FMV, 2026-07-15) ------------------------------------------
- * The frame PACING above is faked (StGetNext just advances a counter); this decodes the ACTUAL
- * STR video for the current frame and hands it to the GPU backend as a fullscreen overlay
- * (PC_GpuSetMovieOverlay), so the intro FMVs (Konami logo v3, TITLE_WS v2) actually play. Decode
- * lives in pc_mdec.c (reimplemented from psx-spx, ffmpeg-validated). We read the STR sectors
- * straight from the disc image (same s_disc we stream XA from), demux the video sectors of the
- * wanted frame, and decode the assembled BS bitstream to BGR555. State declared up top (shared
- * with CdRead2). */
+/* Decode the STR video for frame `frameNo` and hand it to the GPU as a fullscreen overlay: demux
+ * the frame's video sectors from the disc image, assemble the BS bitstream, decode in pc_mdec.c. */
 static void MovieRenderFrame(int frameNo) {
     if (!s_disc || !s_movieActive || frameNo < 1) return;
-    PC_MovieSubsFrame(frameNo);   /* langpack F3: this frame is becoming current (native or HD) */
-    if (s_movieHd) {                             /* 1.6 HD FMV: present the HD frame, skip MDEC */
+    PC_MovieSubsFrame(frameNo);   /* this frame is becoming current (native or HD) */
+    if (s_movieHd) {                             /* HD FMV: present the HD frame, skip MDEC */
         int w = 0, h = 0;
         const unsigned char *rgb = PC_HdVideoFrame(frameNo - 1, &w, &h);   /* game frame 1 -> mp4 frame 0 */
         if (rgb) { PC_GpuSetMovieOverlayRGB(rgb, w, h); s_movieScanFrame = frameNo; return; }
@@ -971,13 +699,9 @@ void StSetStream(unsigned int mode, unsigned int start_frame, unsigned int end_f
 }
 
 unsigned int StGetNext(unsigned int **addr, unsigned int **header) {
-    /* Always succeeds immediately (see the comment above for why) -- only the reported
-     * frameCount is paced, advancing once every CALLS_PER_MOVIE_FRAME calls. core/cd.c's own
-     * Movie_GetNextFrame() then correctly compares that against the real s_totalFrames_80123268
-     * and sets s_movieFinished_8012326c itself, no different from a real MDEC decoder reaching
-     * the end of a real stream. addr[0]/addr[1] must match the header's dummy1/dummy2 fields
-     * exactly (src/core/cd.c:1311's sanity check) or the frame gets silently discarded without
-     * advancing -- keep both zeroed and consistent. */
+    /* Always succeeds; only frameCount is paced, so core/cd.c's own Movie_GetNextFrame detects
+     * completion against s_totalFrames_80123268. addr[0]/addr[1] must equal the header's
+     * dummy1/dummy2 (src/core/cd.c sanity check) or the frame is silently discarded. */
     s_movieCallsSinceFrame++;
     if (s_movieCallsSinceFrame >= CALLS_PER_MOVIE_FRAME) {
         s_movieCallsSinceFrame = 0;

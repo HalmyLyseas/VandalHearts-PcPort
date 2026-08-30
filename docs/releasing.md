@@ -11,6 +11,8 @@ Releases are built locally, never CI (the data-segment generator needs the byte-
       (top level) MD5 `596bb082a2de5f1fe977dd3d7e160b03` **and** JP (`cd jp && make check`) MD5
       `53849277b08184863bd45f10925995a6`, plus `make check-shared` (platform/pc) proving the
       shared game files are still identical between the trees. Non-negotiable.
+- [ ] **Comment hygiene:** `make check-comments` (platform/pc, ~1s) — no comment run over 3 lines
+      and no project-log vocabulary (dates, `exchange/`, stage/version markers) in any tracked file.
 - [ ] **Boot smoke:** `platform/pc/tools/regress/smoke_boot.sh` (~7s) — the whole boot chain
       (data-segment constructors, disc mount, MDEC, SPU/XA, font, rasterizer).
 - [ ] **Raster golden-image:** `platform/pc/tools/regress/raster_check.sh` (<1s) — byte-exact VRAM
@@ -48,6 +50,22 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
   Windows (MinGW cross, **static libav** — cached at `platform/pc/ffmpeg-mingw-static/`, rebuilt
   by the script if missing) and the Linux AppImage (the `vh-deb12` container; the script verifies
   its HD dev packages).
+- **Why clean builds are a hard rule:** neither build system tracks compiler-flag or include-path
+  changes, so an incremental build can link objects compiled against one library era with archives
+  from another (a `pc_hdvideo.o` compiled against the container's shared libav headers linked into
+  the static-libav binary crashes in `avcodec_parameters_to_context` from mismatched struct offsets).
+- **The parity check** (`tools/check_build_parity.sh`) parses the actual source *lists*
+  (`BACKEND_SRCS` + `$(BUILD_DIR)/<stem>.o` usages in the Makefile; `BACKEND_PLAIN`/`DATA_PERM`/
+  `DATA_PLAIN` + the `foreach` stems in CMake), not whole-file mentions — a comment naming a file is
+  not a compile. It fails closed if either parse yields implausibly few entries, so a list-format
+  change cannot silently disable it. `src/test_*.c` harnesses are exempt.
+- **The script refuses to run while user data sits in `build-uni/`** (disc `.bin`s, `saves/`,
+  `hdpacks/`, `langpacks/`): the AppImage stage runs `rm -rf build-uni*`, which would delete a test
+  deployment parked there. Keep deployments in `platform/pc/deploy/` (gitignored) instead.
+- The shipped Windows exe is **stripped** (debug info has no runtime use there — no backtrace
+  machinery — and embeds local build paths); the script then greps the exe for `/home/` and the login
+  name and refuses to package one that still carries them. The unstripped exe stays in
+  `build_win_uni/` for debugging.
 - **Every graphics-era release caught a Windows-only break at this step.** Do not publish a build
   that only ran on Linux.
 - [ ] Windows zip runs in a VM (8 DLLs expected; the exe must import **no** ffmpeg DLLs).

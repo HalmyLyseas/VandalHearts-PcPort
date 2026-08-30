@@ -39,10 +39,9 @@ def drain_danglers():
     for _ in range(8):
         out = subprocess.run(['make', 'PYTHON=python3', 'CROSS=mipsel-linux-gnu-', 'build/SLPM_860.07.elf'],
                              capture_output=True, text=True, stdin=subprocess.DEVNULL, env=os.environ).stderr
-        # ONLY D_/func_ names are safe to define from the name — those come from disassembling the JP
-        # binary, so the encoded address IS the JP address. Source-derived names (s_..._XXXX,
-        # g..._XXXX) encode the *US* address; they must be recovered at the JP address by match_tu, not
-        # name-encoded here. An undefined one is a match_tu gap to fix, not a dangler to paper over.
+        # Only D_/func_ names are safe to define from the name (the encoded address is already
+        # the JP address, from disassembly). Source-derived names (s_/g_..._XXXX) encode the US
+        # address instead and must be recovered by match_tu -- an undefined one is a gap to fix.
         refs = set(re.findall(r"`((?:D_|func_)([0-9A-Fa-f]{8}))'", out))
         add = [f'{full} = 0x{int(a, 16):08x};' for full, a in refs
                if full not in existing and int(a, 16) >= 0x80000000]

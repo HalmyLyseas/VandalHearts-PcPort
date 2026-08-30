@@ -1,31 +1,6 @@
-/*
- * Real, extracted definitions for two of the ~58 "flagged" (pointer-typed) globals from
- * Step 11's data-segment work: gBattleEnemyUnitInitialStates[74] and
- * gBattlePartyUnitInitialStates[50] (declared extern in include/battle.h). Both were left
- * zero-initialized by platform/pc/tools/build_data_segment.py (a raw pointer VALUE copied
- * from the original binary would be a MIPS virtual address, meaningless in our own process) --
- * SetupBattleUnits (src/states/game_setup.c) dereferences gBattleEnemyUnitInitialStates[gState.mapNum]
- * unconditionally, so every NULL entry was a guaranteed crash the first time any battle state
- * was reached (see exchange/12-phase-c-bootstrap.md Bug 11 for the full derivation).
- *
- * Both symbols are arrays of pointers into ONE small, contiguous data region
- * (build/asm/data/E9B58.data.s.o in the real, byte-exact-verified link, spanning
- * roughly 0x800f9f68-0x800fbbb8) -- confirmed by reading every one of the 74+50 real pointer
- * VALUES directly out of SLUS_004.47 (build/SLUS_004.47.map gives the two arrays' own real
- * addresses; ROM offsets computed via the "main" segment's rom/vram base, cross-checked
- * against SLUS_004.47.yaml's own [0x0e9b58, data] subsegment entry) and confirming every
- * single one falls inside that one small span. Extracted the whole span as two raw byte blobs
- * (real, byte-exact data -- not synthesized) and rebuilt each pointer as a real host pointer
- * into the correspondingly-offset position within our own local copy: (target_vram - blob_base)
- * gives the same relative offset in our copy that the original pointer had into the original
- * blob, so BattleEnemyUnitInitialState's own stripIdx==0 / BattlePartyUnitInitialState's own
- * partyIdx==UNIT_INVALID(0xff) terminator conventions -- read entirely by src/states/game_setup.c,
- * completely unaware any of this happened -- land at exactly the same relative positions as
- * the original game intended, including at least one confirmed real case (map indices sharing
- * one all-zero sentinel pointer whose single terminator byte deliberately aliases the start
- * of map 0's own real data -- SetupBattleUnits only reads stripIdx before deciding to stop, so
- * the overlap is safe by construction, not a bug).
- */
+/* gBattleEnemyUnitInitialStates[74] / gBattlePartyUnitInitialStates[50] (include/battle.h),
+ * reconstructed from the byte-exact binary: pointers into the 0x800f9f68-0x800fbbb8 span,
+ * rebased onto local blobs. See docs/pc-port/data-segment.md, "pc_battle_data.c". */
 #include "battle.h"
 
 

@@ -1,13 +1,6 @@
-/* Shared FX helper toolbox used across the spells_*, maps_* and fx_* units: object spawn
- * and unit-snap helpers (SnapToUnit, CreatePositionedObj, SphericalToVector), the
- * RenderMaskEffect primitive (RenderSphere/RenderLightningBolt live in events/fx_scenes.c,
- * address-locked there), the camera-zoom service object (Objf277_Zoom, spawned on every
- * map by SetupMapExtras; its set/stop API SetCameraZoomTarget_Unused/StopCameraZoom_Unused
- * is dead in retail), the Ice Storm camera shake (Objf279, a spell stray), the screen
- * dim/undim pair (DimScreen/UndimScreen, used by the save prompt), a stripped debug-print
- * pair (PrintDigit / Noop_DebugPrintValue), and two controller-2 debug stubs
- * (Objf391_Unused, Objf674_DebugSounds). Handlers reachable from no spell table, no event
- * script and no code path are cut content, suffixed _Unused. */
+/* Shared FX helper toolbox used across the spells_*, maps_* and fx_* units: object spawn and
+ * unit-snap helpers, the RenderMaskEffect primitive, the camera-zoom service object, screen
+ * dim/undim, and debug stubs. See docs/decomp/objf-handlers.md. */
 #include "common.h"
 #include "object.h"
 #include "units.h"

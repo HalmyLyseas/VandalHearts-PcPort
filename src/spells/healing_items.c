@@ -13,10 +13,8 @@
 #undef OBJF
 #define OBJF 306
 void Objf306_791_792_793_Healing_FX2(Object *obj) {
-   // 306: Extra Healing, Hyper Healing
-   // 791: Healing Plus
-   // 792: Ultra Healing
-   // 793: Supreme Healing, Holy H2O
+   // 306: Extra Healing, Hyper Healing; 791: Healing Plus;
+   // 792: Ultra Healing; 793: Supreme Healing, Holy H2O
    Object *unitSprite;
    Object *obj_s0;
    MaskEffectPreset maskEffect;

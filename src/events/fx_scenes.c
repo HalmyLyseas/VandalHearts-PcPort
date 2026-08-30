@@ -1,13 +1,6 @@
-/* Cutscene and event-scene special effects, spawned almost exclusively by EVDATA*.DAT
- * scripts (event opcode 0x1d names an objf index directly -- see the interpreter in
- * events/entities.c): per-scene set pieces (Map44/Scn00, Map36/Scn74-75, Map48/Scn20,
- * Map43/Scn93, Map67/Scn34, Map61/Scn83, Map20, Map30), reusable particles (rays, sparks,
- * streaks, rings), entity-overlay transforms (hide the sprite, cross-fade masked clones),
- * the Dimensional Rift family, blend-mode toggles, and the controller-2 debug camera
- * (Objf714_DebugCamera). RenderLightningBolt and RenderSphere are toolbox-style render
- * primitives address-locked inside this range; callers elsewhere reach them as externs.
- * Handlers reachable from no spell table, no event script and no code path are cut
- * content, suffixed _Unused. */
+/* Cutscene and event-scene special effects, spawned almost exclusively by EVDATA*.DAT scripts
+ * (event opcode 0x1d): per-scene set pieces, reusable particles, entity-overlay transforms, the
+ * Dimensional Rift family, and the controller-2 debug camera. See docs/decomp/objf-handlers.md. */
 #include "common.h"
 #include "object.h"
 #include "units.h"
@@ -666,13 +659,9 @@ void RenderLightningBolt(Object *sprite) {
    sprite_s0->d.sprite.semiTrans = sprite->d.sprite.semiTrans;
    if (sprite_s0->d.sprite.gfxIdx == GFX_NULL
 #ifdef PC_PORT
-       /* Some callers pass a NON-sprite object (e.g. Objf319_Map67_Scn34_RiftArcs) whose d.sprite.gfxIdx
-        * aliases their own struct. On PSX that offset reads 0 (GFX_NULL), so this fallback selects the
-        * lightning gfx. On LP64 a leading pointer in the caller's struct occupies 0x24..0x2B and shifts
-        * the read into the pointer, yielding a garbage index (a fixed-arena pointer's low half) that
-        * slips past the ==GFX_NULL test -> OOB gGfxTPageIds[] read -> tpage 0 -> the effect samples
-        * VRAM page 0 (the framebuffer) = a solid garbage "blob". Treat any out-of-range index as
-        * GFX_NULL, restoring the intended GFX_LIGHTNING_5. */
+       /* Some callers pass a non-sprite object whose d.sprite.gfxIdx aliases a leading pointer in
+        * their own struct; on LP64 that reads a garbage index past GFX_CT instead of PSX's clean 0.
+        * Treat any out-of-range index as GFX_NULL. See docs/width-bugs.md, "The catalogue" (#3c). */
        || (unsigned int)sprite_s0->d.sprite.gfxIdx >= (unsigned int)GFX_CT
 #endif
    ) {
@@ -2067,10 +2056,7 @@ static s16 sFlashingPatternsGfx_801019e8[] = {
 #undef OBJF
 #define OBJF 705
 void Objf705_732_743_744_Transformation(Object *obj) {
-   // 705: Unused?
-   // 732: Objf587_BattleEnemyEvent/Objf014_BattleUnit (Kane/Dolf mid-battle transformations)
-   // 743: EVDATA34.DAT, EVDATA29.DAT (Magnus)
-   // 744: EVDATA86.DAT (Ash)
+   // 705 unused; 732 mid-battle transformations (Kane/Dolf); 743 Magnus; 744 Ash.
 
    Object *obj_s0;
    Object *obj_s1;

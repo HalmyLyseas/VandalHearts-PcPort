@@ -1,25 +1,6 @@
-/* Battle math and its result windows (segment 0x190dc): every number the battle system
- * applies or displays is computed here.
- *
- * Combat: CalculateAttackDamage folds the 49x49 class-matchup table gAdvantage (defined at
- * the top of this file), the four adjacent-supporter bonuses, equipment, elevation and
- * flank/back facing into a resist value, rolls damage, and pays attack XP.
- * CalculateSpellPowerAndExp is its spell counterpart (branching on SPELL_EX_EFFECT),
- * CalculateSupportSpellExp pays XP for buff/heal casts, TryInflictingAilment rolls
- * poison/paralysis against ailmentSusceptibility (it carries a suspected retail precedence
- * bug -- see its comment).
- * Progression: CalculateUnitStats derives level (XP vs gExperienceLevels) then stats;
- * DetermineMaxMpAndStatVariance rolls the 80..119 per-unit variance and the class MP pool;
- * SyncGainedHp carries current HP across a level-up.
- * XP arithmetic: XP is a wide value held as 8 big-endian u16 limbs, with
- * BigIntCompare/Add/Subtract/Divide at the bottom -- every XP award is assembled from
- * those four.
- * Presentation: EmbedIntAsSjis / EmbedExp / GetItemNameLength / ShowExpDialog, and the
- * supporter-marker pair CheckForSupporterBonus / DisplaySupporterBonus.
- *
- * Callers are the executors in battle/executors.c and the AI's scoring in battle/ai.c. PC_FEAT gates
- * cover the Tactical Monk/Ninja MP parity, trial-map XP scaling, and language-pack-safe
- * ShowExpDialog layout. */
+/* Battle math and its result windows (segment 0x190dc): the damage and spell-power formulas
+ * (the gAdvantage matchup table, supporters, equipment, elevation, facing), XP awards as 8-limb
+ * big-endian BigInt arithmetic, level/stat derivation, and the XP and supporter-marker dialogs. */
 #include "common.h"
 #include "object.h"
 #include "battle.h"
@@ -422,12 +403,9 @@ u8 GetItemNameLength(u8 item) {
 void ShowExpDialog(s32 exp, u8 windowId) {
    u8 numDigits;
 #ifdef PC_FEAT
-   /* Language packs: retail embeds the number into line 1 at a FIXED byte offset (8 = the length of
-    * "You got "), which a translated prefix of any other length would misplace. Compose line 1 in a
-    * local buffer instead, so the number follows the (possibly translated) prefix; the digits are
-    * script-neutral. Line 2 is a plain replaceable literal. With no pack the layout is byte-for-byte
-    * the retail one. Both literals are exported by lang_export_literals.py -- the prefix through its
-    * PC_LANGSTR scan (it is not a draw-call argument), line 2 through the draw-call sweep. */
+   /* Language packs: retail embeds the number into line 1 at a fixed byte offset (8, the length of
+    * "You got "), which a translated prefix would misplace. Compose line 1 in a local buffer so the
+    * script-neutral digits follow the prefix; with no pack the layout is byte-for-byte retail. */
    u8 line1[64];
    u8 *prefix = PC_LANGSTR("You got ");
    s32 pl = 0;
@@ -674,13 +652,9 @@ s16 CalculateAttackDamage(UnitStatus *attacker, UnitStatus *defender) {
          }
          if (damage != 0) {
 #ifdef PC_FEAT
-            /* GAP 9 fallback (2026-07-29): the FINAL Trial's enemies are set up through a path where
-             * gState.chapter/mapNum are still in flux, so the spawn-time expMulti override AND the
-             * battle_eval expScalingLevel override both read stale values -> trial enemies keep
-             * expMulti 0 (no attack XP) and expScalingLevel lands on a wrong chapter. At XP-computation
-             * time chap/map are stable + correct, so force the trial values here -- catches every trial
-             * enemy regardless of spawn path. Mutating the enemy's expMulti + the global scaling level
-             * is a persistent, harmless correction (both only feed XP). Normal mode untouched. */
+            /* Tactical trial XP: the final Trial's enemies spawn while gState.chapter/mapNum are still
+             * in flux, so the spawn-time expMulti and battle-eval expScalingLevel overrides read stale
+             * values. Chapter/map are stable here, so force the trial values; both only feed XP. */
             if (gTacticalMode && gState.mapNum <= 5) {
                gState.expScalingLevel = TrialExpScalingLevel(gState.chapter);
                if (defender->expMulti == 0) {
@@ -969,10 +943,9 @@ void DetermineMaxMpAndStatVariance(UnitStatus *unit) {
       unit->maxMp = gClassMpMultiplier[unitClass] * unit->level;
       if (unit->class == CLASS_MONK
 #ifdef PC_FEAT
-          /* GAP 5 (Tactical): retail gives the Monk +advLevelFirst to compensate for its half MP rate
-           * (mult 1). Tactical fixes the rate at the source (mult 2 = caster parity), so keeping this
-           * compensation would double-dip and push Monk/Ninja ABOVE the pure casters. Drop it in
-           * Tactical so maxMp == 2*level, identical to Mage/Priest/Sorcerer. (Ninja is also CLASS_MONK.) */
+          /* Retail gives the Monk +advLevelFirst to compensate for its half MP rate (mult 1). Tactical
+           * sets mult 2 (caster parity), so the compensation would double-dip; drop it so maxMp ==
+           * 2*level. Ninja is also CLASS_MONK. See docs/tactical-mode.md, "Monk & Ninja". */
           && !gTacticalMode
 #endif
          ) {

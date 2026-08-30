@@ -1,14 +1,6 @@
-/* Battle presentation objects (segment 0x11604): the level-up jingle/stats object, the
- * impact bounce-zoom, the two battle cameras, the event zoom, the end-of-move direction
- * chooser and its direction-arrow renderer.
- *
- * Cameras: Objf017_AttackCamera is the attack close-up -- swoop onto the actor (zoom 250,
- * pitch 33.75deg), hold while the strike plays (gSignal5 handshake with the action
- * executor in battle/executors.c), then restore the saved camera. Objf026_588_FocusCamera is
- * the general-purpose focus/follow camera used by spell FX and events: callers hand it a
- * target sprite, a vantage type (0-3 -> the GetBestViewOfTarget* variants in core/graphics.c)
- * and an optional zoom; the 588 table slot is the same handler with a wider default zoom
- * (350). */
+/* Battle presentation objects (segment 0x11604): level-up jingle/stats, impact bounce-zoom, the
+ * attack close-up camera Objf017 (gSignal5 handshake with battle/executors.c), the focus/follow
+ * camera Objf026_588 (vantage 0-3 -> GetBestViewOfTarget*; 588 = wider default zoom 350). */
 #include "common.h"
 #include "object.h"
 #include "audio.h"
@@ -286,12 +278,9 @@ void Objf026_588_FocusCamera(Object *obj) {
    target = OBJ.target;
 
 #ifdef PC_PORT
-   /* PC_PORT (Stage 2.3): OBJ.target (the followed unit's sprite) can be NULL when the
-    * camera targets an empty/vacated tile. PSX / the 2.2 fault handler read 0 through NULL;
-    * target is read-only here (only target->{x1,z1,y1} are read), so redirect NULL to a
-    * zero Object -- every field then reads 0, bit-identical to the handler's per-read
-    * zeroing (read-0, NOT skip: the camera still eases toward origin). NULL sites:
-    * battle/presentation.c:296/328/329/333. See exchange/56. */
+   /* OBJ.target (the followed unit's sprite) is NULL when the camera targets an empty tile. PSX
+    * reads 0 through NULL; target is read-only here, so redirect NULL to a zero Object (read-0,
+    * NOT skip: the camera still eases toward origin). See docs/memory-safety.md. */
    {
       static const Object s_nullObj = {0};
       if (target == NULL) target = (Object *)&s_nullObj;

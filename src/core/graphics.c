@@ -127,11 +127,8 @@ void Objf050_UnitSpritesDecoder(Object *obj) {
                }
                pCache[cacheOfs++ & 0x3ff] = b;
             } else {
-               // Mode lo-bit is clear; next two bytes decode to cache idx and length.
-               // b1: cccc_cccc; b2: CCnn_nnnn;
-               // CCcccccccc: 10-bit cache index
-               // nnnnnn + 3: num bytes to read from cache (3..66)
-               // (0x3f: 0b0011_1111; 0xc0: 0b1100_0000)
+               // Mode lo-bit clear: b1 = cccc_cccc, b2 = CCnn_nnnn. CCcccccccc is a 10-bit
+               // cache index; nnnnnn + 3 is the byte count to read back from the cache (3..66).
                j = *pSrc++;          // b1
                k = *pSrc++;          // b2
                j |= (k & 0xc0) << 2; // cacheIdx
@@ -623,15 +620,9 @@ void CopyObject(Object *src, Object *dst) {
    s32 i;
 
 #ifdef PC_PORT
-   /* PC_PORT (Stage 2.3 width fix): the original copies a hardcoded 24 u32 words = 96 bytes, which is
-    * exactly the PSX/-m32 sizeof(Object). On LP64 the pointer fields in the Object union
-    * (Object_Sprite.animData at 0x38, ...) grow 4->8 bytes, so sizeof(Object) exceeds 96 and the
-    * fields that shifted past the boundary -- notably Object_Sprite.animYOfs (0x5A -> 0x62) -- fall
-    * OUTSIDE the 96-byte copy. Symptom: the level-up hop (Objf380_LevelUpFx renders CopyObject'd
-    * copies of the unit sprite) played its animation frames but never lifted, because gfxIdx (0x28,
-    * before animData) copied fine while the copy's animYOfs stayed 0. Copy the real struct size so
-    * every field comes across. Same class as the core/object.c Object-zeroing loops fixed in 2.3; missed
-    * here. The matching build (no PC_PORT) keeps the exact 24-word loop, so byte-exact is unaffected. */
+   /* PC_PORT width fix: 24 u32 words = 96 bytes = the PSX/-m32 sizeof(Object). On LP64 the union's
+    * pointers grow and fields past that boundary (Object_Sprite.animYOfs) would fall outside the
+    * copy, so copy the real struct size. See docs/width-bugs.md, "The catalogue" (#6). */
    for (i = 0; i < (s32)(sizeof(Object) / sizeof(u32)); i++) {
       ((u32 *)dst)[i] = ((u32 *)src)[i];
    }
@@ -1253,21 +1244,17 @@ void RenderField(void) {
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
          } else if (gBlueMovementGridPtr[iz][ix] != 0) {
 #ifdef PC_FEAT
-            /* Stage 3 (1.1B): a reachable tile that is ALSO enemy-threatened -> warn in orange, so
-             * the player still sees their own extra movement AND the danger (bugreport-02 #3), and the
-             * warning stays distinct from the native yellow attack/AoE target grid (bugreport-04).
-             * Hidden while control is suppressed (mid-animation): during a unit walk / crate push the
-             * board is changing, so a not-yet-recomputed overlay would be stale -- show nothing and
-             * let it reappear correct when control returns (bugreport-02 #2 3rd check). */
+            /* Threat overlay: a reachable tile that is also enemy-threatened warns in orange (distinct
+             * from the native yellow target grid). Hidden while control is suppressed: mid-animation the
+             * board is changing and a not-yet-recomputed overlay would be stale. */
             if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
                RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_ORANGE);
             } else
 #endif
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_BLUE);
 #ifdef PC_FEAT
-         /* Stage 3 (1.1B): pure enemy threat sits BELOW the active unit's move/target grids so
-          * casting AoE and movement previews stay visible on top (bugreport-02 #4); and it is hidden
-          * mid-animation (see above) so a stale danger zone is never drawn. */
+         /* Pure enemy threat sits below the active unit's move/target grids so AoE and movement
+          * previews stay visible on top; hidden mid-animation (see above). */
          } else if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
             RenderMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_PURPLE);
 #endif
@@ -1285,11 +1272,9 @@ void RenderField(void) {
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
       } else if (gBlueMovementGridPtr[iz][ix] != 0) {
 #ifdef PC_FEAT
-         /* Stage 3 (1.1B): mirror the interior loop's threat handling on the map's edge row/column.
-          * Without it, a genuinely enemy-threatened boundary tile lost its purple at camera angles
-          * where the edge loop (not the interior loop) draws that row -- the overlay flickered off on
-          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns orange
-          * (distinct from the native yellow attack/AoE grid -- bugreport-04). */
+         /* Mirror the interior loop's threat handling on the map's edge row/column: at some camera
+          * angles this loop, not the interior one, draws a boundary tile, and the overlay must not
+          * flicker off on rotation. */
          if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
             RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_ORANGE);
          } else
@@ -1312,11 +1297,9 @@ void RenderField(void) {
          RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_RED);
       } else if (gBlueMovementGridPtr[iz][ix] != 0) {
 #ifdef PC_FEAT
-         /* Stage 3 (1.1B): mirror the interior loop's threat handling on the map's edge row/column.
-          * Without it, a genuinely enemy-threatened boundary tile lost its purple at camera angles
-          * where the edge loop (not the interior loop) draws that row -- the overlay flickered off on
-          * rotation (bugreport-01 follow-up 2026-07-26). A reachable+threatened edge tile warns orange
-          * (distinct from the native yellow attack/AoE grid -- bugreport-04). */
+         /* Mirror the interior loop's threat handling on the map's edge row/column: at some camera
+          * angles this loop, not the interior one, draws a boundary tile, and the overlay must not
+          * flicker off on rotation. */
          if (gShowThreatGrid && !gPlayerControlSuppressed && gThreatGridPtr[iz][ix] != 0) {
             RenderEdgeMapTile(gGraphicsPtr->ot, &gMapRowPointers[iz][ix], GRID_COLOR_ORANGE);
          } else
@@ -1421,20 +1404,16 @@ void RenderMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                   poly->b0 = 0;
 #ifdef PC_FEAT
                } else if (gridColor == GRID_COLOR_PURPLE) {
-                  /* Stage 3 (1.1) enemy threat: pulsing purple, distinct from blue/red/yellow. It drives
-                   * TWO channels (red+blue), so at the shared oscillation's 255 peak it reads as a neon
-                   * fluorescent magenta -- eye-tiring over a large danger zone (bugreport 2026-07-26).
-                   * Soften it: halve the pulse amplitude (peak ~148 not 255) and keep green below r/b so
-                   * it desaturates into a calmer purple that still stays clearly purple at the trough. */
+                  /* Enemy threat: pulsing purple. Driving two channels at the shared oscillation's 255
+                   * peak reads as neon magenta, so the pulse amplitude is halved (peak ~148) and green
+                   * is kept below r/b to desaturate into a calmer purple. */
                   int soft = 40 + ((gGridColorOscillation - 40) >> 1);   /* ~47..148 vs 55..255 */
                   poly->r0 = soft;
                   poly->g0 = 30 + (soft >> 2);                            /* muted, not neon */
                   poly->b0 = soft;
                } else if (gridColor == GRID_COLOR_ORANGE) {
-                  /* Stage 3 (1.3): reachable-AND-threatened warning. Orange (red, ~half green, no blue)
-                   * reads clearly apart from the native YELLOW attack/AoE grid (where r==g). Pulse
-                   * softened the same way as PURPLE -- halved amplitude (peak ~148 not 255) -- so it's
-                   * flat, not neon (bugreport-04). */
+                  /* Reachable-and-threatened warning: orange (red, ~half green, no blue) reads apart
+                   * from the native yellow grid (where r==g). Pulse halved like PURPLE (peak ~148). */
                   int soft = 40 + ((gGridColorOscillation - 40) >> 1);   /* ~47..148 vs 55..255 */
                   poly->r0 = soft;
                   poly->g0 = soft >> 1;                                   /* ~23..74 -> orange hue */
@@ -1536,15 +1515,15 @@ void RenderEdgeMapTile(u32 *ot, MapTileModel *tileModel, s32 gridColor) {
                poly->b0 = 0;
 #ifdef PC_FEAT
             } else if (gridColor == GRID_COLOR_PURPLE) {
-               /* Stage 3 (1.1): enemy-threat tint on an edge tile -- the same softened purple as the
-                * interior RenderMapTile (halved pulse, muted green; see the note there). */
+               /* Enemy-threat tint on an edge tile: the same softened purple as the interior
+                * RenderMapTile (halved pulse, muted green; see the note there). */
                int soft = 40 + ((gGridColorOscillation - 40) >> 1);
                poly->r0 = soft;
                poly->g0 = 30 + (soft >> 2);
                poly->b0 = soft;
             } else if (gridColor == GRID_COLOR_ORANGE) {
-               /* Stage 3 (1.3): reachable-AND-threatened warning on an edge tile -- orange, matching
-                * the interior RenderMapTile (softened/halved pulse; see note there; bugreport-04). */
+               /* Reachable-and-threatened warning on an edge tile: orange, matching the interior
+                * RenderMapTile (halved pulse; see the note there). */
                int soft = 40 + ((gGridColorOscillation - 40) >> 1);
                poly->r0 = soft;
                poly->g0 = soft >> 1;
@@ -1967,10 +1946,9 @@ static s8 sViewOfsBelowN[] = {
 static s8 *sViewObstructionTables[] = {sViewOfsLevelS, sViewOfsLevelW, sViewOfsLevelN, sViewOfsLevelE, sViewOfsAboveS, sViewOfsAboveW,
                            sViewOfsAboveN, sViewOfsAboveE, sViewOfsBelowS, sViewOfsBelowW, sViewOfsBelowN, sViewOfsBelowE};
 
-/* Counts map tiles that block the camera's view of tile (z,x) at the given yaw, walking
- * an offset table selected by the elevation relation to the target and facing
- * (sViewObstructionTables; sViewObstructionOfsFlat is the alternate table when param_5 is set). Backs all four
- * GetBestViewOfTarget* pickers. */
+/* Counts map tiles that block the camera's view of tile (z,x) at the given yaw, walking an offset
+ * table picked by facing and the elevation relation to the target (sViewObstructionTables, or
+ * sViewObstructionOfsFlat when param_5 is set). Backs all four GetBestViewOfTarget* pickers. */
 s32 CountViewObstructions(s8 z, s8 x, s32 angle, u8 dir, s32 param_5) {
    s32 result;
    s16 angleDir;

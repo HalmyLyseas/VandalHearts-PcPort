@@ -1,13 +1,6 @@
-/* Salamander, the crawling flame serpent (Objf334 FX1 driver, Objf335 head, Objf336
- * segments), plus Rolling Fire FX1 (Objf332, a stray) and the Wyrmfang flames
- * (Objf747_748/749 -- FX1 is in spells/shared_fx.c). Dispatched via gSpellsEx (see
- * spells/casting_main.c). Objf377 (breath head) is cut content: its breath phase is
- * signalled by no shipped head; suffixed _Unused, kept byte-exact.
- *
- * The head/quad initializer templates live in spells/dark_hurricane.c
- * (gSalamanderQuadTemplate / gSalamanderHeadGfxN / gSalamanderHeadGfxS): the retail TU
- * emitted them at the head of its .rodata, ahead of that file's jumptables, so after the
- * split they must stay in the first piece to keep the byte layout. */
+/* Salamander, the crawling flame serpent (Objf334 driver, Objf335 head, Objf336 segments),
+ * Rolling Fire FX1 (Objf332, a stray) and the Wyrmfang flames (Objf747_748/749); dispatched via
+ * gSpellsEx. The head/quad initializer templates are address-locked in dark_hurricane.c. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -388,10 +381,9 @@ void Objf334_Salamander_FX1(Object *obj) {
 #undef OBJF
 #define OBJF 335
 void Objf335_Salamander_Head(Object *obj) {
-   /* GCC 2.6.3 rejects `Quad quad = gSalamanderQuadTemplate;` (invalid initializer for an
-    * automatic aggregate from an expression), so the retail initializer copies are written
-    * as entry assignments -- same block-copy codegen, template bytes stay address-locked
-    * in spells/dark_hurricane.c. */
+   /* GCC 2.6.3 rejects `Quad quad = gSalamanderQuadTemplate;` (automatic aggregate initialized
+    * from an expression), so the retail initializer copies are written as entry assignments --
+    * same block-copy codegen; the template bytes stay address-locked in dark_hurricane.c. */
    SalamanderQuad quad;
    SalamanderHeadGfx headGfx;
 
@@ -709,10 +701,9 @@ void Objf336_Salamander_Segment(Object *obj) {
 
 #undef OBJF
 #define OBJF 377
-/* An objf335/336-compatible Salamander chain link (identical struct layout + chaining
- * math) drawing the directional head; when its link reports mem == 2 it emits Flame
- * Breath particles -- but no shipped head handler ever writes mem = 2, and nothing
- * spawns 377: a cut breath-phase variant of the Salamander. */
+/* An Objf335/336-compatible chain link drawing the directional head, emitting Flame Breath
+ * particles when its link reports mem == 2 -- but no shipped head ever writes mem = 2 and
+ * nothing spawns 377: a cut breath-phase variant of the Salamander. */
 void Objf377_SalamanderBreathHead_Unused(Object *obj) {
    /* Same GCC 2.6.3 workaround as Objf335: entry assignments in the retail initializer
     * order (headGfx first, then quad). */

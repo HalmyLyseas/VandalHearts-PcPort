@@ -51,6 +51,31 @@ GPU-trace regression harness (`VH_GPU_RECORD`/`VH_GPU_REPLAY`,
 and the `VH_SMOKE` boot harness. Diagnostics are documented next to their code, may change or
 disappear in any release, and are never needed to play the game.
 
+## Frame pacing and the display path
+
+The game paces itself: its own `VSync()` (`src/libetc.c`, backed by the port's timer) sleeps to
+the hardware's ~60 Hz tick, so every frame is already timed in software before the display path
+runs. The presentation layer (`platform/pc/src/pc_gpu_window.c`) therefore sets the GL swap
+interval to **0** -- vertical sync deliberately off. A driver-side swap wait would not replace the
+game's pacing but stack a second wait on top of it, and some GL drivers charge that wait to the
+next frame's first clear rather than to `SDL_GL_SwapWindow`, so the extra stall lands at an
+unpredictable point in the frame; on a software Mesa renderer or under a compositor the behaviour
+is inconsistent. With interval 0, `VH_FRAME_TIME` measures exactly the game's `work` and `idle`
+and nothing the driver adds.
+
+The startup log names the presentation driver (`PC_Gpu: GL vendor=... renderer=... version=...`,
+or `presentation renderer=metal` on macOS) so a "black screen" or "slow on my machine" report shows
+which renderer was actually in use -- a software renderer such as llvmpipe there explains a slow
+display path immediately.
+
+**Event pumping keeps the window responsive.** The SDL event queue is drained from the present
+path *and* from every `VSync()`. Draining is what answers the compositor's responsiveness ping:
+the boot loads run at hardware-exact CD timing, spending ~5-8 s in `VSync()` with nothing
+presented and no pad read, and a compositor whose "not responding" threshold sits inside that
+window (GNOME's does) would otherwise raise its kill/wait dialog and hold a close-button click
+until the first present. `SDL_QUIT` (the close button, or Ctrl+C -- SDL installs its own
+SIGINT/SIGTERM handlers once video is initialised) and Escape exit cleanly.
+
 ## Reference numbers
 
 Measured on a 16-thread desktop CPU, in-battle worst case (large spell effect), `INTERNAL RES` ×4,

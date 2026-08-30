@@ -1,16 +1,6 @@
-/* pc_lang_stub.c -- the JP region's stand-in for the langpack engine (pc_lang.c +
- * pc_lang_font.c), which is US-only by design: it is built on the US ASCII text path
- * (DrawFontGlyph/GetGlyphIdxForAsciiChar), which the JP game does not have, and its
- * dialogue substitution is keyed by US ISO LBAs (exchange/101 §4.3).
- *
- * Shared backends (libcd.c, libkernel.c, libgpu.c, pc_gpu_window.c, pc_movie_subs.c,
- * pc_overlay.c) call these entry points unconditionally; each stub implements the
- * engine's documented "no pack loaded" behaviour (see include/pc_lang.h), so a JP core
- * behaves exactly like a US core with no language pack installed.
- *
- * Only the entry points shared backends actually reference are stubbed (link-verified);
- * the game-source hooks (PC_LangUtf8Glyph et al.) are behind PC_FEAT sites the JP region
- * does not compile. */
+/* pc_lang_stub.c -- the JP core's stand-in for the US-only langpack engine: each entry point the
+ * shared backends call returns its "no pack loaded" answer, so a JP core behaves like a US core
+ * without a pack. Only linked entry points are stubbed. See docs/language-packs.md, "Runtime layout". */
 #include <stddef.h>
 #include "pc_lang.h"
 
@@ -46,8 +36,6 @@ unsigned char *PC_LangStr(const char *lit) { return (unsigned char *)lit; }
 /* No accepted pack -> no localized-backgrounds dir. */
 const char *PC_LangBgDir(void) { return NULL; }
 
-/* PC_LangListPacks is NOT stubbed (2026-08-22): enumeration lives in pc_lang_list.c, compiled
- * in both regions, so the overlay can list installed packs on a JP session (queueing one for a
- * pending US-disc restart via the DISC row). Loading stays stubbed: "" = none selected at boot
- * (per the header contract -- callers print it, so NULL would be wrong here). */
+/* PC_LangListPacks is not stubbed: enumeration lives in pc_lang_list.c, compiled in both regions.
+ * Loading stays stubbed: "" = none selected at boot (callers print it, so NULL would be wrong). */
 const char *PC_LangBootFolder(void) { return ""; }

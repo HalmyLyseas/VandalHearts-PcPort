@@ -1,22 +1,6 @@
-/* G1 differential rasterizer harness (Phase 0b) — GP0 trace replay.
- *
- * Invokes the REAL production rasterizer by #including libgpu.c directly (so it always tracks the code,
- * incl. the coming DDA rewrite — no copy, no divergence). Replays a decompressed DuckStation .psxgpu GPU
- * trace into it and dumps each rendered frame to PPM. Next step diffs those vs DuckStation's reference.
- *
- * KEY: GPUPort0Data packets are DMA BLOCKS, not one-command-each — a command (esp. an A0 VRAM upload with
- * its pixel data) spans packets. So we concatenate all Port0 words into one GP0 FIFO stream and parse
- * commands by their true word-length (opcode+flags; A0 length from its w*h). VSync packets mark frames.
- *
- * Build (from repo root):
- *   cc -std=gnu99 -O2 -Iplatform/pc/include -Iinclude \
- *      platform/pc/tools/raster_harness/harness.c -lm -lpthread -o /tmp/raster_harness
- *   (-lpthread: libgpu.c's hi-res pass is band-threaded; the harness uses the native path but links it.)
- * Run:  zstd -d "….psxgpu.zst" -o /tmp/trace.psxgpu ; /tmp/raster_harness /tmp/trace.psxgpu
- *
- * Harness limitation: our FillTriangle is flat-colour (no Gouraud interpolation) — Gouraud polys replay
- * with v0's colour. VH's casting-ray effect is flat-modulated, so the effect region (G1's target) is faithful.
- */
+/* Differential rasterizer harness: #includes the production GPU source so it always runs the REAL
+ * rasterizer, replays a decompressed DuckStation .psxgpu GP0 trace into it and dumps each frame to PPM
+ * for diffing against the emulator. Build/run: docs/pc-port/subsystems/gpu.md, "Offline raster harness". */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +25,7 @@ static void set_area_br(u32 w) { int x2 = w & 0x3FF, y2 = (w >> 10) & 0x1FF;
 static void set_offset(u32 w) { int ox = w & 0x7FF, oy = (w >> 11) & 0x7FF;
     s_drawEnv.ofs[0] = (ox & 0x400) ? ox - 0x800 : ox; s_drawEnv.ofs[1] = (oy & 0x400) ? oy - 0x800 : oy; }
 
-/* P1: build a native (target 0) render context from the harness's current GP0 state, mirroring what
+/* Build a native (target 0) render context from the harness's current GP0 state, mirroring what
  * DrawOTag builds per draw. The harness only exercises the native path. */
 static RenderCtx harnessCtx(void) {
     RenderCtx rc;
@@ -90,10 +74,9 @@ static void draw_polygon(const u32 *w) {
     int mr = raw ? 128 : (frgb & 0xFF), mg = raw ? 128 : ((frgb >> 8) & 0xFF), mb = raw ? 128 : ((frgb >> 16) & 0xFF);
     int abr = textured ? ((tpage >> 5) & 3) : s_drawModeAbr;
 
-    /* VH_FXLOG=1: ground-truth dump of the effect layer from the trace — every semi-transparent
-     * polygon (the casting-ray / SFX quads), with screen bbox (incl. draw offset), blend mode,
-     * texture page/clut, modulation colour, and UV span. Lets us characterise what hardware
-     * actually draws for the effect vs what our port's GTE/primitive path emits. */
+    /* VH_FXLOG=1: ground-truth dump of the effect layer from the trace -- every semi-transparent polygon
+     * with screen bbox (incl. draw offset), blend mode, texture page/clut, modulation colour and UV span,
+     * to compare what hardware draws for an effect against what the port's GTE/primitive path emits. */
     {
         static int fxlog = -1;
         if (fxlog < 0) fxlog = getenv("VH_FXLOG") ? atoi(getenv("VH_FXLOG")) : 0;
@@ -178,7 +161,8 @@ int main(int argc, char **argv) {
     u8 *data = malloc(sz); if (fread(data, 1, sz, f) != (size_t)sz) return 1; fclose(f);
     if (memcmp(data, "PSXGPUDUMPv1\0", 14) != 0) { fprintf(stderr, "bad magic\n"); return 1; }
 
-    /* pass 1: concatenate all GPUPort0Data words into one GP0 stream; record VSync word-positions */
+    /* pass 1: concatenate all GPUPort0Data words into one GP0 stream (packets are DMA blocks, so one
+     * command -- an A0h upload with its pixels -- can span several); record VSync word-positions */
     u32 *gp0 = malloc(sz); size_t gp0n = 0; long *vsync = malloc(sz); int nvsync = 0;
     for (long pos = 14; pos + 4 <= sz; ) {
         u32 hdr; memcpy(&hdr, data + pos, 4); pos += 4;
@@ -220,10 +204,9 @@ int main(int argc, char **argv) {
     dump_ppm("/tmp/harness_vram.ppm", 0, 0, 1024, 512);
     fprintf(stderr, "[harness] done: %d polygons replayed.\n", npoly);
 
-    /* VH_OVERLAY_QUADS=<raylog.txt> VH_OVERLAY_FRAME=<f>: after the trace has populated VRAM
-     * (textures + CLUTs), redraw the PORT's logged effect quads for one frame ON TOP of a cleared
-     * effect region, so we can see the SHAPE the port's own primitives make (ribbon vs blob) using
-     * the proven-accurate rasterizer. Parses [raylog] lines: tpage/clut/abr/uv/xy (Z-order). */
+    /* VH_OVERLAY_QUADS=<raylog.txt> VH_OVERLAY_FRAME=<f>: after the trace has populated VRAM (textures +
+     * CLUTs), redraw the port's logged effect quads for one frame on a cleared region, to see the shape
+     * the port's own primitives make with this rasterizer. Parses [raylog] lines in Z-order. */
     const char *ovf = getenv("VH_OVERLAY_QUADS");
     if (ovf) {
         int tf = getenv("VH_OVERLAY_FRAME") ? atoi(getenv("VH_OVERLAY_FRAME")) : -1;

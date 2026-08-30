@@ -1,35 +1,6 @@
-/*
- * CD-XA ADPCM streaming audio backend.
- *
- * Scope (validated 2026-07-15 against real hardware via exchange/45-xa-audio-track-map.lua):
- * the game uses XA for the intro-movie audio and for streamed sound effects -- notably the big
- * elemental spell SFX (Hurricane/Salamander/Avalanche/Plasma-Wave, XA files 17/18/19/22/23/33).
- * It does NOT use XA for background music: the loading/battle BGM is SEQ (sequenced music ->
- * SPU voices; battle/evaluators.c PlayBattleBGM -> AUDIO_CMD_PLAY_SEQ), a separate subsystem. There
- * are zero looping XA tracks in the game's demo, so this layer only ever streams finite one-shots.
- *
- * The game (src/core/audio.c) requests XA via PerformAudioCommand(PLAY_XA/PREPARE_XA), which drives a
- * CdlSetmode(RT)/CdlSetfilter(file,chan)/CdlSeekL state machine. On real hardware the CD
- * controller decodes the interleaved XA-ADPCM sectors and mixes them into the SPU's CD input at
- * a serial volume. Here we mirror that: libcd.c reads raw 2352-byte sectors from the .bin at the
- * stream cursor and hands each to PC_XaSubmitSector(); this module decodes the ones matching the
- * active {file,channel,audio} filter and streams the PCM through a dedicated OpenAL source.
- * OpenAL owns the realtime mixing/thread, so the feed is a cheap per-VSync top-up (PC_XaService)
- * with no locking -- see the ctr-native comparison (they hand-mix the SPU and need a callback
- * thread; we offload to OpenAL and don't).
- *
- * CD-XA sector layout (psx-spx cdromformat.md + the standard sound-group format):
- *   subheader[+16..]: file, channel, submode (bit2=0x04 audio), coding-info.
- *   coding-info: bit0-1 mono/stereo (1=stereo), bit2 rate (0=37800,1=18900),
- *                bit4-5 bits/sample (0=4bit,1=8bit).
- *   user data (offset +24): 2304 bytes = 18 sound groups x 128 bytes.
- *   each group: 16 param bytes + 112 data bytes = 28 data-words x 4 bytes.
- *     4-bit: 8 blocks/group (block b -> param group[4+b]; nibble = byte[16+i*4+(b>>1)] hi/lo).
- *     8-bit: 4 blocks/group (block b -> param group[4+b]; sample = byte[16+i*4+b]).
- *   per-block: shift=param&0xF, filter=(param>>4); s = (raw>>shift)+(old*f0+older*f1+32>>6).
- *   Filter pair table is the same public PS1 ADPCM set libsnd.c already uses.
- *   ADPCM prev-sample state is continuous across sectors (per channel) -> kept in module state.
- */
+/* CD-XA ADPCM decoder + OpenAL streaming source. libcd.c feeds raw 2352-byte sectors; this decodes
+ * the ones matching the active {file,channel} filter (standard CD-XA sound-group layout, psx-spx
+ * cdromformat.md) and queues PCM on a dedicated source. See docs/pc-port/subsystems/cd-xa.md. */
 #include <stdio.h>
 #include <string.h>
 #if defined(__APPLE__)
@@ -133,14 +104,9 @@ static void XaEnsureAl(void) {
     s_alReady = 1;
 }
 
-/* Recycle any OpenAL buffers the source has finished playing.
- * IMPORTANT: only while the source is actually PLAYING. On a STOPPED/INITIAL source
- * AL_BUFFERS_PROCESSED is unreliable -- a source that already stopped (e.g. the previous
- * stream underran to its end) reports even freshly-queued buffers as "processed", so
- * reclaiming here would instantly drain the queue we're trying to build up and the source
- * could never be (re)started. Deferring reclaim until playback resumes is safe: those
- * buffers are still queued and get reclaimed on the next PLAYING pass. Intentional teardown
- * (PC_XaReset) does its own explicit unqueue after alSourceStop. */
+/* Recycle buffers the source has finished playing -- only while PLAYING. On a stopped source
+ * AL_BUFFERS_PROCESSED also reports freshly-queued buffers as processed, so reclaiming would
+ * drain the queue being built and the source could never restart. PC_XaReset unqueues itself. */
 static void XaRecycle(void) {
     if (!s_alReady) return;
     ALint state = 0;
@@ -160,7 +126,7 @@ static void XaRecycle(void) {
 void PC_XaReset(void) {
     if (s_alReady) {
         /* Full teardown: stop marks every queued buffer processed, so reclaim them all
-         * directly (XaRecycle now no-ops on a stopped source -- see its note). */
+         * directly (XaRecycle no-ops on a stopped source). */
         alSourceStop(s_source);
         ALint queued = 0;
         alGetSourcei(s_source, AL_BUFFERS_QUEUED, &queued);
@@ -219,18 +185,14 @@ int PC_XaQueuedBuffers(void) {
     return XA_NUM_BUFFERS - s_bufFreeCount;
 }
 
-/* Called by the pump when the track's interleaved data has genuinely ENDED (miss-limit / disc end),
- * as opposed to a momentary feed underrun. Stops PC_XaService from auto-restarting the source, so it
- * plays out whatever real buffers remain ONCE and then stays stopped -- instead of re-issuing
- * alSourcePlay on the drained source, which replays the last stale processed buffer over and over
- * (the ~6 short "afterhit" blips heard after each short spell-hit clip). This does NOT flush: the
- * clip's already-buffered tail finishes naturally; the buffers are reclaimed at the next PC_XaReset. */
+/* The track's data has genuinely ended (miss-limit / disc end), not a momentary underrun: stop
+ * PC_XaService from restarting the drained source, which would replay the last stale buffer
+ * repeatedly (the "afterhit" blips). Buffered audio still plays out; PC_XaReset reclaims later. */
 void PC_XaEndStream(void) {
     s_streaming = 0;
 }
 
-/* Debug: OpenAL source state -> 0 stopped/initial, 1 playing, 2 paused. (XA runtime instrumentation
- * for diffing our actual audio output against the real-hardware xa-track-map CSV.) */
+/* Debug: OpenAL source state -> 0 stopped/initial, 1 playing, 2 paused (VH_XA_CSV instrumentation). */
 int PC_XaSourceState(void) {
     if (!s_alReady) return 0;
     ALint st = 0;

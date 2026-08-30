@@ -23,17 +23,9 @@ typedef union WindowChoice {
 extern u16 gWindowChoiceHeight, gWindowChoicesCount, gWindowChoicesTopMargin;
 extern s16 gWindowActiveIdx;
 extern u8 gHighlightedChoice;
-/* The [16] bound is too small: these are indexed by raw windowId. DrawWindow -- the only writer
- * (ui/window.c:747/750/753/754) -- is called with ids 52..67, and the `usingMultipleTPages` path also
- * writes windowId + 1, so the real maximum index is 68. DisplayCustomWindowWithSetChoice reads
- * back with the same windowId (ui/window.c:1256/1257). Found by the AddressSanitizer sweep
- * flagged by an AddressSanitizer sweep across a chapter-1 battle.
- *
- * On real hardware the overrun is harmless, which is why it was never noticed: gWindowDisplayX is
- * 0x8012ed2c and gWindowDisplayY 0x8012ed54, so ids 52..68 write 0x8012ed94..0x8012edb4 and
- * 0x8012edbc..0x8012eddc respectively -- both entirely inside the unclaimed 88-byte gap between
- * gXaPauseInProgress (0x8012ed8c) and gPartyMemberUnitIdx (0x8012ede4). Nothing else lives there,
- * so the retail game is unaffected. */
+/* The [16] bound is too small -- indexed by raw windowId, DrawWindow calls reach 68. Harmless on
+ * hardware: the overrun lands entirely inside an unclaimed gap between two other globals.
+ * See docs/memory-safety.md, "AddressSanitizer". */
 extern s16 gWindowDisplayX[16];
 extern s16 gWindowDisplayY[16];
 extern WindowChoice gWindowChoice;

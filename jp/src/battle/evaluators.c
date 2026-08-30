@@ -1,25 +1,6 @@
-/* Battle state entry point and the per-map win/lose evaluators (segment 0x30c9c).
- *
- * State_Battle is the in-battle state driver called from core/main.c: loads the map's text,
- * units, portraits, textures and BGM, sets up field and map, restores a deferred in-battle
- * save when there is one, then spawns the battle-ender object (Objf424, states/game_setup.c)
- * and this map's evaluator before handing control to the intro (battle/field.c).
- * PlayBattleBGM / PlayCurrentBattleBGM pick the track, incl. the map 28 / map 40 overrides.
- *
- * gBattleEvaluator[mapNum] maps each battle to one Objf4xx_EvaluateMapNN_<objective>
- * object -- that object IS the map's scripted rule set, polled through gState.needEval
- * (re-evaluate the board) and gState.signal (a search/switch/event trigger raised by the
- * field). NN is the MAP number; the displayed battle number is mapNum - 9. Plain maps
- * use Objf434_EvaluateStandardBattle (all enemies dead = victory, Ash lost = defeat); the
- * named ones add arrival/escape zones, boss or unit-type kill counts, protect clauses, and
- * some drive gState.mapState for the map_effects_* set pieces. The verdict is published as
- * gState.battleEval (BATTLE_EVAL_VICTORY/_DEFEAT), which every other battle object polls.
- *
- * Objf420_BattleVictory / Objf423_BattleDefeat (one handler, two slots) play the YOU WIN /
- * YOU LOSE letter sprites with Objf446_BattleVictoryParticle, then hand off to the results
- * screen (OBJF_BATTLE_RESULTS, battle/results.c) or raise gSignal2 for the defeat path.
- * FindUnitByNameIdx / CountUnitsOfType / CountUnitsOfTeam are the shared board queries.
- */
+/* Battle state entry point and the per-map win/lose evaluators (segment 0x30c9c). State_Battle
+ * loads and sets up a battle; gBattleEvaluator[mapNum] names the Objf4xx object that IS the map's
+ * rule set (polled via gState.needEval/signal, verdict in gState.battleEval); battle no. = NN - 9. */
 #include "common.h"
 #include "units.h"
 #include "object.h"

@@ -46,11 +46,9 @@ K_FIXED, K_PTR, K_TEXT, K_FONT, K_CHARMAP, K_KROM, K_LITERAL, K_CUES, K_FONT16 =
 GTEXT_BYTES = 10928   # symbol_addrs.txt: gText size 0x2ab0 -- LoadText unpacks a whole file here
 FONT_VRAM = 0x801012e4   # sFontGlyphBitmaps[128][9] -- base letterforms for glyph synthesis
 
-# id, name, kind, count, record width (fixed only), pad byte(s)
-# Padding is per table and was READ OFF THE DISC, not assumed: character and spell names are plain
-# ASCII padded with NUL; only item names are full-width Shift-JIS, padded with 0x8140. (Each table's
-# slot 0 is an all-filler "empty" record -- 0x8140s in the SJIS-adjacent tables, NUL in names -- which
-# is why unedited records are always kept verbatim rather than re-synthesised.)
+# id, name, kind, count, record width (fixed only), pad byte(s). Padding is per table, read off the
+# disc: names are NUL-padded ASCII, item names full-width SJIS padded with 0x8140. Unedited records
+# are kept verbatim (slot 0 is an all-filler record). See the README, "On-screen budgets".
 TABLES = [
     (0, "gCharacterNames",    0x800eaf58, "fixed",  35,  7, b"\x00"),
     (1, "gItemNamesSjis",     0x800eed20, "fixed", 101, 17, b"\x81\x40"),
@@ -130,15 +128,9 @@ def fnv1a_str(text):
     return fnv1a(text)          # the one shared implementation lives in lang_io (see its docstring)
 
 
-# --- UTF-8 + glyph synthesis (decision D1/D2, exchange/80) ------------------------------------
-# Pointer strings carry REAL UTF-8; the engine (pc_lang_font.c) draws any codepoint the pack ships
-# a glyph for. Glyphs for accented Latin are SYNTHESISED from the disc's own letterforms: the US
-# font already contains lowercase a-z at indices 13-38 (uppercase at 68-93), and an accent is a few
-# pixels OR'd into the rows the base letter leaves blank.
-#
-# Marks are drawn in rows 0-1, which lowercase letterforms leave empty -- UPPERCASE occupies row 1,
-# so uppercase accents are NOT synthesisable and error out ("needs pack art") rather than merging
-# into the letter. Cedilla uses row 8, blank in every US letterform.
+# --- UTF-8 + glyph synthesis -----------------------------------------------------------------
+# Accented Latin composes from the disc's own letterforms; uppercase accents cannot synthesise
+# at 8x9. See platform/pc/tools/langpack/README.md, "How glyph synthesis works".
 MARKS = {
     0x301: [(0, 0x08), (1, 0x10)],   # acute        ´
     0x300: [(0, 0x10), (1, 0x08)],   # grave        `
@@ -161,10 +153,9 @@ def synth_one(exe, cp):
     rows = list(exe[o + (13 + ord(d[0]) - 97) * 9:][:9])
     shift = 0
     if d[0] in "ij" and any(ord(m) in ABOVE_MARKS for m in d[1:]):
-        # Typography, caught in-game (L12 read as "i with a cross on top"): an above-mark REPLACES
-        # the dot of i/j -- î is dotless-i + circumflex, never dot + circumflex. Clear everything
-        # above the letter body (the dot sits isolated at row 2, body starts row 4), then seat the
-        # mark one row lower so it does not float over the empty dot row.
+        # An above-mark REPLACES the dot of i/j (î is dotless-i + circumflex): clear everything above
+        # the letter body (the dot sits isolated at row 2, body starts row 4), then seat the mark
+        # one row lower so it does not float over the empty dot row.
         rows[0] = rows[1] = rows[2] = rows[3] = 0
         shift = 1
     for m in d[1:]:
@@ -189,9 +180,8 @@ def synth_glyphs(exe, cps, errors):
 
 
 # --- pack-supplied glyph art (NON-LATIN packs) ------------------------------------------------
-# A script the game has never drawn cannot be synthesised: there is no base letterform to build on.
-# Such a pack ships two sheets, small and large, each a 1-bit PNG of packed cells plus a manifest
-# listing one codepoint per cell in reading order. See the tools README.
+# A script with no letterform to synthesise from ships two sheets (packed-cell PNG + codepoint
+# manifest). See platform/pc/tools/langpack/README.md, "Drawing a non-Latin script".
 def load_packart(d, errors):
     """<dir> -> ({cp: 9 rows of 8 bits}, {cp: 15 rows of 16 bits}); either may be empty."""
     try:
@@ -230,19 +220,9 @@ def load_packart(d, errors):
     return small, big
 
 
-# --- 1-byte pack codes for fixed-width tables (decision D2, exchange/80) -----------------------
-# Fixed records keep byte = char = column: a non-ASCII character there gets a FREE 1-BYTE CODE
-# assigned by the builder, the retail map is rewritten so that code names a FREE GLYPH SLOT, and
-# the synthesised bitmap is written into that slot (all via the K_CHARMAP section + core/text.c's
-# hand-off hook). Provenance of the pools:
-#   codes: printable ASCII whose retail map entry is 0 (renders blank), minus '#'/'$' (parser
-#          markup) and minus any character that actually appears in retail text -- a code that
-#          retail uses would suddenly render as the pack glyph wherever retail draws it;
-#   slots: 111-127 ONLY (17 cells). ⚠ NOT slot 1: it is blank in sFontGlyphBitmaps but in the
-#          SHEET it is GLYPH_BG -- the window background tile. Assigning it stamped an accent over
-#          every window fill in the game (increment-4 captures, "huge bleeding in other menus").
-#          The free set is the INTERSECTION of blank-in-bitmaps and unnamed-in-sheet, and 1 is
-#          named. With D3 (widen sFontGlyphBitmaps to [156]) the shared range becomes 111-155 = 45.
+# --- 1-byte pack codes for fixed-width tables --------------------------------------------------
+# Fixed records keep byte = char = column: a non-ASCII character gets a free 1-byte pack code via
+# K_CHARMAP. See docs/language-packs.md, "Glyph slots and pack codes". RETAIL_MAP = code->glyph.
 RETAIL_MAP = [
     128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 97, 40, 42, 0, 99, 0, 39, 0, 0, 0, 102,
@@ -251,20 +231,15 @@ RETAIL_MAP = [
     91, 92, 93, 0, 0, 0, 0, 0, 0, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
     81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 0, 0, 0, 0, 0]
 
-# Fixed tables that carry 1-byte pack codes. Since the F_WD sheet patch (Path 1b), this includes
-# the strip-path names: the same K_CHARMAP records feed BOTH stores (bitmaps via the core/text.c
-# hand-off, sheet cells via the LoadImage-side stamp).
+# Fixed tables that carry 1-byte pack codes, strip-path names included: the same K_CHARMAP records
+# feed both stores (bitmaps via the core/text.c hand-off, sheet cells via the LoadImage-side stamp).
 CHARMAP_TABLES = {"gSpellNames", "gClassAdvancementNames", "terrainText",
                   "gCharacterNames", "gUnitTypeNames", "gItemNames"}
 
 
-# --- 16x15 wide glyphs for the SJIS path (Path 2: the krom extension) --------------------------
-# gItemNamesSjis draws through DrawSjisGlyph -> Krom2RawAdd, which on PC is OUR map + OUR table
-# (libkernel.c / pc_kanji_font.c). A pack assigns accented characters 2-byte codes at 0x8440+ (a
-# range the retail map never answers) and ships 16x15 bitmaps; the runtime consults the pack first.
-# Base letterforms come from the BIOS charset itself (parsed out of pc_kanji_font.c), composed with
-# the marks below. At 15 rows there is room to SHIFT: uppercase (ink from row 1) moves down one row
-# to free the top for the mark -- so this path supports TRUE UPPERCASE ACCENTS, unlike 8x9.
+# --- 16x15 wide glyphs for the SJIS path (the krom extension) ----------------------------------
+# gItemNamesSjis draws through Krom2RawAdd; a pack assigns accented characters 2-byte codes at
+# 0x8440+. See docs/language-packs.md, "The krom extension".
 KROM_MARKS = {                       # two 16-bit rows per mark, MSB = leftmost pixel
     0x301: [0x00C0, 0x0300],         # acute
     0x300: [0x0600, 0x00C0],         # grave
@@ -382,13 +357,11 @@ class CharmapAssign:
         self.exe = exe
         self.art = art or {}          # cp -> 9 rows, for scripts that cannot be synthesised
         self.assigned = {}   # cp -> (code, slot, rows)
-        self.mixed = []      # D4: (code, slot, rows) records restoring true mixed case
+        self.mixed = []      # (code, slot, rows) records restoring true mixed case
         if art:
-            # SCRIPT MODE. A pack that replaces EVERY string leaves no untranslated English to
-            # collide with, so the letter bytes become assignable -- which is the whole reason a
-            # non-Latin alphabet fits at all (33 letters against ~17 spare punctuation codes
-            # otherwise). Uppercase first, punctuation after, so the common case is predictable.
-            # Digits and punctuation the game still prints are never taken.
+            # SCRIPT MODE: a pack that replaces every string leaves no English to collide with, so
+            # the letter bytes become assignable (33 letters against ~17 spare punctuation codes).
+            # Uppercase first, punctuation after; digits and printed punctuation are never taken.
             self.codes = ([b for b in range(0x41, 0x5B)] +
                           [b for b in range(0x21, 0x7F)
                            if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
@@ -397,25 +370,13 @@ class CharmapAssign:
             self.codes = [b for b in range(0x21, 0x7F)
                           if RETAIL_MAP[b] == 0 and b not in (0x23, 0x24)
                           and chr(b) not in retail_chars]
-        # The bytes this pack can hand to a glyph slot -- captured before any get popped, so the
-        # collision guard (pack_code_collisions) can tell whether a DRAWN ASCII byte would be
-        # reassigned. Script mode adds A-Z here; a Latin pack never reassigns letters.
-        # Free glyph slots, 44 of them. Two exclusions inside this span, both learned the hard
-        # way and both invisible until something renders:
-        #   slot 1   = GLYPH_BG, the window background tile in the F_WD sheet (assigning it
-        #              tiled every window in the game with a letter)
-        #   slot 128 = where the retail map sends NUL and space; it has to stay blank
-        # The upper bound tracks src/core/text.c's PC-side sFontGlyphBitmaps[156] and DrawFontGlyph's
-        # matching index guard -- raise both together or glyphs simply do not draw.
+        # Free glyph slots, 44 of them: slot 1 is GLYPH_BG (the window-background tile in the F_WD
+        # sheet) and slot 128 is NUL/space, both excluded. The upper bound tracks src/core/text.c's
+        # sFontGlyphBitmaps[156] and PC_LANG_GLYPH_SLOTS -- raise together or glyphs do not draw.
         self.slots = list(range(111, 128)) + list(range(129, 156))
-        # PUNCTUATION GLYPHS. The base game draws no glyph for some printable ASCII (RETAIL_MAP==0 --
-        # ';' '(' ')' '_' '&' ...), which is exactly why those bytes are free to reassign to alphabet
-        # letters. But a pack may instead want the character ITSELF -- a Greek pack needs ';' for its
-        # question mark. So if the pack's sheet supplies a glyph for such a byte, install it at that
-        # OWN byte (identity code -> slot -> glyph) and drop the byte from the reassignable pool, so a
-        # letter never claims it. Control-code bytes (# $) are never eligible. pack_code_bytes is
-        # therefore frozen only AFTER this, so the collision guard treats a drawn punctuation byte as a
-        # literal rather than a reassigned code.
+        # A byte with RETAIL_MAP==0 is free to reassign -- unless the pack's sheet supplies a glyph
+        # for the character itself (Greek's ';'): then it is installed at its own byte and dropped
+        # from the pool, and pack_code_bytes (the reassignable set) is frozen only after this.
         for cp in sorted(self.art):
             if 0x21 <= cp <= 0x7E and cp not in (0x23, 0x24) and RETAIL_MAP[cp] == 0 and self.slots:
                 if cp in self.codes:
@@ -461,10 +422,9 @@ class CharmapAssign:
                           f"(44 available: 111-127 and 129-155)")
             return None
         if not self.codes:
-            # The usual wall, and it is the CODE pool rather than the slot pool: a pack code has
-            # to be a byte that untranslated retail text can never produce, so every byte English
-            # text uses is off-limits, leaving ~17. A pack that translates EVERYTHING frees the
-            # letter bytes too -- that is the non-Latin mode, still to be built.
+            # The usual wall is the CODE pool, not the slot pool: a pack code must be a byte that
+            # untranslated retail text can never produce, leaving ~17. A pack that translates
+            # everything frees the letter bytes too -- that is script mode.
             errors.append(f"{ctx}: out of free CODES for {ch!r} "
                           f"(~17 bytes are unused by retail English text; a full-script pack "
                           f"needs the non-Latin mode, which reclaims the letter bytes)")
@@ -493,12 +453,9 @@ def enc_codes(s, charmap, errors, ctx):
     0x81-0x9F, which the engine's two byte-pairing consumers read as SJIS leads (see
     dialogue_bytes_safe). 1-byte codes sidestep that entirely and are what the fan translation used.
     Returns None if any character has no code, so the caller can skip the entry."""
-    # A non-Latin pack reassigns the letter (and some punctuation) bytes to its own glyphs, so any
-    # LATIN character left in the text -- an untranslated word, a Latin proper noun -- would draw as
-    # a Cyrillic/Greek letter, not itself. That is the silent nonsense the framework exists to stop,
-    # and unlike a Latin pack it cannot degrade gracefully. Refuse it at build time. (Control-code
-    # operands like the W of $W are consumed by the parser, never drawn, so drawn_chars excludes
-    # them -- which is why the proven Russian pack, full of $W/$T6, still builds.)
+    # A non-Latin pack reassigns the letter bytes, so any Latin character left in the text would
+    # draw as a Cyrillic/Greek letter: refused at build time, since it cannot degrade gracefully.
+    # Control-code operands (the W of $W) are consumed by the parser, so drawn_chars excludes them.
     bad = pack_code_collisions(s, charmap)
     if bad:
         letters = [c for c in bad if c.isalpha()]
@@ -531,7 +488,7 @@ def build_fixed(exe, vram, count, width, pad, entries, name, errors, charmap=Non
                 script=False, item1b=False):
     """Whole-table blob: original record bytes, with edited records re-encoded.
 
-    item1b (gItemNamesSjis only, exchange/91): 1-byte encoding instead of retail's 2-byte SJIS -- 16
+    item1b (gItemNamesSjis only): 1-byte encoding instead of retail's 2-byte SJIS -- 16
     chars in the 17-byte record instead of 8, drawn through the small font. The table stops being a
     diff (the disc holds SJIS, so nothing is kept verbatim): all 101 names ship, untranslated ones
     converted English->plain ASCII (lossless). Padding is NUL, like the other name tables."""
@@ -730,11 +687,9 @@ def build_text(raw_file, doc, stem, budget, errors, used_cps, charmap=None):
     if len(new) > budget:
         errors.append(f"{stem}: patched file is {len(new)} B, the game reads only {budget} B")
         return None, 0
-    # SECOND budget, and it is a different one: LoadText UNPACKS the whole file into gText[10928],
-    # one shared buffer, so a file's entries must also fit there once the framing is stripped. Measure
-    # it by simulating LoadText on the PATCHED bytes -- exact, and it charges the real encoding a
-    # script pack writes (1-byte codes, not UTF-8; charging UTF-8 lengths once inflated SAKABA_T from
-    # its real ~8.6 KB to 14.7 KB and failed on text the retail game loads without trouble).
+    # Second budget: LoadText unpacks the whole file into gText[10928], so the entries must also fit
+    # there once the framing is stripped. Simulating LoadText on the patched bytes charges the real
+    # encoding a script pack writes (1-byte codes, not UTF-8 lengths, which would over-count).
     unpacked = gtext_occupancy(new)
     if unpacked > GTEXT_BYTES:
         errors.append(f"{stem}: unpacks to {unpacked} B, gText holds {GTEXT_BYTES} B")
@@ -746,7 +701,7 @@ PACK_NAME_RX = None   # compiled below; module-level so the CLI and build() shar
 
 
 def check_pack_name(lang):
-    """Packaging convention (exchange/80): <languageTag>-<freeDescription>, lowercase [a-z0-9._-]
+    """Packaging convention: <languageTag>-<freeDescription>, lowercase [a-z0-9._-]
     only -- URL-safe (packs travel as zip links; '#' truncates in browsers), shell-safe, and immune
     to the Windows/Linux case-sensitivity mismatch (two packs on Linux, a collision on Windows)."""
     import re as _re3
@@ -758,15 +713,9 @@ def check_pack_name(lang):
                          f"lowercase [a-z0-9._-] only (e.g. en-fix, fr-fantrad, pt-br-fantrad)")
 
 
-# F3 movie subtitles: mirror the engine's hard limits. Every constant here has a runtime twin
-# that silently degrades (not errors) when exceeded, so the builder is the enforcement point:
-#   CUE_MAX_LINES/CUE_MAX_TEXT   platform/pc/src/pc_movie_subs.h  PC_SUBS_MAX_LINES/_TEXT
-#   CUE_MAX_MOVIES/CUE_MAX_PER   pc_movie_subs.c PACK_MAX_MOVIES / the 512-cue loader cap
-#                                (an oversize set is dropped as "malformed" at pack load)
-#   CUE_MAX_CPS                  pc_gpu_window.c SUBS_MAX_CPS (decoded codepoints per cue,
-#                                all lines together; past it, text is silently not drawn)
-#   CUE_MAX_ACTIVE               pc_gpu_window.c asks PC_MovieSubsActive for at most 2 cues
-#                                per frame (band + card); a third overlap is silently dropped
+# Movie subtitles: each constant mirrors a runtime limit that silently degrades when exceeded, so
+# the builder is the enforcement point (pc_movie_subs.h PC_SUBS_MAX_*, pc_movie_subs.c
+# PACK_MAX_MOVIES, pc_gpu_window.c SUBS_MAX_CPS). See docs/language-packs.md, "Developer reference".
 CUE_MAX_LINES, CUE_MAX_TEXT = 4, 160
 CUE_MAX_MOVIES, CUE_MAX_PER = 32, 512
 CUE_MAX_CPS, CUE_MAX_ACTIVE = 192, 2
@@ -1017,15 +966,14 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
               "own case in the drawn sheets.", file=sys.stderr)
         mixed_case = False
 
-    # Item-name width (exchange/91): the working set declares bytes_per_char on gItemNamesSjis; 1 means
-    # the translator chose 16 small letters over 8 large ones. It flips the encoding to 1-byte and the
-    # runtime to the small-font list path, so it bumps the pack format (older builds refuse it).
+    # Item-name width: bytes_per_char 1 on gItemNamesSjis means 16 small letters over 8 large ones.
+    # It flips the encoding to 1-byte and the runtime to the small-font list path, so it bumps the
+    # pack format (older builds refuse it).
     item1b = (tables.get("gItemNamesSjis", {}).get("limit", {}).get("bytes_per_char") == 1)
 
     # In script mode an untranslated string renders as nonsense (the charmap reassigns the letter
-    # codes), so completeness is a correctness requirement -- refuse an incomplete non-Latin pack
-    # unless the author is deliberately building a partial one for testing. A Latin pack degrades
-    # gracefully, so there it is only worth a note.
+    # codes), so completeness is a correctness requirement: refuse an incomplete non-Latin pack
+    # unless --allow-incomplete. A Latin pack degrades gracefully, so there it is only a note.
     untr = count_untranslated(work)
     if untr:
         if not script:
@@ -1050,9 +998,8 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
                                   script=script, item1b=i1b)
             if n or i1b:
                 # item1b re-encodes the WHOLE table (see build_fixed): the section must ship even
-                # with zero translated names yet, or the manifest declares format 2 while the
-                # runtime still holds the retail 2-byte SJIS table -- and the 1-byte draw path
-                # would render every item screen as mojibake.
+                # with zero translated names, or the manifest declares format 2 while the runtime
+                # still holds retail 2-byte SJIS and the 1-byte draw path renders mojibake.
                 sections.append((K_FIXED, tid, blob))
         else:
             blob, n = build_ptr(exe, vram, count, entries, name, errors, used_cps,
@@ -1086,8 +1033,7 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
 
     # Code literals (K_LITERAL): entries keyed by content hash ("literal:<fnv1a>"), replacement
     # encoded per the ORIGINAL literal's encoding -- SJIS literals (the TURN banners, the dojo
-    # YES/NO) get full-width SJIS + krom codes for accents; everything else is UTF-8 feeding the
-    # same font section as the rest of the pack.
+    # YES/NO) get full-width SJIS + krom codes for accents; everything else is UTF-8.
     nlits = 0
     recs = []
     lit_path = os.path.join(work, "strings", "literals.json")
@@ -1122,10 +1068,9 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
             if len(raw) > 0xFFFF:
                 errors.append(f"{e['key']}: replacement too long"); continue
             recs.append((h, raw))
-    # The TACTICAL LAYER rides the same K_LITERAL mechanism: pc_balance.c resolves its flavor
-    # strings through PC_LangStr at patch-build time, so a record whose hash matches the ENGLISH
-    # tactical string swaps in the translation. Encoding follows the TARGET: gSpellNames entries
-    # are fixed-width 1-byte-code strings (charmap; <= 20 chars), descriptions are UTF-8.
+    # The Tactical layer rides the same K_LITERAL mechanism: pc_balance.c resolves its flavor strings
+    # through PC_LangStr, so a record hashing the ENGLISH tactical string swaps in the translation.
+    # Encoding follows the target: gSpellNames are 1-byte-code (<= 20 chars), descriptions UTF-8.
     tac_path = os.path.join(work, "strings", "tactical.json")
     if os.path.exists(tac_path):
         seen = set()
@@ -1171,10 +1116,9 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
         sections.append((K_LITERAL, 0, blob))
         nlits = len(recs)
 
-    # F3 movie subtitles: cue ingestion runs BEFORE the font section so cue glyphs join K_FONT
-    # (by codepoint -- zero charmap code/slot cost). Deliberately NOT counted by
-    # count_untranslated: a cue set is a per-line diff, and leaving cues untranslated (END2's
-    # credits, by policy) is a valid final state, not incompleteness.
+    # Movie subtitles: cue ingestion runs BEFORE the font section so cue glyphs join K_FONT (by
+    # codepoint -- zero charmap code/slot cost). Not counted by count_untranslated: a cue set is a
+    # per-line diff, and untranslated cues (END2's credits, by policy) are a valid final state.
     cue_font = {}
     cue_font16 = {}
     cue_blob, cue_movies, cue_count = build_cues(work, exe, errors, art_small, charmap, cue_font,
@@ -1203,11 +1147,9 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
     for cp, rows in cue_font.items():
         if cp >= 0x80:
             font_glyphs.setdefault(cp, rows)
-    # F3 movie subtitles: the runtime resolves UTF-8 cue text by CODEPOINT (PC_LangSubtitleGlyph).
-    # Script packs carry their letters only as charmap byte codes -- the Unicode identity never
-    # reaches the runtime -- so also emit every charmap-assigned letter's bitmap under its
-    # codepoint (~13 B each). ASCII cps are excluded: the game's own store serves those, and a
-    # K_FONT record would shadow it.
+    # The subtitle renderer resolves cue text by CODEPOINT, and script packs carry their letters only
+    # as charmap byte codes -- so also emit every charmap-assigned letter under its codepoint
+    # (~13 B each). ASCII is excluded: the game's own store serves it and K_FONT would shadow it.
     for cp, (_code, _slot, rows) in charmap.assigned.items():
         if cp >= 0x80:
             font_glyphs.setdefault(cp, rows)
@@ -1237,12 +1179,9 @@ def build(disc, work, outdir, lang, meta=None, packart=None, allow_incomplete=Fa
         fo.write(MAGIC + struct.pack("<I", len(sections)))
         for kind, sid, payload in sections:
             fo.write(struct.pack("<III", kind, sid, len(payload)) + payload)
-    # F2 (exchange/92): localized backgrounds -- copy work/backgrounds/<hash>.webp into the pack,
-    # SAME <hash>.webp convention as the HD pack (the hash keys the 320x240 native upload; the file is
-    # the 1280x960 translated image). The runtime resolves this source BEFORE the HD pack. They render
-    # only at internal scale >= 2 (the hi-res pass), like all background replacement -- lang_validate
-    # checks resolution/hash and warns about that. Bad names are skipped with a note (a stray hash is a
-    # harmless runtime no-op); the real gate is the validator.
+    # Localized backgrounds: copy work/backgrounds/<hash>.webp into the pack, the HD pack's convention
+    # (the hash keys the 320x240 native upload; the file is the 1280x960 translated image). Bad names
+    # are skipped with a note (a stray hash is a harmless runtime no-op); the real gate is the validator.
     bg_hashes = []
     bg_src = os.path.join(work, "backgrounds")
     if os.path.isdir(bg_src):

@@ -1,10 +1,6 @@
-/*
- * PC-backend replacement for the PSX SDK's libspu.h low-level SPU register
- * interface. Clean-room reimplementation (see libsnd.h for the general
- * rationale). On this backend most of these are deliberate no-ops: SPU RAM
- * management doesn't apply when OpenAL owns its own buffers -- see
- * libspu.c for what each one actually does here and why.
- */
+/* PC-backend replacement for the PSX SDK's libspu.h low-level SPU interface (clean-room: names and
+ * constants only). Most entry points are deliberate no-ops here, since SPU RAM management does not
+ * apply when OpenAL owns its buffers -- see libspu.c for what each one does. */
 #ifndef PLATFORM_PC_PSYQ_LIBSPU_H
 #define PLATFORM_PC_PSYQ_LIBSPU_H
 
@@ -13,9 +9,8 @@
 #define SPU_OFF 0
 #define SPU_ON  1
 #define SPU_REV_MODE_STUDIO_C 4
-/* Individual per-channel bits aren't used directly by this project's call
- * sites (only the all-channels mask is) -- see exchange/02 for the full
- * per-channel bit list if a future file needs it. */
+/* Only the all-channels mask is used by this project's call sites; the per-channel
+ * bits are bit N = voice N (psx-spx). */
 #define SPU_ALLCH 0x00ffffff
 
 typedef void (*SpuIRQCallbackProc)(void);

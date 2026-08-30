@@ -1,21 +1,6 @@
-/* The shared button-press cutaway, Map 26/29's drawbridge levers, and Map 14's sand pit --
- * plus the camera save/restore/ease helpers the whole corpus uses.
- *
- * Buttons: DepressButton() sinks a lever tile instantly; Objf346_ButtonDepress
- * (OBJF_BUTTON_DEPRESS) is the animated cutaway -- rotate and pan the camera onto the tile,
- * sink it over four frames, then park in state 99 so the parent can notice before it frees
- * itself. Maps 17, 26, 27, 28, 29, 35 and 38 all spawn it. Objf347_Map26 and Objf352_Map29
- * are those maps' lever drivers (mapState 1 -> cutaway -> mapState 2 for
- * Objf362_DrawbridgeButton -> ease the camera back at 3); Map 11's is Objf399_Map11.
- *
- * Map 14 sand: Objf670_Map14_Sand raises and lowers a diamond dune via
- * Objf668/666_Map14_Raise/LowerSandMound, which walk outward ring by ring spawning one
- * Objf669/667_Map14_*SandTile per tile. Objf752_Map14_Scn15_SandMoundSpawner is the event
- * script's scene-15 entry to the same mound. Objf708_709_Map14_Unused is a leftover pair of
- * mapState pokes with no spawn site.
- *
- * Shared camera: AssignFrom/ToMainCamera, EaseOutShort/EaseOutInt and EaseOutCamera -- the
- * save/restore/ease-back idiom every scripted map effect wraps its cutaway in. */
+/* The shared button-press cutaway (Objf346, OBJF_BUTTON_DEPRESS), Map 26/29's drawbridge
+ * levers (Objf347/352), Map 14's sand pit (Objf670 and its ring-walking mound helpers), and the
+ * camera save/restore/ease helpers every scripted map effect wraps its cutaway in. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

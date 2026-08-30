@@ -1,13 +1,6 @@
-/*
- * PC backend for PsyQ/libetc.h's pad/vsync interface, backed by SDL2.
- *
- * VSync() reproduces the original's frame-locked timing (NTSC ~60Hz) via a
- * simple frame limiter, matching the original game's behavior rather than
- * decoupling simulation from render rate -- that's a real future feature,
- * not attempted here. PadRead() currently maps SDL2 keyboard state onto the
- * standard PS1 digital-pad bit layout; a real SDL_GameController mapping is
- * a natural follow-up, not required to prove the interface out.
- */
+/* PC backend for PsyQ/libetc.h's pad/vsync interface, backed by SDL2. VSync() reproduces the
+ * original's frame-locked NTSC timing via a fractional-deadline limiter; PadRead() combines SDL2
+ * keyboard state and any connected SDL_GameController onto the standard PS1 digital-pad word. */
 #include <SDL2/SDL.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -19,10 +12,8 @@
 #include "pc_balance.h"
 #include "pc_overlay.h"
 
-/* PSX NTSC vblank rate. The old `FRAME_MS = 1000/60` truncated to 16 (integer), pacing the game at
- * 62.5Hz => it ran ~4% too fast, the uniform "everything a touch shorter than BizHawk" drift
- * (feedback-26). Use the real NTSC vblank period as a DOUBLE, with a fractional-deadline accumulator
- * in VSync() so integer SDL_Delay still averages to the correct rate (some frames 16ms, some 17). */
+/* PSX NTSC vblank rate, paced by a fractional-deadline accumulator (not the naive integer
+ * 1000/60 ms, which runs ~4% fast). See docs/pc-port/subsystems/kernel.md, "VSync". */
 #define VBLANK_HZ 59.94
 #define FRAME_MS_F (1000.0 / VBLANK_HZ)   /* ~16.683 ms */
 
@@ -36,16 +27,15 @@ void PadInit(int mode) {
      * do here beyond letting the caller know pad reads are ready. */
 }
 
-/* Optional SDL_GameController support, alongside the keyboard map. Any plugged-in
- * controller (Xbox/PlayStation/etc., via SDL's built-in mapping DB) is read each
- * frame and OR'd into the same PSX pad word. Lazily initialized so a headless run
- * or a session with no pad costs nothing. */
+/* Optional SDL_GameController support, alongside the keyboard map. Any plugged-in controller
+ * (Xbox/PlayStation/etc., via SDL's built-in mapping DB) is read each frame and OR'd into the
+ * same PSX pad word. Lazily initialized so a headless run or a session with no pad costs nothing. */
 static SDL_GameController *s_pad = NULL;
 static int s_gcSubsysReady = -1; /* -1 untried, 0 failed, 1 ready */
 
-/* Stage-3 (1.4 F2): overlay button-label style (0=PLAYSTATION, 1=XBOX). Xbox-layout pads are the large
- * majority on PC, so it defaults to XBOX when unset -- a PlayStation player flips it once in the overlay
- * and it persists. Only the port's own overlay footers use this; the game's own prompts are untouched. */
+/* Overlay button-label style (0=PLAYSTATION, 1=XBOX). Xbox-layout pads are the large majority on
+ * PC, so it defaults to XBOX when unset -- a PlayStation player flips it once in the overlay and
+ * it persists. Only the port's own overlay footers use this; the game's own prompts are untouched. */
 enum { BTN_PLAYSTATION = 0, BTN_XBOX = 1 };
 int g_btnLabels = BTN_XBOX;
 
@@ -73,9 +63,9 @@ static void pc_pad_ensure_open(void) {
     }
 }
 
-/* Stage 3 (1.1C): right-stick camera axis invert. Runtime-mutable (the in-game options overlay
- * toggles these and persists them to vandalhearts.ini's [camera] section); initialised once from
- * VH_CAM_INVERT_X/Y (which the ini loader sets). Not static -- the overlay reads/writes them. */
+/* Right-stick camera axis invert. Runtime-mutable (the in-game options overlay toggles these and
+ * persists them to vandalhearts.ini's [camera] section); initialised once from VH_CAM_INVERT_X/Y
+ * (which the ini loader sets). Not static -- the overlay reads/writes them. */
 int g_camInvertX = 0;
 int g_camInvertY = 1;   /* default INVERTED (modern twin-stick); PC_LoadCamInvert honours env/ini */
 
@@ -88,7 +78,7 @@ static void PC_LoadCamInvert(void) {
      * tilt the view down). An explicit VH_CAM_INVERT_Y=0 (env or the shipped ini) restores normal. */
     e = getenv("VH_CAM_INVERT_X"); g_camInvertX = (e && e[0] == '1') ? 1 : 0;
     e = getenv("VH_CAM_INVERT_Y"); g_camInvertY = e ? (e[0] == '1' ? 1 : 0) : 1;
-    /* 1.4 F2: overlay button-label style (0=PLAYSTATION, 1=XBOX); default XBOX when the ini is silent. */
+    /* Overlay button-label style (0=PLAYSTATION, 1=XBOX); default XBOX when the ini is silent. */
     e = getenv("VH_BUTTON_LABELS");
     if (e) { int v = e[0] - '0'; g_btnLabels = (v == BTN_PLAYSTATION || v == BTN_XBOX) ? v : BTN_XBOX; }
 }
@@ -115,11 +105,9 @@ static unsigned int pc_pad_read(void) {
     if (GC_BTN(SDL_CONTROLLER_BUTTON_B))             p |= PADRright;  /* Circle   */
     if (GC_BTN(SDL_CONTROLLER_BUTTON_X))             p |= PADRleft;   /* Square   */
     if (GC_BTN(SDL_CONTROLLER_BUTTON_Y))             p |= PADRup;     /* Triangle */
-    /* Stage 3 (1.1): the physical shoulders drive the ALLY-CYCLE, not the camera.
-     * They go into the HIGH pad word ("pad 2", PADL1/PADR1 << 16), which the game reads
-     * separately (gPad2State) from the camera rotation. The camera stays on the right
-     * stick, which feeds the LOW-word L1/R1 below (gPadState). This is the decouple that
-     * lets L1/R1 mean "cycle" while the stick still rotates the view. See exchange/62. */
+    /* The physical shoulders drive the ally-cycle, not the camera: they go into the HIGH pad word
+     * ("pad 2", PADL1/PADR1 << 16, gPad2State) while the right stick feeds the LOW-word L1/R1
+     * below (gPadState). See docs/pc-port/subsystems/kernel.md, "Pad input". */
     if (GC_BTN(SDL_CONTROLLER_BUTTON_LEFTSHOULDER))  p |= (unsigned)PADL1 << 16;
     if (GC_BTN(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) p |= (unsigned)PADR1 << 16;
     if (GC_BTN(SDL_CONTROLLER_BUTTON_START))         p |= PADstart;
@@ -138,14 +126,13 @@ static unsigned int pc_pad_read(void) {
         if (lx < -AXIS_DZ) p |= PADLleft;  else if (lx > AXIS_DZ) p |= PADLright;
         if (ly < -AXIS_DZ) p |= PADLup;    else if (ly > AXIS_DZ) p |= PADLdown;
     }
-    /* QoL: right analog stick -> camera shoulder buttons, twin-stick feel.
-     * Horizontal = L1/R1 (camera rotate), vertical = L2/R2 (camera elevation).
-     * ORs with the physical shoulders/triggers above (both inputs work).
-     * SDL Y axis is +down, matching the left-stick convention. */
+    /* Right analog stick -> camera shoulder buttons, twin-stick feel. Horizontal = L1/R1 (camera
+     * rotate), vertical = L2/R2 (camera elevation); ORs with the physical shoulders/triggers above
+     * (both inputs work). SDL Y axis is +down, matching the left-stick convention. */
     {
         int rx = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTX);
         int ry = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTY);
-        /* Stage 3 (1.1C): per-axis right-stick invert (loaded once at the top of pc_pad_read). */
+        /* Per-axis right-stick invert (loaded once at the top of pc_pad_read). */
         if (g_camInvertX) rx = -rx;
         if (g_camInvertY) ry = -ry;
         if (rx < -AXIS_DZ) p |= PADL1;  else if (rx > AXIS_DZ) p |= PADR1;  /* left->L1, right->R1 */
@@ -154,24 +141,9 @@ static unsigned int pc_pad_read(void) {
     return p;
 }
 
-/* Stage-3 (1.1C) options-overlay pad filter. Sits between the raw pad word and what the game reads,
- * so it works in every context (battle, world map, movies) with zero src/ changes.
- *
- * Contract -- MUST be idempotent across repeated same-frame calls: the game reads PadRead(0) twice
- * per battle frame (gPadState battle_field:125, gPad2State :149) and busy-waits on it in core/engine.c.
- * So no stateful multi-frame buffering of edges; only a chord *latch* (fires once per press, stable
- * when re-read), stateless SELECT masking, and the release-tracked swallow mask below.
- *
- * Chord = SELECT+START is the SOLE show/hide trigger. While SELECT is held we strip START+SELECT
- * (low word) from what the game sees, so the movie/battle START-skip (gPadStateNewPresses &
- * PAD_START) never mistakes the chord for a skip; START alone is untouched, so normal skipping still
- * works. (SELECT on the low word has no non-debug game use.) While open, the overlay owns all input
- * and the game receives a zero pad -- it keeps rendering but idles (no pause).
- *
- * Leak fix (user 2026-07-25): because the game sees a zero pad while the overlay is open, any button
- * still held at the instant it closes would read to the game as a fresh 0->held press (e.g. Circle
- * would pop the battle menu). So on close we latch every currently-held button into `swallow` and
- * keep masking each from the game until it is physically released. Covers all buttons/close paths. */
+/* Options-overlay pad filter: sits between the raw pad word and what the game reads, idempotent
+ * across repeated same-frame calls (PadRead(0) is read twice per battle frame). See
+ * docs/pc-port/subsystems/kernel.md, "Pad input". */
 static unsigned int PC_OverlayFilterPad(unsigned int raw) {
     static unsigned int prev = 0;
     static int chordLatch = 0;
@@ -237,15 +209,14 @@ unsigned int PadRead(int id) {
      * ,/. fast-forward keys, which drive the *high-word* (pad-2) L2/R2. */
     if (keys[SDL_SCANCODE_R])      p1 |= PADR2;
     if (keys[SDL_SCANCODE_F])      p1 |= PADL2;
-    /* Stage 3 (1.1): keyboard ally-cycle on [ / ] -> high word (pad 2), mirroring the
-     * gamepad shoulders. Keeps keyboard functional after Square is freed for the overlay.
-     * Full keyboard layout is documented/refined in docs/controls.md. */
+    /* Keyboard ally-cycle on [ / ] -> high word (pad 2), mirroring the gamepad shoulders. Full
+     * keyboard layout is in docs/controls.md. */
     if (keys[SDL_SCANCODE_LEFTBRACKET])  p1 |= (unsigned)PADL1 << 16;   /* cycle previous */
     if (keys[SDL_SCANCODE_RIGHTBRACKET]) p1 |= (unsigned)PADR1 << 16;   /* cycle next */
     if (keys[SDL_SCANCODE_RETURN]) p1 |= PADstart;
     if (keys[SDL_SCANCODE_SPACE])  p1 |= PADselect;
-    /* Stage 3 (1.4 F1): battle fast-forward on ',' / '.' -> pad-2 (high word) L2/R2, mirroring the
-     * gamepad triggers below. ',' = slower, '.' = faster. */
+    /* Battle fast-forward on ',' / '.' -> pad-2 (high word) L2/R2, mirroring the gamepad triggers
+     * below. ',' = slower, '.' = faster. */
     if (keys[SDL_SCANCODE_COMMA])  p1 |= (unsigned)PADL2 << 16;
     if (keys[SDL_SCANCODE_PERIOD]) p1 |= (unsigned)PADR2 << 16;
 
@@ -254,24 +225,18 @@ unsigned int PadRead(int id) {
 
     p1 |= PC_SmokePadHold();   /* VH_SMOKE boot harness: hold START through the intro movies (pc_diag.c) */
 
-    /* PadRead(0) packs both controller ports into one 32-bit value (port 0
-     * in the low 16 bits, port 1 in the high 16); the original code reads
-     * player 2 via `PadRead(0/1) >> 0x10`. No second controller mapped
-     * yet, so the high half stays zero. */
-    PC_BattleSpeedInput(p1);          /* Stage-3 (1.4 F1): battle fast-forward, pad-2 L2/R2 */
-    return PC_OverlayFilterPad(p1);   /* Stage-3 (1.1C): chord/overlay input filter */
+    /* PadRead(0) packs both controller ports into one 32-bit value (port 0 in the low 16 bits, port
+     * 1 in the high 16); no second controller is mapped, so the high half stays zero. */
+    PC_BattleSpeedInput(p1);          /* battle fast-forward, pad-2 L2/R2 */
+    return PC_OverlayFilterPad(p1);   /* chord/overlay input filter */
 }
 
 int VSync(int mode) {
     if (!s_vsyncInitialized) {
         s_nextVBlankMs = (double)SDL_GetTicks();
         s_vsyncInitialized = 1;
-        /* Stage-3 1.3: apply the Tactical-mode config default now -- first VSync is the earliest
-         * post-constructor point, so pc_balance.c snapshots retail-pristine tables. (The title-menu
-         * toggle + new-game/load hooks will become the interactive triggers in later increments.) */
-        /* ORDER MATTERS (v1.7): the language pack applies FIRST, so pc_balance's lazy pristine
-         * snapshots capture the PACK-APPLIED tables -- toggling Tactical OFF then restores the
-         * player's language, not retail English, on any entry both layers touch. */
+        /* Boot order matters: PC_LangBoot() must run before PC_BalanceBoot(). See
+         * docs/pc-port/subsystems/kernel.md, "VSync". */
         PC_LangBoot();   /* language pack: load + apply once (inert without a pack) */
         PC_BalanceBoot();
     }
@@ -284,27 +249,18 @@ int VSync(int mode) {
     PC_DiagFrameEntry(mode);   /* VH_FRAME_TIME work/idle split (pc_diag.c) */
 
     /* Answer the compositor's responsiveness ping (and keep close/Ctrl+C live) even inside the
-     * game's VSync wait loops -- the hardware-exact boot load spins here for ~5-8s with nothing
-     * presented, which intermittently tripped GNOME's "not responding" dialog (pc_gpu_window.c
-     * has the full story). Every wait loop in the game funnels through VSync, so this one call
-     * covers them all. */
+     * game's own VSync wait loops. See docs/pc-port/subsystems/kernel.md, "VSync". */
     { extern void PC_GpuPumpEvents(void); PC_GpuPumpEvents(); }
 
     int waits = (mode == 0) ? 1 : mode;
-    /* Stage-3 (1.4 F1): fast-forward resets to 1x on leaving battle, so it never carries into the next
-     * battle or an overworld save -- each battle starts at normal speed. */
+    /* Fast-forward resets to 1x on leaving battle, so it never carries into the next battle or an
+     * overworld save -- each battle starts at normal speed. */
     PC_BattleSpeedReset();
     /* Divide the per-tick idle wait by the speed factor so N whole ticks fit the wall-clock of one --
      * outside battle PC_BattleSpeedGet() returns 1 (no-op). */
     double frameMs = FRAME_MS_F / (double)PC_BattleSpeedGet();
-    /* ONE consolidated deadline per call (1.6.1 pacing fix). The old per-vblank loop resynced the
-     * deadline on each missed sub-wait and then slept the NEXT sub-wait in full -- so a battle at
-     * fast-forward (VSync(2), speed 2 => two 8.3ms sub-waits) whose work exceeded one sub-wait paid
-     * `work + 8.3ms` per frame instead of max(work, 16.7ms): a constant ~8ms of idle burned every
-     * frame, capping ~53fps with a measured 90+fps work ceiling. One deadline over the whole call
-     * absorbs sub-frame overshoot in the remaining budget; a miss keeps the deadline (the next
-     * frame's budget bounds the catch-up to one frame -- no racing), and only a FULL frame of
-     * lateness resyncs (a real hitch/stall, the case the old resync existed for). */
+    /* One consolidated deadline per call, absorbing sub-frame overshoot in the remaining budget; only
+     * a full frame of lateness resyncs. See docs/pc-port/subsystems/kernel.md, "VSync". */
     {
         double totalMs = frameMs * waits;
         Uint32 now = SDL_GetTicks();

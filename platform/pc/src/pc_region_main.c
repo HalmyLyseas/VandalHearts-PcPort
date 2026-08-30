@@ -1,23 +1,6 @@
-/* pc_region_main.c -- the unified binary's real main() (P5, exchange/104).
- *
- * Only `make unified` compiles this file. The unified executable carries BOTH region cores as
- * prefix-renamed blobs (us_* / jp_*): each blob is that region's complete, individually-validated
- * object set (game code + generated/reconstructed data + region-compiled backends), partial-linked
- * and renamed, so only one of them ever executes per process. This file is the thin shared layer:
- *
- *   1. GPU-trace replay hook (regression harness) -- must run before anything else, no disc.
- *   2. Config (vandalhearts.ini -> env) and the PSX RAM/scratchpad arena reservations, called
- *      ONCE via the US blob's copies (region-neutral code; the blobs' own constructors for these
- *      are compiled out under VH_UNIFIED -- see pc_bootstrap.c). Data-init constructors (the
- *      generated_data memcpys, pointer-table fixups) still run normally in BOTH blobs at load;
- *      they touch only their own renamed globals.
- *   3. Disc discovery + region classification (self-contained here: both regions' boot layouts).
- *   4. Dispatch: <region>_PC_BootstrapRegion(path) then <region>_main().
- *
- * Region selection: VH_REGION=auto|us|jp (env or vandalhearts.ini, like every other key).
- * auto = whichever region's disc is found; both present -> US (the established default) with a
- * printed override hint. VH_DISC_IMAGE still overrides the PATH (and is classified, not trusted).
- */
+/* pc_region_main.c -- the unified binary's real main(): finds discs, classifies the region, and
+ * dispatches to one of the two prefix-renamed region cores (us_* / jp_*); only `make unified`
+ * compiles it. See docs/pc-port/bootstrap.md, "The unified binary". */
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -132,10 +115,9 @@ int main(void) {
     { const char *rp = getenv("VH_GPU_REPLAY");
       if (rp && *rp) exit(us_PC_GpuReplayTrace(rp)); }
 
-    /* 2. Once-per-process, region-neutral init (the blobs' constructors for these are
-     *    compiled out under VH_UNIFIED). Config first so VH_REGION/VH_DISC_IMAGE from the
-     *    ini are visible to the scan below -- same relative order as the constructor
-     *    priorities it replaces. */
+    /* 2. Once-per-process, region-neutral init (the blobs' constructors for these are compiled out
+     *    under VH_UNIFIED). Config first so VH_REGION/VH_DISC_IMAGE from the ini are visible to the
+     *    scan below -- the same relative order as the single-region constructor priorities. */
     us_PC_LoadIniConfig();
     us_PC_ReservePsxRam();
 

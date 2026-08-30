@@ -66,10 +66,9 @@ static const u8 D_800151C8[888] = {
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-/* TODO: unmatched .sdata — a run of small (<=8 byte) NUL-padded strings
- * (job/character names). Bytes verified exact against the original ROM;
- * split into 8-byte chunks so each stays under -G8 and lands in .sdata
- * like the original; not yet decompiled into real named C structures. */
+/* TODO: unmatched .sdata -- a run of small (<=8 byte) NUL-padded strings (job/character names),
+ * bytes verified exact against the original ROM. Split into 8-byte chunks so each stays under -G8
+ * and lands in .sdata like the original; not yet decompiled into named C structures. */
 static u8 D_80122FB0[8] = { 0x4f, 0x6c, 0x64, 0x20, 0x6d, 0x61, 0x6e, 0x00 };
 static u8 D_80122FB8[8] = { 0x57, 0x6f, 0x6d, 0x61, 0x6e, 0x00, 0x00, 0x00 };
 static u8 D_80122FC0[8] = { 0x4d, 0x61, 0x6e, 0x00, 0x54, 0x61, 0x6c, 0x6b };
@@ -120,19 +119,9 @@ void MsgBox_SetText(s32, s32, s32);
 void MsgBox_SetText2(s32, s32, s32);
 void Objf798_ResetInputState(Object *);
 
-/* PERMUTER: 101 entries, not 100. src/world/dojo.c:511 deliberately sets `OBJ.partyIdx = 100` as a
- * "no selection yet" sentinel, and world/dojo.c:1007 then does
- * `gStringTable[32] = gStringTable[OBJ.partyIdx];` -- reading index 100 of a 100-entry table for
- * the one frame before a real party index is assigned. Found by the ASAN sweep during chapter 1.
- *
- * On hardware that reads `whiteShades` (0x801011bc, immediately after gStringTable's 400 bytes)
- * reinterpreted as a string pointer -- garbage, but the game evidently never displays string 32
- * on that frame. The PC port's generated string-table constructor normalizes this sentinel and all
- * retail NULL entries to a stable empty string, without relying on a platform fault handler.
- *
- * The extra entry is implicitly NULL, so behaviour is unchanged -- this only makes the existing
- * outcome deterministic instead of dependent on linker padding. The initializer list keeps
- * supplying exactly the 100 real entries, so nothing about the matching build shifts. */
+/* PERMUTER: 101 entries, not 100 -- world/dojo.c sets `OBJ.partyIdx = 100` as a "no selection
+ * yet" sentinel and reads `gStringTable[OBJ.partyIdx]` for one frame (hardware reads the shade
+ * tables after it). The extra entry is NULL; see docs/memory-safety.md, "How the port handles them". */
 #ifdef PC_PORT
 /* The native port reconstructs these PSX-address pointers from the user's executable in
  * gen_string_table.py, then installs host pointers from a constructor. */
@@ -172,10 +161,8 @@ s32 DecodeLineOfText(u8 *src, u8 *dst) {
 
    while (1) {
 #ifdef PC_PORT
-      /* Corrupt-input bound (2026-08-21, JP debug-menu event-map warp, gdb first-chance trace):
-       * with UNLOADED scratch data there is no CR/LF terminator, and the decode marched ~4.7KB
-       * past the caller's 1KB stack buffer into the guard page -- smearing the whole stack on
-       * the way (the "no dump, no core" crash). Real lines are <100 bytes; 1000 stays inside
+      /* Corrupt-input bound: unloaded scratch data has no CR/LF terminator, and an unbounded decode
+       * marches past the caller's 1KB stack buffer. Real lines are <100 bytes; 1000 stays inside
        * LoadText's buffer[1024] incl. the "\n\0" tail. LoadText treats a capped line as END. */
       if (n >= 1000) {
          break;
@@ -220,10 +207,9 @@ void LoadText(s32 cdf, u8 *pText, u8 **textPointers) {
 
 #ifdef PC_PORT
       if (n >= 1000) {
-         /* Capped decode = corrupt/unloaded text data (see DecodeLineOfText). Don't just stop:
-          * leaving textPointers[] unfilled hands consumers garbage pointers that can sit at a
-          * page edge and fault inside the renderers (2026-08-22, debug-menu warp, 2nd gdb
-          * trace). Point every entry at a safe empty string instead, so draws render nothing. */
+         /* Capped decode = corrupt/unloaded text data (see DecodeLineOfText). Leaving textPointers[]
+          * unfilled would hand consumers garbage pointers that can fault inside the renderers, so
+          * point every entry at a safe empty string and draws render nothing. */
          pText[0] = '\0';
          for (n = 1; n <= 100; n++) {
             textPointers[n] = pText;
@@ -406,12 +392,9 @@ s32 MsgBox_DrawFontGlyph(Object *msg, s16 idx) {
 }
 
 #ifdef PC_FEAT
-/* Language packs (platform/pc/src/pc_lang_font.c): UTF-8 sibling of MsgBox_DrawFontGlyph, with
- * IDENTICAL position math -- the glyph just comes from the pack's codepoint table instead of
- * sFontGlyphBitmaps. Consumes the WHOLE multi-byte sequence and returns its byte length, or 0 when
- * *p is not a pack-drawable sequence start (plain ASCII / no pack -- the retail path then runs
- * untouched). Past maxCharsPerLine it clips exactly like the retail path (nothing drawn) but still
- * consumes, so continuation bytes can never leak into the parser. */
+/* Language packs (platform/pc/src/pc_lang_font.c): UTF-8 sibling of MsgBox_DrawFontGlyph, same
+ * position math. Returns the sequence's byte length, or 0 when *p is not a pack-drawable start.
+ * Always consumes the whole sequence, even when clipped, so continuation bytes never reach the parser. */
 static s32 MsgBox_DrawLangUtf8(Object *msg, u8 *p) {
    extern s32 PC_LangUtf8Glyph(u8 **pp, s32 px, s32 py, s32 color);
    extern s32 PC_LangUtf8SeqLen(u8 *pB);
@@ -864,12 +847,9 @@ u8 GetGlyphIdxForAsciiChar(u8 asc) {
        81,  82, 83, 84,  85, 86, 87, 88, 89, 90, 91,  92, 93, 0,  0,  0,  0,  0};
 
 #ifdef PC_FEAT
-   /* Language packs (platform/pc/src/pc_lang.c): both the code->glyph map above and the glyph
-    * bitmaps are function/file-STATIC, so -- like battle/field.c's terrainText -- they are handed
-    * to the language layer once, on first use. A pack's charmap section can then assign free byte
-    * codes to free glyph slots (writing pack bitmaps into them) and remap existing codes (the
-    * mixed-case option reuses the lowercase art already present at indices 13-38). Every consumer
-    * of this map -- DrawText, the message box, StringToGlyphs -- picks the changes up for free. */
+   /* Language packs (platform/pc/src/pc_lang.c): the code->glyph map and the glyph bitmaps are
+    * static, so they are handed to the language layer once, on first use. A pack's charmap can then
+    * assign free codes to free glyph slots or remap existing ones; every consumer of this map sees it. */
    {
       static s32 langApplied = 0;
       if (!langApplied) {
@@ -883,37 +863,9 @@ u8 GetGlyphIdxForAsciiChar(u8 asc) {
    return mappings[asc & 0x7f];
 }
 
-/* PC PORT NOTE (not a decompile change -- see exchange/12-phase-c-bootstrap.md Bug 10):
- * GetGlyphIdxForAsciiChar() maps the space character to glyph index 128, one past this
- * array's original 128-row bound, and DrawFontGlyph()'s own guard (`glyphIdx <= 128`)
- * deliberately allows that. On real hardware this out-of-bounds read is harmless: the
- * original linker happens to place all-zero bytes immediately after this array (confirmed
- * directly against SLUS_004.47, file offset 0xf1f64), so "row 128" reads as a blank glyph.
- * Our own compiler's completely different static-data layout doesn't reproduce that
- * placement -- without this, DrawFontGlyph(128, ...) reads whatever unrelated data our own
- * build happens to place there instead, visible as a stray glyph-shaped mark wherever a
- * space should render (a real, reported artifact, not a hypothetical). Two separately
- * declared globals aren't guaranteed adjacent in memory (that would just trade one undefined
- * behavior for another), so the fix widens the array itself by one row instead: C
- * zero-initializes any element an initializer list doesn't cover, so row 128 becomes a real,
- * guaranteed-contiguous, guaranteed-zero row -- the original 128 rows' data (from
- * assets/801012e4.inc) is completely unchanged.
- *
- * This widening is a PC-PORT-ONLY fix and MUST be gated: growing the array adds rows to
- * core/text.c's .data, which shifts every following symbol and breaks the stage-1 byte-exact
- * match. The matching (PSX) build keeps the original [128] size -- there the OOB "row 128"
- * read lands on the linker's all-zero bytes at file offset 0xf1f64 (the following data
- * segment), reproducing the blank glyph exactly. `PERMUTER` is defined only by the
- * platform/pc build, never by the matching build.
- *
- * The PC size is [156] rather than [129] to give LANGUAGE PACKS somewhere to put new
- * letterforms (see platform/pc/include/pc_lang.h). A pack's charmap may claim slots
- * 111-127 and 129-155 -- 44 in total, enough for a whole non-Latin alphabet. Two slots
- * inside that span are NOT free and must never be assigned: 128 is where the retail map
- * sends NUL and space (it has to stay blank), and 1 is the window-background tile in the
- * F_WD sheet, which indexes the same numbers. Rows past the initializer are zero-filled by
- * C, so with no pack loaded they are blank AND unreachable -- the retail map's largest
- * value is 128, so nothing can address them. */
+/* PERMUTER: [156] rows, not [128]. GetGlyphIdxForAsciiChar maps space to glyph 128, one past the
+ * retail array; hardware reads the linker's all-zero bytes after it (a blank glyph), so row 128
+ * exists and stays zero here. Free slots: docs/language-packs.md, "Glyph slots and pack codes". */
 #ifdef PERMUTER
 static u8 sFontGlyphBitmaps[156][9] = {
 #else
@@ -996,9 +948,8 @@ void DrawText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 c
 
    while (1) {
 #ifdef PC_PORT
-      /* Unterminated-input bound (2026-08-22, debug-menu warp, gdb first-chance in this loop):
-       * a garbage string walked ~60 glyphs past the screen edge and off a mapped page. Real
-       * draws are far below 4096 glyph/control steps per call; bail instead. */
+      /* Unterminated-input bound: a garbage string would walk glyphs past the screen edge and off
+       * a mapped page. Real draws are far below 4096 glyph/control steps per call; bail instead. */
       if (++guardSteps > 4096) {
          return;
       }
@@ -1054,11 +1005,9 @@ void DrawText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 c
             }
          }
 #ifdef PC_FEAT
-         /* Language packs (platform/pc/src/pc_lang_font.c): pointer strings from a pack are UTF-8.
-          * Offer the byte to the pack's font engine first -- if it starts a valid multi-byte
-          * sequence, the WHOLE sequence is consumed and drawn as ONE glyph, and the shared
-          * column/wrap arithmetic below runs exactly as for one retail character. Returns 0
-          * untouched for plain ASCII or when no pack font is loaded, so retail text is unaffected. */
+         /* Language packs (platform/pc/src/pc_lang_font.c): pack strings are UTF-8. Offer the byte
+          * to the pack font first; a valid multi-byte sequence is consumed and drawn as ONE glyph,
+          * and the shared column/wrap arithmetic below runs as for one retail character. 0 = retail. */
          {
             extern s32 PC_LangUtf8Glyph(u8 **pp, s32 px, s32 py, s32 color);
             if (PC_LangUtf8Glyph(&p, column * (8 >> 2) + x + pad, rowY + y, color) == 0) {
@@ -1115,9 +1064,8 @@ void DrawSjisText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s
 
    while (1) {
 #ifdef PC_PORT
-      /* Unterminated-input bound (2026-08-22, debug-menu warp, gdb first-chance in this loop):
-       * a garbage string walked ~60 glyphs past the screen edge and off a mapped page. Real
-       * draws are far below 4096 glyph/control steps per call; bail instead. */
+      /* Unterminated-input bound: a garbage string would walk glyphs past the screen edge and off
+       * a mapped page. Real draws are far below 4096 glyph/control steps per call; bail instead. */
       if (++guardSteps > 4096) {
          return;
       }

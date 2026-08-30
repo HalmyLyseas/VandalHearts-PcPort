@@ -7,10 +7,9 @@
 #include "window.h"
 
 #ifdef PC_FEAT
-/* Language packs (platform/pc/src/pc_lang.c): text held in the sPartyNames array below cannot be wrapped at the
- * array itself -- a static initializer needs a compile-time constant. It is wrapped where the array
- * is READ instead: PC_LangStr hashes whatever string it is handed at run time, so one wrap covers
- * every entry in every array. Transparent in the matching build. */
+/* sPartyNames below can't be wrapped at the array itself -- a static initializer needs a
+ * compile-time constant -- so it's wrapped where it's READ instead: PC_LangStr
+ * (platform/pc/src/pc_lang.c) hashes the string at run time; transparent in the matching build. */
 extern u8 *PC_LangStr(const char *lit);
 #define PC_LANGSTR(s) ((u8 *)PC_LangStr((const char *)(s)))
 #else
@@ -520,31 +519,21 @@ void UpdateStatChangeText(u8 item, u8 partyIdx) {
 }
 
 #ifdef PC_FEAT
-/* --- ITEM-NAME WIDTH: 1-byte / 16-char item lists (exchange/91) ---------------------------------
- * A format-2 pack (PC_LangItemNames1Byte()) stores item names as 16 one-byte chars instead of 8
- * two-byte SJIS ones. They must draw through the small 8x9 font, not the wide SJIS one, and PER ROW
- * at the choice pitch (the small font's own ~9 px advance desyncs from the 17 px choice rows). The
- * name draws LEFT; the price is RIGHT-ALIGNED so a long name never pushes it off the widened window. */
+/* Format-2 1-byte item lists draw through the small 8x9 font, not the wide SJIS one, at the choice
+ * pitch per row (its own ~9px advance desyncs from the 17px choice rows). Name draws LEFT, price
+ * RIGHT-ALIGNED. See docs/language-packs.md, "Format 2: 1-byte item names". */
 extern int PC_LangItemNames1Byte(void);
 #define ITEM1B_ROW_H  17
-#define ITEM1B_COLS   20     /* name (<=16) + right-aligned price. 20 cols keeps the price inside the
-                              * NARROWER Sell/Depot list boxes too (not just the widened Buy box), so it
-                              * never rides the border. A long name yields its right columns to the
-                              * price (exchange/91, feedback-35/36). */
-#define ITEM1B_NAME_TIGHT 11 /* char cap for the purchase/sell/transfer confirm box -- it is sized for
-                              * 8 SJIS chars AND carries an item icon on the left, so it fits ~11 small
-                              * chars before the name rides the border (feedback-36). */
-#define GOLD1B_X      233    /* gold box screen x (feedback-35: shifted 1 cell left of 241, box grown
-                              * the same 8 px so its right edge stays put) */
+#define ITEM1B_COLS   20     /* name (<=16) + right-aligned price; also fits inside the narrower
+                              * Sell/Depot boxes, not just the widened Buy box. */
+#define ITEM1B_NAME_TIGHT 11 /* char cap for the purchase/sell/transfer confirm box: sized for 8
+                              * SJIS chars plus an item icon on the left. */
+#define GOLD1B_X      233    /* gold box screen x: shifted 1 cell left of 241, box grown 8px so its
+                              * right edge stays put. */
 #define GOLD1B_W      80     /* 10 cells @ 8 px: holds max gold "990000G" (7 small chars) with room. */
-/* Compose one FIXED-WIDTH list row -- an optional 1-col prefix, the 16-char name (space-padded),
- * then, when priced, a right-aligned price in an 8-col field. Fixed width matters: a scroll redraw
- * draws spaces over the previous row's cells, so a shorter new name leaves no leftover tail (ASCII
- * space -> blank glyph, which clears). The prefix restores the retail party-list column labels
- * (SJIS '#' on the three equipped rows, a space on the carried rows -- see
- * ListPartyMemberInventory) that the 1-byte path otherwise drops; 0 = no prefix column (shop/depot
- * lists, matching their SJIS layout). showPrice==0 or a 0 cost (an empty slot) leaves the price
- * blank, matching the SJIS path. */
+/* Composes one fixed-width list row (prefix + 16-char name + right-aligned price); fixed width
+ * lets a scroll redraw blank a shorter name's leftover tail with spaces. See
+ * docs/language-packs.md, "Format 2: 1-byte item names". */
 static void ItemRow1Byte(u8 *row, const u8 *name, s16 cost, s32 showPrice, u8 prefix) {
    s32 i, done = 0, m = 0, o = 0;
    char tmp[8];
@@ -1529,9 +1518,8 @@ void Objf406_ShopOrDepot(Object *obj) {
       }
 #ifdef PC_PORT
       /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot (i >= 13,
-       * so partyIdx2 is still -1). On PSX the garbage portrait id is harmless -- overwritten by the
-       * `i >= 13` branch below -- but on PC the wild index can hit unmapped memory. Skip the read when
-       * partyIdx2 is invalid; the branch below sets the portrait to 0 in exactly that case. */
+       * so partyIdx2 is still -1); harmless on PSX (the i >= 13 branch below overwrites it) but a
+       * wild index on a host. Skip the read when partyIdx2 is invalid; that branch sets 0 anyway. */
       if (OBJ.partyIdx2 >= 0)
          gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
 #else
@@ -1919,9 +1907,8 @@ void Objf406_ShopOrDepot(Object *obj) {
       }
 #ifdef PC_PORT
       /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot (i >= 13,
-       * so partyIdx2 is still -1). On PSX the garbage portrait id is harmless -- overwritten by the
-       * `i >= 13` branch below -- but on PC the wild index can hit unmapped memory. Skip the read when
-       * partyIdx2 is invalid; the branch below sets the portrait to 0 in exactly that case. */
+       * so partyIdx2 is still -1); harmless on PSX (the i >= 13 branch below overwrites it) but a
+       * wild index on a host. Skip the read when partyIdx2 is invalid; that branch sets 0 anyway. */
       if (OBJ.partyIdx2 >= 0)
          gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
 #else
@@ -2743,8 +2730,8 @@ void Objf406_ShopOrDepot(Object *obj) {
       if (--OBJ.goldTimer == 0) {
          gDisplayedGold = gState.gold;
 #ifdef PC_FEAT
-         /* exchange/91: the 1-byte item list needs the right area, so shrink the gold box (104->72),
-          * draw the amount in the small font, and slide it right (208->241) to sit clear of the list. */
+         /* The 1-byte item list needs the right area, so shrink the gold box (104->72), draw the
+          * amount in the small font, and slide it right (208->241) to sit clear of the list. */
          if (PC_LangItemNames1Byte()) {
             DrawWindow(0x36, 256, 98, GOLD1B_W, 36, 408, 90, WBS_CROSSED, 0);
             DrawGold1Byte(gDisplayedGold);

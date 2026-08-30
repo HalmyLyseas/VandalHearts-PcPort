@@ -1,11 +1,6 @@
-/* The generic particle library and shared battle FX, second bank (the first is
- * spells/hit_effects.c): rock spurts and rubble (Objf763/759, RotateQuadXY/YZ/XZ), stat and
- * level-up FX (Objf272/380/278/685), Spellbind FX2/FX3 (Objf715_to_718), the generic
- * particles (Objf710/739) and their emitters (projectile trails 764-769), item-spell
- * dispatch (770-789), Remove Paralysis (735/740/736/737), Phase Shift and Wyrmfang FX1
- * (Objf378/363/359), plus strays kept by address contiguity (Objf087/098 Map20 arrows,
- * Objf797 Map47 dusk tint). Objf790 (an ember-puff emitter, the only spawner of
- * OBJF_PARTICLE_739) appears in no retail event script -- cut content, suffixed _Unused. */
+/* Generic particle library and shared battle FX, second bank (the first is hit_effects.c):
+ * rock spurts/rubble, stat and level-up FX, Spellbind, the Objf710/739 particles and their
+ * emitters, item-spell dispatch (770-789), Remove Paralysis, Phase Shift/Wyrmfang FX1, strays. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -100,20 +95,6 @@ void Objf759_RockSpurtParticle(Object *obj) {
       break;
    }
 }
-
-/*void RotateQuadXY(Quad src, Quad dst, s16 theta) {
-   //? Or just operate directly on SVECTOR* args (to avoid obscured array args)
-   SVECTOR *pSrc = &src[0];
-   SVECTOR *pDst = &dst[0];
-   s32 i;
-
-   for (i = 0; i < 4; i++) {
-      pDst->vx = (pSrc->vx * rcos(theta) - pSrc->vy * rsin(theta)) >> 12;
-      pDst->vy = (pSrc->vx * rsin(theta) + pSrc->vy * rcos(theta)) >> 12;
-      pDst++;
-      pSrc++;
-   }
-}*/
 
 void RotateQuadXY(SVECTOR *src, SVECTOR *dst, s16 theta) {
    s32 i;
@@ -1022,12 +1003,9 @@ s16 gSparkleAnimData_800ffab4[36] = {
     2, GFX_SPARKLE_3, 2, GFX_SPARKLE_4, 2, GFX_SPARKLE_5, 2, GFX_SPARKLE_4, 2, GFX_SPARKLE_3,
     2, GFX_SPARKLE_2, 2, GFX_NULL,      0, GFX_NULL};
 
-/* JP-only, fully unreferenced (no jal site, no gObjFunctionPointers slot, no data
- * pointer anywhere in the retail binary) -- cut content, like Objf790 below. A timed
- * re-firing explosion-puff emitter: 60-frame fuse, then spawns one OBJF_PARTICLE_710
- * per tick with the explosion anim and a random drift velocity, self-deleting the
- * tick after the fuse expires. NOTE the retail bug: `particle` is passed to
- * CreatePositionedObj UNINITIALIZED (stale callee-saved register). */
+/* JP-only cut content, unreferenced by any call site, gObjFunctionPointers slot or data pointer:
+ * a 60-frame fuse, then one OBJF_PARTICLE_710 explosion puff per tick with a random drift.
+ * Retail bug: `particle` reaches CreatePositionedObj uninitialized (stale callee-saved reg). */
 void ObjfJP_TimedExplosionEmitter_Unused(Object *obj) {
    Object *particle;
    s32 theta1;

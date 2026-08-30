@@ -1,18 +1,6 @@
-/* Map 35's collapsing bridge, plus the shared flaming-rock projectile.
- *
- * Objf652_Map35_Button (spawned by SetupMapExtras()) is the entire Map 35 sequence. When
- * Objf555_EvaluateMap35_SlayKurtz sets mapState it runs the shared OBJF_BUTTON_DEPRESS cutaway,
- * focuses on the span, and branches on whether any player unit stands on the 5x2 deck:
- * with no player casualties it simply drops the span, otherwise it walks the deck tile by
- * tile issuing TA_32 dialogue prompts first. Either path throws OBJF_EXPLODING_TILE debris
- * built from the embedded tile model, vents OBJF_SMOKE, marks the doomed units TA_22 and
- * calls Map35_RemoveBridge(), which turns the deck into water tiles. State 0 applies the
- * finished state directly on reload.
- *
- * Objf702_FlamingRock (OBJF_FLAMING_ROCK) is not a Map 35 object and sits here only by
- * address adjacency: a ballistic burning rock trailing explosion puffs, dying on terrain
- * contact; spawned by Objf336_Salamander_Segment (spells/salamander.c) and by the cut
- * Objf734_MeteorImpact_Unused (events/fx_scenes.c). */
+/* Map 35's collapsing bridge (Objf652_Map35_Button: cutaway, per-tile TA_32 prompts for player
+ * units on the 5x2 deck, debris, then Map35_RemoveBridge()) and, by address adjacency,
+ * Objf702_FlamingRock, the ballistic burning rock thrown by Objf336 (spells/salamander.c). */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

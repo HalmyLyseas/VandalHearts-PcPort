@@ -80,8 +80,47 @@ current screen reverts to native at once). This is by design: enabling HD mid-sc
 whatever is currently in VRAM. Normal use — leaving it on — replaces every background from load, so the
 distinction only shows when flipping the option during play.
 
-Enabling HD applies from the next background load (the current on-screen background is not swapped live);
-disabling it is immediate.
+## Engine side: how a background is replaced
+
+The replacement hooks live in `platform/pc/src/pc_hdpack.c`, with two seams into the GPU backend:
+`LoadImage` (registration) and the hi-res rasterizer's per-triangle texture resolve (sampling).
+
+- **Identity.** `LoadImage` computes an FNV-1a hash over the raw 16-bit words of each upload -- the
+  same bytes the disc `.TIM` decodes to, which is why a pack is buildable offline. A region is
+  registered the first time a hash is seen, and only if a replacement file exists for it (a cheap
+  `stat`); every other upload costs one hash and nothing else. Files are `backgrounds/<hash>.webp`,
+  or raw `<hash>.hdi` (`HDI1` header + width/height + RGBA8) for builds without libwebp.
+- **Live regions.** Regions are keyed by their VRAM rectangle in 16-bit words, so a background drawn
+  as several quads or across texture pages still maps to the right HD pixel. Many assets reuse the
+  same rectangle, so every upload marks its own region *live* and un-marks every registered region
+  whose rectangle it **overlaps** -- not only an exact match, because a dynamic texture uploaded into
+  a sub-rectangle of a backdrop would otherwise leave the backdrop stale-live and HD-replace whatever
+  samples that VRAM. This eviction runs on every upload even while HD PACK is off, which is what makes
+  toggling ON mid-scene show native art until the scene's own background reloads.
+- **8bpp only.** Every replaced asset is an 8bpp background. Battle draws (unit sprites, effects,
+  cursor tiles, HP bars) are 4bpp and reach VRAM by bulk DMA rather than `LoadImage`, so eviction
+  cannot see them; the sampler refuses any non-8bpp texture page instead, so a live background region
+  is never read through a sprite that merely shares its VRAM words.
+- **Async decode.** Decoding a full background (~1.2 Mpx of WebP) and packing it costs enough to dip
+  a scene-load frame if done inline, so `LoadImage` only queues the region and a single detached
+  loader thread decodes it, newest upload first (the current scene). The thread publishes the pixel
+  pointer with a release store; the sampler's acquire load sees NULL until then and draws native
+  texels. Scene loads sit behind fades, so that one-or-two-frame native window is invisible. The
+  region table itself is touched only by the render thread. `VH_HD_SYNC=1` decodes inline instead,
+  for A/B comparison.
+- **16-bit pre-pack.** Replacement pixels are stored in the PS1 texel format (BGR555) rather than
+  RGBA8: half the resident memory, and no per-pixel conversion in the sample loop. Alpha below 128
+  becomes `0x0000` (transparent -- the native texel-is-zero rule); opaque black is nudged to `0x0421`
+  so it still draws.
+- **Toggle semantics.** The HD PACK toggle is checked per sample, so switching it off is immediate
+  even for a region that is still live. A language pack's translated backgrounds use the same
+  registry with priority over the HD pack, are never gated by the toggle, and are the only regions
+  sampled at `INTERNAL RES` x1 (HD-pack regions stay a >= x2 enhancement).
+- **Authoring probes.** `VH_HD_DUMP=<dir>` writes each unique upload as a `.ppm`, decoded with the
+  CLUT actually used to draw it (known only at first sample), for matching against HD art;
+  `VH_HD_RAW=1` adds the exact hashed source words. `VH_HD_PACK=<dir>` points straight at a
+  `<hash>.webp` folder and bypasses detection and the toggle; `VH_HD_VIDEOS=<dir>` does the same for
+  movies.
 
 ## Building a pack
 

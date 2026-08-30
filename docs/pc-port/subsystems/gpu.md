@@ -85,7 +85,7 @@ representations were tried and rejected:
    let clearing the next OT invalidate handles already registered in the
    previous one. Result: every OT walked empty, a permanent black screen.
 
-The current design is the **token bridge** (Stage 2.3). A slot/tag holds a
+The current design is the **token bridge**. A slot/tag holds a
 **token**, not an address: a 1-based index into a per-frame registry that owns
 the real host-width pointer. Tokens are 32 bits by construction, so the same
 code is correct at `-m32` and `-m64`.
@@ -131,10 +131,13 @@ work reads and writes this array; nothing is uploaded to the GPU as geometry.
 | `TILE` | offset/clip-respecting solid rect fill |
 
 Quads are split into two triangles exactly as the hardware documents
-(vertices 1,2,3 then 2,3,4). The triangle filler is a barycentric scanline
-rasteriser with **affine UV interpolation and nearest-neighbour sampling — no
-bilinear, no perspective correction** — which matches real PS1 GPU behaviour
-rather than cutting a corner. A texel value of `0x0000` is treated as fully
+(vertices 1,2,3 then 2,3,4). The default triangle filler is the fixed-point
+DDA described under [PSX-accurate DDA](#psx-accurate-dda-vh_accurate); the
+legacy filler (`VH_ACCURATE=0`) is a barycentric scanline rasteriser. Both use
+**affine UV interpolation and nearest-neighbour sampling — no bilinear, no
+perspective correction** — which matches real PS1 GPU behaviour rather than
+cutting a corner. Texture modulation is `(texel * colour) / 128`, so a
+colour of 128 is neutral. A texel value of `0x0000` is treated as fully
 transparent (skipped), the documented hardware quirk. Texture sampling honours
 4bpp / 8bpp CLUT-indexed and 15bpp direct texture pages, with `GetTPage`/`GetClut`
 bit-packing taken from the psx-spx texpage/CLUT tables.
@@ -149,6 +152,32 @@ the caller decides where to `LoadImage`), matching the real API's two usage
 patterns in the game (`LoadFullscreenImage` with its own rect, and `world/dojo.c`
 slicing one TIM with pointer arithmetic).
 
+### Primitive packet layout in the clean-room header
+
+`platform/pc/include/PsyQ/libgpu.h` keeps Sony's struct shapes (so the
+byte-exact decomp's `Graphics` struct and every `POLY_FT4`/`SPRT`/`TILE` field
+access compile unchanged) with these deliberate departures:
+
+- **`P_TAG.tag` is a 32-bit token**, replacing the hardware word that packs a
+  24-bit `addr` with an 8-bit `len`. Every primitive struct starts with the same
+  `tag / r0 / g0 / b0 / code` header so a `(P_TAG *)p` cast dispatches uniformly.
+  `setlen`/`getlen` are no-ops kept for source compatibility; `setaddr`/`getaddr`
+  exist for raw tag inspection only (see Gotchas).
+- **`DR_MODE`** is `{tag; code[2]}` on hardware (the raw GP0 `E1h`/`E2h` words).
+  Here it carries the common header plus a `tpage` word instead, so `DrawOTag`'s
+  generic `getcode()` dispatch works. Only `SetDrawMode` builds it and only
+  `DrawOTag` reads it. Its otherwise-unused `r0/g0/b0` bytes carry a packed word:
+  bit 22 = dither-enable (`dtd`), bit 23 = "texture window present", and five-bit
+  `MaskX | MaskY<<5 | OffX<<10 | OffY<<15` fields (see the texture-window
+  section below).
+- **The `code` byte** holds a backend discriminator in its low nibble
+  (`PC_GPU_PRIM_POLY_F4..DR_MODE` = 1–5) with bit `0x80` as the semi-transparency
+  flag set by `SetSemiTrans`. Primitives built by `AddObjPrim_Gui` carry the real
+  GP0 byte `0x2c` (`| 0x02` for semi-transparency) instead; `PC_GPU_PRIM_TYPE` /
+  `PC_GPU_IS_SEMI` decode both schemes.
+- **`TIM_IMAGE`** holds real pointers (`paddr`/`caddr`) into the caller's file
+  buffer, which is why it is wider than the PS1 struct on a 64-bit host.
+
 ### Presentation
 
 The game renders a native **320×240** frame. `PC_GpuPresent`
@@ -159,7 +188,9 @@ window opens at `native × scale`; **`VH_SCALE`** overrides the integer factor
 (default 2 → 640×480, clamped 1–8). The viewport is recomputed every frame to a
 letterboxed, aspect-preserving rectangle, so live resize / maximise work without
 extra plumbing. Scaling is display-resolution only (nearest-neighbour, so pixel
-art stays crisp) — the 3D is not re-rendered at higher internal density.
+art stays crisp) — the 3D is not re-rendered at higher internal density unless
+[internal-resolution supersampling](#internal-resolution-supersampling-vh_internal_scale)
+is on, in which case the hi-res buffer is what gets presented.
 
 Presentation is deferred to the **end of `DrawOTag`**, not to `PutDispEnv`.
 Because this backend rasterises synchronously, presenting at `PutDispEnv` (as the
@@ -205,28 +236,137 @@ lead ("the game never calls `SetTexWindow`") was wrong: the window arrives via
   `Mask == 0` is a no-op (full page). The fix is general — any map effect using a
   texture window benefits.
 
-## The 1.5/1.6 rendering layers (accurate rasterizer, supersampling, HD sampling)
+## Rendering layers: accurate rasterizer, supersampling, HD sampling
 
-Everything above describes the base pipeline; three later layers sit on top of it — the fills and
+Everything above describes the base pipeline; three layers sit on top of it — the fills and
 supersampling in `pc_raster.c`, the HD sampling in `pc_hdpack.c`:
 
 - **PS1-accurate rasterization (`VH_ACCURATE`, the default).** The fills are a fixed-point integer
   DDA that evaluates pixel coverage *and* texture UVs at the exact positions the PS1 GPU does, with
   ordered dithering (gated on the GPU's dither-enable state, GP0 E1h.9), the 5-bit blend, and the
   hardware's fill conventions — validated ~99.8–99.99 % pixel-exact against a reference-emulator
-  VRAM capture. The softer legacy fills remain behind `VH_ACCURATE=0`. The per-rule detail lives as
-  comments on the DDA code itself (`dda_span` and friends).
+  VRAM capture. The softer legacy fills remain behind `VH_ACCURATE=0`. Rules below.
 - **Internal-resolution supersampling (`VH_INTERNAL_SCALE` 1–4×, "INTERNAL RES").** Each primitive
   is rasterized twice: natively into `s_vram` (authoritative — uploads, `StoreImage`, and all
   read-back see only this), and, when the scale is >1, into a separate `s_hires` buffer at scaled
   geometry via a per-frame deferred display list. The hi-res pass is fanned out across worker
   threads (`VH_RASTER_THREADS`, disjoint scanline bands, bit-identical output) and is what gets
   presented. *Crust-free* sampling biases hi-res texel sampling onto tile interiors on perspective
-  quads (2D UI is auto-detected and stays pixel-aligned), which is what removed the tile-seam grid.
-- **HD background sampling (1.6, `HD PACK`).** `LoadImage` content-hashes each upload; a matching
+  quads (2D UI is auto-detected and stays pixel-aligned), which is what removes the tile-seam grid.
+- **HD background sampling (`HD PACK`).** `LoadImage` content-hashes each upload; a matching
   pack image is decoded on a background thread and, once published, the hi-res pass samples it at
   sub-texel precision instead of the native texels (8bpp draws only — battle 4bpp sprites sharing
   the same VRAM are never replaced). See [hd-pack.md](../../hd-pack.md).
+
+### PSX-accurate DDA (`VH_ACCURATE`)
+
+`FillTriangleDDA` in `pc_raster.c` is a port of DuckStation's Mednafen-derived software
+rasterizer (`DrawTriangle` / `DrawTrianglePart` / `DrawSpan` / `UVStepper`); only the per-pixel
+shading (texture sample, modulate, dither, blend) is the port's own. The gate is a runtime check of
+`VH_ACCURATE` (ini or env), not an `#ifdef`, so one binary can A/B both paths.
+
+- **Coverage.** Vertices are sorted top/mid/bottom while tracking which one is the top-left
+  (`tl`). Edges step in 32.32 fixed point: `dda_makefp(x)` seeds `x << 32` plus a bias of
+  `(1<<32) - (1<<11)`, and `dda_makestep(dx, dy)` biases the division toward the edge's direction
+  by `±(dy-1)`. A span fills `[x_start, x_bound)` — left-inclusive, right-exclusive — and rows are
+  clipped to the inclusive drawing area. Coverage and UVs are both evaluated at the pixel's
+  **integer** position, so there is no centre-versus-corner mismatch between them (that mismatch
+  is what produces tile-edge seams and the fuzzy "extrapolated UV" texels of a centre-sampled
+  filler). A zero-height or zero-area triangle draws nothing.
+- **Texture UVs.** 12 integer + 12 + 12 fraction bits (`DDA_ASHIFT`, `DDA_APOST`): the UV origin
+  is seeded at the top-left vertex plus half a texel, then stepped back to screen (0,0), so any
+  pixel's UV is `origin + x·dUdx + y·dUdy`. The per-axis steps come from the triangle determinant,
+  `ATTRIB_STEP(A,B) = ((det(A,B) * 4096) / det) << 12`. Sampled U/V are masked to 8 bits, which is
+  how a UV past 256 wraps on a 256×256 page. The texture window (below) applies after the mask.
+- **Ordered dithering.** The GPU dithers the *front* colour in the 24→15-bit truncation, before
+  any semi-transparency blend, on modulated/untextured polygons only. The 4×4 signed matrix
+  (`DITHER4`, same offsets as DuckStation's `DITHER_MATRIX`) is indexed `[y & 3][x & 3]`; the
+  hardware LUT `clamp((v + off) >> 3, 0, 31)` is reproduced by clamp-then-shift. It is applied only
+  when the dither-enable bit (GP0 `E1h`.9) is set, which the port tracks from `DRAWENV.dtd`,
+  `SetDrawMode`'s `dtd` and `DR_MODE` in OT order. The game runs the battle field with `dtd = 0`
+  (`states/game_setup.c`), so terrain and UI must not be dithered; only `dtd = 1` scenes (some
+  effects) are. The blend result itself is written un-dithered.
+- **5-bit semi-transparency blend.** `BlendG1` is the hardware's parallel bit-math on the packed
+  BGR555 halfwords (per DuckStation's `ShadePixel`): the four `ABR` modes are `0.5·B + 0.5·F`,
+  `B + F`, `B − F` and `B + 0.25·F`, each a per-channel 5-bit add/subtract with saturation. The
+  front pixel arrives with bit 15 set; for untextured polygons bit 15 is cleared afterwards. A
+  textured semi-transparent polygon only blends where the texel's own STP bit (15) is set —
+  a CLUT whose entries all lack bit 15 draws opaque.
+- **Legacy path (`VH_ACCURATE=0`).** Barycentric coverage sampled at the pixel centre, floor UV,
+  8-bit per-channel blend, no dither.
+
+### Internal-resolution supersampling (`VH_INTERNAL_SCALE`)
+
+- **Geometry × S, UVs native.** When rasterizing into the hi-res target the vertices, draw offset
+  and clip are multiplied by S while UVs stay native; the DDA's own UV-step math then advances the
+  native texture at 1/S per hi-res pixel — one texture sample per hi-res pixel, coverage and texture
+  both at S× density. The native pass (`target == 0`) always uses S = 1.
+- **Buffer lifecycle.** `s_hires` is allocated once at the maximum scale (4×) so the options
+  overlay can change the scale live without reallocating; each frame uses the current scale's
+  stride. A live scale change clears the buffer, or the old stride briefly shows as garbage. Bulk
+  VRAM writes that bypass the rasterizer (`LoadImage`, `MoveImage`, `ClearImage`) are mirrored in
+  as S×S nearest blocks (`HiresMirrorRect`).
+- **Sample re-centring.** The DDA's `+0.5`-texel seed is right for the native grid, but at S× with
+  a ~1:1 texture it lands the sub-samples exactly on texel boundaries, where fixed-point floor
+  drops or duplicates whole columns (text strokes vanish). The hi-res pass therefore re-centres on
+  the hi-res pixel: `+0.5 · (dU/dx + dU/dy)` per axis. For minified textures (terrain) this equals
+  the native seed; for ~1:1 it becomes `+0.5/S` texel, giving each source texel S evenly spaced
+  samples.
+- **U/V == 256 clamp.** A full 256-wide/tall texture's exclusive right/bottom edge sits at
+  U/V = 256, which the 32-bit UV fixed point cannot hold (`256 << 24` overflows to 0); the finer
+  hi-res sampling would tip the last pixel to texel 0 instead of texel 255 — a dark seam on
+  full-page background sprites. The hi-res pass clamps that exact value to 255. Only single-page
+  sprites (`u0 + w == 256`) have a vertex precisely at 256; tiled sprites (U past 256) wrap via the
+  natural overflow and never do. The native pass never reaches 256.
+- **Edge clamp at present.** No primitive's scaled span quite reaches the last presented hi-res
+  column/row, so it would retain stale previous-frame content (a flickering 1 px strip).
+  `HiresPresent` replicates the neighbouring column/row into it — the same native edge pixel.
+- **Scale-1 shadow pass.** The hi-res pass also runs at S = 1 when a language pack ships localized
+  backgrounds, because those are sampled only in this pass and a translated title card must not
+  depend on a graphics setting. At S = 1 every hi-res-only tweak (re-centring, crust bias, the 256
+  clamp) is skipped, so the pass is pixel-identical to native outside a replaced region. HD packs
+  deliberately do not arm this: their backgrounds stay a ≥ 2× feature.
+
+### Crust-free tile sampling
+
+Terrain tiles carry a dark border "crust" in their texture cells. On the native grid the hardware
+sampling positions never land on it, but the denser hi-res grid does, producing a faint dark grid
+along terrain/lava/water seams. The fix uses the re-centring above: for perspective primitives the
+half-texel is **not** subtracted, which shifts the hi-res sample +0.5 texel onto the interior texel
+— reproducing what the native grid samples, with no softening and the hardware dither kept.
+Axis-aligned 2D UI/text keeps true centre sampling, because the same bias there shifts glyph and
+border columns by half a texel and doubles or drops columns ("vertical lines" in windows).
+
+The discriminator is `flat2d`: the quad projects to an axis-aligned screen rectangle, i.e. its four
+rounded vertices span exactly two distinct X and two distinct Y values (a perspective tile is a
+parallelogram with ≥ 3 distinct in one axis). It is decided once per **quad** in `FillQuad` so both
+triangles agree — a per-triangle decision splits a quad's halves and leaves a diagonal seam.
+
+### Banded worker pool
+
+During the OT walk the native pass draws inline while each hi-res primitive is **appended** to a
+per-frame display list with a self-contained `RenderCtx` snapshot (clip, offset, dither, texture
+window, target/scale). After the single-threaded walk the list is rasterized in OT order by N
+threads, each owning a scanline band of the drawing area: bands write disjoint hi-res rows and the
+list is read-only, so there is no locking. The pool is persistent — threads are created once and
+released each frame by a generation counter (no per-frame create/join); the main thread takes the
+last band. `VH_RASTER_THREADS` overrides the count (default: online CPUs, capped at 32). A frame is
+single-threaded when the list is tiny — except when an HD replacement is loaded, since one
+fullscreen HD background is a single primitive with millions of expensive samples.
+
+### Offline raster harness
+
+`platform/pc/tools/raster_harness/harness.c` is a differential test against a real emulator: it
+compiles the production GPU source in directly, replays a decompressed DuckStation `.psxgpu` GP0
+trace into it, and dumps each frame to PPM for diffing against the emulator's own VRAM capture.
+`GPUPort0Data` packets in that format are DMA *blocks*, not one command each — an `A0h` VRAM upload
+spans packets — so the harness concatenates all Port-0 words into one GP0 stream and parses commands
+by their true word length; VSync packets delimit frames. The port's fills are flat-colour, so Gouraud
+polygons replay with vertex 0's colour. PPM output expands 5→8 bits by replication
+(`(v << 3) | (v >> 2)`), matching both the present path and the emulator dump so the diff measures
+rasterization error only. Build from the repo root with
+`cc -std=gnu99 -O2 -Iplatform/pc/include -Iinclude platform/pc/tools/raster_harness/harness.c -lm -lpthread`
+and run it on a `zstd -d`-decompressed trace.
 
 **Regression harness:** `VH_GPU_RECORD` / `VH_GPU_REPLAY` serialize and deterministically replay
 everything this file consumes (VRAM ops + walker-dispatched primitives) — see

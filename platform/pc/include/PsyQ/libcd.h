@@ -1,15 +1,6 @@
-/*
- * PC-backend replacement for the PSX SDK's libcd.h CD-ROM interface.
- *
- * Clean-room reimplementation: signatures, struct layouts, and command/mode
- * constants are functional facts (the CD-ROM command protocol and BCD MSF
- * addressing are public, standard conventions, not creative expression) --
- * no text from Sony's original header. Scope covers only what the game's
- * source actually calls (per exchange/02-phase-c-interface-contract.md).
- *
- * The 4 DecDCT* (MDEC video decompression) functions are declared but not
- * yet implemented -- FMV playback is deferred, see libcd.c.
- */
+/* Clean-room PC replacement for PsyQ libcd.h: signatures, struct layouts and command/mode
+ * constants only (the CD-ROM command protocol and BCD MSF addressing are public conventions),
+ * scoped to what the game calls. Implemented in platform/pc/src/libcd.c. */
 #ifndef PLATFORM_PC_PSYQ_LIBCD_H
 #define PLATFORM_PC_PSYQ_LIBCD_H
 
@@ -32,10 +23,8 @@ typedef struct {
     unsigned short pad;
 } CdlFILTER;
 
-/* STR (streaming movie) sector header -- referenced by core/cd.c's deferred
- * Movie_* / MDEC playback path (see the DecDCT* deferral note above); the
- * struct itself is still needed just for core/cd.c to compile and pack/unpack
- * frame headers, even though frame decode isn't implemented. */
+/* STR (streaming movie) sector header, used by core/cd.c's Movie_* path to pack/unpack frame
+ * headers; the PC StGetNext fills one with a paced frameCount. */
 typedef struct {
     u_short id;
     u_short type;
@@ -83,13 +72,9 @@ int DecDCTvlc(unsigned int *bs, unsigned int *buf);
 void DecDCTin(unsigned int *buf, int mode);
 void DecDCTout(unsigned int *buf, int size);
 
-/* STR (streaming movie) ring-buffer API -- same deferral as DecDCT* above
- * (FMV/movie playback, not regular data loading). DecDCToutCallback isn't
- * declared in any real header either (same "undeclared, relies on old
- * GCC's implicit-declaration leniency" pattern already found for Kernel's
- * GetRCnt/OpenEvent) -- signature inferred from its call sites
- * (core/cd.c passes NULL or a function pointer, matching the
- * CdReadyCallback/DrawSyncCallback callback-setter convention). */
+/* STR ring-buffer API. DecDCToutCallback is not declared in any real header (old GCC accepts
+ * the implicit declaration); its signature follows the CdReadyCallback/DrawSyncCallback
+ * callback-setter convention that core/cd.c's call sites use. */
 unsigned int DecDCToutCallback(void (*func)());
 void StSetRing(unsigned int *ring_addr, unsigned int ring_size);
 void StUnSetRing(void);

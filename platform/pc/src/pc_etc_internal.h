@@ -1,10 +1,9 @@
-/* pc_etc_internal.h -- seams between libetc.c (pads + VSync pacing) and the TUs extracted from it
- * (pc_diag.c, pc_battle_speed.c). NOT a public API; everything here used to be file-static in
- * libetc.c before the split. */
+/* pc_etc_internal.h -- seams between libetc.c (pads + VSync pacing) and the TUs split out of it
+ * (pc_diag.c, pc_battle_speed.c). NOT a public API. */
 #ifndef PC_ETC_INTERNAL_H
 #define PC_ETC_INTERNAL_H
 
-/* ---- pc_battle_speed.c (Stage-3 1.4 F1 battle fast-forward) ---- */
+/* ---- pc_battle_speed.c (battle fast-forward) ---- */
 int  PC_InActiveBattle(void);           /* core/main.c State_Battle() dispatch set {3,23,27,30,31} */
 int  PC_BattleSpeedGet(void);           /* effective speed: 1 outside battle (OSD + pacing divisor) */
 int  PC_BattleSpeedRaw(void);           /* the raw speed state, for diagnostics labels */

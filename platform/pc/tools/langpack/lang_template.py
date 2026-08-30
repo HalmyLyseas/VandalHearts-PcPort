@@ -35,10 +35,9 @@ def glyphless_ascii(cp):
     must supply a glyph for it, exactly like a non-ASCII letter, so the template must report it."""
     return 0x21 <= cp <= 0x7E and cp not in (0x23, 0x24) and RETAIL_MAP[cp] == 0
 
-# The two glyph surfaces, and which text sources land on each. Item names (and the SJIS literals --
-# the TURN banner, the dojo YES/NO) draw through the 16x15 "krom" font; everything else through the
-# 8x9 font. A non-Latin pack draws its whole alphabet at BOTH sizes, but the split lets us report a
-# letter that a Latin pack needs only on one surface (an uppercase accent in an item name, say).
+# The two glyph surfaces and which text sources land on each -- see
+# platform/pc/tools/langpack/README.md, "The two fonts". The split lets the report name a
+# letter a Latin pack needs on only one surface (e.g. an uppercase accent in an item name).
 LARGE_TABLES = {"gItemNamesSjis"}
 
 
@@ -99,12 +98,9 @@ def collect(work):
                 for line in (e.get("text") or []):
                     add(line, "small")
 
-    # F3 movie subtitles render in the LARGE (16x15) font -- a cue letter that appears nowhere
-    # else in the game still needs its art, so cues join the scan on the large surface.
-    # MIRRORS the builder's rule: a krom-synthesizable character (accented Latin) is counted as
-    # itself; anything else is counted as its Unicode UPPERCASE, because the builder folds a
-    # glyphless letter before erroring and script sheets are caps-only -- so the report names
-    # exactly the art the build gate will demand.
+    # Movie subtitles render in the large (16x15) font, so cues join the scan on the large
+    # surface and mirror the builder's own letter-casing rule. See
+    # platform/pc/tools/langpack/README.md, "Movie subtitles".
     cdir = os.path.join(sdir, "cues")
     if os.path.isdir(cdir):
         for fn in os.listdir(cdir):

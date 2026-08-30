@@ -1,20 +1,7 @@
 #!/usr/bin/env bash
-# check_build_parity.sh -- guard against Makefile <-> CMakeLists source-list drift.
-#
-# The port has two interchangeable build systems, each with its OWN source list. Every
-# platform/pc/src/*.c must be COMPILED by both, or one build silently loses a compilation unit and
-# breaks only on the platform that uses that system. This exact drift caused the 1.6 Windows
-# release breakage: pc_hdvideo.c was in the Makefile's BACKEND_SRCS but not CMake's BACKEND_PLAIN
-# -> undefined PC_HdVideo* at the MinGW link (a nearby CMake COMMENT mentioned the file, which is
-# why this script parses the actual source LISTS, not whole-file mentions).
-#
-# Parsed lists (fail-closed: if parsing yields implausibly few entries, the script errors so a
-# format change can't silently disable the check):
-#   Makefile   : the BACKEND_SRCS line + every $(BUILD_DIR)/<stem>.o reference (data files)
-#   CMakeLists : set(BACKEND_PLAIN ...), set(DATA_PERM ...), set(DATA_PLAIN ...) + the literal
-#                stems on the foreach() line that assembles ALL_OBJ_SRCS
-# Exempt: src/test_*.c (standalone Phase-C PoC harnesses with their own main(), never in the game
-# build). make-release.sh runs this before building anything.
+# check_build_parity.sh -- guard against Makefile <-> CMakeLists source-list drift: every
+# platform/pc/src/*.c must compile under both build systems, or one silently loses a unit.
+# See docs/releasing.md, "3. Stage-build BOTH platforms first — always".
 set -euo pipefail
 PC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MK="$PC_DIR/Makefile"; CM="$PC_DIR/CMakeLists.txt"

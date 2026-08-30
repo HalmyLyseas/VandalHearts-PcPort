@@ -1,12 +1,6 @@
-/*
- * PC backend for PsyQ/libspu.h. All of this project's call sites (in
- * src/core/audio.c) use these for one-time setup/teardown around SPU RAM and
- * IRQ management -- concepts that don't map onto an OpenAL-based backend
- * (OpenAL owns its own buffers; there's no manual SPU RAM heap to
- * allocate, and no hardware IRQ to hook). SpuSetKey(SPU_OFF, SPU_ALLCH)
- * is the one call with real, useful behavior on PC: it means "silence
- * everything," which maps directly onto stopping all active voices.
- */
+/* PC backend for PsyQ libspu. The game's call sites (src/core/audio.c) do one-time SPU RAM / IRQ
+ * setup, which has no analogue on this backend; SpuSetKey(SPU_OFF, SPU_ALLCH) is the one call with
+ * real behaviour ("silence everything" -> stop all voices). See docs/pc-port/subsystems/spu.md. */
 #include "PsyQ/libspu.h"
 #include "libsnd_internal.h"
 

@@ -1,30 +1,6 @@
-/* pc_lang_font.c -- language pack: HOW THE TEXT LOOKS (the UTF-8 side).
- *
- * Counterpart of pc_lang.c per the file map in pc_lang.h. This TU owns UTF-8 decoding, the pack's
- * codepoint->bitmap glyph table, and drawing a glyph the exact way the game does. It exists because
- * of decision D1 (exchange/80): pointer strings carry real UTF-8, and the engine renders any
- * codepoint the pack ships a glyph for -- no index space, no character-count ceiling.
- *
- * WHERE IT HOOKS. src/core/text.c's DrawText_Internal has exactly one glyph-emitting site; a PC_FEAT-
- * gated branch there offers each byte to PC_LangUtf8Glyph() first. If the byte starts a valid UTF-8
- * sequence (leads 0xC2..0xF4 -- distinguishable from ASCII, and gated so it can never race the SJIS
- * ranges), we consume the WHOLE sequence and draw one glyph; otherwise we return 0 and the retail
- * path runs untouched. One codepoint = one column, so the game's column/wrap arithmetic is shared,
- * not duplicated.
- *
- * DRAWING. DrawGlyphBitmap() is a verbatim sibling of src/core/text.c's DrawFontGlyph() -- same 1bpp ->
- * 4bpp expansion (including its s16 arithmetic, so pack glyphs pick up the exact retail colour
- * shades), same 2-word x 9-row LoadImage, same y<247 guard. It takes a bitmap instead of a glyph
- * index, which is the one thing the retail interface cannot do.
- *
- * GLYPH SOURCE. A K_FONT section in strings.bin: u32 count, then per glyph u32 codepoint +
- * 9 bitmap rows (8x9, 1bpp, MSB left), sorted by codepoint. The builder synthesises accented Latin
- * from the disc's own letterforms (the US font already contains lowercase a-z at indices 13-38) or
- * takes pack-supplied art; this TU only consumes the table.
- *
- * A missing glyph draws BLANK (and logs once per codepoint): the sequence must still be consumed,
- * or the retail path would render the continuation bytes as garbage letters.
- */
+/* pc_lang_font.c -- language pack: how the text looks. Strict UTF-8 decoding, the pack's codepoint
+ * -> bitmap glyph tables (K_FONT / K_FONT16 / K_KROM), drawing a glyph exactly as the game does, and
+ * the F_WD glyph-sheet patch. Formats: docs/language-packs.md, "Developer reference". */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,8 +74,9 @@ static int Utf8Decode(const unsigned char *p, unsigned *cp) {
     return 0;
 }
 
-/* Verbatim sibling of src/core/text.c's DrawFontGlyph(), bitmap-in instead of index-in. The s16
- * arithmetic is retail's own (colour shades ride on its sign behaviour) -- do not "fix" it. */
+/* Verbatim sibling of src/core/text.c's DrawFontGlyph(), bitmap-in instead of index-in: same 1bpp
+ * -> 4bpp expansion, same 2-word x 9-row LoadImage, same y<247 guard. The s16 arithmetic is
+ * retail's own (colour shades ride on its sign behaviour) -- do not "fix" it. */
 static void DrawGlyphBitmap(const unsigned char *rows, int x, int y, int color) {
     RECT rect;
     unsigned short buffer[32];
@@ -132,23 +109,17 @@ static void DrawGlyphBitmap(const unsigned char *rows, int x, int y, int color) 
     DrawSync(0);
 }
 
-/* --- F_WD sheet patch (strip-path names; exchange/80 "Path 1(b)") ---------------------------
- * The strip path (gCharacterNames / gUnitTypeNames / gItemNames) does not rasterize at draw time:
- * DrawGlyphStrip MoveImage-blits pre-uploaded pixels out of the glyph sheet at VRAM (640,256),
- * 32 cells/row, cell index == glyph slot. The charmap increment already routes pack codes to free
- * slots; this stamps the SAME K_CHARMAP bitmaps into those slots' SHEET CELLS whenever the sheet is
- * uploaded (LoadFWD runs per scene, and every upload passes through our LoadImage -- the source
- * buffer is patched there, so VRAM, the hires mirror and the trace stay consistent).
- *
- * Pixel format: 4bpp nibbles, 4 px/halfword, nibble n == pixel n (the same packing DrawFontGlyph
- * emits). The ink value is SAMPLED from the 'A' cell (slot 68) of the very upload being patched --
- * most frequent non-zero nibble -- rather than assumed, so it matches the sheet's own art. */
+/* F_WD sheet patch: the strip path (DrawGlyphStrip) blits pre-uploaded cells out of the glyph sheet
+ * at VRAM (640,256), 32 cells/row, cell index == glyph slot, so K_CHARMAP bitmaps are stamped into
+ * the upload's source buffer. See docs/language-packs.md, "The glyph-sheet patch". */
 #define FWD_SHEET_X 640
 #define FWD_SHEET_Y 256
 #define FWD_CELLS_PER_ROW 32
 #define FWD_CELL_W 2              /* halfwords: 8 px at 4bpp */
 #define FWD_CELL_H 9
 
+/* Ink value sampled from the 'A' cell (slot 68) of the upload being patched -- the most frequent
+ * non-zero 4bpp nibble -- so stamped glyphs match the sheet's own art rather than an assumed value. */
 static unsigned SheetInkNibble(const unsigned short *pix, int w, int h) {
     int counts[16] = {0}, r, hw, n, best = 4, bestCt = 0;
     int row0 = (68 / FWD_CELLS_PER_ROW) * FWD_CELL_H, col = (68 % FWD_CELLS_PER_ROW) * FWD_CELL_W;
@@ -183,12 +154,9 @@ void PC_LangPatchFwdUpload(int px, int py, int pw, int ph, unsigned short *pix) 
             int slot = rec[1], r, blank = 1;
             int row0 = (slot / FWD_CELLS_PER_ROW) * FWD_CELL_H;
             int col = (slot % FWD_CELLS_PER_ROW) * FWD_CELL_W;
-            /* Same reject rule as PC_LangApplyCharmap (pc_lang.c) -- this is the SECOND consumer
-             * of the same hostile blob and must not be laxer: slot 1 is the window-background tile
-             * in THIS sheet (stamping it tiles every window with a letter -- the witnessed
-             * regression), slot 128 is NUL/space and must stay blank. And a blank record means
-             * "map only" there, so it must not ERASE the sheet cell here (the target of a map-only
-             * remap already holds the right art, e.g. the lowercase a-z cells). */
+            /* Same reject rule as PC_LangApplyCharmap: slot 1 is this sheet's window-background
+             * tile, slot 128 is NUL/space. A blank record is "map only" there, so it must not erase
+             * the sheet cell here (a map-only target, e.g. a lowercase cell, already holds its art). */
             if (slot == 1 || slot == 128 || slot >= PC_LANG_GLYPH_SLOTS) continue;
             for (r = 0; r < FWD_CELL_H; r++)
                 if (rec[2 + r]) { blank = 0; break; }
@@ -216,11 +184,9 @@ void PC_LangPatchFwdUpload(int px, int py, int pw, int ph, unsigned short *pix) 
     }
 }
 
-/* --- Krom extension (SJIS item names; exchange/80 "Path 2") ---------------------------------
- * K_KROM section: u16 pack code (0x8440+, a range the retail krom map never answers) + 30-byte
- * 16x15 bitmap (2 bytes/row, MSB left), 32 bytes/record, sorted by code. libkernel.c's
- * Krom2RawAdd consults PC_LangKromGlyph first, so DrawSjisGlyph renders pack glyphs with its own
- * anti-aliasing -- zero src/ involvement. */
+/* Krom extension (SJIS item names). K_KROM records: u16 pack code (0x8440+, never answered by the
+ * retail krom map) + 30-byte 16x15 bitmap, sorted by code. libkernel.c's Krom2RawAdd consults
+ * PC_LangKromGlyph first, so DrawSjisGlyph renders pack glyphs with its own anti-aliasing. */
 typedef struct { unsigned code; unsigned char rows[30]; } KromGlyph;
 static KromGlyph *s_krom;
 static int s_kromN;
@@ -255,8 +221,8 @@ const void *PC_LangKromGlyph(unsigned sjis) {
     return NULL;
 }
 
-/* Langpack F3 movie subtitles: the codepoint-keyed pack glyph table, exposed for the subtitle
- * renderer (pc_lang.c's PC_LangSubtitleGlyph tries this before the game's ASCII store). */
+/* The codepoint-keyed pack glyph table, exposed for the subtitle renderer (pc_lang.c's
+ * PC_LangSubtitleGlyph tries this before the game's ASCII store). */
 const unsigned char *PC_LangFontGlyph(unsigned cp) {
     return s_glyphN ? FindGlyph(cp) : NULL;
 }
@@ -314,12 +280,9 @@ int PC_LangUtf8SeqLen(const unsigned char *p) {
     return Utf8Decode(p, &cp);
 }
 
-/* One item name in the small font (format-2 packs: gItemNamesSjis holds plain 1-byte ASCII).
- * Hard-truncate to cap chars and never wrap, so a long name clips at its box edge instead of
- * spilling outside or dropping onto a second line. THE one implementation behind the three gated
- * draw sites (ui/supplies.c confirm boxes, ui/window.c battle item list, battle/field.c unit panel) --
- * the per-box caps are the callers' knowledge (feedback-35/36 pixel tuning), the truncate-and-draw
- * behaviour is this function's, so a future tuning pass lands once. */
+/* One item name in the small font (format-2 packs: gItemNamesSjis holds 1-byte ASCII). Hard-
+ * truncates to cap chars and never wraps, so a long name clips at its box edge. The one
+ * implementation behind the three gated draw sites; the per-box caps are the callers' knowledge. */
 extern void DrawText(int x, int y, int maxCharsPerLine, int lineSpacing, int color,
                      unsigned char *text);                                        /* src/core/text.c */
 void PC_LangDrawItemName1Byte(int x, int y, int color, const unsigned char *name, int cap) {
@@ -331,6 +294,9 @@ void PC_LangDrawItemName1Byte(int x, int y, int color, const unsigned char *name
     DrawText(x, y, cap + 1, 0, color, buf);
 }
 
+/* The gated emit-site hook in DrawText_Internal: a valid UTF-8 lead (0xC2..0xF4, never an SJIS
+ * range) consumes the whole sequence and draws one glyph per column. A missing glyph draws blank
+ * (logged once per codepoint) -- the sequence must still be consumed, or retail draws its bytes. */
 int PC_LangUtf8Glyph(unsigned char **pp, int x, int y, int color) {
     unsigned cp;
     int n;

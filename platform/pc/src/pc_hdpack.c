@@ -1,17 +1,6 @@
-/* pc_hdpack.c -- HD asset-replacement: backgrounds (1.6 HD pack).
- * Extracted verbatim from libgpu.c (it accreted there because LoadImage and the DDA sampler are its
- * hooks; the subsystem itself is pack detection + region registry + async decode, not GPU emulation).
- * Seams with libgpu.c: pc_gpu_internal.h. The FMV half of the pack lives in pc_hdvideo.c.
- *
- * Replace a native texture region (e.g. a background) with a hi-res image, sampled at SUB-TEXEL
- * precision during the hi-res pass -- so it shows real HD detail, not the native-texel NN block that
- * VH_INTERNAL_SCALE already gives. Native pass + non-HD runs are byte-for-byte untouched.
- *
- * Identity = an FNV-1a hash of the raw uploaded VRAM block (in LoadImage). Regions are keyed by VRAM
- * WORD coords, so multi-quad / multi-tpage drawing of one upload maps back to the right HD pixel.
- *   VH_HD_DUMP=<dir>  -> write a grayscale .pgm of each unique upload (shape, to identify it)
- *   VH_HD_PACK=<dir>  -> load <dir>/<hash>.hdi (raw RGBA8 + header) and replace that region
- * HD assets (.hdi) are produced offline from PNG by workflow/vh_hdi_pack.py. */
+/* pc_hdpack.c -- HD background replacement: pack detection, a VRAM-region registry keyed by an FNV-1a
+ * hash of each LoadImage upload, and the async decode that publishes hi-res pixels for the hi-res pass
+ * to sample at sub-texel precision. FMVs: pc_hdvideo.c. See docs/hd-pack.md, "Engine side". */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,13 +25,9 @@ static int s_hdRegN, s_hdReplaceN;
 int HdRegionCount(void)  { return s_hdRegN; }      /* per-triangle gates in the DDA (pc_gpu_internal.h) */
 int HdReplaceCount(void) { return s_hdReplaceN; }
 
-/* GRAD 1 (1.6): auto-detect + validate an installed HD pack beside the exe/AppImage (disc-.bin pattern).
- *   <deploy>/hdpacks/manifest.json               validated: its "game" id must match this build
- *   <deploy>/hdpacks/backgrounds/<hash>.webp     the replacement images
- * VH_HD_PACK=<dir> still overrides (points straight at a <hash>.webp folder, skipping detection). */
-/* Region-derived (exchange/102 P2): "SLUS-00447" US / "SLPM-86007" JP. A pack authored for
- * the other region is rejected BY NAME below (its asset hashes would not match anyway, but
- * the failure must be explained, not silent). */
+/* Auto-detect + validate an installed HD pack beside the exe/AppImage: <deploy>/hdpacks/<game-id>/
+ * manifest.json, whose "game" id must equal this build's HD_GAME_ID ("SLUS-00447" US / "SLPM-86007"
+ * JP). A pack for the other region is rejected BY NAME so the failure is explained, not silent. */
 #define HD_GAME_ID VH_HD_GAME_ID
 #define HD_PATH    1024
 extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe dir, or AppImage dir) */
@@ -83,12 +68,9 @@ static void HdDetect(void) {
     s_hdPack.checked = 1;
     snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "no HD pack");
     if (!PC_GetDeployDir(deploy, sizeof(deploy))) return;
-    /* v2.0 layout: hdpacks/<game-id>/ -- one subfolder per region's pack, so a dual-disc install
-     * holds both and each session picks its own. Keyed by the COMPILE-TIME HD_GAME_ID (the same
-     * constant the manifest check validates), so an SCPS-45183 (Asia) disc -- byte-identical to
-     * the US master and served by the US core -- correctly resolves hdpacks/SLUS-00447/.
-     * Fallback: the pre-2.0 flat hdpacks/ layout keeps working untouched (its manifest is
-     * game-id-checked below either way), so existing installs need no migration. */
+    /* Layout: hdpacks/<game-id>/ -- one subfolder per region, keyed by the COMPILE-TIME HD_GAME_ID
+     * (so an Asia SCPS-45183 disc, served by the US core, resolves hdpacks/SLUS-00447/). Fallback:
+     * the flat hdpacks/ layout, whose manifest is game-id-checked below either way. */
     snprintf(base, sizeof(base), "%s/hdpacks/%s", deploy, HD_GAME_ID);
     snprintf(manifest, sizeof(manifest), "%s/manifest.json", base);
     if (!HdManifestRead(manifest, game, sizeof(game), &s_hdPack.count)) {
@@ -103,7 +85,7 @@ static void HdDetect(void) {
                 game, HD_GAME_ID);
         return;
     }
-    if (s_hdPack.packVersion < 2) {                      /* 1.6.0-era pack: no videos manifest */
+    if (s_hdPack.packVersion < 2) {                      /* packVersion 1: no videos manifest */
         snprintf(s_hdPack.reason, sizeof(s_hdPack.reason), "OUTDATED PACK");
         fprintf(stderr, "[HD] pack manifest is v%d; this build needs v2 -- regenerate it with "
                         "tools/hdpack/vh_hdpack_manifest.py (or download the current pack)\n",
@@ -145,16 +127,15 @@ static const char *HdPackDir(void) {
     return (env && *env) ? env : s_hdPack.dir;
 }
 
-/* F2 (exchange/92): PC_LangBgDir (pc_lang.h) is the langpack backgrounds/ source -- gated on
- * MANIFEST ACCEPTANCE, independent of the HD PACK toggle (localized backgrounds are translation,
- * not an enhancement). Resolved before the HD pack (see BgSourceDir), so a translated background
- * wins. */
+/* PC_LangBgDir (pc_lang.h) is the langpack backgrounds/ source -- gated on MANIFEST ACCEPTANCE,
+ * independent of the HD PACK toggle (localized backgrounds are translation, not an enhancement).
+ * Resolved before the HD pack (see BgSourceDir), so a translated background wins. */
 
 /* Any background-replacement source live right now (HD pack OR a langpack backgrounds/). Gates the
  * per-triangle region resolve in the DDA (pc_raster.c) and the registration in HdPack_OnLoad. */
 int HdAnyActive(void) { return HdActive() || PC_LangBgDir() != NULL; }
 
-/* Public API for the options overlay (GRAD 2/3). The toggle itself is g_vhHdPack (bound directly). */
+/* Public API for the options overlay. The toggle itself is g_vhHdPack (bound directly). */
 int PC_HdPackAvailable(void)      { HdDetect(); return s_hdPack.valid; }
 int PC_HdPackEnabled(void)        { HdDetect(); return s_hdPack.valid && g_vhHdPack; }
 int PC_HdPackCount(void)          { HdDetect(); return s_hdPack.count; }
@@ -234,10 +215,9 @@ static unsigned int *HdLoadImage(const char *dir, unsigned long long h, int *ow,
 #endif
     return HdLoadHdi(dir, h, ow, oh);
 }
-/* PERF (1.6): pre-pack the loaded RGBA8 replacement to the 16-bit target texel format ONCE at load.
- * Halves resident memory (2 vs 4 B/px -> much friendlier to the 1.2M-px/frame sample loop's cache) and
- * removes the per-pixel RGBA->555 pack from the hot loop. 0x0000 = transparent (native texel!=0 rule);
- * opaque black is nudged to 0x0421 (1,1,1) so it still draws instead of vanishing. */
+/* Pre-pack the loaded RGBA8 replacement to the 16-bit target texel format ONCE at load: halves resident
+ * memory (cache-friendlier for the ~1.2M-px/frame sample loop) and removes the per-pixel RGBA->555 pack
+ * from the hot loop. 0x0000 = transparent (native texel!=0 rule); opaque black becomes 0x0421 (1,1,1). */
 static unsigned short *HdPack16(const unsigned int *rgba, int n) {
     unsigned short *px = (unsigned short *)malloc((size_t)n * 2); int i;
     if (!px) return NULL;
@@ -251,16 +231,9 @@ static unsigned short *HdPack16(const unsigned int *rgba, int n) {
     return px;
 }
 
-/* ---- async replacement loader (5a) -------------------------------------------------------------
- * The webp decode + 16-bit pack of a full background (~1.2Mpx) costs enough to dip a scene-load
- * frame from 60 to ~55 fps when run inline in LoadImage (the render thread). Instead: LoadImage
- * does only a cheap EXISTENCE probe (stat) and queues the region; a single detached loader thread
- * decodes and then PUBLISHES r->px with a release store. Until it lands, the draw path's acquire
- * load sees NULL and samples the native texels -- scene loads sit behind fades, so the one-or-two-
- * frame native window is invisible. LIFO queue: the most recent upload is the current scene.
- * The region registry (s_hdReg/s_hdRegN/live) stays single-threaded (render thread only); the
- * loader touches ONLY r->w/r->h/r->px of already-registered entries, exactly once each.
- * VH_HD_SYNC=1 restores the old inline decode (A/B + debugging). */
+/* ---- async replacement loader --------------------------------------------------------------------
+ * LoadImage only stat()s and queues the region; one detached thread decodes and publishes r->px with
+ * a release store (LIFO: newest upload first). VH_HD_SYNC=1 decodes inline. See docs/hd-pack.md. */
 static int HdFileExists(const char *dir, unsigned long long h) {
     char path[HD_PATH + 64]; struct stat st;
     snprintf(path, sizeof(path), "%s/%016llx.webp", dir, h);
@@ -268,7 +241,7 @@ static int HdFileExists(const char *dir, unsigned long long h) {
     snprintf(path, sizeof(path), "%s/%016llx.hdi", dir, h);
     return stat(path, &st) == 0;
 }
-/* F2: which source holds a replacement for this hash? Langpack backgrounds/ first (priority), then
+/* Which source holds a replacement for this hash? Langpack backgrounds/ first (priority), then
  * the HD pack. NULL if neither. Up to two stats -- called once per unique background at registration. */
 static const char *BgSourceDir(unsigned long long h) {
     const char *ld = PC_LangBgDir();
@@ -280,8 +253,8 @@ static pthread_mutex_t s_hdLoadMtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  s_hdLoadCv  = PTHREAD_COND_INITIALIZER;
 static HdRegion *s_hdLoadQ[HD_MAX_REGIONS];
 static int s_hdLoadQn, s_hdLoaderUp;
-/* F2: each region carries its own source dir (r->dir) -- langpack and HD backgrounds can both be live,
- * so there is no longer a single pack-dir snapshot; the loader reads from the region's own source. */
+/* Each region carries its own source dir (r->dir): langpack and HD backgrounds can both be live, so
+ * there is no single pack-dir snapshot; the loader reads from the region's own source. */
 
 static void *HdLoaderMain(void *arg) {
     (void)arg;
@@ -305,7 +278,7 @@ static void *HdLoaderMain(void *arg) {
     }
     return NULL;
 }
-static void HdLoaderQueue(HdRegion *r) {         /* F2: source is r->dir, set at registration */
+static void HdLoaderQueue(HdRegion *r) {         /* source is r->dir, set at registration */
     pthread_mutex_lock(&s_hdLoadMtx);
     if (!s_hdLoaderUp) {
         pthread_t th; pthread_attr_t at;
@@ -330,14 +303,12 @@ static void HdLoaderQueue(HdRegion *r) {         /* F2: source is r->dir, set at
  * SAME VRAM rect, so regions are found-by-hash but must be matched-by-rect at draw time -- we track which
  * region is LIVE (its content is what's in VRAM at that rect right now) and update it on every upload. */
 void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
-    const char *dp = HdDumpDir(); unsigned long long h; HdRegion *r = NULL; int i;   /* F2: source resolved per-hash via BgSourceDir */
+    const char *dp = HdDumpDir(); unsigned long long h; HdRegion *r = NULL; int i;   /* source resolved per-hash via BgSourceDir */
     if (rect->w <= 0 || rect->h <= 0) return;
-    /* Hash + register/replace only when the pack (or dump) is active. But the LIVE-region invalidation at
-     * the end runs on EVERY upload regardless of the toggle -- so a background uploaded while HD PACK is
-     * OFF (pk==NULL) still evicts the stale live region it overwrites. Without this, toggling HD ON mid-
-     * scene resampled the PREVIOUS scene's HD image (its region stayed live because its VRAM eviction was
-     * skipped); now the current scene correctly shows native until its own background reloads. */
-    if (HdAnyActive() || dp) {                     /* F2: any bg source (HD pack OR langpack), or dumping */
+    /* Hash + register/replace only when a pack (or dump) is active. The LIVE-region invalidation below
+     * runs on EVERY upload regardless of the toggle: a background uploaded while HD PACK is OFF still
+     * evicts the stale live region it overwrites, so toggling ON mid-scene never resamples an old scene. */
+    if (HdAnyActive() || dp) {                     /* any bg source (HD pack OR langpack), or dumping */
         if (dp) { static int mk; if (!mk) { mk = 1; HD_MKDIR(dp); } }
         h = HdHash(src, rect->w * rect->h);
         r = HdFind(h);
@@ -352,7 +323,7 @@ void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
                     rf = fopen(rp, "wb"); if (rf) { fwrite(src, 2, (size_t)rect->w * rect->h, rf); fclose(rf); }
                 }
                 {
-                    const char *repl = BgSourceDir(h);   /* F2: langpack first, then HD pack (cheap stat) */
+                    const char *repl = BgSourceDir(h);   /* langpack first, then HD pack (cheap stat) */
                     int hasRepl = repl != NULL;
                     if (hasRepl) {
                         static int syncMode = -1;
@@ -373,13 +344,9 @@ void HdPack_OnLoad(const RECT *rect, const unsigned short *src) {
             }
         }
     }
-    /* This upload now occupies (part of) VRAM. Invalidate EVERY region whose rect it OVERLAPS -- their
-     * content is no longer intact, so they must not be sampled as a stale replacement. Exact-rect reuse
-     * (same backdrop reloaded across scenes) is the common case; the overlap test additionally closes the
-     * battle regression where dynamic textures uploaded to sub-rects of a backdrop's VRAM left the backdrop
-     * region stale-live -> overlays/effects/tiles sampling that VRAM were wrongly HD-replaced (opaque,
-     * wrong content). A partially-overwritten backdrop correctly reverts to native. Runs even with HD off
-     * (r==NULL) so a mid-scene toggle never sees a stale live region. */
+    /* This upload now occupies (part of) VRAM: invalidate EVERY region whose rect it OVERLAPS, not just
+     * exact-rect reuse -- a dynamic texture uploaded into a sub-rect of a backdrop would otherwise leave
+     * it stale-live and HD-replace whatever samples that VRAM. Runs even with HD off (r==NULL). */
     for (i = 0; i < s_hdRegN; i++) {
         HdRegion *o = &s_hdReg[i];
         if (o == r) continue;
@@ -431,17 +398,15 @@ void HdMaybeDump(int tpage, int clut, int uMin, int uMax, int vMin, int vMax) {
         HdDecodeAndDump(r, tp, clut);
     }
 }
-/* Per-TRIANGLE replace resolve (hi-res pass): return the replaced region this textured triangle samples
- * (via its texel-UV bbox -> VRAM footprint), or NULL. The per-pixel HD sampling is then inlined in
- * dda_span with precomputed constants -- no per-pixel scan/divide. Replace mode registers only regions
- * that have a replacement, so this scan is short. */
+/* Per-TRIANGLE replace resolve (hi-res pass): the replaced region this textured triangle samples (via
+ * its texel-UV bbox -> VRAM footprint), or NULL. Per-pixel HD sampling is then inlined in dda_span with
+ * precomputed constants. Only regions with a replacement are registered, so the scan is short. */
 HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax) {
     int tpX, tpY, tp, ppw, wx0, wx1, wy0, wy1, i;
     TPageOrigin(tpage, &tpX, &tpY, &tp);
-    /* Every HD-replaced asset is an 8bpp background (tp==1). Battle draws (unit sprites, effects, cursor
-     * tiles, HP bars) are 4bpp and merely share the same VRAM words as a still-live background region at a
-     * DIFFERENT bit depth -- reading them as the background is the regression. They never go through
-     * LoadImage (bulk VRAM DMA), so eviction can't catch them; the bit-depth guard does, cleanly. */
+    /* Every HD-replaced asset is an 8bpp background (tp==1). Battle draws (unit sprites, effects,
+     * cursor tiles, HP bars) are 4bpp and merely share VRAM words with a still-live background region;
+     * they bypass LoadImage (bulk DMA) so eviction cannot catch them -- the bit-depth guard does. */
     if (tp != 1) return NULL;
     ppw = (tp == 0) ? 4 : (tp == 1) ? 2 : 1;
     wx0 = tpX + uMin / ppw; wx1 = tpX + uMax / ppw; wy0 = tpY + vMin; wy1 = tpY + vMax;
@@ -450,18 +415,13 @@ HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax) {
         /* acquire pairs with the loader thread's release publish of px: once non-NULL, w/h and the
          * pixel data are visible too. Until then the region is skipped -> native texels draw. */
         if (!__atomic_load_n(&r->px, __ATOMIC_ACQUIRE) || !r->live) continue;
-        /* The HD PACK toggle must gate HD-PACK-sourced regions PER SAMPLE, not just at registration:
-         * a region registered while the toggle was ON stays live (and re-uploads re-mark it live),
-         * so without this check toggling OFF mid-scene keeps drawing it for the rest of the run.
-         * Langpack-sourced regions (r->dir is PC_LangBgDir()'s one static buffer -- pointer identity
-         * is exact) are deliberately NOT gated: localized backgrounds are translation, not an
-         * enhancement, and ride the language selection instead. Toggling back ON re-samples the
-         * still-live region, mirroring the toggle-ON semantics the eviction comment above documents. */
+        /* The HD PACK toggle gates HD-PACK-sourced regions PER SAMPLE (a live region would otherwise
+         * keep drawing after toggling OFF mid-scene). Langpack regions (r->dir is PC_LangBgDir()'s one
+         * static buffer -- pointer identity is exact) are translation, not an enhancement: never gated. */
         if (!HdActive() && r->dir != PC_LangBgDir()) continue;
-        /* At internal scale 1 the shadow pass exists ONLY for the langpack (pc_raster.c
-         * HiresWanted): localized backgrounds are translation and must not depend on a graphics
-         * setting, but HD-pack backgrounds remain a >= 2x enhancement -- sampling them here at 1x
-         * would silently change what "HD PACK requires internal res" means in the manual. */
+        /* At internal scale 1 the shadow pass exists ONLY for the langpack (pc_raster.c HiresWanted):
+         * localized backgrounds must not depend on a graphics setting, while HD-pack backgrounds stay
+         * a >= 2x enhancement ("HD PACK requires internal res" in the manual). */
         if (PC_GpuGetInternalScale() == 1 && r->dir != PC_LangBgDir()) continue;
         if (wx1 < r->rx || wx0 >= r->rx + r->rw || wy1 < r->ry || wy0 >= r->ry + r->rh) continue;
         return r;

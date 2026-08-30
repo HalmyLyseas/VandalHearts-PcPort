@@ -1,32 +1,6 @@
-/* Map-file decompression, terrain/texture event objects, the event-script index, and the
- * shared unit animation-set data (segment 0xa2ce0).
- *
- * UnpackMapFileData decodes the M_*.PRS map files: one control byte supplies eight mode
- * bits, each selecting a literal byte or one of three back-reference forms (10-bit
- * absolute index into the dictionary, 4-bit relative distance, or a run of up to 70
- * literals). The dictionary is a 1KB ring in scratchpad RAM at 0x1f800000 (primed with a
- * write cursor at 990).
- * ProcessMapFileData reads the 4-byte length header and unpacks into gMapDataPtr; LoadMap
- * (states/game_setup.c) is the only caller.
- *
- * LoadEventData carves the freshly loaded EVDATA*.DAT out of gEvtEntityData: the leading
- * s16 is the entity count, and each entity's script is a run of s16 (opcode, argument)
- * pairs ending at opcode 99; walking the terminators yields one gEvtEntityDataPointers
- * entry per entity. events/scene_loaders.c calls it and hands each pointer to SetupEventEntity
- * (units/actor.c).
- *
- * Objf683_AdjustFaceElevation and Objf684_SlidingFace both index the 76-entry
- * sSlidingFaces table by obj->state2 and move one tile-model face's elevation -- the first
- * in a single step, the second a few units per frame; event opcodes 0x52/0x53 spawn them.
- * Objf758_Map44_Scn00_ShrinkDoorTex trims three map textures' height over 32 frames to
- * track a door being lowered.
- *
- * From line ~250 the file is pure data: 64 D_* byte arrays in the unit-sprite animation
- * format (s8 (frameIdx, delay) pairs closed by a zero pair, plus the 5-byte 0x3b/0x3c
- * records carrying a per-frame position offset), gathered into gAnimSet_80101fc0[56] and
- * two small sets nothing references. Entries come in front/back pairs because animation
- * is indexed animSet[animIdx + facingFront]; events/scene_loaders.c passes these as event entities'
- * base/alt sets. */
+/* M_*.PRS map-file decompression, LoadEventData (docs/decomp/event-scripts.md, "File format and
+ * loading"), the face-elevation event objects (opcodes 0x52/0x53) and the shared unit
+ * animation-set data gAnimSet_80101fc0, front/back pairs indexed animSet[animIdx + facing]. */
 #include "common.h"
 #include "field.h"
 #include "object.h"

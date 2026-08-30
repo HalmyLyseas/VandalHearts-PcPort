@@ -90,6 +90,16 @@ the Vandalier in chapter 6, they offer little reward for the consumables and tim
 - Losing a unit in a Trial now carries a **gold penalty**, also scaled to the chapter's final battle —
   the Trials are a resource source, but not a free one.
 
+The level-cap override is split across two files because the Trial enemies are set up on a path
+where `gState.chapter`/`gState.mapNum` are still in flux: at spawn time the chapter cap is applied
+instead of copying Ash's level (`states/game_setup.c`), and the enemies keep `expMulti 0` — retail's
+attack-XP multiplier for Trial enemies — plus a chapter-scaling override in `battle/evaluators.c` that
+can land on the wrong chapter while those globals are unstable. By the time XP is actually computed
+(`battle/math.c`, `CalculateAttackDamage`), chapter and map are stable, so the fix forces both values
+there instead: it restores a per-chapter attack-XP multiplier and the correct `expScalingLevel`.
+Mutating the enemy's `expMulti` and the global scaling level at that point is persistent and harmless,
+since both values only ever feed XP.
+
 ### Guardsman & Dragoon — mobility
 
 **Intent — make the Armored path an active front-line choice.** Guardsman/Dragoon are the party's
@@ -121,7 +131,9 @@ pass: it's a hybrid (inherently harder to balance), and almost everything in ret
 
 - **MP pool** brought to exact caster parity (`2 × level`) — `gClassMpMultiplier` **1 → 2**, and the
   retail Monk-only `+advLevelFirst` promotion bonus (which existed to soften the half rate) is dropped
-  in Tactical so the two don't stack and overshoot.
+  in Tactical so the two don't stack and overshoot. The `reqLv ≤ 10` base spells are kept through the
+  second path-B promotion (`states/game_setup.c`, `PopulateUnitSpellList`), so an early Monk/Ninja spell
+  doesn't drop off the list once the class promotes again.
 - **Magic resistance** improved to sit between the caster and frontline tiers — `magicSusceptibility`
   **3 → 2** (weaker than Priest/Mage, stronger than Swordsman/Duelist).
 - **Claws** raised to match their tier's other weapons — Panzer Claw real power **10 → 12**, Dragon Claw
@@ -248,7 +260,11 @@ members back into the final chapter.
 
 - **Removed** the `gState.debug` hook that gave the Vandalier all spells and all items.
 - **Kept Plasma Wave** on its spell list — the signature power-fantasy cast survives, but it's now
-  MP-limited like any spell, with the infinite-MP item loop gone.
+  MP-limited like any spell, with the infinite-MP item loop gone. Mechanically, unit setup
+  (`SetupPartyBattleUnit`/`SyncPartyUnit`) writes `SPELL_PLASMA_WAVE` directly into the unit's first
+  free spell slot whenever its weapon is the V-Heart, rather than through the usual `gSpellLists`-append
+  path — so the spell never leaks onto Ash's other promotions and never indexes past
+  `gSpellLevelRequirement`'s 36 entries.
 
 ![The Vandalier's spell list: Plasma Wave present, paid for from a finite MP pool](images/TacticalOnly-Spellist-Vandalier.png)
 
@@ -287,6 +303,146 @@ adds finally pull their weight on defense. It's a bias layered on top of the ori
 rewrite, and it's **Tactical-only** — normal mode's AI is untouched. The full targeting model (and why
 retail behaves the way it does) is in
 [game-mechanics/ai-decision-making.md](game-mechanics/ai-decision-making.md).
+
+The term is tuned rather than dominant: `score += (magSusc − 3) × 30` (the weight lives as
+`PC_AI_MAGSUSC_K` in `battle/ai.c`). A resistant target (`magSusc` 1 or 2) gets −60 or −30; a weak one
+(4 or 5) gets +30 or +60 — only a 30-point edge over a neutral target, so advantage, HP and terrain
+stay live tiebreakers and a well-matched neutral unit can still be picked over a weak one. The term
+needs no magic-only gate: it only runs in the damage-scoring branch, which is reached exclusively for
+magic spells (physical attacks score through the separate attack scorer, above), and every damage
+spell already scales with `magSusc` in the damage formula itself.
+
+## Implementation notes
+
+*For maintainers; players can skip this section.* The mode lives in
+`platform/pc/src/pc_balance.c` / `pc_balance.h`, a PC-side unit that is never part of the matching
+build. Game-side reads of `gTacticalMode` sit in `src/` behind `#ifdef PC_FEAT`.
+
+### The runtime patch
+
+Tactical values are a single **restorable, idempotent patch** over the game's mutable global tables:
+each patched location is an (address, size, tactical value) record with a snapshot of the pristine
+bytes. `PC_SyncBalance()` applies the tactical values when `gTacticalMode` is set and writes the
+snapshot back when it is not, enforcing the invariant `patchApplied == gTacticalMode`; it must run
+after every mode change (boot, the overlay toggle, load-adopt, return to title). The snapshot is
+taken lazily on the first sync — after the generated data has populated the tables and before any
+patch — so Normal mode presents pristine values no matter how often a session switches modes.
+
+- Pointer-table swaps (item and spell descriptions) pass the pointer through the record's `tac`
+  field, which is `unsigned long long` on purpose: `unsigned long` is 32-bit on Windows (LLP64).
+- Fixed-width string patches (`gSpellNames[]` is a `char[][21]` array, not a pointer table) copy in
+  place and must fit the record width; a longer replacement — a mis-built language pack — is logged
+  and skipped rather than overrunning the next record.
+- The Tactical layer's text is translatable: every authored string is offered to the active language
+  pack by content (`PC_LangStr`) once, at patch-build time.
+- Diagnostics: `VH_SPELL_DUMP=1` logs each unit's advancement fields and resulting spell list;
+  `VH_BALANCE_DUMP=1` prints the patched spell fields after apply.
+
+### Level caps
+
+`TacticalCap(chapter)` returns 50 (the retail cap) in Normal and, in Tactical, the chapter's cap with
+`chapter` clamped to `[1, 6]` (chapter 1 is a valid Trial index):
+
+| Chapter | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|--:|--:|--:|--:|--:|--:|
+| Cap | 10 | 15 | 19 | 24 | 28 | 32 |
+
+The starters begin at level 5–6, so chapter 1 is a +5 ramp; every later chapter adds a uniform +4,
+and 32 is the final boss's level. A steeper early curve leaves the party 2–3 levels under cap by
+chapters 3–4, while smaller late steps let area casters hit the cap mid-chapter and waste the
+chapter-5 Trial and final-battle XP; the uniform +4 avoids both.
+
+### Trial rewards
+
+A cleared Trial pays like **that chapter's final battle**: the four per-chapter tables are the final
+battle's own values read from the retail binary (regular enemies; bosses get no 2× tier). All are
+indexed by `gState.chapter` clamped to `[1, 6]` — one Trial map replays across chapters — and are read
+only by the `PC_FEAT` Trial hooks, always under `gTacticalMode && mapNum <= 5`.
+
+| Chapter | 1 | 2 | 3 | 4 | 5 | 6 | Retail Trial |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| Attack-XP scaling level (`TrialExpScalingLevel`) | 9 | 14 | 17 | 21 | 26 | 29 | — |
+| Enemy XP multiplier (`TrialEnemyExpMulti`) | 12 | 15 | 16 | 15 | 12 | 21 | 0 |
+| Gold per kill (`TrialGoldReward`) | 170 | 330 | 660 | 1040 | 1820 | 2700 | 10 |
+| Gold lost per player-unit death (`TrialGoldPenalty`) | 110 | 220 | 440 | 700 | 1200 | 1800 | 10 |
+
+### Class rework constants
+
+Every value below is one patch record in `ensureInit()`:
+
+| Change | Table | Retail → Tactical |
+|---|---|---|
+| Guardsman mobility (Clint/Grog/Dolan) | `gUnitInfo[{26,31,32}].step` | 1 → 5 (Bowman profile) |
+| Dragoon mobility | `gUnitInfo[{50,55,56}].step` | 4 → 6 (Sniper profile) |
+| Monk/Ninja magic resistance (Eleni/Huxley/Sara/Zohar) | `gUnitInfo[{28,29,34,35,52,53,58,59}].magicSusceptibility` | 3 → 2 |
+| Monk MP pool | `gClassMpMultiplier[CLASS_MONK]` | 1 → 2 |
+| Panzer Claw / Dragon Claw | `gItemEquipmentPower[ITEM_P_CLAWS]`, `[ITEM_D_CLAWS]` | 10 → 12, 12 → 13 |
+| Roman Fire | `gSpells[11].power` | 7 → 9 |
+| Chapter-4 opener XP | `gBattleExpScalingLevels[29]` | 16 → 18 (the only downward dip in maps 10–43; its neighbours are 17 and 18) |
+
+`step` selects a whole movement profile — range, climb ceiling and terrain cost — see
+[game-mechanics/classes.md](game-mechanics/classes.md).
+
+**Spell-slot swaps.** Two swaps make spells 13 and 26 class-exclusive so their stats and level
+requirements tune freely:
+
+- **Spell 13 (Spread Force)** becomes Monk-only: power 13 → 8, MP 7 → 8, `gSpellLevelRequirement`
+  21 → 12 (Stone Shower's retail level). `gSpellLists[{4,5,10,11}][1][3]` — the Monk path's slot 3 for
+  Eleni/Huxley/Sara/Zohar — point at it.
+- **Spell 26 (retail Stone Shower)** becomes the mage's Thunder Ball: range 5, field 1, power 13,
+  MP 10, level 21 (Spread Force's retail level). Its `gSpellsEx` main/target/defeat objects
+  (224/128/129) are copied from spell 41, the item-cast Thunder Ball, which itself stays untouched
+  because enemy unit 124 casts it. `gSpellLists[{4,11}][0][7]` — the mage path's slot 7 for
+  Eleni/Zohar — point at it. Stone Shower is dropped in Tactical only; no enemy, item or code path
+  casts it.
+- The name in `gSpellNames[26]` is patched in place. On the Japanese game it is the katakana
+  サンダーボール: the JP renderer draws full-width Shift-JIS names, and an ASCII name renders blank in
+  the spell list and the cast banner.
+
+**Mystic Energy (spell 32)**, beyond the stat changes in the table above:
+
+- `gSpellSounds2[32]` 0 → 911. Retail Mystic Energy is single-target and has no per-target hit
+  sound; as an ally-group buff the per-target loop in `battle/executors.c` plays `gSpellSounds2` once
+  per ally, so it mirrors the cast sound — the same `Sounds1 == Sounds2` pattern Cure Wide uses.
+- `gSpellsEx[32][OBJF_TARGET]` 113 → 112. Both are the lightweight `OBJF_CASTING_STAT_BUFF` object
+  (so the swap stays AOE-safe); 112 is Mystic Shield's blue-CLUT variant of retail's green 113. The
+  floating stat-up text is keyed off the aura CLUT (`Objf681_StatBuffFx`): BLUES shows only "DF up!",
+  REDS "AT up!", GREENS both — so the recolor also drops the misleading "AT up!" for a defense-only
+  buff. `OBJF_DEFEAT` is left alone: an ally buff never reaches the defeated-target path.
+- The defBoost / magic-resistance effect itself is a `PC_FEAT` hook in the game source, not a table
+  patch.
+
+**Cut weapons stay cut.** The Bloodaxe (item 35) and Kill bow (item 23) are enemy-commander weapons
+(the Bloodaxe belongs to Dallas and generic troopers, the Kill bow to Lando), not unused content;
+both items are byte-for-byte retail in Tactical.
+
+### Text swaps
+
+- **Item descriptions.** `gItemDescriptions` (single-line) and `gItemDescriptions2` (shop) are
+  pointer tables, both defined with the retail strings in the generated `pc_item_descriptions.c`;
+  Tactical repoints entries 8–11 and 88–96 at authored text (the table under *Clarified item
+  descriptions*). On the Japanese game the nine `?????` items instead reuse the disc's own spell
+  description, `gSpellDescriptions[gItemSpells[id]]` — those spells (63–71) take no Tactical patch, so
+  the baked numbers stay correct — and items 8–11 need no swap because the JP retail text already
+  states the specs.
+- **Spell info lines.** The in-battle spell-info bar draws `gSpellDescriptions[]`, a baked string
+  with range/field/MP hardcoded rather than read from `gSpells`, so every reworked spell's line is
+  repointed too. US lines copy the retail format and spacing. JP lines are the retail string with
+  only the numerals swapped (`<retail prefix> 射程R 範囲F 消費ＭＰn`; a full-width digit *d* is the
+  Shift-JIS pair `0x82, 0x4F + d`). Spell 32 borrows spell 29's protective prefix in both regions
+  ("Protect Magic" / 物理攻撃を防御): the retail "ATK/DEF up" wording would misdescribe a defense-only
+  buff.
+
+### Save cards and the mode marker
+
+Each mode uses its own save folder, and every card also carries the mode inside the file:
+`CardFileData_Header.padding[0]` — file offset 68 — is `'T'` (0x54) in Tactical and 0 in Normal
+(`stampSaveMarker`, run from every sync). The game never touches `padding` (`core/card.c`), so the
+stamp rides inside a hardware-valid save. `PC_AdoptSaveMode()` reads the marker before a load and,
+when it disagrees with the current mode, adopts the card's mode and re-syncs — a hand-moved file
+lands in the right tables. The Japanese card header shares the US layout up to and including
+`padding[28]` at offset 68 — JP only appends a third icon frame at the tail (512 vs 384 bytes) — so
+the marker offset holds in both regions.
 
 ## A note on the numbers
 

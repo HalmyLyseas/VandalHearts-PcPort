@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
-# Build a MINIMAL, STATIC libav — just what the port's HD-FMV decoder (pc_hdvideo.c) needs:
-# H.264/HEVC decode + mov/mp4 demux + swscale rescale. Two targets:
-#   TARGET=mingw  (default) -> cross-compiled for Windows (x86_64-w64-mingw32)
-#   TARGET=native           -> the build host (used inside the vh-deb12 container so the Linux
-#                              AppImage links libav statically instead of bundling the distro's
-#                              shared ffmpeg + its 100+-library codec closure)
-#
-# Why: distro/MSYS2 ffmpeg is a SHARED "kitchen-sink" build — its avcodec DLL alone imports 35+
-# external codec DLLs (x264/x265/aom/vpx/dav1d/jxl/cairo/glib/gnutls/...), 60-100 MB to bundle.
-# This build enables ONLY the decode path, static, with no external libs, so the libs link
-# straight into vandalhearts_pc.exe (~+2-4 MB) and NO ffmpeg DLLs need shipping.
-#
-# Output: $PREFIX/{lib/libav*.a,libswscale.a, include/libav*, include/libswscale}
-# Point the port's CMake at it:  cmake ... -DCMAKE_PREFIX_PATH="$PREFIX"
-# Static libav on MinGW also needs -lbcrypt at final link (avutil uses BCryptGenRandom); the
-# CMakeLists adds it under VH_HDVIDEO when cross-compiling.
+# Builds a minimal, static libav for the port's HD-FMV decoder (H.264/HEVC decode + mov/mp4
+# demux + swscale only, no external codec libs). TARGET=mingw (default, Windows cross) or
+# TARGET=native (the build host). See docs/cross-platform.md, "Toolchain".
+
+# Output: $PREFIX/{lib/libav*.a,libswscale.a, include/libav*, include/libswscale}. Static
+# libav on MinGW also needs -lbcrypt at final link (avutil uses BCryptGenRandom); CMakeLists
+# adds it under VH_HDVIDEO when cross-compiling.
 set -euo pipefail
 
 TARGET=${TARGET:-mingw}

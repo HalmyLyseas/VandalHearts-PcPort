@@ -1,7 +1,6 @@
-/* pc_gpu_internal.h -- seams between libgpu.c (PsyQ GPU API + VRAM + OT walker) and the subsystem
- * TUs extracted from it (pc_gpu_trace.c, ...). NOT a public API: nothing outside platform/pc/src
- * includes this. Everything here used to be file-static in libgpu.c; the split moved whole
- * subsystems out verbatim, and these are the few symbols that must cross the new TU boundaries. */
+/* pc_gpu_internal.h -- seams between libgpu.c (PsyQ GPU API + VRAM + OT walker) and the other GPU TUs
+ * (pc_raster.c, pc_hdpack.c, pc_gpu_trace.c). NOT a public API: nothing outside platform/pc/src
+ * includes this. */
 #ifndef PC_GPU_INTERNAL_H
 #define PC_GPU_INTERNAL_H
 
@@ -29,13 +28,12 @@ extern unsigned s_drawFrame;
 #define PC_GPU_VRAM_W 1024
 #define PC_GPU_VRAM_H 512
 unsigned short (*PC_GpuVram(void))[PC_GPU_VRAM_W];
-/* Texpage/pixel helpers shared across the split TUs (were file-static in libgpu.c). */
+/* Texpage/pixel helpers shared across the GPU TUs. */
 void TPageOrigin(int tpage, int *x, int *y, int *tp);
 void UnpackColor(unsigned short c, int *r, int *g, int *b);
-/* Per-pass render context (Stage-3 1.5/P1 re-entrancy). The mutable rasterizer state the pixel/texture
- * path reads: clip band, draw offset, dither-enable, texture window, and the target (native VRAM vs the
- * Sx hi-res buffer). The OT walk (DrawOTag, in libgpu.c) tracks DR_MODE state in its own globals and
- * snapshots it into a ctx per draw; the hi-res pass hands per-band copies to worker threads. */
+/* Per-pass render context: the mutable rasterizer state the pixel/texture path reads -- clip band, draw
+ * offset, dither-enable, texture window, and the target (native VRAM vs the Sx hi-res buffer). DrawOTag
+ * snapshots its DR_MODE globals into one per draw; the hi-res pass hands per-band copies to workers. */
 typedef struct {
     int clipX, clipY, clipW, clipH;   /* drawing area, native units (y/h become the band under threading) */
     int ofsX, ofsY;                   /* draw offset, native units */
@@ -49,7 +47,7 @@ void FillQuad(const RenderCtx *rc, RVert v0, RVert v1, RVert v2, RVert v3, int r
               int textured, int tpage, int clut, int semiTrans, int abr);
 void FillRect(const RenderCtx *rc, int x0, int y0, int w, int h, int r, int g, int b);
 void FillRectRaw(int x0, int y0, int w, int h, int r, int g, int b);   /* ClearImage: no offset/clip */
-/* G2 hi-res pass (VH_INTERNAL_SCALE): buffer lifecycle, per-frame display list, banded thread pool. */
+/* Hi-res pass (VH_INTERNAL_SCALE): buffer lifecycle, per-frame display list, banded thread pool. */
 void HiresEnsure(void);
 void HiresMirrorRect(int x0, int y0, int w, int h);   /* keep hi-res in sync with bulk VRAM writes */
 void HiresFrameReset(void);
@@ -61,7 +59,7 @@ int  HiresActive(void);                                        /* scale > 1 and 
 void HiresPresent(int dispX, int dispY, int dispW, int dispH); /* edge-clamp + dump hook + present */
 extern volatile sig_atomic_t g_vhHiresDumpReq;   /* SIGUSR2 latch: dump the hires pair this frame */
 
-/* ---- provided by pc_hdpack.c (1.6 HD pack: background replacement) ---- */
+/* ---- provided by pc_hdpack.c (HD pack: background replacement) ---- */
 /* One replaced/dumped VRAM region. px is published by the async loader with a release store;
  * readers acquire-load it (NULL until the decode lands -> native texels draw). */
 typedef struct { unsigned long long hash; int rx, ry, rw, rh; unsigned short *px; int w, h; int dumped; int live; const char *dir; } HdRegion;
@@ -69,7 +67,7 @@ void HdPack_OnLoad(const RECT *rect, const unsigned short *src);  /* LoadImage h
 void HdMaybeDump(int tpage, int clut, int uMin, int uMax, int vMin, int vMax);   /* VH_HD_DUMP */
 HdRegion *HdFindTriRegion(int tpage, int uMin, int uMax, int vMin, int vMax);    /* per-triangle resolve */
 int  HdActive(void);           /* HD pack (or VH_HD_PACK override) live right now? */
-int  HdAnyActive(void);        /* HD pack OR a langpack backgrounds/ source live (F2, exchange/92) */
+int  HdAnyActive(void);        /* HD pack OR a langpack backgrounds/ source live */
 const char *HdDumpDir(void);   /* VH_HD_DUMP dir, or NULL */
 int  HdRegionCount(void);      /* registered regions (gates the per-triangle work) */
 int  HdReplaceCount(void);     /* regions with a replacement (gates threading + resolve) */

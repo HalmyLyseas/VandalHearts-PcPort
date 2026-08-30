@@ -409,35 +409,14 @@ typedef enum ObjFunctionIdx {
    OBJF_LIGHTNING_RING_SPRITE = 803,
 } ObjFunctionIdx;
 
-/* ---- PC_PORT (Stage 2.3): 64-bit coords-alias padding ---------------------------------------
- * Several union members in Object_DataStore DELIBERATELY alias Object_Sprite's `coords[4]` at
- * 0x3C: an effect writes its vertices through its own struct, and the shared renderer
- * (AddObjPrim2/4/5 in core/object.c) reads them back as `obj->d.sprite.coords`. That alias holds only
- * while every one of those structs puts coords at the same offset.
- *
- * Object_Sprite has `void *animData` at 0x38, immediately before coords. On a 64-bit host that
- * pointer grows 4 -> 8 bytes and pushes Object_Sprite.coords from +24 to +32, while the effect
- * structs -- which have plain s16 fields there -- keep coords at +24. The renderer then reads 8
- * bytes past the vertices the effect actually wrote. Symptom: the casting "inward ray" effect
- * (Objf314_InwardRay) drew white blobs instead of thin rays, because its quad's tail vertices
- * came back as unrelated struct fields.
- *
- * This pad restores the alias on 64-bit hosts. It is a no-op for the matching build (which never
- * defines PC_PORT) and for any 32-bit build. Object_396 needs no pad: it already carries the same
- * `void *animData` at 0x38 and therefore shifts identically to Object_Sprite. */
+/* Several Object_DataStore union members deliberately alias Object_Sprite's `coords[4]` at 0x3C:
+ * an effect writes its vertices through its own struct, and the shared renderer reads them back
+ * via `obj->d.sprite.coords`. See docs/width-bugs.md, "The catalogue" (#3). */
 #if defined(PC_PORT) && (defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(__aarch64__))
 #define PC_PORT_LP64 1   /* PC build on a 64-bit host; matching/32-bit builds leave it undefined */
-/* Two sizes: Object_Sprite's `void *animData` sits at a 4-byte-aligned offset, so on LP64 it
- * costs +8 (4 bytes of alignment padding + 4 bytes of growth) and pushes coords 24 -> 32. Most
- * aliasing structs naturally sit at 24 and need the full +8; three (Object_323_713, _675, _719)
- * already carry their own pointer and land at 28, needing only +4. Verified by measuring
- * offsetof(...,coords) for all 14 at both widths -- they must ALL read 32 at -m64.
- *
- * ⚠️ The PAD only fixes `coords`. A struct whose OWN pointer is a LEADING field at 0x24 (aliasing
- * Object_Sprite's 4 hidden/facing bytes) ALSO shifts gfxIdx/clut/boxIdx off Object_Sprite's alias on
- * LP64 -- the PAD does not help those. Object_675 and Object_719 have that shape and are fixed
- * individually below (leading pointer -> a 4-byte gap + the pointer relocated to the 0x38 animData
- * slot, like the correct Object_396). See docs/width-bugs.md. */
+/* Object_Sprite's `void *animData` at 0x38 grows 4->8 on LP64, pushing coords 24->32; 11 of the 14
+ * aliasing structs need the full +8 pad, 3 that already carry their own pointer land at 28 and
+ * need only +4 (verified via offsetof at both widths). See docs/width-bugs.md, "The catalogue". */
 #define PC_PORT_COORDS_ALIAS_PAD8 u8 pc_coordsAliasPad[8];
 #define PC_PORT_COORDS_ALIAS_PAD4 u8 pc_coordsAliasPad[4];
 #else
@@ -2352,12 +2331,8 @@ typedef struct Object_305_328 {
    /* :0x5C */ struct Object *unused_0x5C;
 } Object_305_328;
 
-/* Healing - FX2 */
-// TODO: Disambiguate from Object_100?
-// 306: Extra Healing, Hyper Healing
-// 791: Healing Plus
-// 792: Ultra Healing
-// 793: Supreme Healing, Holy H2O
+/* Healing FX2 variant (TODO: disambiguate from Object_100): 306 Extra/Hyper Healing, 791 Healing
+ * Plus, 792 Ultra Healing, 793 Supreme Healing/Holy H2O. */
 typedef struct Object_306_Etc {
    /* :0x24 */ s16 timer;
    /* :0x26 */ u8 unk_0x26[18];
@@ -3473,9 +3448,9 @@ typedef struct Object_673 {
 /* Leena's Forcefield */
 typedef struct Object_675 {
 #ifdef PC_PORT_LP64
-   /* PC_PORT LP64 fix (same shape as Object_719): targetSprite is a LEADING pointer at 0x24, whose 8
-    * LP64 bytes shift gfxIdx/clut/boxIdx off Object_Sprite's alias. Keep 0x24 a 4-byte gap and move
-    * the pointer to the 0x38 animData slot so all aliased fields (gfxIdx/clut/boxIdx/coords) line up. */
+   /* Same shape as Object_719: targetSprite is a LEADING pointer at 0x24, whose 8 LP64 bytes shift
+    * gfxIdx/clut/boxIdx off Object_Sprite's alias. Keep 0x24 a 4-byte gap and move the pointer to
+    * the 0x38 animData slot so all aliased fields line up. See docs/width-bugs.md, "The catalogue". */
    u8 pc_leadPtrGap[4];
 #else
    /* :0x24 */ struct Object *targetSprite;
@@ -3591,12 +3566,9 @@ typedef struct Object_715_to_718 {
 /* Dimensional Rift */
 typedef struct Object_719 {
 #ifdef PC_PORT_LP64
-   /* PC_PORT LP64 fix (see the note at PC_PORT_COORDS_ALIAS_PAD): entitySpriteParam is a LEADING
-    * pointer at 0x24 in the retail struct; on LP64 its 8 bytes shift gfxIdx/clut off Object_Sprite's
-    * alias, so AddObjPrim4 reads a garbage gfxIdx and the Dimensional Rift renders as white planes.
-    * Keep 0x24 a 4-byte gap (gfxIdx stays at 0x28) and relocate the pointer to the 0x38 animData slot
-    * like the correct Object_396 -- an 8-byte pointer there shifts coords identically to
-    * Object_Sprite, so coords lands at 0x40 with no extra pad. */
+   /* entitySpriteParam is a LEADING pointer at 0x24 (unlike PC_PORT_COORDS_ALIAS_PAD's trailing
+    * case); keep 0x24 a 4-byte gap and relocate the pointer to the 0x38 animData slot, like
+    * Object_396. See docs/width-bugs.md, "The catalogue" (#3b). */
    u8 pc_leadPtrGap[4];
 #else
    /* :0x24 */ struct Object *entitySpriteParam;

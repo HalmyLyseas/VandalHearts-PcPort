@@ -23,9 +23,8 @@ void main(void) {
    while (1) {
 #ifdef PC_PORT
       /* Overlay RETURN TO TITLE is deferred to here -- the only point where no game code is
-       * mid-frame -- so the state flip can't race a live loader (see pc_balance.c). Must run
-       * BEFORE UpdateState: the title state's entry then resets leftover objects before
-       * Obj_Execute can run one. Same gated hook as the US tree (src/core/main.c). */
+       * mid-frame -- so the state flip can't race a live loader (see pc_balance.c). Must run BEFORE
+       * UpdateState: the title state's entry resets leftover objects before Obj_Execute runs one. */
       { extern void PC_ApplyReturnToTitle(void); PC_ApplyReturnToTitle(); }
 #endif
       UpdateState();
@@ -433,10 +432,9 @@ void State_EventScene(void) {
    }
 }
 
-/* JP-only debug scene selector. The US build ships slot 584 as an empty stub; the JP build keeps
- * the development jump-to-anywhere menu, spawned from the debug menu (states/debug_menu). Three
- * paged selector families -- events, world-map destinations and towns. Within each, an even state2
- * draws a page and the following odd state2 reads the choice; LEFT/RIGHT page, X backs out. */
+/* JP-only debug scene selector, spawned from the debug menu (states/debug_menu); the US build ships
+ * slot 584 as an empty stub. Three paged families -- events, world-map destinations, towns; an even
+ * state2 draws a page and the following odd state2 reads the choice; LEFT/RIGHT page, X backs out. */
 void Objf584_DebugSceneSelect(Object *obj) {
    switch (obj->state) {
    case 0:

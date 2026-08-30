@@ -75,21 +75,13 @@ typedef enum GridColor {
 } GridColor;
 
 #ifdef PC_FEAT
-/* Stage 3 (1.1): purple enemy-threat overlay. A macro, not an enum member, so the matching
- * build's GridColor is byte-for-byte unchanged (no trailing-comma / value-set difference). */
+/* Purple marks the enemy-threat overlay. A macro, not an enum member, so the matching build's
+ * GridColor stays byte-for-byte unchanged (no trailing-comma / value-set difference). */
 #define GRID_COLOR_PURPLE 4
-/* Stage 3 (1.3): orange for a reachable-AND-threatened tile, so the threat warning is distinct from
- * the native yellow attack/AoE target grid (bugreport-04). Macro (not enum) for the same byte-exact
- * reason as PURPLE. */
+/* Orange marks a reachable-AND-threatened tile, distinct from the native yellow attack/AoE target
+ * grid. Macro (not enum) for the same byte-exact reason as PURPLE. */
 #define GRID_COLOR_ORANGE 5
 #endif
-
-/*typedef struct ImpededStep {
-   u8 z;
-   u8 x;
-   u8 step;
-   u8 rem;
-} ImpededStep;*/
 
 typedef struct HiddenItem {
    u8 z;
@@ -127,41 +119,9 @@ extern PathGridRow *gCrateGrid_Ptr;
 extern u8 gImpededSteps[5][200];
 extern u8 *gImpededStepsQueue[5];
 extern u8 gTravelTerrainCost[14][11]; // [stepping-type][terrain-type]
-/* Indexed `[stepType][diff]` in battle/path_grids.c. The real hardware dimensions are [14][20]; the outer
- * dimension is widened to [20] in the PC build ONLY, for a confirmed reason -- see below. The inner
- * dimension (stride) is NEVER changed: `gTravelAscentCost[stepType][diff]` == base + stepType*20 +
- * diff, so keeping 20 is mandatory for the address math to match.
- *
- * The ASAN sweep found this table overrun in pathfinding, confirmed by the PC_DEBUG_PATH_STEP probe
- * across two maps (exchange/58): a VALID stepType with a `diff` of ~126.
- *
- * CAUSE (corrected -- an earlier version blamed steep terrain / the DEATH ANT sand-pyramid; that
- * was a red herring). The probe also fired for a short-range enchanter on FLAT terrain, so it is
- * NOT relief. It is a map-BOUNDARY read: PopulateMovementGrid reads each neighbour's terrain and
- * elevation UNCONDITIONALLY (battle/path_grids.c:1140-1142) and only AFTERWARDS rejects boundary tiles via
- * `if (gTerrainPtr[...].s.terrain >= 0)`. So when a unit's move-flood reaches the playable-area
- * edge, it reads the off-map/boundary neighbour's elevation (~126 different from real terrain),
- * computes gTravelAscentCost[stepType][126], and then discards the result. Ubiquitous: every map,
- * every edge, every unit's movement -- which is why the `diff` was identical (126) on both maps.
- * The wrong stepType>13 theory (step-14/15 units) is separately dead: every gUnitInfo[].step is
- * 0..13.
- *
- * WHY FIX IT ANYWAY (the read happens before the reject, so it is real): on hardware the four travel
- * tables are contiguous (Ascent 0x800fc110 | Descent 0x800fc228 | gGfxSubTextures 0x800fc340), so
- * `Ascent[stepType][big diff]` reads real Descent bytes -- almost always 255. In the PC build these
- * are independent globals with an 8-byte alignment GAP, so the same overread is shifted 8 bytes and
- * returns DIFFERENT bytes: checked exhaustively, 112 (stepType,diff) combinations flip 255->0. For
- * a boundary neighbour the cost is discarded, so those flips are usually harmless; but the read is
- * a genuine OOB access regardless (ASAN-flagged, and a theoretical wild read), and for any VALID
- * (terrain>=0) tile that ever carries diff>=20 the cost WOULD be used. Making the read in-bounds and
- * byte-identical to hardware closes all of that at once.
- *
- * Fix: widen the OUTER dimension to 20 rows (400 bytes). The data-segment generator extracts
- * `sizeof` bytes from each symbol's real VRAM address, so the extra rows contain the genuine
- * contiguous Ascent+Descent(+gGfxSubTextures) image -- making the port read byte-identical to
- * hardware for every overread, gap notwithstanding. 400 bytes covers the worst case (stepType 13,
- * s8-max diff 127 -> linear 387). The PC_DEBUG_PATH_STEP probe stays as a tripwire for any diff
- * beyond that. PERMUTER-gated; the matching build keeps the true [14][20]. */
+/* Indexed `[stepType][diff]`. PERMUTER widens only the OUTER dimension (hardware is [14][20]) to
+ * close a map-boundary OOB overread; the inner dimension (stride 20) must never change -- the
+ * address math depends on it. See docs/pc-port/bootstrap.md, "`region-jp/` headers". */
 #ifdef PERMUTER
 extern u8 gTravelAscentCost[20][20];  // [stepping-type][elevation-diff]  (outer widened; stride=20)
 extern u8 gTravelDescentCost[20][20];
@@ -193,8 +153,8 @@ extern HiddenItem gMapHiddenItems[BATTLE_CT][2];
 extern u8 gShowBlueMovementGrid;
 
 #ifdef PC_FEAT
-/* Stage 3 (1.1): enemy threat overlay. gThreatGrid holds the union of every living enemy's
- * move+attack reach; gShowThreatGrid toggles its display; ComputeThreatGrid() rebuilds it. */
+/* Enemy threat overlay. gThreatGrid holds the union of every living enemy's move+attack reach;
+ * gShowThreatGrid toggles its display; ComputeThreatGrid() rebuilds it. */
 extern PathGridRow gThreatGrid[30];
 extern PathGridRow *gThreatGridPtr;   /* = &gThreatGrid[1], the [1]-origin alias the others use */
 extern u8 gShowThreatGrid;

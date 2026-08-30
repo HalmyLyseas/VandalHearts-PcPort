@@ -1,25 +1,6 @@
-/* Battle unit-hit effects and screen fades (segment 0x506c0).
- *
- * Object handlers for what happens ON a unit when spells and attacks land, plus the
- * whole-screen fades. Groups:
- *   - Screen fades (Objf070-075): to/from black and white, plus sprite fade in/out and the
- *     stretch-warp (Objf062) used by teleport-style disappearances.
- *   - Ring bursts (Objf076/077, Objf130): expanding ring sprites / a swept quad torus drawn
- *     around the target unit, both signalling completion via gSignal3.
- *   - Damage/slay presentation (Objf078/079, Objf131, Objf149): flashing unit sprite, the
- *     slain-unit stretch-and-vanish, and the generic flash used while damage numbers show.
- *   - The ENGULF family (Objf132_EngulfUnit, one handler for indices 132-142/799/800):
- *     hide the real sprite, draw two fading overlay copies, surround the unit with an
- *     elemental ring of particles, pop the damage number, then either restore the sprite
- *     (spell survived: 132/136/140/799) or stretch-fade it away (slain: 134/138/142/800).
- *     Elements: flame (132/134), lightning (136/138 and the 799/800 pair), explosion
- *     (140/142). Spawn sites index it as base + endingFxType. Emitters Objf133/137/141
- *     spawn 30 orbiting particles each (Objf801/802/803: flame/explosion/lightning anims).
- *   - Melee impact dressing (Objf201-206, Objf213-215): unit struck, blocking, blocking
- *     impact particles, blood spurts, dust clouds.
- *   - Objf119_RadialFxSprite: general orbiting burst particle with a selectable animation
- *     (impact/explosion/puff/sparkle/flame/lightning/orb), used by other effect drivers.
- */
+/* Unit-hit effects and screen fades: fades (Objf070-075, Objf062), ring bursts (Objf076/077,
+ * Objf130), damage/slay presentation (Objf078/079/131/149), the Objf132 engulf family with its
+ * Objf133/137/141 emitters, melee impact dressing (Objf201-206, 213-215), Objf119 particles. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -683,10 +664,9 @@ void Objf079_Slay_FX3(Object *obj) {
 
 #undef OBJF
 #define OBJF Unk8006183c
-/* UNREACHABLE: declared but absent from gObjFunctionPointers[], so no functionIndex can
- * dispatch here -- a retail leftover. Mechanism (for the record): hides the real unit
- * sprite and redraws it plus an enlarged translucent tinted copy (a selection/charge
- * aura), until state 99 restores the sprite. Keeps its address name on purpose. */
+/* Unreachable: absent from gObjFunctionPointers[], so no functionIndex dispatches here. It
+ * hides the real unit sprite and redraws it plus an enlarged translucent tinted copy (a
+ * selection/charge aura) until state 99 restores the sprite. Keeps its address name. */
 void Objf_Unk_8006183c(Object *obj) {
    Object *unitSprite, *fxSprite;
    Quad quad;
@@ -1066,12 +1046,9 @@ void Objf137_LightningRingEmitter(Object *obj) {
 
 #undef OBJF
 #define OBJF 132
-/* One handler for the whole engulf family (table slots 132, 134, 136, 138, 140, 142, 799,
- * 800 all point here; 135/139 are NULL slots -- the 139 case below is unreachable). See the
- * file header for the element/outcome mapping. Spawners select a variant as
- * OBJF_ENGULF_<element>_DAMAGE + endingFxType (e.g. Evil Stream FX2/FX3 spawn the flame pair
- * with a red palette). The 799/800 pair is dispatched data-driven: it is Delta Mirage's
- * target/defeat entry in gSpellsEx (no static spawn site by design). */
+/* One handler for the engulf family: 132/134 flame, 136/138 and 799/800 lightning, 140/142
+ * explosion; the first of each pair restores the sprite, the second stretch-fades it away.
+ * Spawners pick OBJF_ENGULF_<element>_DAMAGE + endingFxType; 135/139 are NULL slots. */
 void Objf132_EngulfUnit(Object *obj) {
    static struct {
       s16 clut, objf, radius, to_x28, to_x2a;
@@ -1942,9 +1919,9 @@ void Objf202_746_UnitBlocking(Object *obj) {
       if (--OBJ.variant_0x24.timer == -1) {
          obj->functionIndex = OBJF_NULL;
          obj_s0 = OBJ.unusedSprite;
-         /* PC_PORT (Stage 2.3): unusedSprite/unitSprite may be NULL here; PSX / the 2.2
-          * fault handler discard the store. Skip it -- store-discard is exact. NULL site #4
-          * (functionIndex@0x8). See exchange/52 Phase 2.3 Step A. */
+         /* unusedSprite/unitSprite may be NULL here; the PSX silently discards a store through
+          * a null pointer, so writing functionIndex@0x8 is harmless on hardware. On PC, skip
+          * the store -- store-discard is exact. */
 #ifdef PC_PORT
          if (obj_s0)
 #endif

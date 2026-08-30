@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# build-unified-win.sh -- cross-compile the P5 UNIFIED Windows executable (exchange/104).
-#
-# Three CMake stages, mirroring `make unified`:
+# build-unified-win.sh -- cross-compiles the unified Windows executable (both regions,
+# runtime disc selection), mirroring `make unified` in three CMake stages.
+
 #   1. VH_REGION=us  VH_UNIFIED_CORE=ON VH_BLOB=ON  -> build_win_uni_us/core_us.o
 #   2. VH_REGION=jp  VH_UNIFIED_CORE=ON VH_BLOB=ON  -> build_win_uni_jp/core_jp.o
 #   3. VH_UNIFIED_CORES="<both cores>"              -> build_win_uni/vandalhearts_pc.exe
+
 # Same toolchain/static-libav conventions as make-release.sh's Windows leg. Clean builds
-# always (flag changes are not dependency-tracked; the 1.6.1 lesson).
+# always -- flag changes are not dependency-tracked between runs.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/.." && pwd)"

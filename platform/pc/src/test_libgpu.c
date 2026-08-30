@@ -1,7 +1,6 @@
-/* Standalone proof-of-concept: exercises the VRAM buffer, Ordering Table
- * walk, rasterizer (POLY_F4/POLY_FT4/SPRT/TILE), GetTPage/GetClut bit
- * packing, TIM parsing, and the SDL2/OpenGL present path. Not part of the
- * real game build. */
+/* Standalone check of the GPU backend: VRAM buffer, ordering-table walk, rasterizer
+ * (POLY_F4/POLY_FT4/SPRT/TILE), GetTPage/GetClut bit packing, TIM parsing, and the headless
+ * present path. Not part of the game build. */
 #include <stdio.h>
 #include <string.h>
 #include "PsyQ/libgpu.h"
@@ -132,10 +131,9 @@ int main(void) {
             DR_MODE mode;
             SPRT s;
             ClearOTag(ot, 8);
-            /* AddPrim inserts at the head of the bucket (LIFO), and DrawOTag
-             * walks from the head -- add the sprite first so DR_MODE (added
-             * last) ends up processed first, exactly like the real
-             * SetDrawMode-before-sprite call sequence the OT encodes. */
+            /* AddPrim inserts at the head of the bucket (LIFO) and DrawOTag walks from the head,
+             * so add the sprite first: DR_MODE (added last) is processed first, like the
+             * SetDrawMode-before-sprite sequence the game's OT encodes. */
             SetSprt(&s);
             setRGB0(&s, 128, 128, 128);
             setXY0(&s, 200, 50);
@@ -188,10 +186,8 @@ int main(void) {
 
     printf("\n=== SDL2/OpenGL present path (headless smoke test) ===\n");
     {
-        /* No PC_GpuInit() called -- PC_GpuPresent (now called at the end of
-         * DrawOTag, not PutDispEnv -- see the libgpu.c comment on both) must
-         * no-op cleanly rather than crash, matching Pad/VSync's headless
-         * testing precedent. Exercises the same PutDispEnv-then-DrawOTag
+        /* No PC_GpuInit() call: PC_GpuPresent (run at the end of DrawOTag, not PutDispEnv) must
+         * no-op cleanly without a window rather than crash. Exercises the PutDispEnv-then-DrawOTag
          * pairing every real call site uses. */
         u_long ot[1];
         ClearOTag(ot, 1);

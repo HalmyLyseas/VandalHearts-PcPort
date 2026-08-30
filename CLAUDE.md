@@ -226,3 +226,7 @@ reconstructs what it needs from the user's own copy.
   reference only tracked files (`docs/`, `.claude/skills/`, real source paths), never `exchange/` or
   external notes that a cloner won't have. Put deep-dive detail in `docs/` or a skill.
 - Update `docs/` and this file at milestones rather than writing new top-level summary files.
+- **Comments are for a reader with no project history:** present tense, ≤3 consecutive lines,
+  never dates / `exchange/` / stage or version markers / "previously" narration — longer rationale
+  goes in `docs/` with a one-line pointer. `make check-comments` (platform/pc) enforces it on every
+  tracked file; run it before committing. Convention detail in [`CONTRIBUTING.md`](CONTRIBUTING.md).

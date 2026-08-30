@@ -20,11 +20,9 @@ LD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '
 
 def main():
     t = open(LD).read()
-    # splat's template inserts `. = ALIGN(., 16)` at every section-group boundary, but the real
-    # SLPM_860.07 packs .rodata->.text->.data contiguously at their natural (<=8-byte) alignment with
-    # no 16-byte pad. Drop the align before each of the *_END markers where we've split real sections.
-    # drop the align before every RODATA/TEXT/DATA/SDATA section-group END marker, in any segment
-    # (main_*, additional_*, …). BSS is nobits — leave its align alone.
+    # splat's template inserts `. = ALIGN(., 16)` at every section-group boundary; the real
+    # SLPM_860.07 packs sections contiguously with no 16-byte pad. Drop the align before every
+    # RODATA/TEXT/DATA/SDATA END marker in any segment (BSS is nobits, left alone).
     n = 0
     for marker in re.findall(r'(\w+_(?:RODATA|TEXT|DATA|SDATA)_END) = \.;', t):
         needle = f"        . = ALIGN(., 16);\n        {marker} = .;"

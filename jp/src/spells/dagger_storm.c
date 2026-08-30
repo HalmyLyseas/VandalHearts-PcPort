@@ -1,9 +1,6 @@
-/* Dagger Storm spell effects (Objf090/337/091/093/092 and a rain helper), plus the
- * generic explosion burst Objf309 and strays kept by address contiguity. Dispatched via
- * gSpellsEx (see spells/casting_main.c). Cut content herein (no spell/event/code
- * dispatch): Objf082/083 (orbiting ember pair, homing explosion spark) and Objf321
- * (expanding explosion ring -- its only spawner, Objf734 in events/fx_scenes.c, is itself
- * unreachable). Suffixed _Unused, kept byte-exact. */
+/* Dagger Storm spell effects (Objf090/337/091/093/092 and a rain helper), the generic explosion
+ * burst Objf309, and strays kept by address contiguity. Dispatched via gSpellsEx
+ * (docs/decomp/spell-fx-dispatch.md); _Unused handlers are cut content, kept byte-exact. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

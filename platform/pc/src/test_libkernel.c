@@ -1,8 +1,6 @@
-/* Standalone proof-of-concept: exercises the event system (matching
- * core/card.c's own OpenEvent/EnableEvent/StartCard/TestEvent flow), the timer,
- * and a real save-file round trip through FileOpen/FileWrite/FileClose/
- * FileOpen/FileRead/FileClose plus firstfile/nextfile directory scanning.
- * Not part of the real game build. */
+/* Standalone proof-of-concept, not part of the game build: exercises the event system
+ * (OpenEvent/EnableEvent/StartCard/TestEvent, matching core/card.c's flow), the timer, and a save-
+ * file round trip through FileOpen/FileWrite/FileRead/FileClose plus firstfile/nextfile scanning. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

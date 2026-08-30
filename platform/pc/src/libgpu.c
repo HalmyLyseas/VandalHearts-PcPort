@@ -1,29 +1,6 @@
-/*
- * PC backend for the GPU (rendering) subsystem.
- *
- * A real 1MB VRAM buffer (512 lines x 1024 halfwords, BGR555 -- the actual
- * PS1 hardware pixel format, per psx-spx's "VRAM Overview/Addressing"), a
- * real Ordering-Table walk (AddPrim/ClearOTag/DrawOTag), and a software
- * rasterizer for the 4 primitive types the game actually uses (POLY_F4,
- * POLY_FT4, SPRT, TILE), plus real TIM texture-file parsing (format per
- * psx-spx's cdromfileformats.md -- a public, well-documented Sony SDK file
- * format, not proprietary expression). SDL2+OpenGL is used only for the
- * final step: blitting the finished VRAM contents to a window each frame --
- * matching the project's SDL2/OpenGL decision (exchange's
- * decision_phase_c_graphics_api note) and the "OpenLara-style" translation
- * the interface contract doc recommends (OT -> per-frame primitive list ->
- * rasterize, not a 1:1 GPU command re-submission).
- *
- * Texture sampling is intentionally nearest-neighbor / affine (no bilinear,
- * no perspective correction) -- this matches real PS1 GPU behavior exactly,
- * not a shortcut. A texel value of 0x0000 is treated as fully transparent
- * (skip the pixel), a well-documented real hardware quirk independent of
- * the semi-transparency flag.
- *
- * GetTPage/GetClut bit-packing and the 4bpp/8bpp CLUT-indexed texture
- * addressing formulas are taken directly from psx-spx's "Texpage Attribute"/
- * "Clut Attribute"/"VRAM Overview" sections, not guessed.
- */
+/* PC backend for the PSX GPU: the PsyQ libgpu API surface, VRAM transfers into the 1 MB BGR555
+ * buffer, the ordering-table token bridge and the DrawOTag walker. Rasterization lives in
+ * pc_raster.c. See docs/pc-port/subsystems/gpu.md. */
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,25 +21,14 @@ static DRAWENV s_drawEnv;
 static DISPENV s_dispEnv;
 static int s_drawModeAbr = 0;   /* last SetDrawMode-configured semi-trans mode */
 static int s_drawModeDither = 0;/* GP0(E1h).9 dither-enable, from DRAWENV.dtd / SetDrawMode / DR_MODE.
-                                 * The game runs the battle field with dtd=0 (states/game_setup.c:1083) so
-                                 * terrain/UI must NOT be dithered; only dtd=1 scenes (e.g. some fx) are.
-                                 * DuckStation gates dither on this exact bit -- honouring it stops us
-                                 * over-dithering (fuzzy walls, fragmented water-tile edges). */
-static int s_drawModeTPage = 0; /* last SetDrawMode-configured tpage -- SPRT/TILE
-                                  * have no tpage field of their own on real hw
-                                  * (unlike POLY_FT4), they use this instead */
+                                 * The battle field runs with dtd=0 (states/game_setup.c), so terrain/UI
+                                 * must NOT be dithered; only dtd=1 scenes (some effects) are. */
+static int s_drawModeTPage = 0; /* last SetDrawMode-configured tpage -- SPRT/TILE have no tpage
+                                  * field of their own on real hardware (unlike POLY_FT4) */
 
-/* Current GPU texture window (persistent state, GP0(E2h)), set by SetDrawMode's
- * `tw` RECT and applied per-texel in SampleTexture. Mask/Offset are in 8-pixel
- * steps (0..31 each); mask 0 = no windowing (full 256x256 page). Persists across
- * primitives/frames exactly like real hardware -- callers that want full-page
- * sampling re-arm it with a full-page window (see Map15 ocean, which brackets
- * its 32x32-windowed chunks with a w=0 reset). See psx-spx GPU GP0(E2h):
- *   Texcoord = (Texcoord AND NOT(Mask*8)) OR ((Offset AND Mask)*8)
- * Used e.g. by src/maps/map_13_15.c Objf299_Map15_Ocean, which tiles a
- * single 32x32 water tile (MoveImage'd to the 576,256 page) across the sea via a
- * 32x32 window -- without this the chunks' 0..255 UVs sampled the mostly-empty
- * page (purple rectangles + noise bands during the sailing intro; bugreport-02). */
+/* Texture window state (GP0(E2h)): set by SetDrawMode's `tw` RECT via DR_MODE, applied per texel in
+ * SampleTexture, and persistent across primitives and frames like real hardware. Mask/Offset are in
+ * 8-pixel steps; mask 0 = full page. See docs/pc-port/subsystems/gpu.md, "Texture window (GP0 E2h)". */
 static int s_twMaskX = 0, s_twMaskY = 0, s_twOffX = 0, s_twOffY = 0;
 
 /* ---- GetTPage / GetClut (psx-spx "Texpage Attribute" / "Clut Attribute") */
@@ -99,24 +65,9 @@ DISPENV *SetDefDispEnv(DISPENV *env, int x, int y, int w, int h) {
 DRAWENV *SetDefDrawEnv(DRAWENV *env, int x, int y, int w, int h) {
     memset(env, 0, sizeof(*env));
     setRECT(&env->clip, x, y, w, h);
-    /* Real SetDefDrawEnv always sets the draw offset to match the clip
-     * position -- without it (as this function did before), every
-     * primitive draws at its raw, buffer-relative y0 (e.g. 0..240)
-     * regardless of which of the two page-flip buffers is current, since
-     * both buffers' clip.y differ (16 vs 272 -- see states/game_setup.c's
-     * SetDefDrawEnv calls) but neither's ofs did anything to shift the
-     * actual draw position to match. FillQuad/FillRect's clip-clamping
-     * then makes this look inconsistent rather than uniformly wrong: one
-     * buffer's clip.y (16) partially overlaps the unshifted 0..240 draw
-     * range (clamped to 16..240, so some content survives), while the
-     * other's clip.y (272) doesn't overlap it at all (clamped minY=272 >
-     * maxY=240, an inverted/empty range -- zero pixels ever drawn). Found
-     * via gdb: real content was consistently present at VRAM y=16 and
-     * consistently absent at y=272 regardless of which buffer was
-     * "current," which only makes sense if draws always land at the same
-     * absolute position rather than being offset per buffer -- confirmed
-     * as a real, reported flicker (title screen alternating between
-     * correct and solid-black every other frame), not a hypothetical. */
+    /* PsyQ's SetDefDrawEnv also sets the draw offset to the clip origin. The game's two page-flip
+     * buffers differ only in clip.y (16 vs 272, states/game_setup.c); without the offset every
+     * primitive lands at its raw y and one buffer never receives a pixel (alternating black frames). */
     env->ofs[0] = (short)x;
     env->ofs[1] = (short)y;
     return env;
@@ -125,19 +76,9 @@ DRAWENV *SetDefDrawEnv(DRAWENV *env, int x, int y, int w, int h) {
 DISPENV *GetDispEnv(DISPENV *env) { *env = s_dispEnv; return env; }
 
 DISPENV *PutDispEnv(DISPENV *env) {
-    /* Presenting here (as an earlier version of this function did) doesn't
-     * match how every real call site actually uses this API: all three
-     * (core/engine.c, core/cd.c, states/game_setup.c) call PutDispEnv immediately followed
-     * by DrawOTag -- on real hardware that's fine, since PutDispEnv just
-     * arms the CRT's next scanout and the GPU's DMA (kicked off by
-     * DrawOTag) finishes well before that scanout actually happens. This
-     * backend's DrawOTag rasterizes synchronously, so presenting here
-     * showed s_vram's content from BEFORE this frame's DrawOTag ran --
-     * i.e., whichever content this same double-buffer slot held from its
-     * *previous* draw, one full buffer-swap cycle stale every single
-     * frame. Visible as flicker between correctly- and stale-looking
-     * frames, reported after a real build+visual check, not a
-     * hypothetical. Deferred to the end of DrawOTag instead -- see there. */
+    /* Only records the DISPENV; presentation happens at the end of DrawOTag. Every call site pairs
+     * PutDispEnv with an immediate DrawOTag and this backend rasterizes synchronously, so presenting
+     * here would show the slot's previous contents. See docs/pc-port/subsystems/gpu.md, "Presentation". */
     s_dispEnv = *env;
     return env;
 }
@@ -153,13 +94,9 @@ void SetDrawMode(DR_MODE *p, int dfe, int dtd, int tpage, RECT *tw) {
     p->tag = 0;
     p->tpage = (unsigned int)tpage;
     setcode(p, PC_GPU_PRIM_DR_MODE);
-    /* Carry the texture window (if any) in this prim's otherwise-unused r0/g0/b0
-     * bytes so DrawOTag can apply it in OT order (real hw threads GP0(E2h) in
-     * code[1]). Bit 23 flags "window present"; NULL tw means "leave the window
-     * unchanged", matching PsyQ SetDrawMode(...,NULL). RECT.w/h are the window
-     * size in pixels -> Mask = (256-size)>>3 (psx-spx tiling table: 32px -> 0x1c
-     * -> wrap u&31); RECT.x/y are the window offset in pixels -> Offset = >>3. */
-    /* bit 22 = dither-enable (dtd), always carried; bit 23 = texture-window present (below). */
+    /* Pack dtd (bit 22) and the texture window (bit 23 = present; Mask = (256-size)>>3, Offset = pos>>3,
+     * five bits each) into the unused r0/g0/b0 bytes so DrawOTag applies them in OT order, as hardware
+     * threads GP0(E2h) through the packet stream. NULL tw leaves the window unchanged, matching PsyQ. */
     {
         u32 packed = dtd ? 0x400000u : 0;
         if (tw) {
@@ -177,26 +114,25 @@ void SetDrawMode(DR_MODE *p, int dfe, int dtd, int tpage, RECT *tw) {
 }
 
 /* ---- VRAM transfers ------------------------------------------------------
- * The TrcInit/TrcWrite calls feed the GPU trace record/replay regression harness -- see
- * pc_gpu_trace.c (extracted subsystem; seams in pc_gpu_internal.h). */
+ * The TrcInit/TrcWrite calls feed the GPU trace record/replay regression harness (pc_gpu_trace.c;
+ * seams in pc_gpu_internal.h). */
 
 int LoadImage(RECT *rect, unsigned int *p) {
     unsigned short *src = (unsigned short *)p;
     unsigned short (*vram)[VRAM_W] = PC_GpuVram();
     int x, y;
     TrcInit();
-    /* Language pack (pc_lang_font.c): when this upload is the F_WD glyph sheet, the pack's charmap
-     * glyphs are stamped into their sheet cells IN THE SOURCE BUFFER, before anything consumes it --
-     * so VRAM, the hires mirror, the trace and the HD hash all see one consistent image, and every
-     * re-upload (LoadFWD runs per scene) re-applies for free. No-op without a pack. */
+    /* Language pack (pc_lang_font.c): when this upload is the F_WD glyph sheet, the pack's glyphs are
+     * stamped into the SOURCE buffer first, so VRAM, the hi-res mirror, the trace and the HD hash all see
+     * one image and every re-upload (LoadFWD runs per scene) re-applies it. No-op without a pack. */
     PC_LangPatchFwdUpload(rect->x, rect->y, rect->w, rect->h, src);
     if (rect->w > 0 && rect->h > 0) TrcWrite('L', rect, 8, src, (u32)(rect->w * rect->h * 2));
     for (y = 0; y < rect->h; y++)
         for (x = 0; x < rect->w; x++)
             if (rect->y + y < VRAM_H && rect->x + x < VRAM_W)
                 vram[rect->y + y][rect->x + x] = src[y * rect->w + x];
-    HiresMirrorRect(rect->x, rect->y, rect->w, rect->h);   /* G2: keep hires FB in sync (backgrounds) */
-    if (!TrcReplaying()) HdPack_OnLoad(rect, src);         /* 1.6 HD pack: hash + replace/dump (env-gated) */
+    HiresMirrorRect(rect->x, rect->y, rect->w, rect->h);   /* keep the hi-res FB in sync (backgrounds) */
+    if (!TrcReplaying()) HdPack_OnLoad(rect, src);         /* HD pack: hash + replace/dump (env-gated) */
     return 0;
 }
 
@@ -225,7 +161,7 @@ int MoveImage(RECT *rect, int x, int y) {
                 sx < VRAM_W && sy < VRAM_H && dx < VRAM_W && dy < VRAM_H)
                 vram[dy][dx] = vram[sy][sx];
         }
-    HiresMirrorRect(x, y, rect->w, rect->h);   /* G2: keep hires FB in sync (VRAM->VRAM blit) */
+    HiresMirrorRect(x, y, rect->w, rect->h);   /* keep the hi-res FB in sync (VRAM->VRAM blit) */
     return 0;
 }
 
@@ -235,34 +171,9 @@ int ClearImage(RECT *rect, u_char r, u_char g, u_char b) {
     return 0;
 }
 
-/* ---- Ordering Table: the TOKEN BRIDGE (Stage 2.3, 2026-07-21) -------------
- *
- * An OT slot is 4 bytes and cannot be widened: `Graphics.ot` is `u32 ot[OT_SIZE]`
- * in include/graphics.h, a real decompiled struct. The previous implementation
- * stored a HOST POINTER truncated to 32 bits, which works only under -m32 and
- * was the single thing pinning the build to a 32-bit target.
- *
- * Instead of an address, a slot/tag now holds a **token**: a 1-based index into
- * a per-frame registry that owns the real (host-width) pointer. Tokens are 32
- * bits by construction, so the representation is pointer-width independent and
- * the same code is correct under -m32 and -m64.
- *
- *   token 0        = end of chain (what real hardware encodes as a NULL/terminator)
- *   token 1..N     = registry index; the entry carries the pointer AND whether the
- *                    target is a bare OT bucket rather than a drawable primitive
- *
- * This also RETIRES the old "bit 0 of the stored address means bucket" hack. That
- * trick stole an alignment bit because a raw pointer had nowhere to put the
- * distinction; real hardware gets it free from the tag word's separate `len`
- * field (len==0 => just a link). A registry entry has room for it properly.
- *
- * Lifetime: the registry resets in ClearOTag, which is the head of every frame's
- * ClearOTag -> AddPrim* -> DrawOTag cycle. Tokens are therefore valid for exactly
- * one frame, which is all the OT itself is.
- *
- * Note the surface this replaced was tiny: src/ touches the link ONLY through
- * AddPrim/addPrim (44 sites, 0 uses of setaddr/getaddr/termPrim/nextPrim), so
- * this needed no decompiled-source edits at all. */
+/* ---- Ordering Table: the token bridge. An OT slot is a 4-byte u32 (Graphics.ot, include/graphics.h)
+ * and cannot hold a host pointer, so a slot/tag stores a 1-based token into this per-frame registry
+ * (0 = end of chain). See docs/pc-port/subsystems/gpu.md, "The ordering table and the link-token bridge". */
 #define PC_OT_MAX_TOKENS 65536
 
 static void *s_otPtr[PC_OT_MAX_TOKENS];
@@ -272,10 +183,9 @@ static int s_otOverflowed;  /* latched, so the warning prints once per frame */
 
 void PC_OtResetTokens(void) { s_otTokens = 0; s_otOverflowed = 0; }   /* non-static: the trace replay mints its own chains (pc_gpu_internal.h) */
 
-/* Mint a token for `p`. Returns 0 (= end of chain) on overflow, which drops the
- * tail of that bucket rather than corrupting memory -- and says so loudly, since
- * silently losing primitives is exactly the kind of failure that would otherwise
- * look like a subtle rendering bug. */
+/* Mint a token for `p`. On overflow returns 0 (end of chain), which drops the tail of that bucket
+ * rather than corrupting memory, and warns once per frame: silently losing primitives would look
+ * like a subtle rendering bug. */
 u32 PC_OtMint(void *p, int isBucket) {
     if (s_otTokens + 1 >= PC_OT_MAX_TOKENS) {
         if (!s_otOverflowed) {
@@ -297,31 +207,17 @@ static void *PC_OtResolve(u32 tok, int *isBucket) {
     return s_otPtr[tok];
 }
 
-/* ---- Ordering Table (see the header comment on the `tag` representation) */
+/* ---- Ordering Table API */
 
 unsigned int *ClearOTag(unsigned int *ot, int n) {
-    /* ot really points at a u32[n] array (Graphics.ot in include/graphics.h)
-     * -- see the libgpu.h file-header comment. Index through a u32* so each
-     * slot write is 4 bytes, not 8.
-     *
-     * Real ClearOTag threads the whole array into ONE chain
-     * (ot[0]->ot[1]->...->ot[n-1]->NULL) rather than zeroing each slot
-     * independently: game code calls AddPrim at depth-sorted buckets other
-     * than index 0 (ot[OT_SIZE-1], ot[2], ot+OT_SIZE-otz, ...) but always
-     * calls DrawOTag(gGraphicsPtr->ot) -- i.e. starting the walk at ot[0].
-     * Zeroing every slot left ot[0] permanently NULL regardless of what got
-     * added elsewhere, so DrawOTag's walk terminated instantly every frame
-     * -- confirmed via gdb (cur == NULL on every single DrawOTag call,
-     * despite primitives genuinely being registered elsewhere in the same
-     * table), a real, permanent black screen. Threading ot[0] through every
-     * bucket up to the ot[n-1]->NULL terminator means AddPrim's insertions
-     * at any bucket sit on the path DrawOTag actually walks. */
+    /* `ot` is a u32[n] array (Graphics.ot); index through a u32* so each slot write is 4 bytes.
+     * Thread the whole array into ONE chain (ot[0]->ot[1]->...->ot[n-1]->0): the game inserts at
+     * depth-sorted buckets but always walks from ot[0], so every bucket must sit on that path. */
     u32 *slots = (u32 *)ot;
     int i;
     if (n <= 0) return ot;
-    /* Frame boundary: ClearOTag is always the head of the
-     * ClearOTag -> AddPrim* -> DrawOTag cycle (3 call sites in src/, each
-     * paired with a DrawOTag), so this is where the token registry resets. */
+    /* Frame boundary: ClearOTag is always the head of the ClearOTag -> AddPrim* -> DrawOTag cycle
+     * (every call site in src/ pairs it with a DrawOTag), so this is where the token registry resets. */
     PC_OtResetTokens();
     for (i = 0; i < n - 1; i++) slots[i] = PC_OtMint(&slots[i + 1], 1);
     slots[n - 1] = 0;   /* token 0 == end of chain */
@@ -337,27 +233,17 @@ void AddPrim(void *ot, void *p) {
     ((P_TAG *)ot)->tag = PC_OtMint(p, 0);
 }
 
-/* VRAM snapshot probe: write the full 1024x512 VRAM as a binary PPM (BGR555 ->
- * RGB888) so a graphics bug can be inspected as an image -- texture pages, CLUT
- * rows, staging. The blue effect samples tpage 0x0036 (page origin 384,256) via
- * CLUT 0x7d28 (VRAM 640,500); the dump shows whether that region holds valid
- * texture/palette or garbage. Two triggers:
- *   - On demand (preferred for a long lead-in): `kill -USR2 <pid>` snaps the
- *     current frame. Unlimited; the signal handler just sets a flag (the write
- *     itself happens here, in the frame loop, since fopen/fwrite aren't
- *     async-signal-safe).
- *   - Periodic: VH_VRAM_DUMP=N dumps every N frames, capped at VH_VRAM_DUMP_MAX
- *     files (default 2000; set to 0 = UNLIMITED for a brute-force every-frame capture).
- *     VH_VRAM_DUMP_DIR=<path> writes the .ppm files there (default: cwd). */
+/* VRAM snapshot probe: writes the full 1024x512 VRAM as a binary PPM (BGR555 -> RGB888). Triggers:
+ * `kill -USR2 <pid>` snaps the current frame (the handler only sets a flag; fopen is not signal-safe),
+ * or VH_VRAM_DUMP=N every N frames, capped by VH_VRAM_DUMP_MAX (0 = unlimited), into VH_VRAM_DUMP_DIR. */
 static volatile sig_atomic_t s_vramDumpReq = 0;
 static volatile sig_atomic_t s_tileLogReq = 0;     /* SIGUSR2 also latches a one-frame prim-list dump */
 static unsigned s_tileLogFrame = 0;                /* the frame SIGUSR2 latched (VH_TILELOG) */
 static const char *s_vramDumpDir = NULL;
 
-/* DEBUG (VH_TILELOG=1 + `kill -USR2`): dump EVERY primitive in DRAW ORDER whose bounding box overlaps a
- * small region, on the SIGUSR2 frame -- so the prim that paints the seam pixels is identifiable (it's the
- * last one over a seam pixel). Region env-overridable via VH_TILELOG_BOX="x0,y0,x1,y1". Portable (the
- * SIGUSR2 trigger is POSIX-only; on Windows s_tileLogReq just stays 0 and this never fires). */
+/* Debug (VH_TILELOG=1 + `kill -USR2`): on the latched frame, log every primitive in draw order whose
+ * bounding box overlaps a small region (VH_TILELOG_BOX="x0,y0,x1,y1"), so the prim that paints a given
+ * pixel is identifiable. SIGUSR2 is POSIX-only; on Windows s_tileLogReq stays 0 and this never fires. */
 static void PrimLog(const char *kind, int n, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3,
                     int tpage, int clut, int semi, int abr, int r, int g, int b) {
     static int s_pl = -1; static int bx0 = 130, by0 = 95, bx1 = 178, by1 = 140;
@@ -437,20 +323,19 @@ static void PC_MaybeDumpVram(void) {
 }
 
 void DrawOTag(unsigned int *p) {
-    /* VH_GPU_PRIM_LOG=1: dump "anomalous" primitives (our SetSemiTrans 0x80 bit set, or a code that
-     * decodes to an unrecognized type) -- the fx SetSemiTrans-without-SetPolyFT4 effect polys we hunt.
-     * Env checked once. */
+    /* VH_GPU_PRIM_LOG=1: dump anomalous primitives (SetSemiTrans 0x80 bit set, or a code that decodes
+     * to an unrecognized type), e.g. effect polys that call SetSemiTrans without SetPolyFT4. Env read once. */
     static int s_primLog = -1;
     u32 nextTok = ((P_TAG *)p)->tag;
     unsigned long walkSteps = 0;   /* fail-soft cycle guard -- see the cap check at the loop tail */
-    int hiScale = PC_GpuGetInternalScale(); /* G2: >1 => also rasterize each prim into the hi-res buffer at Sx */
+    int hiScale = PC_GpuGetInternalScale(); /* >1 => also rasterize each prim into the hi-res buffer at Sx */
     static int s_rtTime = -1; static clock_t s_rtAccum = 0; static unsigned s_rtFrames = 0; clock_t s_rtStart = 0;
     TrcInit();
     s_drawFrame++;
     if (s_tileLogReq) { s_tileLogFrame = s_drawFrame; s_tileLogReq = 0; }
     HiresEnsure();                           /* self-gated: allocates when scale > 1 OR a langpack
                                               * ships localized backgrounds (shadow pass at 1x) */
-    HiresFrameReset();                       /* P1: reset the per-frame hi-res display list */
+    HiresFrameReset();                       /* reset the per-frame hi-res display list */
     if (s_rtTime < 0) s_rtTime = getenv("VH_RASTER_TIME") ? 1 : 0;
     if (s_rtTime) s_rtStart = clock();
     if (s_primLog < 0) s_primLog = getenv("VH_GPU_PRIM_LOG") ? 1 : 0;
@@ -459,11 +344,9 @@ void DrawOTag(unsigned int *p) {
         void *cur = PC_OtResolve(nextTok, &isBucket);
         u32 rawTagOfCur;
         if (cur == NULL) {
-            /* A non-zero link that does not resolve means something wrote a RAW POINTER into a
-             * tag instead of minting a token (the `addPrim` macro did exactly this until
-             * 2026-07-21). Breaking here silently drops every primitive further down the chain --
-             * which presented as "the compass, logo and all textboxes vanished while the 3D
-             * looked perfect", and cost a full debug cycle to find. Never fail quietly again. */
+            /* A non-zero link that does not resolve means a RAW POINTER was written into a tag instead
+             * of a minted token (only AddPrim/ClearOTag may link). Breaking here silently drops every
+             * primitive further down the chain, so warn once rather than fail quietly. */
             static int warned = 0;
             if (!warned) {
                 fprintf(stderr, "[libgpu] OT walk aborted: link %u is not a valid token "
@@ -490,10 +373,9 @@ void DrawOTag(unsigned int *p) {
                     POLY_FT4 *q = (POLY_FT4 *)cur;
                     int abr = ((unsigned)q->tpage >> 5) & 3;
                     int tp = ((unsigned)q->tpage >> 7) & 3;
-                    /* STP scan: which of the 16 CLUT entries carry bit15 (per-pixel
-                     * semi-transparency). A textured semi poly only blends where the
-                     * texel's STP is set -- if this mask is 0 the effect draws opaque.
-                     * Reads raw s_vram (bit15 intact), unlike the RGB PPM dump. */
+                    /* STP scan: which of the 16 CLUT entries carry bit15 (per-pixel semi-transparency).
+                     * A textured semi poly only blends where the texel's STP is set; mask 0 = draws opaque.
+                     * Reads raw VRAM (bit15 intact), unlike the RGB PPM dump. */
                     int clutX = ((unsigned)q->clut & 0x3f) * 16;
                     int clutY = ((unsigned)q->clut >> 6) & 0x1ff;
                     unsigned stp = 0; int i;
@@ -509,10 +391,9 @@ void DrawOTag(unsigned int *p) {
                 }
             }
 
-            /* Build the per-pass render contexts from the current walk state (P1 re-entrancy): native
-             * (target 0) always, hi-res (target 1, geometry ×hiScale) when supersampling is on. The
-             * dual-write draws both. Snapshotting into a ctx here is what lets the hi-res pass later be
-             * split into per-band worker threads. */
+            /* Build the per-pass render contexts from the current walk state: native (target 0) always,
+             * hi-res (target 1, geometry x hiScale) when supersampling is on. Snapshotting into a ctx is
+             * what lets the hi-res pass be split across per-band worker threads afterwards. */
             RenderCtx rcn, rch;
             int hires = HiresActive();
             rcn.clipX = s_drawEnv.clip.x; rcn.clipY = s_drawEnv.clip.y;
@@ -583,11 +464,9 @@ void DrawOTag(unsigned int *p) {
             }
         }
         nextTok = rawTagOfCur;
-        /* Fail-soft cycle guard: a cyclic OT link would spin this walk forever (seen live
-         * 2026-08-22: JP game on the WINDOWS build hung in DrawOTag at the intro-logo -> title
-         * transition; Windows froze the process as unresponsive). A legitimate frame is a few
-         * thousand prims + the 4096-bucket table; one million steps is unreachable except by a
-         * cycle. Dump a diagnostic tail once, drop the rest of the frame, keep running. */
+        /* Fail-soft cycle guard: a cyclic OT link would spin this walk forever (Windows then freezes
+         * the process as unresponsive). A legitimate frame is a few thousand prims plus the bucket
+         * table, so one million steps only happens on a cycle: dump a tail, drop the frame, keep running. */
         if (++walkSteps > 1000000UL) {
             static int cycleWarned = 0;
             if (!cycleWarned) {
@@ -611,21 +490,20 @@ void DrawOTag(unsigned int *p) {
 
     TrcFrameEnd();   /* trace record: 'Z' frame delimiter (+ closes the file at the frame cap) */
 
-    /* P1: rasterize the deferred hi-res display list (the native pass drew inline above), fanned out
-     * across per-band worker threads (step 2b). */
+    /* Rasterize the deferred hi-res display list (the native pass drew inline above), fanned out
+     * across per-band worker threads. */
     if (HiresActive())
         HiresRasterizeThreaded(s_drawEnv.clip.y, s_drawEnv.clip.h);
 
-    /* Present now, after this frame's rasterization is done -- see the
-     * comment on PutDispEnv for why. Uses whichever DISPENV the most
-     * recent PutDispEnv call recorded, matching every real call site's
-     * PutDispEnv-then-DrawOTag pairing. */
+    /* Present now, after this frame's rasterization, using the DISPENV the most recent PutDispEnv
+     * recorded: every call site pairs PutDispEnv with an immediate DrawOTag. See
+     * docs/pc-port/subsystems/gpu.md, "Presentation". */
     if (s_rtTime) { s_rtAccum += clock() - s_rtStart;
         if (++s_rtFrames >= 120) { fprintf(stderr, "[raster] scale=%d  mean %.0f us/frame CPU (%u frames)\n",
             hiScale, (double)s_rtAccum / CLOCKS_PER_SEC * 1e6 / s_rtFrames, s_rtFrames); s_rtAccum = 0; s_rtFrames = 0; } }
     PC_UpdateCamOsd(); /* refresh the debug pose label to match this frame (VH_CAM_OSD) */
     PC_MaybeDumpVram(); /* VH_VRAM_DUMP=N: snapshot VRAM to PPM for texture/CLUT triage */
-    if (HiresActive()) {                   /* G2: present the supersampled display region */
+    if (HiresActive()) {                   /* present the supersampled display region */
         HiresPresent(s_dispEnv.disp.x, s_dispEnv.disp.y, s_dispEnv.disp.w, s_dispEnv.disp.h);
     } else {
         unsigned short (*vram)[VRAM_W] = PC_GpuVram();
@@ -646,28 +524,9 @@ void SetPolyFT4(POLY_FT4 *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_POLY_FT4); }
 void SetSprt(SPRT *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_SPRT); }
 void SetTile(TILE *p) { p->tag = 0; setcode(p, PC_GPU_PRIM_TILE); }
 
-/* ---- TIM texture file parsing --------------------------------------------
- * Format per psx-spx cdromfileformats.md
- * "TIM Format": 4-byte magic (10h), 4-byte mode (bit3 = has-CLUT, bits0-2 =
- * pixel type), then a CLUT section (if present) and a pixel section, each
- * shaped { unsigned int size; unsigned int destCoord (YyyyXxxxh); unsigned int whWord
- * (YsizXsizh); pixel data }.
- *
- * Real ReadTIM does NOT upload to VRAM itself -- it only parses the header
- * and hands back prect/crect (the TIM's own embedded target rect, purely
- * informational) and paddr/caddr, genuine pointers to the pixel/CLUT bytes
- * still sitting in the file buffer. The caller decides whether/where to
- * LoadImage() them -- confirmed by two real, different usage patterns:
- * core/screen_effects.c's LoadFullscreenImage() calls LoadImage(&timRect,
- * tim.paddr) with its OWN hardcoded rect (ignoring the TIM's embedded one),
- * and world/dojo.c does POINTER ARITHMETIC on tim.paddr (`tim.paddr + 0x1c20`) to
- * slice one TIM file into several separate LoadImage() calls. An earlier
- * version of this function uploaded to the TIM's embedded rect internally
- * with its paddr/caddr pointing at dummy zeroed static unsigned int placeholders --
- * every caller's LoadImage() then read pixel data starting from the address
- * of a single zeroed local variable, walking off into whatever adjacent
- * stack/data-segment bytes followed it (visible on screen as garbage that
- * looked suspiciously like host pointer values -- because it was). */
+/* ---- TIM parsing: ReadTIM only parses a TIM header; paddr/caddr point into the caller's file
+ * buffer, and the caller uploads it. See docs/pc-port/subsystems/gpu.md, "Primitives and
+ * rasterisation". */
 
 static unsigned int *s_openTimBase;
 

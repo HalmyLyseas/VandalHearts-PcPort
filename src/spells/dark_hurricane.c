@@ -1,11 +1,6 @@
-/* Dark Hurricane spell effects (Objf283 driver, Objf281_282 vortex, Objf280,
- * Objf389/390/388 debris) and Objf285, the generic casting-pose FX spawned by Objf014
- * (units/actor.c) -- a stray kept by address contiguity. Dispatched via gSpellsEx (see
- * spells/casting_main.c); drivers own the gSignal3 completion handshake, children do not.
- * Cut content herein, verified against the retail gSpellsEx dump, the parsed EVDATA event
- * scripts, and a whole-tree reference search (suffixed _Unused): converging sparkle,
- * shrinking ground arc, duplicate sparkle and red-X marker, plus two unreachable
- * Objf_Unk_* handlers absent from gObjFunctionPointers entirely. */
+/* Dark Hurricane spell effects (Objf283 driver, Objf281_282 vortex, Objf280, Objf389/390/388
+ * debris) and Objf285, the casting-pose FX spawned by Objf014 (units/actor.c) -- a stray.
+ * Dispatched via gSpellsEx (docs/decomp/spell-fx-dispatch.md); _Unused = cut content. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"
@@ -15,11 +10,9 @@
 #include "units.h"
 #include "audio.h"
 
-/* Retail rodata artifact: the templates for Salamander's local initializers (Objf335/377,
- * spells/salamander.c) were emitted at the head of THIS TU's .rodata, ahead of the
- * jumptables below -- so after the file split they must stay here, hoisted as named
- * consts, to keep the byte layout. Order matters: quad, then the N-start head-facing
- * table, then the S-start one. */
+/* Address-locked rodata: Salamander's local-initializer templates (Objf335/377,
+ * spells/salamander.c) sit at the head of this TU's .rodata, ahead of the jumptables, so they
+ * stay here as named consts in this order: quad, N-start head table, S-start head table. */
 typedef struct { SVECTOR v[4]; } SalamanderQuad;   /* Quad is an array typedef; arrays cannot be
                                                     * copy-assigned, so both templates are struct-
                                                     * wrapped (same bytes, same block-copy codegen). */

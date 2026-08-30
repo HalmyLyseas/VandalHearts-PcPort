@@ -1,34 +1,6 @@
-/*
- * PC backend for PsyQ/libsnd.h, backed by OpenAL.
- *
- * VAB (Voice Attribute Bank) format and SPU-ADPCM (VAG) decoding are
- * public, well-documented PS1 facts (independently reverse-engineered and
- * published many times over in the homebrew/preservation community) --
- * reimplemented here from that public knowledge and verified empirically
- * (2026-07-10) against this game's own real sound data extracted via our
- * own CD backend (see exchange/06-phase-c-audio-backend.md), not copied
- * from any SDK source.
- *
- * Layout confirmed against real data (JOU.VH/JOU.VB, gCdFiles indices
- * CDF_SD_JOU_VH/VB in src/core/cd.c):
- *   - 32-byte header ("pBAV" magic, numPrograms/numTones/numVAG counts)
- *   - a *fixed* 128-slot program table (2048 bytes) regardless of
- *     numPrograms
- *   - a tone table sized to *numPrograms* * 16 fixed tone-slots each
- *     (32 bytes/tone) -- NOT fixed at 128 programs, unlike the program
- *     table
- *   - a VAG size table (u16 per entry, index 0 reserved/dummy) right
- *     after; cumulative sum gives each VAG's byte offset into the body
- *
- * Deferred, not implemented: SsSeqOpen/Play/Stop/Close/SetVol (a real
- * MIDI-like sequence interpreter for a proprietary song format -- a
- * separate, substantial undertaking, same category as MDEC/FMV was for
- * CD). ADSR envelope shaping and PS1's exact pitch lookup table are also
- * not reproduced -- voices currently play at a flat volume with a
- * standard equal-temperament semitone pitch calculation, close but not
- * cycle-exact. All are natural follow-ups, not required to prove the
- * interface/mechanism.
- */
+/* PC backend for PsyQ libsnd: VAB bank parsing (public PS1 format, clean-room), SPU-ADPCM decode,
+ * the SEQ sequencer and PsyQ's key-on volume law, all driving the software SPU in pc_spu.c.
+ * See docs/pc-port/subsystems/spu.md, "PsyQ libsnd and the SEQ sequencer". */
 #if defined(__APPLE__)
 #include <OpenAL/al.h>
 #include <OpenAL/alc.h>
@@ -42,20 +14,11 @@
 #include <string.h>
 #include "PsyQ/libsnd.h"
 #include "libsnd_internal.h"
-#include "cd_files.h" /* CdFileInfo, gCdFiles -- see the SsVabTransBodyPartly comment below */
+#include "cd_files.h" /* CdFileInfo, gCdFiles -- the VAB body transfer's completion accounting */
 
-/* SsVabTransBodyPartly's "have I received the whole body" check must match
- * core/cd.c's OWN completion accounting (gCdLoader.sectorsRead reaching
- * gCdFiles[cdf].sectorCt) exactly -- see that function's comment for why
- * (a real hang was traced to these two notions of "done" disagreeing).
- * gCdFiles is a real project global (src/core/cd.c), not PsyQ/Sony content --
- * reaching across from the Audio backend into CD-subsystem state is a
- * deliberate, narrow exception to keep backend layering otherwise clean,
- * justified because it's the only way to match the real protocol's
- * semantics rather than guess at them. gVabLoader is anonymous-struct-typed
- * in core/cd.c itself; mirrored here field-for-field (matches the same
- * "extern struct {...} name;" pattern already used for Kernel's local
- * externs). */
+/* The VAB body transfer's "whole body received" test must match core/cd.c's own completion
+ * accounting (gCdLoader.sectorsRead vs gCdFiles[cdf].sectorCt) or the loader stalls; gVabLoader is
+ * mirrored field-for-field. See docs/pc-port/subsystems/spu.md, "VAB body transfer and CD completion accounting". */
 extern CdFileInfo gCdFiles[712];
 extern struct {
     s32 state;
@@ -79,24 +42,21 @@ typedef struct {
     unsigned char pan;
     unsigned char min, max; /* key range -- which note picks this tone (SEQ note-on) */
     unsigned short adsr1, adsr2; /* PS1 ADSR envelope words (SEQ note shaping) */
-    unsigned char mode;   /* VagAtr +1. Bit2 = REVERB ENABLE (hardware's per-voice EON). The music
-                           * bank's tones are all mode=4, every SFX bank's are mode=0 -- so music is
-                           * wet and SFX are dry. We used to send the whole mix to the reverb, which
-                           * gave menu beeps a 1.2 s tail they should not have (bugreport-06). */
+    unsigned char mode;   /* VagAtr +1. Bit 2 = per-voice reverb enable (hardware EON). The music
+                           * bank's tones are all mode=4, every SFX bank's are mode=0, so music is
+                           * wet and SFX are dry (a menu beep gets no reverb tail). */
 } Tone;
 
 typedef struct {
     int inUse;
     short numPrograms;
     short numVag;
-    /* ProgAtr (VAB program table) -- a whole multiplicative stage PsyQ applies that we used to
-     * skip entirely. See exchange/57: SsUtKeyOnV's volume path (0x800d74b8) does
-     * vol * progVol/127 * toneVol/127. This game's music bank sets prog 0 (the bass) to 127 and
-     * every other program to 85..104, so dropping it left the whole non-bass mix ~2.3 dB hot
-     * relative to the bass -- the bass "deficit" was really everything else being too loud. */
+    /* ProgAtr (VAB program table). PsyQ's key-on path (0x800d74b8) multiplies in ProgAtr.mvol;
+     * the music bank sets program 0 (the bass) to 127 and every other program to 85..104, so
+     * skipping it leaves the non-bass mix ~2.3 dB hot relative to the bass. */
     unsigned char masterVol;              /* VabHdr +24 mvol -- PsyQ reads it at key-on
                                            * (0x800d6d98). 127 in every VAB on this disc, so a
-                                           * no-op here, but applied for faithfulness. */
+                                           * no-op here, applied for faithfulness. */
     unsigned char progVol[MAX_PROGRAMS];  /* ProgAtr +1 mvol (0..127) */
     unsigned char progPan[MAX_PROGRAMS];  /* ProgAtr +4 mpan (0..127, 64 = centre) */
     unsigned char progTones[MAX_PROGRAMS];/* ProgAtr +0 nTone -- 0 means the program owns NO tone
@@ -104,43 +64,30 @@ typedef struct {
     Tone tones[MAX_PROGRAMS][TONES_PER_PROGRAM]; /* only [0..numPrograms) populated */
     ALuint vagBuffers[MAX_VAG]; /* 0 = no buffer (unused/dummy VAG) */
     unsigned char vagLoops[MAX_VAG]; /* 1 = sustain-looping sample (hold notes ring) */
-    /* Retained decoded PCM for the software SPU (VH_SWSPU) -- the OpenAL path uses the
-     * vagBuffers above, the software SPU steps through these directly. */
+    /* Decoded PCM retained for the software SPU, which steps through it directly (the OpenAL
+     * buffers above are uploaded but play no part in rendering). */
     short *vagPcm[MAX_VAG];      /* decoded 16-bit PCM (freed in SsVabClose), 0 = none */
     int    vagLen[MAX_VAG];      /* sample count                                       */
     int    vagLoopS[MAX_VAG], vagLoopE[MAX_VAG]; /* sustain loop [S,E), E<=S = none     */
 } Vab;
 
-/* Software SPU (pc_spu.c) -- optional sample-accurate voice renderer, gated by VH_SWSPU. */
+/* Software SPU (pc_spu.c): the sample-accurate voice renderer every key-on goes through. */
 extern void PC_SpuKeyOn(int voice, const short *pcm, int len, int loopS, int loopE,
                         unsigned int step, float gainL, float gainR,
                         unsigned short adsr1, unsigned short adsr2, int revOn);
 
-/* PS1 pan (0..127, 64 = centre) -> per-channel gain factors.
- *
- * GROUND TRUTH, not a guess: disassembled from PsyQ's own key-on volume path, statically linked
- * into SLUS_004.47 at 0x800d75c4 (see exchange/57). Each pan stage is
- *     pan <  64 :  R = R * pan       / 63,  L untouched
- *     pan >= 64 :  L = L * (127-pan) / 63,  R untouched
- * The magic multiplier 0x04104105 with the >>5 add-form correction is a divide-by-**63**, not 64,
- * and the boundary is `< 64` -- so pan 64 takes the second branch and yields 63/63 = unity on
- * both channels. Centre is unity/unity (constant-max law, no -3 dB centre dip). */
+/* PS1 pan (0..127, 64 = centre) -> per-channel gain factors, as in PsyQ's key-on path at
+ * 0x800d75c4: the divisor is 63 (magic multiplier 0x04104105 with the >>5 add-form) and the test
+ * is `< 64`, so pan 64 is unity on both sides. See docs/pc-port/subsystems/spu.md, "The PsyQ volume law". */
 static void PanFactors(int pan, float *l, float *r) {
     if (pan < 0) { pan = 0; } if (pan > 127) { pan = 127; }
     *l = (pan < 64) ? 1.0f : (float)(127 - pan) / 63.0f;
     *r = (pan < 64) ? (float)pan / 63.0f : 1.0f;
 }
 
-/* PsyQ's SQUARE LAW -- the final stage of the real key-on volume chain (0x800d6d8c, which runs
- * AFTER 0x800d74b8 and overwrites its VolL/VolR at the same [0x8012a05c + voice*16]):
- *
- *     VolL = L*L / 16383      VolR = R*R / 16383        (L,R normalised to 16383 = 127*129)
- *
- * i.e. `out = 16383 * (lin/16383)^2` -- quadratic, not linear, so EVERY dB of attenuation is
- * doubled. Applied AFTER the pan stages on hardware, so pan factors are squared too. Our whole
- * linear chain was already algebraically identical to PsyQ's `lin`; this was the sole remaining
- * divergence, and it means we had been rendering the mix at half the hardware's dynamic range
- * in dB. See exchange/57. Always applied now (the authentic law); the old linear A/B was removed. */
+/* PsyQ's square law, the final key-on volume stage (0x800d6d8c): VolL = L*L/16383, applied after
+ * the pan stages so the pan factors are squared too; every dB of attenuation is doubled.
+ * See docs/pc-port/subsystems/spu.md, "The PsyQ volume law". */
 static float ApplyVolumeLaw(float g) { return g * g; }
 extern void PC_SpuSetVoiceDebugId(int voice, int vag, int prog, int note);
 extern void PC_SpuKeyOff(int voice);
@@ -151,22 +98,12 @@ extern int  PC_SpuVoiceActive(int voice);
 extern int  PC_SpuVoiceReleasing(int voice);
 extern void PC_SpuSetReverb(int on, float depth);
 
-/* Master output trim for the software SPU path. The OpenAL-era SEQ_MASTER_GAIN=0.47 was
- * hand-tuned for OpenAL's per-source mixing and does NOT belong on a faithful software
- * mixer -- it left the mix ~2x hotter than the BizHawk reference (peak -0.2 dBFS, no
- * headroom for SFX). This value calibrates the SW mix to the reference RMS (fixed;
- * the old VH_SPU_GAIN override was removed). Applied only to the SW path (OpenAL path unchanged). */
+/* Master output trim for the software mix, calibrated on the rendered output against the
+ * octoshock reference (RMS within 0.01 dB, peak -5.6 vs -5.9 dBFS).
+ * See docs/pc-port/subsystems/spu.md, "Master trim". */
 static float SpuSeqGain(void) {
     static float g = -1.0f;
-    /* 2026-07-20: re-derived for the square law (exchange/57), then CORRECTED against a real
-     * capture. The first estimate (0.571) came from modelling per-voice gains x ADSR, which
-     * predicted a 2.380x compensation -- but that model ignores voice summation and the reverb
-     * send, and the rendered mix came out 4.97 dB below the octoshock reference. Measured on
-     * build-current.wav vs emulation-output.wav: rms 1295.5 vs 2296.7 -> x1.773, so the true
-     * factor is 2.380 x 1.773 = 4.22 and the trim is 0.24 x 4.22 = 1.012. That puts our peak at
-     * -5.6 dBFS against the reference's -5.9 dBFS, i.e. the same headroom hardware leaves for SFX.
-     * LESSON: derive a LEVEL trim from the rendered output, not from a model of the inputs. */
-    if (g < 0.0f) g = 1.012f;   /* calibrated for the (always-on) square law */
+    if (g < 0.0f) g = 1.012f;   /* calibrated for the square law */
     return g;
 }
 
@@ -199,38 +136,22 @@ static Voice s_voices[MAX_VOICES];
 static short s_masterVolL = 0x7f, s_masterVolR = 0x7f;
 static const unsigned char *s_vagSizeTablePtr[MAX_VAB];
 
-/* SsVabTransBodyPartly is called repeatedly, each time with only the
- * latest CD-read chunk (core/cd.c's ContinueLoadingVab drives this in fixed
- * 90-sector/184320-byte chunks, re-using the same buffer address each
- * call) -- not the whole VAB body at once. Real hardware streams the body
- * via SPU DMA across many such partial transfers; the caller's own state
- * machine (gCdLoader/gVabLoader in core/cd.c) only advances once this function
- * reports -2 ("need more") vs. completion, so accumulating chunks here
- * and only decoding once the full body has arrived is required for
- * correctness, not just efficiency -- returning "done" after only the
- * first chunk (the original, wrong implementation) left the caller's own
- * chunk-loop with no way to ever ask for the next chunk, hanging forever
- * on any VAB body bigger than one chunk. Found via a real hang (VAB body
- * for CDF_SD_SEQ_VH, gdb backtrace showed gCdLoader.state stuck at 98
- * forever) -- see exchange/12-phase-c-bootstrap.md. */
+/* Staging for the chunked VAB body: core/cd.c streams the .VB in fixed 90-sector chunks through
+ * one buffer, and its loader only advances once this backend reports -2 ("need more") or done.
+ * See docs/pc-port/subsystems/spu.md, "VAB body transfer and CD completion accounting". */
 static unsigned char *s_vabBodyStaging[MAX_VAB];
 static int s_vabBodyTotal[MAX_VAB];
 static int s_vabBodyReceived[MAX_VAB];
 
-/* ---- SPU-ADPCM (VAG) decode -----------------------------------------
- * Standard PS1 SPU-ADPCM: 16-byte blocks, byte0 = (filter<<4)|shift,
- * byte1 = flags (loop control, unused for one-shot SFX), 14 bytes of
- * packed 4-bit signed nibbles (28 samples/block). Fixed 5-tap filter
- * pair table is the well-known public PS1 SPU ADPCM coefficient set.
- */
+/* ---- SPU-ADPCM (VAG) decode: 16-byte blocks, byte0 = (filter<<4)|shift, byte1 = loop flags,
+ * 14 bytes of packed 4-bit signed nibbles (28 samples/block). The 5-tap filter pair is the
+ * standard PS1 SPU-ADPCM coefficient set (psx-spx). */
 static const int s_filterPos[5] = {0, 60, 115, 98, 122};
 static const int s_filterNeg[5] = {0, 0, -52, -55, -60};
 
-/* Decodes raw VAG bytes to signed 16-bit PCM. Returns sample count and fills *outPcm (caller
- * frees). Also reports the SPU-ADPCM sustain loop, if any: block-header byte1 flags (per
- * octoshock spu.cpp) bit2 (0x04)=loop-start, bit0 (0x01)=block-end, bit1 (0x02)=repeat. A sample
- * loops from the loop-start block to the end block iff that end block has the repeat bit; else
- * it's one-shot. *outLoopStart and *outLoopEnd get sample indices, or -1 for a one-shot sample. */
+/* Decodes raw VAG bytes to signed 16-bit PCM; returns the sample count, *outPcm is caller-freed.
+ * Block flag bits (psx-spx): 0x04 = loop start, 0x01 = end block, 0x02 = repeat. The sample loops
+ * [loop start, end) iff the end block also has the repeat bit; otherwise the loop indices are -1. */
 static int DecodeVag(const unsigned char *data, int size, short **outPcm,
                      int *outLoopStart, int *outLoopEnd) {
     int numBlocks = size / 16;
@@ -297,25 +218,9 @@ short SsVabOpenHeadSticky(unsigned char *vabHead, short vabId, unsigned int dumm
 
     const unsigned char *toneTable = vabHead + 32 + 128 * 16; /* fixed 128-slot program table */
 
-    /* ---- program -> TONE BLOCK mapping ---------------------------------------------------
-     * A VAB's tone table contains one 16-slot block per program that ACTUALLY HAS TONES.
-     * Programs with nTone == 0 are SKIPPED and consume no block, so every program after such a
-     * hole is shifted down. Indexing blocks by the raw program number (what we did until
-     * 2026-07-21) silently hands those programs ANOTHER INSTRUMENT'S SAMPLES.
-     *
-     * SD_COMP's bank is exactly this shape: program 11 has nTone == 0, so
-     *     prog 12 -> block 11,  13 -> 12,  14 -> 13,  15 -> 14,  16 -> 15
-     * and programs 12..16 were all playing the wrong samples. The audible one was program 14
-     * (the demo-battle lead): it played vag 9 (centre 67) where hardware plays vag 19
-     * (centre 79) — so its high notes came out an OCTAVE UP and piercing. Confirmed by reading
-     * the real hardware's per-voice VAG allocation out of PsyQ's RAM tables
-     * (exchange/59-hw-voice-alloc.lua); the rule below reproduces hardware's choice for every
-     * program in the bank. See exchange/57.
-     *
-     * Corollary: the header's `ps` counts programs WITH TONES, not the highest program index —
-     * SD_COMP declares ps=16 yet legitimately uses program 16. So scan the whole 128-slot
-     * ProgAtr table and stop once `ps` tone-bearing programs have been seen, rather than
-     * treating `p >= ps` as out of range. */
+    /* Program -> tone-block mapping: the tone table holds one 16-slot block per program that has
+     * tones, so a program with nTone == 0 consumes no block and every later program shifts down;
+     * the header's `ps` counts tone-bearing programs. See docs/pc-port/subsystems/spu.md, "VAB tone-block packing". */
     int block[MAX_PROGRAMS];
     int nBlocks = 0, progsWithTones = 0, highestProg = 0;
     for (int p = 0; p < MAX_PROGRAMS; p++) {
@@ -350,22 +255,13 @@ short SsVabOpenHeadSticky(unsigned char *vabHead, short vabId, unsigned int dumm
      * transfer (SsVabTransBodyPartly) needs it to compute per-VAG offsets. */
     vab->inUse = 1;
     { extern short g_seqLastVabOpened; g_seqLastVabOpened = vabId; } /* SEQ binds to it (see sequencer) */
-    /* NB: nBlocks, not numPrograms -- the tone table holds one block per TONE-BEARING program,
-     * and numPrograms is now the highest usable program index (see the mapping comment above).
-     * Using the wrong one here shifts every VAG offset and decodes the wrong sample data. */
+    /* nBlocks, not numPrograms: the tone table holds one block per tone-bearing program, and
+     * numPrograms is the highest usable program index. Mixing them up shifts every VAG offset. */
     s_vagSizeTablePtr[vabId] = toneTable + nBlocks * TONES_PER_PROGRAM * 32;
 
-    /* The real total body size to wait for is gCdFiles[bodyCdf].sectorCt *
-     * 2048 -- core/cd.c's own gCdLoader completion accounting, NOT the sum of
-     * VAG sizes from the size table. Those can legitimately differ (this
-     * VAB's real body occupies more CD sectors than its VAG samples alone
-     * need -- likely disc-layout padding), and using the smaller
-     * VAG-sum total made SsVabTransBodyPartly report "done" before core/cd.c's
-     * own gCdLoader had read every sector it expected to, leaving
-     * gCdLoader.state permanently stuck (a real hang, not hypothetical --
-     * see the SsVabTransBodyPartly comment and exchange/12-...). Matching
-     * core/cd.c's own notion of "done" exactly is what actually matters here,
-     * not how many bytes the audio decode itself needs. */
+    /* The body total to wait for is core/cd.c's own completion count (sectorCt * 2048), not the
+     * sum of the VAG size table: the two can differ, and a smaller total stalls gCdLoader for good.
+     * See docs/pc-port/subsystems/spu.md, "VAB body transfer and CD completion accounting". */
     {
         int total = (int)gCdFiles[gVabLoader.bodyCdf].sectorCt * 2048;
         free(s_vabBodyStaging[vabId]);
@@ -384,10 +280,8 @@ short SsVabTransBodyPartly(unsigned char *vabBody, unsigned int size, short vabI
 
     if (!s_context) return 1; /* SsInit() not called -- nothing to upload to */
 
-    /* Accumulate this chunk into the staging buffer. `size` is the
-     * caller's fixed max-chunk-size (e.g. 90*2048), not necessarily how
-     * much real data remains -- clamp to our own tracked total so the
-     * last, partial chunk doesn't read past the true body end. */
+    /* Accumulate this chunk. `size` is the caller's fixed maximum chunk size (90*2048), not the
+     * bytes remaining, so clamp to the tracked total or the last chunk reads past the body end. */
     {
         int remaining = s_vabBodyTotal[vabId] - s_vabBodyReceived[vabId];
         int take = (int)size < remaining ? (int)size : remaining;
@@ -404,11 +298,9 @@ short SsVabTransBodyPartly(unsigned char *vabBody, unsigned int size, short vabI
     /* Full body received -- decode every VAG from the assembled buffer. */
     int offset = 0;
     for (int v = 0; v <= vab->numVag && v < MAX_VAG; v++) {
-        /* The VAG size table stores sizes in 8-BYTE SPU units, not bytes (verified: sum*8 ==
-         * the exact .VB body size, and every value*8 is a whole number of 16-byte ADPCM blocks).
-         * Treating them as bytes decoded 1/8 of each sample AND read every VAG after the first
-         * from an 8x-too-small offset -> right notes but WRONG sample data (wrong timbre; garbage
-         * for high-index VAGs like the bass). Affects the SPU-SFX path too. */
+        /* VAG size table entries are in 8-byte SPU units, not bytes (sum*8 == the .VB body size,
+         * and every entry*8 is a whole number of 16-byte ADPCM blocks). Reading them as bytes
+         * decodes 1/8 of each sample and reads every later VAG from an 8x-too-small offset. */
         int vagSize = (ReadU16(sizeTable + v * 2) & 0xffff) * 8;
         if (v > 0 && vagSize > 0 && s_vabBodyStaging[vabId]) {
             short *pcm;
@@ -425,14 +317,13 @@ short SsVabTransBodyPartly(unsigned char *vabBody, unsigned int size, short vabI
             }
             vab->vagBuffers[v] = buf;
             /* Retain the decoded PCM + loop for the software SPU (freed in SsVabClose). */
-            vab->vagPcm[v]   = pcm;   /* NB: not freed here anymore */
+            vab->vagPcm[v]   = pcm;   /* freed in SsVabClose */
             vab->vagLen[v]   = n;
             vab->vagLoopS[v] = loopStart;
             vab->vagLoopE[v] = loopEnd;
-            /* Debug: VH_SPU_DUMPVAG=1 writes every decoded VAG as vh_vag_<vab>_<n>.wav (44.1k mono)
-             * plus a manifest of len/loop points. Offline analysis of the ISO cannot be trusted for
-             * this -- the VAB body offset there is not the one the game actually transfers -- so
-             * when a sample's TIMBRE is in question, dump what we really play. See exchange/57. */
+            /* VH_SPU_DUMPVAG=1 writes every decoded VAG as vh_vag_<vab>_<n>.wav plus a manifest.
+             * This is the PCM the game really plays; offline analysis of the ISO does not give the
+             * same body offsets. See docs/pc-port/subsystems/spu.md, "Diagnostics". */
             { static int dump = -1;
               if (dump < 0) { const char *e = getenv("VH_SPU_DUMPVAG"); dump = (e && e[0] == '1'); }
               if (dump && n > 0) {
@@ -538,7 +429,7 @@ void SsSetMVol(short lVol, short rVol) {
 }
 
 void SsSetSerialAttr(char port, char attr, char mode) {
-    (void)port; (void)attr; (void)mode; /* CD-DA/XA mix routing -- lands once CD streaming (CdRead2) exists */
+    (void)port; (void)attr; (void)mode; /* serial (CD/XA) routing flags; the XA stream always mixes in here */
 }
 void SsSetSerialVol(char port, short lVol, short rVol) {
     /* Serial-A carries the CD/XA input on real hardware -> route to the XA stream gain. */
@@ -594,33 +485,17 @@ static void PlayOnVoice(int voiceIdx, short vabId, short prog, short tone, int n
     if (vg < 0 || vg >= MAX_VAG || !s_vabs[vabId].vagPcm[vg]) return;
     {
         int ls = s_vabs[vabId].vagLoopS[vg], le = s_vabs[vabId].vagLoopE[vg];
-        /* SFX have a degenerate frozen-max ADSR (never fades, and most get no key-off). A tiny
-         * "hold" loop (the last ADPCM block, ~28 samples, a silent DC tail) would then loop forever
-         * and keep the voice permanently active -- starving the allocator (SFX gaps) and stealing
-         * music voices. Treat such a hold-loop as one-shot: play out and free the voice. A GENUINE
-         * sustain loop (e.g. a spell casting sound, thousands of samples) is kept so it rings until
-         * the game's SFX_ROLE_RELEASE key-off. Music (SeqNoteOn) is untouched -- its notes get real
-         * note-offs. */
+        /* SFX ADSRs never fade and most SFX get no key-off, so a one-block hold loop would keep
+         * the voice active forever; treat it as one-shot. A genuine sustain loop (spell casting,
+         * thousands of samples) rings until the game's SFX_ROLE_RELEASE key-off. */
         int plen = s_vabs[vabId].vagLen[vg];
-        /* A hold-loop is the sample's PARKING SPOT, not part of the sound: these VAGs decode to a
-         * flat +28672 DC over those ~28 samples (verified across every SFX bank). Hardware parks
-         * there at full envelope -- constant DC, inaudible -- and the ADSR release (Rr=4) ramps it
-         * away on key-off, so there is never a step. Playing it as a one-shot and then hard-stopping
-         * emits a rectangular DC pulse instead: the menu "pop" (bugreport-06). The real audio ends
-         * cleanly at loopS (last samples measured -17 / 1 / 4), so truncate there. */
+        /* Truncate at loopS, where the real audio ends: the hold block is a flat +28672 DC parking
+         * spot and cutting inside it emits a rectangular pulse (the menu "pop").
+         * See docs/pc-port/subsystems/spu.md, "SFX voices and hold loops". */
         if (le - ls < SFX_HOLD_LOOP_MAX) { if (ls > 0) plen = ls; ls = 0; le = 0; }
-        /* voll/volr are the caller's per-channel volumes (SsUtKeyOnV) -- feed them to the voice's
-         * L/R gains instead of averaging them to mono, as the SPU's VolL/VolR do. See exchange/57. */
-        /* Full PsyQ key-on volume chain -- the SAME one the SEQ path uses, because 0x800d6d8c
-         * serves all three key-on entry points including SsUtKeyOnV:
-         *     lin = (V/127) * (VabHdr.mvol/127) * (ProgAtr.mvol/127) * (VagAtr.vol/127)
-         * then the square law. The ONE difference for SFX is that hardware SKIPS the per-channel
-         * volume stage (0x800d6e7c tests b716 == 0x21, which SsUtKeyOnV sets) -- so no chVol here.
-         *
-         * The progVol/toneVol factors were missing until 2026-07-21 and made every SFX ~8 dB too
-         * loud; once SpuSeqGain was re-derived to 1.012 for the square law that pushed full-volume
-         * SFX (menu beeps) to -0.3 dBFS, where the voice being cut produced an audible POP.
-         * Typical P,T ~100/127 => the missing factor was (0.787*0.787)^2 = 0.38. */
+        /* PsyQ's full key-on chain, shared with the SEQ path: (V/127) x VabHdr.mvol x ProgAtr.mvol
+         * x VagAtr.vol, then the square law; SFX skip only the per-channel stage. voll/volr are
+         * per-side gains, not averaged. See docs/pc-port/subsystems/spu.md, "SFX key-on volume". */
         float sfxL = (float)voll / 127.0f, sfxR = (float)volr / 127.0f;
         sfxL *= (float)s_vabs[vabId].masterVol / 127.0f;
         sfxR *= (float)s_vabs[vabId].masterVol / 127.0f;
@@ -637,8 +512,8 @@ static void PlayOnVoice(int voiceIdx, short vabId, short prog, short tone, int n
                     ApplyVolumeLaw(sfxL) * SpuSeqGain(),
                     ApplyVolumeLaw(sfxR) * SpuSeqGain(), t->adsr1, t->adsr2,
                     (t->mode & 0x04) != 0);
-        /* tag SFX voices too, else the fidelity trace shows their zero-init ids and they look
-         * like a phantom "vag 0" instrument (exchange/57) */
+        /* tag SFX voices too, else the VH_SPU_TRACE rows show their zero-init ids and they look
+         * like a phantom "vag 0" instrument */
         PC_SpuSetVoiceDebugId(voiceIdx, vg, prog, note);
         if (SfxLog()) { extern unsigned int SDL_GetTicks(void);
             fprintf(SfxLog(), "t=%6u keyon  v=%d vag=%d loopLen=%d vol=%d\n",
@@ -665,9 +540,8 @@ void SsVoKeyOn(int vabId, int prog, unsigned short pitch, unsigned short vol) {
                 int plen2 = s_vabs[vabId].vagLen[vg];
                 /* truncate at the hold-loop start -- see PlayOnVoice's note (DC pulse = the pop) */
                 if (le - ls < SFX_HOLD_LOOP_MAX) { if (ls > 0) plen2 = ls; ls = 0; le = 0; }
-                /* Same full key-on chain as PlayOnVoice above (VabHdr.mvol x ProgAtr.mvol x
-                 * VagAtr.vol, no per-channel stage for SFX), then the square law. Without the
-                 * progVol/toneVol factors this path was ~8 dB hot -- see PlayOnVoice's comment. */
+                /* Same key-on chain as PlayOnVoice (VabHdr.mvol x ProgAtr.mvol x VagAtr.vol, no
+                 * per-channel stage for SFX), then the square law. */
                 float g = (float)vol / 127.0f;
                 g *= (float)s_vabs[vabId].masterVol / 127.0f;
                 g *= (float)s_vabs[vabId].progVol[prog] / 127.0f;
@@ -712,12 +586,9 @@ short SsUtKeyOffV(short voice) {
     return voice;
 }
 
-/* ---- sequencer (PS1 SEQ / MIDI-like) --------------------------------- *
- * P1 (2026-07-15): parses the standard PS1 SEQ ("pQES") header + MIDI event
- * stream (confirmed in exchange/46) and drives the existing per-voice VAB
- * playback (PlayOnVoice) at real-time tempo. Flat gain for now -- ADSR
- * envelopes, pan and pitch-bend are P2. A SEQ plays through the VAB most
- * recently opened before SsSeqOpen (the soundset loaded by LoadSeqSet). */
+/* ---- sequencer (PS1 SEQ / MIDI-like): parses the "pQES" header + event stream and keys notes
+ * on the software SPU at real-time tempo, through the VAB named by SsSeqOpen's second argument.
+ * See docs/pc-port/subsystems/spu.md, "PsyQ libsnd and the SEQ sequencer". */
 
 #define MAX_SEQ         4
 #define SEQ_CHANNELS    16
@@ -742,16 +613,12 @@ typedef struct {
     unsigned char running;       /* MIDI running status                     */
     unsigned char chProg[SEQ_CHANNELS];
     unsigned char chVol[SEQ_CHANNELS];
-    unsigned char chPan[SEQ_CHANNELS];  /* CC 0x0A, 0..127 (64 = centre); was untracked */
+    unsigned char chPan[SEQ_CHANNELS];  /* CC 0x0A, 0..127 (64 = centre)                */
     signed char   noteVoice[SEQ_CHANNELS][128]; /* voice holding (ch,note), or -1 */
 } Seq;
 
 static Seq s_seqs[MAX_SEQ];
 static int s_seqVoiceRR = 0;
-/* SEQ music master gain. Re-measured after the VAG-size fix (correct samples): music-only RMS
- * was 1.30x below the emulator reference, so 0.30 -> 0.39 matches its loudness ( our peak ~27%
- * full-scale -> ~35%, still well under the reference's ~51%, no clipping). The old 0.30 was
- * calibrated against the broken 8x-truncated samples, which sat hotter. */
 static int s_seqOns = 0, s_seqOffs = 0;   /* diag: note-on / note-off balance */
 
 /* --- SEQ diagnostic sink: opt-in via VH_SEQ_LOG (off for end users) --- */
@@ -785,13 +652,9 @@ static int SeqAllocVoice(void) {
       return idx; }
 }
 
-/* Select the tone (and its program) for `note`.
- * This game's music VAB is ONE multisample tiled across programs: each tone is keyed to a
- * single note (min==max==key) and the programs' key-blocks tile the keyboard (prog0:24-31,
- * prog1:32-39, ... prog9:96-103). So the SEQ program-change does NOT pick the sample -- the
- * note does, globally. We still honour a proper per-program range match first (for any VAB
- * that is authored as real multi-program instruments), then fall back to the global
- * nearest-key search. Returns the tone index and writes the owning program to *outProg. */
+/* Select the tone (and its program) for `note`: a key-range match inside the requested program
+ * first, else the nearest key anywhere in the bank (for a multisample tiled across programs).
+ * Returns the tone index, owning program in *outProg. See docs/pc-port/subsystems/spu.md, "Tone selection". */
 static int SeqPickTone(const Vab *vab, int reqProg, int note, int *outProg) {
     int t, p;
     /* 1) exact range match inside the requested program (standard multi-program VAB) */
@@ -837,8 +700,8 @@ static void SeqNoteOn(Seq *s, int ch, int note, int vel) {
     if (tone < 0 || selProg < 0) return;
     SeqNoteOff(s, ch, note);                 /* retrigger: drop any prior instance */
     int voice = SeqAllocVoice();
-    /* If we're stealing an in-use SEQ voice, drop its previous owner's tracking so that note's
-     * later note-off can't release this (reassigned) voice -- the stale-steal phantom fix. */
+    /* Stealing an in-use SEQ voice: drop the previous owner's back-reference so that note's
+     * later note-off cannot release this reassigned voice. */
     if (s_voices[voice].ownSeq >= 0) {
         Voice *vc = &s_voices[voice];
         Seq *o = &s_seqs[vc->ownSeq];
@@ -846,16 +709,13 @@ static void SeqNoteOn(Seq *s, int ch, int note, int vel) {
             o->noteVoice[vc->ownCh][vc->ownNote] = -1;
     }
     int gain = (vel * s->chVol[ch]) / 127;   /* velocity x channel volume */
-    /* x ProgAtr master volume, then x per-tone volume -- PsyQ's two /127 stages, in its order
-     * (0x800d7514 progVol, then 0x800d7560 toneVol). progVol was missing entirely until the
-     * 0x800d74b8 disassembly; it is what keeps the bass (prog 0, mvol 127) sitting above the
-     * rest of the bank (mvol 85..104) instead of everything sharing full scale. */
+    /* x ProgAtr.mvol, then x VagAtr.vol -- PsyQ's two /127 stages in its order (0x800d7514, then
+     * 0x800d7560). progVol keeps the bass (prog 0, mvol 127) above the rest of the bank (85..104). */
     gain = (gain * vab->masterVol) / 127;                 /* VabHdr.mvol  (0x800d6d98) */
     gain = (gain * vab->progVol[selProg]) / 127;
     gain = (gain * vab->tones[selProg][tone].vol) / 127;
-    /* Per-voice L/R. Hardware applies three successive pan stages -- tone pan, program pan, then
-     * the note pan -- each attenuating only one side. progPan is 64 (centre, no-op) throughout
-     * this game's banks but is applied for faithfulness. See exchange/57. */
+    /* Per-voice L/R: three successive pan stages (tone, program, note), each attenuating one side.
+     * progPan is 64 (centre) throughout this game's banks. */
     float gL, gR;
     { float tpL, tpR, ppL, ppR, cpL, cpR;
       PanFactors(vab->tones[selProg][tone].pan, &tpL, &tpR);
@@ -865,9 +725,8 @@ static void SeqNoteOn(Seq *s, int ch, int note, int vel) {
       gR = (float)((gain * s->volR) / 127) / 127.0f * tpR * ppR * cpR;
       /* PsyQ squares AFTER panning, so the pan factors are squared too. */
       gL = ApplyVolumeLaw(gL); gR = ApplyVolumeLaw(gR);
-      /* Debug: isolate one instrument by ear. VH_SPU_SOLOPROG=N plays ONLY program N,
-       * VH_SPU_MUTEPROG=N silences it. Spectral attribution has misidentified the offending
-       * instrument twice (exchange/57); soloing settles it in one run. */
+      /* VH_SPU_SOLOPROG=N plays only program N, VH_SPU_MUTEPROG=N silences it: isolate one
+       * instrument by ear (spectral attribution alone misidentifies instruments). */
       { static int solo = -2, mute = -2;
         if (solo == -2) { const char *e = getenv("VH_SPU_SOLOPROG"); solo = e ? atoi(e) : -1;
                           e = getenv("VH_SPU_MUTEPROG");            mute = e ? atoi(e) : -1; }
@@ -918,14 +777,12 @@ static int SeqProcessEvent(Seq *s) {
                  break; }
     case 0xc0: s->chProg[ch] = *s->pos++; break;   /* program change             */
     case 0xd0: s->pos += 1; break;                 /* channel pressure (ignore)  */
-    case 0xe0: s->pos += 2; break;                 /* pitch bend (P2)            */
+    case 0xe0: s->pos += 2; break;                 /* pitch bend (ignored)       */
     case 0xf0:
         if (status == 0xff) {                      /* meta event                 */
-            /* PS1 SEQ meta events have NO SMF-style VLQ length field. Verified from
-             * real song data: a tempo event is `FF 51 tt tt tt` (3 raw bytes, us/quarter),
-             * NOT `FF 51 03 tt tt tt`. The old code read the first tempo byte as a length,
-             * skipped that many bytes, and desynced the whole stream -> phantom multi-second
-             * deltas that stalled playback (the town-music stuck-chord bug). */
+            /* PS1 SEQ meta events carry no SMF-style length byte: a tempo event is `FF 51 tt tt tt`
+             * (3 raw bytes, us/quarter), not `FF 51 03 ...`. Reading the first tempo byte as a
+             * length skips into a note-on and desyncs the whole stream. */
             unsigned char meta = *s->pos++;
             if (meta == 0x2f) return 0;            /* end of track               */
             if (meta == 0x51) {                    /* set tempo: exactly 3 bytes */
@@ -945,9 +802,9 @@ static int SeqProcessEvent(Seq *s) {
 }
 
 short SsSeqOpen(unsigned int *seqData, short vabId) {
-    /* NB: PsyQ's 2nd arg is the VAB id the sequence plays through (the game passes 1 = SD_SEQ,
-     * the dedicated music bank), NOT a "mode". We were ignoring it and binding to the last-opened
-     * VAB -- which during a battle is the map's SFX bank (BAT), i.e. the wrong instruments. */
+    /* PsyQ's 2nd arg is the VAB id the sequence plays through (the game passes 1 = SD_SEQ, the
+     * music bank), not a mode. Binding to the last-opened VAB instead picks the map's SFX bank
+     * during a battle -- the wrong instruments. */
     const unsigned char *d = (const unsigned char *)seqData;
     if (!d || !(d[0] == 'p' && d[1] == 'Q' && d[2] == 'E' && d[3] == 'S')) return -1;
     int slot = -1, i;
@@ -986,10 +843,9 @@ void SsSeqPlay(short num, char playMode, short repeatCount) {
     if (num < 0 || num >= MAX_SEQ || !s_seqs[num].inUse) return;
     Seq *s = &s_seqs[num];
     if (playMode != SSPLAY_PLAY) {
-        /* Pause/stop mode: freeze the sequencer AND release any held notes -- else a
-         * sustained voice rings forever. (This impl's SSPLAY_PLAY restarts from the top,
-         * so there's no resume-from-pause state to preserve. The game only ever passes
-         * SSPLAY_PLAY, so this branch is defensive.) */
+        /* Pause/stop mode: freeze the sequencer and release held notes, else a sustained voice
+         * rings forever. Defensive: the game only passes SSPLAY_PLAY, and play restarts from the
+         * top, so there is no resume-from-pause state to keep. */
         s->playing = 0;
         { int c, n; for (c = 0; c < SEQ_CHANNELS; c++) for (n = 0; n < 128; n++) SeqNoteOff(s, c, n); }
         SeqReleaseOrphanVoices(num);
@@ -1004,12 +860,9 @@ void SsSeqPlay(short num, char playMode, short repeatCount) {
     s->playing = 1;
 }
 
-/* Force-release every voice still owned by sequence `num`, whether or not it is
- * still tracked in noteVoice[][]. The per-note SeqNoteOff loop misses voices that
- * were orphaned from that map by a voice-steal chain -- those keep sustaining
- * after the sequence stops, i.e. the "note plays forever after a scene
- * transition" bug. This invariant (a live SEQ voice must belong to a *playing*
- * sequence) closes the whole hung-note class. */
+/* Force-release every voice still owned by sequence `num`, tracked in noteVoice[][] or not (a
+ * voice orphaned by a steal chain otherwise sustains after the sequence stops).
+ * See docs/pc-port/subsystems/spu.md, "Voice ownership and the stuck-note reaper". */
 static void SeqReleaseOrphanVoices(short num) {
     int vi, released = 0;
     for (vi = 0; vi < MAX_VOICES; vi++) {
@@ -1041,11 +894,9 @@ void SsSeqClose(short num) {
     s_seqs[num].inUse = 0;
 }
 
-/* End-of-track handling shared by the real 0x2F end and the runaway-delta watchdog.
- * Releases held notes then loops or stops; returns 1 if it looped (keep advancing),
- * 0 if it stopped. releaseOnLoop also drops held notes when looping -- ON for the
- * watchdog (garbage past real data => the held chord is stale), OFF for a clean 0x2F
- * end so a note legitimately sustained across a well-formed loop seam isn't cut. */
+/* End-of-track handling shared by the real 0x2F end and the runaway-delta watchdog: releases held
+ * notes, then loops or stops (returns 1 if it looped). releaseOnLoop drops held notes on a loop
+ * too -- on for the watchdog (the held chord is stale), off for a clean 0x2F seam. */
 static int SeqEndOfTrack(Seq *s, int releaseOnLoop) {
     if (s->loopInfinite || s->repeatLeft > 1) {
         if (!s->loopInfinite) s->repeatLeft--;
@@ -1066,11 +917,9 @@ static void SeqAdvanceByUsec(double dtUsec) {
         Seq *s = &s_seqs[si];
         if (!s->inUse || !s->playing) continue;
         s->tickBudget += (double)s->ppqn * dtUsec / (double)s->tempo;
-        /* Runaway inter-event delta: no real song has a single gap this int. Such a
-         * value means the parser ran past the real track data (s->end is a fixed
-         * 0x40000 cap, NOT the true length) and read a garbage VLQ, so tickBudget can
-         * never reach it and the sequence freezes forever holding its last chord --
-         * the stuck-note-after-transition bug. Treat it as end-of-track. */
+        /* Runaway inter-event delta: s->end is a fixed 0x40000 cap, not the true length, so a
+         * parser that runs past real data reads a garbage VLQ that tickBudget can never reach.
+         * Treat it as end-of-track. See docs/pc-port/subsystems/spu.md, "Runaway-delta watchdog". */
         int maxDelta = (int)s->ppqn * 32;   /* 32 quarter-notes; far beyond any real gap */
         int guard = 0;
         while (guard++ < 20000) {
@@ -1080,8 +929,8 @@ static void SeqAdvanceByUsec(double dtUsec) {
                     si, s->ticksToNext, (int)(s->pos - s->base)); fflush(lf); } }
                 if (SeqEndOfTrack(s, 1)) continue; else break; }
             if (s->tickBudget < (double)s->ticksToNext) {              /* wait for musical time */
-                /* diag: an abnormally int wait (>8 quarter-notes) is a stall candidate; log
-                 * tempo+delta (rate-limited ~1/s per seq). >8q won't fire for normal music. */
+                /* diag: a wait over 8 quarter-notes is a stall candidate; log tempo+delta,
+                 * rate-limited ~1/s per seq. Normal music never trips it. */
                 if (s->ticksToNext > s->ppqn * 8) {
                     extern unsigned int SDL_GetTicks(void);
                     static unsigned int lastLog[MAX_SEQ];
@@ -1099,13 +948,9 @@ static void SeqAdvanceByUsec(double dtUsec) {
     }
 }
 
-/* Free voice-pool slots whose software-SPU note has finished, so the allocator reuses them.
- * Also runs the stuck-note reaper: a still-HELD SEQ voice whose owning sequence no longer
- * back-references it (orphaned by a voice-steal chain, so its note-off can never arrive) is
- * force-released. Safe by construction: SFX voices have ownSeq<0 (skipped); a correctly-held
- * note always satisfies noteVoice[ownCh][ownNote]==vi (set in SeqNoteOn, untouched); and a
- * normally-releasing voice is skipped via PC_SpuVoiceReleasing, so only genuine stuck notes
- * are touched. See the hung-note-after-transition report (vh_seq_log.txt). */
+/* Free pool slots whose software-SPU note has finished, and run the stuck-note reaper: a held SEQ
+ * voice whose owning sequence has dropped its back-reference can never get a note-off, so release
+ * it. See docs/pc-port/subsystems/spu.md, "Voice ownership and the stuck-note reaper". */
 static void SwSpuSyncActive(void) {
     int vi;
     for (vi = 0; vi < MAX_VOICES; vi++) {
@@ -1148,10 +993,9 @@ void PC_SeqTick(void) {
     PC_SpuService();                                   /* drives PC_SeqAdvanceSamples per block */
     for (vi = 0; vi < MAX_VOICES; vi++) if (PC_SpuVoiceActive(vi)) activeSeq++;
 
-    /* diag: density + note-on/off balance + master vol + wall-clock, ~6x/sec. The timestamp
-     * exposes whether frames are advancing during a silence (game-thread block => timestamp
-     * jumps) vs. the game intentionally muting (mvol->0) or the SEQ having stopped (activeSeq 0
-     * while a seq is still 'playing'). */
+    /* diag: density + note-on/off balance + master vol + wall-clock, ~6x/sec. A jumping timestamp
+     * during a silence means the game thread blocked; mvol 0 means an intentional mute; activeSeq 0
+     * with a seq still 'playing' means the SEQ stopped. */
     { static int tk = 0, verbose = -1; FILE *lg = SeqLog();
       if (verbose < 0) verbose = getenv("VH_SEQ_LOG") ? 1 : 0;   /* gate the ~6x/sec spam; low-volume [note]/[reaper]/SsSeqStop stay on */
       if (lg && verbose && (++tk % 10) == 0) {

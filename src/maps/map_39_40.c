@@ -1,21 +1,6 @@
-/* Map 39's rising temple and Map 40's barricade.
- *
- * Map 39's trick: the submerged sections are authored 28 tiles to the right, outside the
- * visible bounds. Map39_Setup() shifts and sinks that staging copy into place, and
- * Map39_SwapSection() swaps a rectangle of it back in as each section surfaces, re-deriving
- * terrain from the tile's texture. Objf656_Map39 is the driver: as
- * Objf559_EvaluateMap39_EscortLeena advances mapState it pans the camera and raises the next section
- * using the local area helpers, dressing the emerging tiles with
- * Objf672_Map39_SplashingTile, which fires OBJF_SPLASH sprites as a tile's highest vertex
- * breaks the surface. Objf754_Map39_Scn82 is the event script's cutscene version of the
- * same rise. Map39_SetupSectionSplashing_2 is a byte-identical duplicate used only for the
- * last section -- do not merge, it holds distinct bytes.
- *
- * Map 40: Objf703_Map40_Barricade waits on mapState and spawns
- * Objf738_Map40_LowerBarricade, which sinks the barricade while shaking the camera and
- * venting OBJF_SMOKE; Map40_FlattenBarricade() is the instant version. Objf738's states 3-5
- * are unreachable copy-paste from Objf662_Map28_OpenDoor -- they still address Map 28's
- * gate tiles -- kept byte-exact. */
+/* Map 39's rising temple (its submerged sections are authored 28 tiles right of the visible
+ * bounds and swapped in as each surfaces; Map39_SetupSectionSplashing_2 is a same-code twin at
+ * its own address -- do not merge) and Map 40's barricade (Objf703 -> Objf738). */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

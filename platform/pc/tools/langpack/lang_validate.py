@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """lang_validate.py -- validate a translator WORKING SET against the engine's real limits.
 
-(Rewritten for the v1.7.0 engine: the original validated a third-party DISC; this validates the
-thing a translator actually edits, after lang_merge and before lang_build.)
+(Validates the translator working set itself -- not a third-party DISC -- the thing a translator
+actually edits, after lang_merge and before lang_build.)
 
 Two layers, deliberately distinct:
 
@@ -99,7 +99,7 @@ def load_hdpack_hashes(hdpack, errors):
 
 
 def check_backgrounds(work, hdpack, errors, warns):
-    """F2 (exchange/92): validate work/backgrounds/<hash>.webp -- a valid WebP, exactly 1280x960, a
+    """Validate work/backgrounds/<hash>.webp -- a valid WebP, exactly 1280x960, a
     16-hex hash name, and (with --hdpack) a hash that is a real background in that pack. Localized
     localized backgrounds render at EVERY internal scale (at 1x the engine keeps a native-size
     shadow pass alive for exactly this), so note the 1x look rather than a scale requirement."""
@@ -140,11 +140,8 @@ def validate(disc, work, strict=False, packart=None, hdpack=None):
     errors, warns = [], []
 
     # --- layer 1: dry-run build ----------------------------------------------------------------
-    # Pass --packart so a NON-LATIN working set is validated in the mode it will actually build in
-    # (script mode / 1-byte codes); without it the builder would reject every Cyrillic string as a
-    # bad Latin one. allow_incomplete keeps an unfinished script pack from hard-failing here, so the
-    # other errors (glyph capacity, collisions, budgets) still surface; completeness is reported
-    # separately below.
+    # See platform/pc/tools/langpack/README.md, "How validation works", for why --packart and
+    # allow_incomplete matter here.
     tmp = tempfile.mkdtemp(prefix="lang_validate_")
     buf = io.StringIO()
     built = True
@@ -175,17 +172,16 @@ def validate(disc, work, strict=False, packart=None, hdpack=None):
     tables = load_json(os.path.join(work, "strings", "tables.json"))["tables"]
     st_entries = tables["gStringTable"]["entries"]
 
-    # Per-table record widths, honoring the working set's declared encoding: bytes_per_char 1 on
-    # gItemNamesSjis is the format-2 opt-in (exchange/91) and widens the record from 8 SJIS chars
-    # to 16 1-byte chars. MIRRORS lang_build.build_fixed's rule -- validate and build must agree,
-    # or every format-2 pack with a >8-char name is "validate red, build green" forever.
+    # Per-table record widths, honoring the working set's declared encoding (README.md, "Item names:
+    # 16 characters (format 2)"). Mirrors lang_build.build_fixed's rule -- validate and build must
+    # agree here, or a format-2 pack with a >8-char name is "validate red, build green" forever.
     fixed_chars = dict(FIXED_CHARS)
     if tables.get("gItemNamesSjis", {}).get("limit", {}).get("bytes_per_char") == 1:
         fixed_chars["gItemNamesSjis"] = 16
 
     # #N reference cycles: every #N points into gStringTable, so any cycle is reachable from one
     # of its own member entries -- one pass over that table finds them all, and later cols() calls
-    # (which expand with the same guard, silently) can no longer crash on one.
+    # (which expand with the same guard, silently) never crash on one.
     cyc = set()
     for e in st_entries:
         cols(e.get("text") or e.get("en") or "", st_entries, _cycles=cyc)

@@ -1,16 +1,6 @@
-/* The event-entity interpreter: the object behind every scripted cutscene actor.
- *
- * Objf409_EventEntity (~870 lines) runs one EVDATA*.DAT script per entity, bound by
- * SetupEventEntity in units/actor.c. state3 is the run state (0 create sprite, 1 fetch the
- * next s16 opcode/arg pair, 2 execute or block), and the opcodes form one flat switch --
- * motion/facing (3-8), waits (1/9/0xa), animation select (2, 0x30), control flow (0xc
- * relative branch, 0x11/0x12 resume other entities), and a long tail of one-shot effects:
- * audio, dialogue, camera, terrain (0x52/0x53 spawn the face-elevation objects in
- * maps/unpack.c), and 0x1d, which spawns an object by raw objf index -- the mechanism
- * behind most per-scene effects in events/fx_scenes.c and the spells_* and maps_* units.
- *
- * Objf590_BattleTurnTicker closes the file: a per-turn map script live only on the two
- * timed maps (13, the collapsing bridge; 33, Kira over the lava pit). */
+/* Objf409_EventEntity: the object behind every scripted cutscene actor, running one
+ * EVDATA*.DAT script per entity. Objf590_BattleTurnTicker closes the file: a per-turn map
+ * script. See docs/decomp/event-scripts.md, "The interpreter". */
 #include "common.h"
 #include "object.h"
 #include "window.h"

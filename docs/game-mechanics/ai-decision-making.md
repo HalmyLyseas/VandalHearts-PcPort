@@ -7,6 +7,27 @@ Several behaviours players read as "smart" or "dumb" fall straight out of these 
 
 Code references point at `src/battle/ai.c` unless noted.
 
+## How the AI runs, frame to frame
+
+The battle manager (`battle/field.c`, the enemy-turn state machine) spawns
+`Objf570_AI_ChooseAction` on the acting unit's tile. That handler picks a plan from the unit's
+spells, MP, class and HP — with per-map specials (one map is retreat-only; one boss uses
+escape-point movement instead of the general planners) — and spawns exactly one of four planners:
+`Objf402_AI_PlanSpellCast` builds movement grids, spawns the spell-value and enemy-proximity grid
+builders, then searches every reachable cell × every castable cell for the best (move, target) pair;
+`Objf403_AI_PlanAttack` scores each target through the attack scorer described below (facing/back
+bonus, path cost, elevation, archer kiting, plus a scripted priority target on one map);
+`Objf404_AI_PlanRetreat` repositions away from enemies onto preferred terrain (also the self-heal
+positioning step); `Objf589_AI_MoveToEscapePoint` walks to scripted goal cells or the map edge.
+
+Planners publish their result into shared globals — a move-to tile, a target tile, and an action type
+(0 = move/wait with optional facing, 1 = attack, 2 = cast) — then raise a "plan done" signal;
+`Objf570` relays a "plan ready" signal back to the battle manager. Every planner yields mid-sweep
+once it has run long enough in a frame (checked against a hardware real-time counter), so a large
+grid search spreads across several frames instead of stalling the game; the port's model for pacing
+that same counter under a host's variable frame time is in
+[pc-port/subsystems/kernel.md](../pc-port/subsystems/kernel.md).
+
 ## The two-stage caster decision
 
 A unit that knows spells decides in two **separate** passes. Nothing about the target influences the

@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
-# raster_check.sh [path-to-exe] -- golden-image regression test for the software rasterizer.
-#
-# First run: boots the game headless (smoke mode, movies auto-skipped) while RECORDING a GPU trace
-# of the whole boot-to-title sequence -- every VRAM upload and every primitive the rasterizer drew
-# -- then REPLAYS that trace deterministically and stores its VRAM signature as the reference.
-# Every later run replays the same trace through the current code and compares signatures:
-# any change to rasterization behavior (coverage, UV stepping, dithering, blending, clipping,
-# texture windows...) changes the hash and FAILS the check. Byte-for-byte, no tolerance.
-#
-# The trace contains game-derived texture data, so it lives under build/regress/ (gitignored) and
-# is recorded from YOUR disc on first use. After INTENTIONAL rasterizer changes, re-baseline with:
-#   rm build/regress/boot.vht*    (then re-run this script)
+# raster_check.sh [path-to-exe] -- golden-image regression test for the software rasterizer: records a
+# boot GPU trace on first run, then replays it through the current code and compares the VRAM signature
+# byte-for-byte. After INTENDED rasterizer changes: rm build/regress/boot.vht*  (details in README.md).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PC_DIR="$(cd "$HERE/../.." && pwd)"
@@ -22,10 +13,8 @@ mkdir -p "$RD"
 
 replay_hash() {
     # Pin the raster environment: the ini->env loader runs before replay, so a user's
-    # VH_INTERNAL_SCALE/VH_RASTER_THREADS in vandalhearts.ini would otherwise leak in.
-    # VH_LANG/VH_LANGPACK too (empty = no pack): a persisted language pack legitimately patches
-    # the F_WD glyph-sheet uploads at LoadImage, which changes the replayed VRAM signature --
-    # exactly the false FAIL this pinning exists to prevent (bit us 2026-08-09 with ru-gen).
+    # VH_INTERNAL_SCALE/VH_RASTER_THREADS in vandalhearts.ini would otherwise leak in. VH_LANG/VH_LANGPACK
+    # too (empty = no pack): a language pack patches the F_WD glyph-sheet uploads and changes the signature.
     env VH_GPU_REPLAY="$TRACE" VH_INTERNAL_SCALE=1 VH_RASTER_THREADS=1 \
         VH_LANG= VH_LANGPACK= VH_HDPACK=0 \
         SDL_VIDEODRIVER=dummy ALSOFT_DRIVERS=null "$EXE" 2>/dev/null \

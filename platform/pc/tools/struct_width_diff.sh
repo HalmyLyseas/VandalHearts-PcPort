@@ -1,22 +1,13 @@
 #!/bin/sh
-# Reports every project struct whose sizeof() differs between the 32- and 64-bit builds.
-#
-# This is the check neither sanitizer can do. ASAN and UBSan find accesses that are out of bounds
-# in the build being run; they cannot see a struct that simply CHANGES SIZE at LP64 and thereby
-# overflows a fixed byte-size buffer somewhere else. That class cost a full debugging session
-# (exchange/bugs/bugreport-07.md Bug B: UnitStatus 120 -> 136 grew CardFileData_InBattleSave past
-# the 0x1700 card buffer, so the checksum never matched and in-battle saves would not load).
-#
-# Needs both builds present:
-#   make link                              # build/    (64-bit)
-#   make link M32=-m32 BUILD_DIR=build32   # build32/  (32-bit)
-#
-# Reading the output: a size difference is NOT automatically a bug. Anything holding a pointer
-# legitimately grows. It becomes a bug only where the struct meets a FIXED byte size --
-# serialization to a save file, a memcpy with a literal length, or a preallocated buffer. Triage
-# each hit by asking "is this ever written to a file or copied with a hardcoded size?".
-# Object_* variants are union members inside Object and are expected to differ; they are runtime
-# only and already handled by the union-alias padding in include/object.h.
+# Reports every project struct whose sizeof() differs between the 32- and 64-bit builds --
+# a class neither sanitizer can see.
+# See docs/memory-safety.md, "Struct-width diffing — what neither sanitizer sees".
+
+# Needs both builds present: `make link` -> build/ (64-bit), `make link M32=-m32
+# BUILD_DIR=build32` -> build32/ (32-bit).
+
+# A size difference is not automatically a bug -- anything holding a pointer legitimately
+# grows. Object_* variants are union members inside Object, expected to differ.
 
 cd "$(dirname "$0")/.." || exit 1
 

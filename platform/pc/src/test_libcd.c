@@ -1,8 +1,6 @@
-/* Standalone proof-of-concept: reads a real known game file (SIBAI1_1.DAT,
- * gCdFiles[CDF_SIBAI1_1_DAT] = {0x27e8, 0x01, ...} in src/core/cd.c) through the
- * exact CdControl(CdlSetloc)+CdRead flow core/cd.c itself uses, and verifies the
- * bytes match the independently-extracted reference exactly. Not part of
- * the real game build. */
+/* Standalone check: reads SIBAI1_1.DAT (gCdFiles[CDF_SIBAI1_1_DAT] = {0x27e8, ...}) through the
+ * same CdControl(CdlSetloc)+CdRead flow core/cd.c uses and compares the bytes against an
+ * independently-extracted reference. Not part of the game build. */
 #include <stdio.h>
 #include <string.h>
 #include "PsyQ/libcd.h"

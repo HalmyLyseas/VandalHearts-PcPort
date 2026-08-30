@@ -2312,12 +2312,8 @@ typedef struct Object_305_328 {
    /* :0x5C */ struct Object *unused_0x5C;
 } Object_305_328;
 
-/* Healing - FX2 */
-// TODO: Disambiguate from Object_100?
-// 306: Extra Healing, Hyper Healing
-// 791: Healing Plus
-// 792: Ultra Healing
-// 793: Supreme Healing, Holy H2O
+/* Healing FX2 variant (TODO: disambiguate from Object_100): 306 Extra/Hyper Healing, 791 Healing
+ * Plus, 792 Ultra Healing, 793 Supreme Healing/Holy H2O. */
 typedef struct Object_306_Etc {
    /* :0x24 */ s16 timer;
    /* :0x26 */ u8 unk_0x26[18];

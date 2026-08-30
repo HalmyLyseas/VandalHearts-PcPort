@@ -1,19 +1,6 @@
-/* Healing, status and stat-buff spell effects.
- *
- * Same dispatch model as spells/casting_main.c: nothing here has a static spawn site --
- * gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT] (battle/executors.c) selects the
- * handler, so the suffix records the slot (_FX1 = caster/main, _FX2 = per target,
- * _FX3 = defeat); sub-objects are named <Spell>_<Thing>.
- *
- * Groups:
- *   Healing (Objf060, a stub that only raises gSignal3; Objf100 + Objf101 sparkle), Cure
- *     (Objf104), Poison (Objf102_227 -- one handler in slots 102 and 227 -- with Objf103
- *     bubbles), Harmful Wave (Objf108 + Objf109 ring), Magic Charge (Objf106 + Objf107
- *     glyph ring; 106 is Magic Charge's DEFEAT slot in the retail gSpellsEx -- spell 23 =
- *     330/372/106 -- so it is reachable, not a leftover).
- *   Stat buffs -- Bless Weapon / Mystic Shield / Mystic Energy (Objf111/112/113) spawn the
- *     shared Objf110_CastingStatBuff with a per-spell CLUT, which drives Objf681_StatBuffFx
- *     and Objf733_StatBuffIcon. */
+/* Healing, status and stat-buff spell effects: Healing (Objf060/100/101), Cure (Objf104), Poison
+ * (Objf102_227/103), Harmful Wave (Objf108/109), Magic Charge (Objf106/107 -- 106 is spell 23's
+ * DEFEAT slot, so reachable) and the Objf110/681/733 stat-buff chain. gSpellsEx-dispatched. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

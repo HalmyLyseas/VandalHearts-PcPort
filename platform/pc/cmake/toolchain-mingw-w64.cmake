@@ -1,15 +1,15 @@
 # CMake toolchain file: cross-compile the native PC port to a 64-bit Windows .exe from Linux,
-# using the MinGW-w64 GCC cross-toolchain (Stage 2.4).
-#
+# using the MinGW-w64 GCC cross-toolchain.
+
 #   cmake -S . -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-mingw-w64.cmake
 #   cmake --build build_win
-#
-# Produces build_win/vandalhearts_pc.exe. SDL2 + OpenAL for the w64-mingw32 target must be present
-# in the sysroot below (Arch/CachyOS: `paru -S mingw-w64-sdl2 mingw-w64-openal`; OpenGL's import lib
-# ships with the toolchain). The runtime DLLs are copied next to the .exe by CMakeLists.
-#
-# Win64 is LLP64 (`long` is 32-bit) vs Linux LP64 (`long` is 64-bit). Harmless here: Stage 2.3
-# mapped PSX `long`->`int` throughout the PC layer, so no struct depends on `long`'s width.
+
+# Produces build_win/vandalhearts_pc.exe. SDL2 + OpenAL for the w64-mingw32 target must be
+# present in the sysroot below (Arch/CachyOS: `paru -S mingw-w64-sdl2 mingw-w64-openal`;
+# OpenGL's import lib ships with the toolchain). Runtime DLLs are copied next to the .exe.
+
+# Win64 is LLP64 (`long` is 32-bit) vs Linux LP64 (`long` is 64-bit). Harmless here: PSX
+# `long` maps to `int` throughout the PC layer, so no struct depends on `long`'s width.
 
 set(CMAKE_SYSTEM_NAME Windows)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
@@ -35,10 +35,9 @@ if(VH_MINGW_PREFIX)
     list(APPEND CMAKE_FIND_ROOT_PATH "${VH_MINGW_PREFIX}")
 endif()
 
-# 1.6: an extra prefix for a locally-built STATIC libav (the HD-video decoder) can be searched too.
-# With MODE ONLY below, find_library/find_path only look under CMAKE_FIND_ROOT_PATH, so a host
-# CMAKE_PREFIX_PATH is ignored -- the prefix must be appended here. Set it with -DVH_MINGW_FFMPEG=<prefix>
-# or the VH_MINGW_FFMPEG environment variable (make-release.sh does the latter).
+# An extra prefix for a locally-built static libav (the HD-video decoder) can be searched
+# too -- with MODE ONLY below, find_library/find_path only look under CMAKE_FIND_ROOT_PATH,
+# so a host CMAKE_PREFIX_PATH is ignored. Set via -DVH_MINGW_FFMPEG=<prefix> or the env var.
 if(VH_MINGW_FFMPEG)
     list(APPEND CMAKE_FIND_ROOT_PATH "${VH_MINGW_FFMPEG}")
 elseif(DEFINED ENV{VH_MINGW_FFMPEG})

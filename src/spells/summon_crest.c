@@ -1,17 +1,6 @@
-/* Summon-crest and lightning-family casting effects.
- *
- * Same dispatch model as spells/casting_main.c: nothing here has a static spawn site --
- * gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT] (battle/executors.c) selects the
- * handler, so the suffix records the slot (_FX1 = caster/main, _FX2 = per target,
- * _FX3 = defeat); sub-objects are named <Spell>_<Thing>.
- *
- * Groups:
- *   Summon crest -- Objf204_SummonCrest is the renderer; Objf207/209/210 are the
- *     red/blue/green shims that spawn it with a CLUT. Also driven from the
- *     summon-rune-column cutscene object (Objf323_713, events/fx_scenes.c), the one
- *     non-gSpellsEx user in the file.
- *   Holy Lightning (Objf208 + Objf212 casting bolt; FX2/FX3 in spells/lightning.c),
- *   Rolling Thunder (Objf197 + Objf198, same continuation). */
+/* Summon-crest and lightning-family casting effects: Objf204_SummonCrest and its red/blue/green
+ * shims Objf207/209/210 (also driven by the Objf323_713 cutscene object), Holy Lightning
+ * (Objf208/212) and Rolling Thunder (Objf197/198). gSpellsEx: docs/decomp/spell-fx-dispatch.md. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

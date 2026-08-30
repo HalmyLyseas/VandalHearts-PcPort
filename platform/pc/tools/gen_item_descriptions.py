@@ -20,7 +20,7 @@ NOTE: gTextPointers (0x8012be9c) is a *runtime-filled* table -- all-NULL in the
 ROM image (.bss), populated by the game at load time -- so it is correctly left
 zeroed by the data-gen and is NOT reconstructed here.
 
-Stage-2 PC-port backend file only; the matching build never sees it.
+PC-port backend file only; the matching build never sees it.
 """
 import os
 import struct
@@ -37,7 +37,7 @@ FILE_BASE = 0x800
 REGION = os.environ.get("VH_REGION", "us")
 if REGION == "jp":
     # JP has ONE description table serving both names (both symbols map to 0x800f16cc in
-    # SLPM_860.07 -- exchange/102 §3); gItemDescriptions2 is emitted as an alias below.
+    # SLPM_860.07); gItemDescriptions2 is emitted as an alias below.
     TABLES = [("gItemDescriptions", 0x800f16cc, 101)]
     ALIASES = [("gItemDescriptions2", "gItemDescriptions", 101)]
 else:

@@ -63,7 +63,9 @@ decompilation:
 - [spell-fx-dispatch.md](decomp/spell-fx-dispatch.md) — the `gSpellsEx` FX model and the full
   71-spell dispatch table, validated live in-game
 - [event-scripts.md](decomp/event-scripts.md) — the EVDATA cutscene bytecode: format, the
-  interpreter, all opcodes, and the census of event-spawned objects
+  interpreter, all opcodes, the census of event-spawned objects, and the `M_*.PRS` map-file format
+- [map-effects.md](decomp/map-effects.md) — the per-map scripted scenery in `src/maps/*.c`:
+  drawbridges, floodgates, collapsing bridges and the other map-specific set pieces
 
 ## The PC port internals
 

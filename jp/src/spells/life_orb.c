@@ -1,8 +1,6 @@
-/* Life Orb spell effects (Objf310-315, orb + rays) plus two strays kept by address
- * contiguity: Objf327 (Healing Circle FX2 -- FX1 is in spells/restoration.c) and
- * Objf322_370_371_372 (Magic Restoration FX2). The two RenderCylinder helpers close the
- * file, shared with the Map61 cutscene objects. Dispatched via gSpellsEx (see
- * spells/casting_main.c). */
+/* Life Orb spell effects (Objf310-315, orb + rays), two strays kept by address contiguity --
+ * Objf327 (Healing Circle FX2) and Objf322_370_371_372 (Magic Restoration FX2) -- and the two
+ * RenderCylinder helpers shared with the Map 61 cutscene objects. Dispatched via gSpellsEx. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

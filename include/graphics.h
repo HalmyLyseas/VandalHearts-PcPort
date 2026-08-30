@@ -413,27 +413,8 @@ typedef enum AnimIdx {
    ANIM_ATTACKING_FAR_END_F = 29
 } AnimIdx;
 
-/*typedef enum SpriteBoxIdx {
-   SPRITE_BOX_0 = 0,
-   SPRITE_BOX_1 = 1,
-   SPRITE_BOX_2 = 2,
-   SPRITE_BOX_3 = 3,
-   SPRITE_BOX_4 = 4,
-   SPRITE_BOX_5 = 5,
-   SPRITE_BOX_6 = 6,
-   SPRITE_BOX_7 = 7,
-   SPRITE_BOX_8 = 8,
-   SPRITE_BOX_9 = 9,
-   SPRITE_BOX_10 = 10,
-   SPRITE_BOX_11 = 11,
-   SPRITE_BOX_12 = 12,
-   SPRITE_BOX_13 = 13,
-   SPRITE_BOX_14 = 14,
-   SPRITE_BOX_15 = 15,
-   SPRITE_BOX_16 = 16,
-   SPRITE_BOX_17 = 17,
-   SPRITE_BOX_18 = 18
-} SpriteBoxIdx;*/
+/* Object.boxIdx (s16, e.g. include/object.h:0x34) takes values 0..18; no named constants exist
+ * for them. */
 
 typedef enum GpuCode {
    GPU_CODE_SEMI_TRANS = 0x02,
@@ -707,28 +688,9 @@ extern s16 gSpriteStripTPageIds[50];
 extern s16 gSpriteStripUnitIds[23];
 extern s16 gSceneSpriteStripUnitIds[105][20];
 extern u8 **gSpriteStripAnimSets[25];
-/* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites (src/states/game_setup.c:1073) indexes
- * this with gSpriteStripUnitIds[i], and the decomp already carried a `//?: Won't this read
- * out-of-bounds of gUnitAnimSets?` comment at that line. The index ceiling is set by DATA, not
- * reasoning: gSpriteStripUnitIds is filled from gSceneSpriteStripUnitIds, whose shipped table
- * (byte-identical in both regions) carries 77 distinct ids in 401..488 (scene 0 slot 0 = 403) --
- * so the array is sized [489], the shipped maximum + 1. The history is two rounds of the same
- * "widen on a non-exhaustive value" mistake (also made with gTravelAscentCost): first [192] off
- * the first observed index (151; a ch4 cutscene overran it at ~199), then [301] off a REASONED
- * ceiling ("IDs 151..300 are reserved for main party event sprites", SetupPartySprites
- * states/game_setup.c:117-176) that the actual scene table contradicts. Sized once here from an
- * exhaustive scan of the shipped data.
- *
- * Unlike the generator-extracted travel tables, gUnitAnimSets is a RECONSTRUCTED pointer table
- * (platform/pc/src/pc_unit_anim_data.c), so the hardware bytes past 144 (adjacent gUnitClutIds read
- * as pointers -- garbage even on hardware) cannot be faithfully reproduced. Entries 144..488 are
- * therefore NULL: the point of widening is SAFETY (the read stays in bounds and yields NULL instead
- * of a dereferenced wild pointer -- gSpriteStripAnimSets IS dereferenced at units/actor.c:142),
- * not faithfulness. Believed set-but-unused for rendering: cutscene units take their animset from
- * gEvtEntities, which is why the NULL padding has not broken any cutscene sprite across full
- * playthroughs. If a future cutscene sprite IS wrong, the real fix is to reconstruct those
- * event-sprite animsets, not to grow the array.
- * PERMUTER-gated; the matching build keeps [UNIT_DB_CT]. */
+/* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites indexes this with
+ * gSpriteStripUnitIds[i], whose shipped values run up to 488; sized [489], entries 144..488 NULL
+ * for safety. PERMUTER-gated. See docs/pc-port/data-segment.md, "gUnitAnimSets". */
 #ifdef PERMUTER
 extern u8 **gUnitAnimSets[489];
 #else
@@ -752,26 +714,9 @@ extern u8 gGfxSubTextures[GFX_CT][4]; // (x, y, w, h)
 // extern u16 gTPageIds[4][32];
 extern s16 gTPageIds[128];
 
-// ?: Going off of the loop at {@addr 0x8005cd94}, this should
-// have 128 elements, but the last few bytes ({@addr 0x8014014c})
-// are used in a completely unrelated manner: {@addr 800c471c}
-//
-// CONFIRMED 2026-07-21, and the "?" can be resolved: the original really does write 128 entries
-// and really does overrun. SetupGfx (src/states/game_setup.c:1712) runs `for i<8 { for k<16 }` = 128
-// s16 writes from 0x80140054, i.e. through 0x80140153 -- straight over `s_cdSyncStatus`
-// (0x8014014c, an s32) and the 4-byte gap before gPortraitOverlayOffsets (0x80140154). It is a
-// genuine out-of-bounds write in the retail game, benign only by luck: src/core/audio.c always does
-// `s_cdSyncStatus = CdSync(1, buf);` immediately before every read of it (core/audio.c:473 vs 475/479),
-// so the clobbered value is never observed. Found by the AddressSanitizer sweep (`make asan32`),
-// which flagged it on every SetupGfx call.
-//
-// The PC build widens it to the 128 the code actually uses, so the write is in bounds. This is
-// PERMUTER-gated -- NOT PC_PORT -- because the data-segment generator's sizeof() probe compiles
-// with -DPERMUTER only, and it must agree with the game code about the size or it emits a
-// 248-byte object for code that writes 256. Same discipline as src/core/text.c's
-// sFontGlyphBitmaps[129] vs [128]; the matching build defines neither macro and keeps [124].
-// Behaviourally this means s_cdSyncStatus survives SetupGfx on PC but not on PSX -- harmless per
-// the reassign-before-read above, and it removes ASAN noise that would otherwise bury real finds.
+// SetupGfx's `for i<8 { for k<16 }` loop writes 128 s16 entries, overrunning the hardware's 124
+// into `s_cdSyncStatus` (harmless -- always reassigned before its next read). PERMUTER widens to
+// 128. See docs/memory-safety.md, "AddressSanitizer".
 #ifdef PERMUTER
 extern s16 gClutIds[128];
 #else
@@ -811,11 +756,6 @@ static inline s16 GetCamRotX() { return gCameraRotation.vx; }
 static inline s16 GetCamRotY() { return gCameraRotation.vy; }
 static inline s16 GetCamDir() { return gCameraRotation.vy >> 10; }
 static inline u16 GetCamRotY_U() { return gCameraRotation.vy; }
-
-/*static inline void SetCamPosX(s32 value) { gCameraPos.vx = value; }
-static inline void SetCamPosY(s32 value) { gCameraPos.vy = value; }
-static inline void SetCamPosZ(s32 value) { gCameraPos.vz = value; }
-static inline void SetCamRotY(s32 value) { gCameraRotation.vy = value; }*/
 
 static inline void OffsetCamPosX(s32 value) { gCameraPos.vx = GetCamPosX() + value; }
 static inline void OffsetCamPosY(s32 value) { gCameraPos.vy = GetCamPosY() + value; }

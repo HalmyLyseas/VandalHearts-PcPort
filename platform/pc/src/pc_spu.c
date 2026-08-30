@@ -1,20 +1,6 @@
-/*
- * Software SPU voice renderer (Phase 2.1, milestone M1).
- *
- * Replaces the OpenAL-per-voice music/SFX backend with a sample-accurate PS1
- * SPU: each voice is stepped through its decoded SPU-ADPCM (VAG) PCM at the SPU
- * pitch rate, interpolated, gained, and the up-to-32 voices are summed into one
- * stereo 44100 Hz stream fed to a single OpenAL streaming source (same no-thread
- * per-VSync top-up pattern as pc_xa.c). This removes the dependence on OpenAL's
- * per-source AL_PITCH/AL_GAIN and (later, M5) the EFX reverb extension.
- *
- * Adapted from the working per-sample SPU core in ctr-native/platform/
- * native_audio.c (sibling native PS1 port, already a trusted reference here),
- * cross-checked against psx-spx soundprocessingunitspu.md.
- *
- * M1 = pitch step + LINEAR interpolation + flat gain (short click-avoidance
- * ramps), no ADSR/Gaussian/reverb yet. Those land in M3/M4/M5.
- */
+/* Software SPU: a sample-accurate PS1 SPU voice renderer (decoded-ADPCM stepping at the SPU pitch
+ * rate, Gaussian interpolation, ADSR, STUDIO_C reverb) summed into one stereo 44100 Hz OpenAL
+ * stream; behaviour per psx-spx. See docs/pc-port/subsystems/spu.md, "The software SPU". */
 #if defined(__APPLE__)
 #include <OpenAL/al.h>
 #include <OpenAL/alc.h>
@@ -43,11 +29,9 @@ typedef struct {
     int          len;                 /* sample count                                        */
     int          loopS, loopE;        /* sustain loop [loopS,loopE), or loopE<=loopS = none   */
     int          active;
-    int          revOn;               /* VagAtr.mode bit2 -- this voice feeds the reverb send.
-                                       * Hardware sets EON per voice; the music bank's tones all
-                                       * carry mode=4 and EVERY SFX bank's carry mode=0, so SFX
-                                       * are dry. Sending the whole mix (what we did until
-                                       * 2026-07-21) gave menu beeps a 1.2 s reverb tail. */
+    int          revOn;               /* VagAtr.mode bit2 -- this voice feeds the reverb send
+                                       * (hardware's per-voice EON). The music bank's tones all
+                                       * carry mode=4, every SFX bank's mode=0, so SFX are dry. */
     int          looped;              /* 1 once the sustain loop has wrapped at least once;
                                        * makes the Gaussian history fetch loop-aware (see
                                        * SpuGetSample -- hardware keeps a running 4-sample
@@ -55,14 +39,11 @@ typedef struct {
                                        * data after a wrap). */
     unsigned long long phase;         /* 20.12 fixed-point sample position                   */
     unsigned int step;                /* VxPitch (0x1000 = unity)                            */
-    int          dbgVag, dbgProg, dbgNote;  /* identity for the fidelity trace (exchange/57) */
+    int          dbgVag, dbgProg, dbgNote;  /* identity for the VH_SPU_TRACE rows             */
     float        gainL, gainR;        /* per-voice L/R note volume, 0..1 (velocity*chan*seq*
-                                       * vol*pan). Hardware has independent VolL/VolR per voice
-                                       * (octoshock spu.cpp reads them per-voice); previously a
-                                       * single mono gain was summed into both channels, i.e. the
-                                       * whole mix rendered dead-centre and the VAB tone pan /
-                                       * SEQ channel pan were ignored. See exchange/57. */
-    /* Sample-accurate ADSR (M3), ported from ctr-native native_audio.c / psx-spx. */
+                                       * vol*pan); hardware has independent VolL/VolR per voice,
+                                       * which is what carries the tone pan / SEQ channel pan. */
+    /* Sample-accurate ADSR (psx-spx "Volume and ADSR Generator"). */
     int          adsrLevel;           /* 0..0x7fff current envelope level                     */
     unsigned int adsrCounter;         /* 15-bit fractional rate counter                       */
     int          adsrPhase;           /* enum ADSR_*                                          */
@@ -79,25 +60,16 @@ static float    s_masterL = 1.0f, s_masterR = 1.0f;
 
 static int Clamp16(int x) { return x < -32768 ? -32768 : (x > 32767 ? 32767 : x); }
 
-/* Reference-matching EQ tilt -- now HARDWIRED OFF (s_analogOn = 0); the code is kept but unreached.
- * CORRECTION (2026-07-17): this was originally believed to model the PS1 *analog output stage*,
- * but the octoshock reference is RAW DIGITAL -- spu.cpp sums voices+reverb, applies main volume,
- * clamps, and scales x0.75, with NO analog/lowpass filter anywhere. So this is NOT analog modeling;
- * it's a small spectral-tilt correction. Once the square volume law landed it OVER-corrects (2.20 dB
- * -> 4.27 dB mean error vs the reference), so it stays off; the proper fix lives in the raw mix itself
- * (interpolation aliasing / ADSR-attack brightness / reverb balance). See memory spu_m1_progress. */
+/* Reference-matching EQ tilt, compiled but unreachable (s_analogOn is fixed at 0): a spectral
+ * correction fitted to a mix that lacked the square law, which over-corrects with it in place.
+ * See docs/pc-port/subsystems/spu.md, "Gotchas / notes". */
 static int   s_analogOn = -1;
 static float s_bassK = 2.0f, s_bassA, s_trebK = 0.6f, s_trebA;
 static float s_bassLP[2], s_trebLP[2];
 static float EnvF(const char *k, float d){ const char *e=getenv(k); return e?(float)atof(e):d; }
 static void AnalogInit(void) {
     if (s_analogOn >= 0) return;
-    /* DEFAULT FLIPPED TO OFF, 2026-07-20. This curve was fitted to compensate for the missing
-     * SQUARE LAW (see exchange/57). With the square law implemented the compensation OVER-corrects:
-     * measured mean|error| vs the octoshock reference over 30 Hz-12 kHz is
-     *     raw mix 2.20 dB   vs   raw mix + this filter 4.27 dB
-     * i.e. enabling it is now WORSE than the pre-fix build (3.21 dB). Now hardwired OFF -- the square
-     * law makes it an over-correction; the code path is kept (fed by s_bassK/s_trebK) but unreached. */
+    /* Hardwired off; the VH_SPU_BASS/TREB parameters only feed the unreachable filter. */
     s_analogOn = 0;
     s_bassK = EnvF("VH_SPU_BASS", 2.0f);           /* sub-bass boost amount (fit: ~4->1.4dB) */
     s_trebK = EnvF("VH_SPU_TREB", 0.6f);           /* treble softening 0..1                   */
@@ -126,7 +98,7 @@ void PC_SpuSetMaster(int l127, int r127) {
 }
 
 /* Decode the PS1 ADSR1/ADSR2 words into per-phase shift/step/mode fields
- * (psx-spx "Volume and ADSR Generator"; layout matches ctr-native). */
+ * (psx-spx "Volume and ADSR Generator"). */
 static void SpuDecodeAdsr(SpuVoice *v, unsigned short adsr1, unsigned short adsr2) {
     int ar = (adsr1 >> 8) & 0x7f;
     int sr = (adsr2 >> 6) & 0x7f;
@@ -162,8 +134,8 @@ void PC_SpuKeyOn(int voice, const short *pcm, int len, int loopS, int loopE,
     v->active = 1;
 }
 
-/* Tag a voice with the sample/program/note it is playing, so the fidelity trace can identify
- * WHICH VAG the bass notes use (exchange/57). Called right after PC_SpuKeyOn by libsnd. */
+/* Tag a voice with the sample/program/note it plays, so the VH_SPU_TRACE rows identify which
+ * VAG each note uses. Called right after PC_SpuKeyOn by libsnd. */
 void PC_SpuSetVoiceDebugId(int voice, int vag, int prog, int note) {
     if (voice < 0 || voice >= SPU_VOICES) return;
     s_v[voice].dbgVag = vag; s_v[voice].dbgProg = prog; s_v[voice].dbgNote = note;
@@ -221,10 +193,9 @@ static int SpuAdsrAdvance(SpuVoice *v) {
     case ADSR_SUSTAIN: {
         int allOnes = ((v->srStep & 3) | (v->srShift << 2)) == 0x7f;
         SpuAdsrRunStep(v, v->srShift, v->srStep, v->sExp, v->sDec, allOnes);
-        /* A sustain-DECREASE that has faded to 0 is silent forever (a looping SFX with no
-         * key-off relies on exactly this). Free the voice so it doesn't linger active,
-         * hogging the pool and blocking new SFX/music -- the SFX log showed 90 looping
-         * key-ons vs 14 key-offs, i.e. most SFX end via ADSR, not key-off. */
+        /* A sustain-decrease that has faded to 0 is silent forever (a looping SFX with no key-off
+         * ends exactly this way -- most SFX end via ADSR, not key-off). Free the voice so it
+         * does not hog the pool. */
         if (v->sDec && v->adsrLevel <= 0) return 0;
         break; }
     case ADSR_RELEASE:
@@ -249,15 +220,15 @@ int PC_SpuVoiceActive(int voice) {
     return s_v[voice].active;
 }
 
-/* True if the voice is no longer held (release tail or off) -- i.e. its note-off
- * already happened and it will fade out on its own. Lets the SEQ layer tell a
- * stuck (still-held) orphan from a normally-releasing voice. */
+/* True if the voice is not held any more (release tail or off), i.e. its note-off has happened
+ * and it fades on its own. Lets the SEQ layer tell a stuck (still-held) orphan from a normally
+ * releasing voice. */
 int PC_SpuVoiceReleasing(int voice) {
     if (voice < 0 || voice >= SPU_VOICES) return 1;
     return s_v[voice].adsrPhase == ADSR_RELEASE || s_v[voice].adsrPhase == ADSR_OFF;
 }
 
-/* PS1 SPU 4-point Gaussian interpolation table (psx-spx; values verbatim from ctr-native). */
+/* PS1 SPU 4-point Gaussian interpolation table (psx-spx). */
 static const short s_gauss[512] = {
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     0,0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,
@@ -292,16 +263,9 @@ static const short s_gauss[512] = {
     22467,22498,22527,22556,22584,22611,22637,22662,22686,22709,22731,22752,22772,22791,22809,22826,
     22842,22857,22872,22885,22897,22908,22918,22927,22935,22942,22948,22953,22957,22960,22962,22963 };
 
-/* Loop-aware PCM fetch. Out-of-range reads 0 (a keyed-on voice starts with a cleared history).
- *
- * The loop-awareness is REAL now -- it previously wasn't, despite the comment. The 4-point
- * Gaussian needs the three samples that PRECEDED idx *in playback order*. Back-indexing gives
- * that everywhere except immediately after a sustain-loop wrap: at idx==loopS the true history
- * is loopE-1..loopE-3 (the end of the loop we just came from), but a raw idx-1..idx-3 reads
- * loopS-1..loopS-3 -- i.e. the pre-loop ATTACK data, which is unrelated. Hardware never has this
- * problem because it keeps a running 4-sample shift register rather than indexing backwards.
- * The result was a 3-sample discontinuity on EVERY wrap of EVERY sustained voice; see
- * exchange/57 (it is the last surviving candidate for the +6 dB 3-6 kHz excess in the raw mix). */
+/* Loop-aware PCM fetch; out-of-range reads 0 (a keyed-on voice starts with cleared history).
+ * After a sustain-loop wrap the three samples "before" loopS are loopE-1..loopE-3, not the pre-loop
+ * attack data: hardware keeps a running 4-sample shift register rather than indexing backwards. */
 static int SpuGetSample(const SpuVoice *v, int idx) {
     if (v->looped && v->loopE > v->loopS && idx < v->loopS)
         idx = v->loopE - (v->loopS - idx);   /* wrap the history back into the loop tail */
@@ -337,17 +301,13 @@ static void SpuVoiceAdvance(SpuVoice *v) {
     }
 }
 
-/* ---- SPU reverb (M5) --------------------------------------------------------
- * Faithful PS1 SPU reverb (the comb/all-pass network over a work buffer, run at
- * 22050 Hz with a 39-tap FIR resampling the 44100 in/out), ported from
- * ctr-native native_audio.c. The game selects SPU_REV_MODE_STUDIO_C, so only
- * that preset is embedded. Replaces the OpenAL EFX approximation for the SW
- * path. All SEQ music voices are reverb-enabled (as the OpenAL path routed
- * them), so the whole SW mix is the reverb send. */
+/* ---- SPU reverb: the PS1 comb/all-pass network over a work buffer, run at 22050 Hz with a
+ * 39-tap FIR resampling the 44100 Hz in/out (psx-spx). The game selects SPU_REV_MODE_STUDIO_C,
+ * so only that preset is embedded; only voices with VagAtr.mode bit 2 feed the send. */
 #define REV_FIR_TAPS 39
 #define REV_SAMPLES  0x37F0            /* STUDIO_C size: 0x6FE0 bytes / 2 */
 
-/* register indices (preset order, matches psx-spx / ctr-native) */
+/* register indices (preset order, psx-spx) */
 enum { R_DAPF1, R_DAPF2, R_VIIR, R_VCOMB1, R_VCOMB2, R_VCOMB3, R_VCOMB4, R_VWALL,
        R_VAPF1, R_VAPF2, R_MLSAME, R_MRSAME, R_MLCOMB1, R_MRCOMB1, R_MLCOMB2, R_MRCOMB2,
        R_DLSAME, R_DRSAME, R_MLDIFF, R_MRDIFF, R_MLCOMB3, R_MRCOMB3, R_MLCOMB4, R_MRCOMB4,
@@ -373,8 +333,7 @@ static struct {
 static int   s_revOn = 0;
 static float s_revDepth = 0.0f;         /* 0..1 wet mix, from SsUtSetReverbDepth */
 
-/* Wet-mix reverb, driven by the game via SsUtSetReverbDepth. (The old VH_SPU_REVDEPTH/REVOFF debug
- * overrides from the bass-deficit investigation, exchange/57, were removed once the mix was calibrated.) */
+/* Wet-mix reverb depth, driven by the game via SsUtSetReverbDepth (pushed each VSync). */
 void PC_SpuSetReverb(int on, float depth) {
     s_revOn = on;
     s_revDepth = depth;
@@ -441,11 +400,9 @@ static void RevProcess(int sendL, int sendR, int *wetL, int *wetR) {
     *wetR = (int)(oR * s_revDepth);
 }
 
-/* Per-voice trace mirroring exchange/58-spu-deep-trace.lua's hardware capture, so the two diff
- * field-for-field (bass-deficit investigation, exchange/57). Enable with VH_SPU_TRACE=1 ->
- * vh_spu_voices_ours.csv + vh_spu_globals_ours.csv. Sampled once per rendered block (not per
- * sample) to stay cheap; `frame` here is a block counter, so align to the hardware trace by
- * elapsed time, not by absolute frame number. */
+/* VH_SPU_TRACE=1: per-voice rows to vh_spu_voices_ours.csv + vh_spu_globals_ours.csv, laid out to
+ * diff field-for-field against a per-voice hardware capture. Sampled once per rendered block;
+ * `block` is a block counter, so align to a hardware trace by elapsed time, not frame number. */
 static void SpuTrace(void) {
     static int en = -1;
     static FILE *fv = NULL, *fg = NULL;
@@ -490,7 +447,7 @@ static void SpuRenderBlock(short *out, int frames) {
             float s, env;
             if (!v->active) continue;
             s = SpuVoiceSample(v);
-            /* sample-accurate ADSR envelope (M3): level 0..0x7fff scales the sample. */
+            /* sample-accurate ADSR envelope: level 0..0x7fff scales the sample. */
             if (!SpuAdsrAdvance(v)) { v->active = 0; continue; }
             env = (float)v->adsrLevel / (float)ADSR_MAX;
             accL += s * env * v->gainL;
@@ -527,12 +484,9 @@ static void SpuEnsureAl(void) {
 static void SpuRecycle(void) {
     ALint processed = 0;
     if (!s_alReady) return;
-    /* Reclaim every finished buffer -- crucially INCLUDING after an underrun (a game-thread stall,
-     * e.g. an attack or a CD load, drains the queue and the source goes STOPPED with all buffers
-     * processed). The old "skip when not PLAYING" guard, copied from pc_xa, permanently stalled a
-     * continuous stream: without reclaiming, nothing could be re-rendered and the music went silent
-     * forever ("cuts and never catches up"). A fresh/INITIAL source reports 0 processed, so this is
-     * safe there too. */
+    /* Reclaim every finished buffer, including after an underrun (a game-thread stall drains the
+     * queue and the source goes STOPPED with all buffers processed). Skipping the reclaim when not
+     * PLAYING stalls the stream for good. A fresh source reports 0 processed, so this is safe. */
     alGetSourcei(s_source, AL_BUFFERS_PROCESSED, &processed);
     while (processed-- > 0 && s_bufFreeCount < SPU_NUM_BUFFERS) {
         ALuint b = 0;
@@ -546,10 +500,9 @@ static void SpuRecycle(void) {
  * frame clock (removes frame-jitter / loop-point hiccups). Defined in libsnd.c. */
 extern void PC_SeqAdvanceSamples(int n);
 
-/* Per-VSync top-up: keep the queue full, rendering silence when idle so the
- * stream never underruns. Called from PC_SeqTick when VH_SWSPU is active.
- * Each block is preceded by advancing the sequencer by exactly that block's
- * worth of samples, so the audio IS the master clock. */
+/* Per-VSync top-up (from PC_SeqTick): keep the queue full, rendering silence when idle so the
+ * stream never underruns. Each block is preceded by advancing the sequencer by exactly that
+ * block's worth of samples, so the audio is the master clock. */
 void PC_SpuService(void) {
     static short block[SPU_BLOCK_FRAMES * 2];
     SpuEnsureAl();

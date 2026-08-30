@@ -1,7 +1,6 @@
-/* Event-spawned map ambience dressing: chimney smoke (Objf289/302), the Map36 Leena
- * forcefield (Objf675), rain (Objf676_687/677), water ripples (Objf678) and the campfire
- * (Objf692). All are spawned by event scripts (opcode 0x1d in EVDATA*.DAT names an objf
- * index directly), which is why no handler here has a C spawn site. */
+/* Event-spawned map ambience: chimney smoke (Objf289/302), the Map 36 forcefield (Objf675),
+ * rain (Objf676_687/677), water ripples (Objf678) and the campfire (Objf692). All are spawned
+ * by event opcode 0x1d (docs/decomp/event-scripts.md), so no handler here has a C spawn site. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

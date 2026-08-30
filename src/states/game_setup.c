@@ -1,34 +1,36 @@
-/* The game's setup layer: boot-time init, per-scene and per-battle asset loading, party
- * and battle-unit construction, and the field/terrain tables (segment 0x496f8).
- *
- * Party: ResetStateForNewGame, SetupParty (starting levels per gInitialLevels),
- * SetupPartySprites (unit ids remapped for the advancement path taken),
- * SetDefaultStatsForParty, PopulateUnitSpellList, SetupPartyBattleUnit, SyncPartyUnit,
- * ClearPortraitSet. Roster: LoadSceneUnitRoster fills gSpriteStripUnitIds and
- * gCurrentUnitSet from the scene tables that LoadUnits (units/load.c) then loads;
- * SetupBattleUnit is the 9-argument spawner creating the UnitStatus, its OBJF_BATTLE_UNIT
- * battler and its sprite; CreateBattleUnitForUnit and SetupBattleUnits wrap it.
- * Objf424_BattleEnder watches gState.battleEval and runs the outro -- bgm fade, the
- * victory or defeat object, overlay fetch -- plus a debug START skip.
- *
- * Boot and GPU: Initialize (callbacks, pad, card, CD, geometry, both draw/disp envs),
- * ResetGeomOffset, SetupLight, SetupQuads, SetupSprites, and SetupGfx, which builds
- * gTPageIds/gClutIds from COL_DAT.DAT and rewrites the gGfx* tables from cell indices to
- * real ids exactly once. Asset loaders (VRAM destination + CD file): LoadMapTextures,
- * LoadFWD, LoadPortraits (with LoadProvidedPortraits, advancement-aware), LoadFCOM4XX,
- * LoadItemIcons.
- *
- * Map and field: LoadMap holds the per-mapNum table of dimensions, margins and M_*.PRS
- * file, unpacks through ProcessMapFileData (maps/unpack.c) and calls SetupField. SetupMap
- * spawns the on-map service objects (cursor, compass, panorama, battle manager, field
- * info, options, map-object setup) then SetupMapExtras (maps/common.c). SetupField
- * clears gMapUnits, every path grid and gTerrain, installs their border rings (the ring
- * battle/path_grids.c relies on), then derives each tile's terrain type from its texture index
- * through a large per-map switch. UpdateElevation / UpdateTileElevation recompute tile
- * heights from the model's vertex ys, re-run whenever terrain is deformed mid-battle.
- *
- * PCDrv_WriteFile is an UNREFERENCED dev-kit host dump. Tactical balance hooks
- * (GAP 2/3/5/9/11) live here behind PC_FEAT. */
+/* The game's setup layer: boot-time init, per-scene and per-battle asset loading, party and
+ * battle-unit construction, and the field/terrain tables (segment 0x496f8). */
+
+/* Party: ResetStateForNewGame, SetupParty (starting levels per gInitialLevels),
+ * SetupPartySprites (unit ids remapped for the advancement path taken), SetDefaultStatsForParty,
+ * PopulateUnitSpellList, SetupPartyBattleUnit, SyncPartyUnit, ClearPortraitSet. */
+
+/* Roster: LoadSceneUnitRoster fills gSpriteStripUnitIds and gCurrentUnitSet from the scene tables
+ * that LoadUnits (units/load.c) then loads; SetupBattleUnit is the 9-argument spawner creating the
+ * UnitStatus, its OBJF_BATTLE_UNIT battler and its sprite (CreateBattleUnitForUnit/SetupBattleUnits wrap it). */
+
+/* Objf424_BattleEnder watches gState.battleEval and runs the outro -- bgm fade, the victory or
+ * defeat object, overlay fetch -- plus a debug START skip. */
+
+/* Boot and GPU: Initialize (callbacks, pad, card, CD, geometry, draw/disp envs), ResetGeomOffset,
+ * SetupLight/Quads/Sprites, and SetupGfx, which builds gTPageIds/gClutIds from COL_DAT.DAT and
+ * rewrites the gGfx* tables from cell indices to real ids exactly once. */
+
+/* Asset loaders (VRAM destination + CD file): LoadMapTextures, LoadFWD, LoadPortraits (with
+ * LoadProvidedPortraits, advancement-aware), LoadFCOM4XX, LoadItemIcons. */
+
+/* Map and field: LoadMap holds the per-mapNum table of dimensions, margins and M_*.PRS file,
+ * unpacks through ProcessMapFileData (maps/unpack.c) and calls SetupField. SetupMap spawns the
+ * on-map service objects then SetupMapExtras (maps/common.c). */
+
+/* SetupField clears gMapUnits, every path grid and gTerrain, installs their border rings (relied
+ * on by battle/path_grids.c), then derives each tile's terrain type from its texture index. */
+
+/* UpdateElevation/UpdateTileElevation recompute tile heights from the model's vertex ys, re-run
+ * whenever terrain is deformed mid-battle. */
+
+/* PCDrv_WriteFile is an unreferenced dev-kit host dump. Tactical balance hooks live here behind
+ * PC_FEAT. */
 #include "common.h"
 #include "state.h"
 #include "units.h"
@@ -42,10 +44,10 @@
 #include "PsyQ/libsn.h"
 
 #ifdef PC_FEAT
-/* Stage-3 1.3: pc_balance.c -- gTacticalMode + the per-chapter cap (GAP 2 Trials, GAP 3 PLASMA_WAVE). */
+/* pc_balance.c: gTacticalMode and the per-chapter level cap (Trials, endgame weapon). */
 extern int gTacticalMode;
 extern int TacticalCap(int chapter);
-extern int TrialEnemyExpMulti(int chapter);   /* GAP 9: per-chapter trial attack-XP multiplier */
+extern int TrialEnemyExpMulti(int chapter);   /* per-chapter trial attack-XP multiplier */
 #endif
 
 void ClearPortraitSet(void);
@@ -153,10 +155,9 @@ void SetupPartySprites(void) {
    for (i = 0; i < 20; i++) {
       id = gSpriteStripUnitIds[i];
       if (id >= 151 && id <= 274) {
-         // IDs 151..300 are reserved for main party event sprites (sitting, etc.), but they start
-         // off as a "virtual" ID, since they need to be adjusted to account for advancements.
-         // Larger ranges (e.g. 157..[181..183]) are (presumably) to leave room for the preceding
-         // ranges' adjustment. (Also, I wonder why Clint is out of order here.)
+         // IDs 151..300 are reserved for main party event sprites (sitting, etc.); they start as a
+         // "virtual" id remapped here for the advancement path taken. Larger ranges (e.g.
+         // 157..[181..183]) leave room for the preceding range's adjustment; Clint's is out of order.
          if (id >= 273) { ///////// 273..274
             partyIdx = UNIT_DARIUS;
          } else if (id >= 247) { // 247..272
@@ -303,19 +304,11 @@ void PopulateUnitSpellList(UnitStatus *unit) {
          }
       }
 #ifdef PC_FEAT
-      /* GAP 11 (Tactical): REVERTED. The original idea shed the 3 inherited reqLv<=10 base spells on
-       * the 2nd path-B promotion (Ninja/etc.) for a "pure specialist" kit. Flavorful, but in practice
-       * it's a nerf to a path that doesn't need one -- and the inherited spells retain real niche
-       * value past L20: the mage-path sibling keeps Spellbind (a longer/odd-range magic poke Spread
-       * Force + Thunder Flash can't replicate), and the Bishop-path sibling keeps a cheap single-unit
-       * top-off heal, a longer-range single-target cure, and a mini defense buff. Minor by L20 but not
-       * dead weight, so the base spells are now KEPT. (This also retires the bugreport-05 compaction
-       * pass: without GAP 11's front-nulling, the retail step-2 filter only nulls the reqLv-ordered
-       * tail, so the list stays contiguous and NULL-terminated on its own.) */
-      /* GAP 3: in Tactical, re-grant PLASMA_WAVE to Ash's de-godmoded Vandalier ONLY (weapon ==
-       * V_HEART_2). Set directly into the first free slot -- Vandalier-exclusive (doesn't leak to Ash's
-       * other promotions like the doc's gSpellLists-append would), and it never indexes
-       * gSpellLevelRequirement[45], which would be an OOB read past that table's 36 entries. */
+      /* Tactical keeps the inherited reqLv<=10 spells through the second path-B promotion (Monk/Ninja
+       * etc.) instead of shedding them. See docs/tactical-mode.md, "Monk & Ninja — full rework". */
+
+      /* Re-grants PLASMA_WAVE to Ash's de-godmoded Vandalier (weapon V_HEART_2 only) into the first
+       * free spell slot. See docs/tactical-mode.md, "Vandalier — reined in". */
       if (gTacticalMode && unit->name == UNIT_ASH && unit->weapon == ITEM_V_HEART_2) {
          for (i = 0; i < ARRAY_COUNT(unit->spells); i++) {
             if (unit->spells[i] == SPELL_NULL) {
@@ -349,11 +342,9 @@ void SetupPartyBattleUnit(u8 partyIdx, u8 z, u8 x, u8 direction) {
 
       battler = Obj_GetUnused();
 #ifdef PC_PORT
-      /* Debug-menu warp guard (2026-08-21, JP event-map crash, core-verified): warping straight
-       * into a battle scene skips the roster/object-pool resets the normal flow does, so
-       * Obj_GetUnused() can exhaust (returns NULL -> the store below faulted) and CreateUnit can
-       * run off the full roster (returns &gUnits[UNIT_CT], one past the array -- retail OOB).
-       * Reachable ONLY via the retail debug menu (VH_DEBUG_MENU); bail instead of corrupting. */
+      /* Warping straight into a battle scene from the debug menu skips the roster/object-pool resets
+       * the normal flow does, so Obj_GetUnused() can return NULL and CreateUnit can run off the
+       * roster; bail instead of storing through it. See docs/gameplay-additions.md, "The debug menu". */
       if (battler == NULL || unit >= &gUnits[UNIT_CT]) {
          return;
       }
@@ -408,8 +399,8 @@ void SetupPartyBattleUnit(u8 partyIdx, u8 z, u8 x, u8 direction) {
       unit->mp = gClassMpMultiplier[class] * unit->level;
       if (unit->class == CLASS_MONK
 #ifdef PC_FEAT
-          /* GAP 5 (Tactical): drop the Monk/Ninja +advLevelFirst MP bonus for exact caster parity --
-           * one of THREE sites that add it (also battle/math.c + SyncPartyUnit below). */
+          /* Tactical drops the Monk/Ninja +advLevelFirst MP bonus for caster parity -- one of three
+           * sites that add it (also battle/math.c and SyncPartyUnit below). */
           && !gTacticalMode
 #endif
          ) {
@@ -485,8 +476,8 @@ void SyncPartyUnit(u8 partyIdx) {
    unit->mp = gClassMpMultiplier[class] * unit->level;
    if (unit->class == CLASS_MONK
 #ifdef PC_FEAT
-       /* GAP 5 (Tactical): drop the Monk/Ninja +advLevelFirst MP bonus for exact caster parity (the
-        * 3rd of the three sites; see battle/math.c and the battle-unit setup above). */
+       /* Tactical drops the Monk/Ninja +advLevelFirst MP bonus for caster parity (the third of the
+        * three sites; see battle/math.c and the battle-unit setup above). */
        && !gTacticalMode
 #endif
       ) {
@@ -987,18 +978,18 @@ void SetupBattleUnit(s16 stripIdx, u8 z, u8 x, s8 level, u8 team, u8 direction, 
    if (gState.mapNum <= 5) {
       // Trials of Toroah
 #ifdef PC_FEAT
-      /* GAP 2: in Tactical, spawn trial enemies at the per-chapter cap instead of copying Ash's EXP
-       * (which benches Ash trivialises the trial). Derive experience[] the same way the else branch
-       * does, so the derived level is consistent. Normal mode keeps the retail Ash-copy below. */
+      /* Tactical spawns trial enemies at the per-chapter cap instead of copying Ash's XP, so the
+       * trial stays a real fight whether or not Ash is fielded. See docs/tactical-mode.md,
+       * "Trials of Toroah". */
       if (gTacticalMode) {
          int lvl = TacticalCap(gState.chapter);
          for (i = 0; i < 8; i++) {
             gTempUnitPtr->experience[i] = gExperienceLevels[lvl - 1][i];
          }
          gTempUnitPtr->level = lvl;
-         /* GAP 9: retail trial enemies carry expMulti 0, so physical attacks paid no XP (only support
-          * did). Restore a per-chapter multiplier so clearing a trial rewards attackers too; the level
-          * cap keeps the total bounded. Paired with expScalingLevel in battle/evaluators.c. */
+         /* Retail trial enemies carry expMulti 0 (attacks pay no XP); restore a per-chapter
+          * multiplier so attackers get rewarded too, paired with expScalingLevel in
+          * battle/evaluators.c. */
          gTempUnitPtr->expMulti = TrialEnemyExpMulti(gState.chapter);
       } else {
 #endif
@@ -1049,10 +1040,9 @@ void SetupBattleUnits(void) {
    BattlePartyUnitInitialState *pPartyInit;
 
 #ifdef PC_PORT
-   /* Debug-menu warp guard (2026-08-22, gdb: scene-7 warp entered battle setup with an
-    * unset/garbage mapNum): both tables are 74 per-map row POINTERS, so an out-of-range index
-    * reads a garbage row and the walk below faults; a NULL row (non-battle map) would too.
-    * Bail on either. Unreachable in normal play. */
+   /* A debug-menu warp can enter battle setup with an unset mapNum. Both tables are 74 per-map
+    * row pointers, so an out-of-range index reads a garbage row and the walk below faults; a NULL
+    * row (non-battle map) would too. See docs/gameplay-additions.md, "The debug menu". */
    if ((u32)gState.mapNum >= 74u ||
        gBattleEnemyUnitInitialStates[gState.mapNum] == NULL ||
        gBattlePartyUnitInitialStates[gState.mapNum] == NULL) {

@@ -113,11 +113,21 @@ Because physical resistance (`gAdvantage`) and magic vulnerability (`magSusc`) l
 tables**, they are **independent axes** — which is how the Dragoon can be the most physically protected
 class in the game *and* the most magic-vulnerable at the same time.
 
+`CalculateSpellPowerAndExp` is the counterpart to `CalculateAttackDamage` for this chain — it computes
+the outcome once a target is confirmed, branching on the spell's effect type. Before it runs,
+`Objf027_TargetingSpell` validates the cast: it paints the cast range and tracks the cursor, checks the
+chosen cell against `gSpells[].targeting` (enemy / ally / enemy group / ally group / free cell), and
+repeats the check for area spells against the blast footprint. Confirming closes the spell window and
+hands off to `OBJF_UNIT_CASTING` at the caster's tile; two of the five targeting types are bare returns
+because no retail spell uses them.
+
 ## Status ailments
 
 `ailmentSusceptibility` gates whether a status effect (poison/paralyze/…) lands
 (`src/battle/math.c:661`): **1 = fully immune** (chance forced to 0), 2 = half chance, 3 = normal. The
-Monk/Ninja and Healer lines are the only ailment-immune classes.
+Monk/Ninja and Healer lines are the only ailment-immune classes. The roll itself lives in
+`TryInflictingAilment`, which has a suspected operator-precedence bug in retail's expression; it is kept
+byte-exact rather than corrected (documented at the function).
 
 ## Situational modifiers (all fold into `resist`)
 
@@ -135,7 +145,107 @@ Level is **derived from `experience`** (a `BigInt`) via `gExperienceLevels`
 the scaling logic. EXP is granted by `BigIntAdd(unit.experience, gState.experience)` at two sites, each
 already guarded by a hard cap `if (unit.level < 50)` (`src/battle/executors.c:648` combat, `:1429`
 spell-cast). Support-spell casts grant `(exp-to-next-level)/3` each (`CalculateSupportSpellExp`), which
-is the basis of the infinite-EXP exploit.
+is the basis of the infinite-EXP exploit. `experience` is stored as **eight big-endian `u16` limbs**
+rather than a native integer type — the range needed to hold every level's cumulative EXP without
+overflow — manipulated with `BigIntCompare`/`BigIntAdd`/`BigIntSubtract`/`BigIntDivide`.
+`CalculateUnitStats` derives the level from `experience` and then derives stats from the level;
+`DetermineMaxMpAndStatVariance` separately rolls each unit's 80–119% per-stat variance and its class MP
+pool; `SyncGainedHp` carries a unit's current HP forward across a level-up, so gaining a level in
+combat doesn't reset the damage already taken.
+
+## Battle flow: turn structure and the executor objects
+
+Battle presentation runs through `battle/field.c`, the front-end, and `battle/executors.c`, the
+action objects it spawns.
+
+`Objf013_BattleMgr` is the turn state machine: state 0 waits on `gIsEnemyTurn`; state 13 raises the
+"ENEMY TURN" banner, runs the enemy scripted event and its upkeep; states 2–7 loop picking the next
+enemy or AI ally, spawning `OBJF_AI_CHOOSE_ACTION` and waiting on `gAiPlanReady`, then walking the
+unit to the planned tile (`gX/gZ_801233d8`); states 8–12 dispatch the planned action by
+`gAiActionType` (0 = move/face, 1 = attack, 2 = cast) into `OBJF_UNIT_ATTACKING` /
+`OBJF_UNIT_CASTING`; states 99/100 clean up; state 14 raises the "PLAYER TURN" banner and restores
+the camera. States 101–105 are the map-40 scripted spawn sequence; map 8 is the attract-mode demo
+path.
+
+The idle field cursor is `Objf425_BattleOptions` (unit cycling, the turn counter, zoom/options, end
+turn); selecting a unit spawns `Objf003_BattleActions`, which drives the move grid, the path walk,
+and the Attack/Magic/Item/Wait menu, in turn spawning `OBJF_TARGETING_ATTACK` or
+`OBJF_TARGETING_SPELL`. `Objf030_FieldInfo` is terrain/unit inspection; `Objf585_BattlePlayerEvent` /
+`Objf587_BattleEnemyEvent` drive per-map scripted dialogue and reinforcement spawns (win/lose rules
+live in `battle/evaluators.c`, below).
+
+**The executor objects and their signal protocol.** `Objf015_TargetingAttack` is the attack-side
+cursor/confirm step (the mirror of `Objf027_TargetingSpell`, above) and the treasure-chest prompt; it
+spawns `OBJF_UNIT_ATTACKING` / `OBJF_OPENING_CHEST` and reports back through `gSignal2` (1 = cancel,
+2 = commit, 99 = executor done). `Objf021_UnitAttacking` runs the attack camera, facing, supporter
+markers, `CalculateAttackDamage`, the counterattack, XP and any level-up. `Objf028_UnitCasting`
+collects targets into `gTargetCoords`, plays the cast animation, then dispatches visuals data-driven
+from `gSpellsEx[gCurrentSpell]`: the `MAIN` slot once, `TARGET`/`DEFEAT` per target (handlers live in
+the spell FX units; see [spell-fx-dispatch.md](../decomp/spell-fx-dispatch.md)).
+`Objf592_BattleTurnStart` is the per-team start-of-turn upkeep — clearing buffs, healing circles,
+paralysis-recovery rolls, poison damage, and per-map respawns.
+
+Three `gSignal` variables carry the handshake between these objects: `gSignal3`/`gSignal4` are "step
+finished" replies from the unit sprite's action and any spawned FX objects; `gSignal5` is the camera
+handshake between the executor and `Objf017_AttackCamera` / `Objf571_LevelUp` — the camera raises 1
+once it is in place, the executor raises 99 to release it, and the camera answers 100.
+`Objf017_AttackCamera` swoops onto the actor (zoom 250, pitch 33.75°), holds through the strike, then
+restores the saved camera; `Objf026_588_FocusCamera` is the general-purpose focus/follow camera used
+by spell FX and events, taking a target sprite, one of four vantage types (the `GetBestViewOfTarget*`
+family in `core/graphics.c`) and an optional zoom — table slot 588 is the same handler with a wider
+default zoom (350).
+
+## Map setup and win/lose evaluation
+
+`State_Battle` loads the map's text, units, portraits, textures and BGM, restores a deferred
+in-battle save if one exists, then spawns the battle-ender object (`Objf424_BattleEnder`) and the
+map's evaluator before handing off to the intro (`Objf597_BattleIntro`). `gBattleEvaluator[mapNum]`
+maps each battle to one `Objf4xx_EvaluateMapNN_<objective>` object, polled through `gState.needEval`
+(re-evaluate the board) and `gState.signal` (a search/switch/event trigger raised by the field); `NN`
+is the map number, and the displayed battle number is `mapNum − 9`. Plain maps use
+`Objf434_EvaluateStandardBattle` (all enemies dead = victory, Ash lost = defeat); named maps add
+arrival/escape zones, boss or unit-type kill counts, protect clauses, and some drive
+`gState.mapState` for scripted set pieces (see [map-effects.md](../decomp/map-effects.md)). The
+verdict lands in `gState.battleEval`; `Objf420_BattleVictory` / `Objf423_BattleDefeat` (one handler,
+two slots) play the win/lose letter sprites, then hand off to the results screen or raise `gSignal2`
+for the defeat path.
+
+## Battle results screen
+
+`TallySlainUnit` records a kill: party members set a flag in `gPartyMemberSlain`, everyone else
+bumps the matching `gSlainUnits` count; both arrays are zeroed per battle and mirrored into the
+in-battle save. `CommitPartyStatus` flushes every live unit back into `gPartyMembers` before the
+results run. `Objf594_BattleResults` (spawned once the victory banner finishes) draws the results
+windows, then walks the kill list and the lost-party list, spawning one `Objf593_BattleResultsUnit`
+child every 10 frames — each renders one unit's strip sprite, with a red-X marker under any entry
+that is a penalty (a lost party member, or a negative reward value) — alongside a gold counter that
+re-renders the running total each time a child posts its reward. Slots wrap at 8 per row, restarting
+the grid past 32.
+
+## Unit sprites: loading, state machine, and portraits
+
+`Objf014_BattleUnit` is the on-map unit sprite: `obj->state` selects the action, `obj->state2` the
+step — 0 spawn, 1 idle + player-controlled movement, 2 move, 5/9/10 struck and blocking, 6 spell
+casting, 8 melee and 12 ranged attack, 15 high step, 16 level up, 7/13/17/18/19 the death variants
+(calling `TallySlainUnit`, with a blood or rock-spurt effect), 20 defeat speech.
+
+`LoadUnits` walks the per-unit `UNIT_xx.DAT` files and, for every id present in the current battle's
+unit set, uploads that unit's sprite strip to VRAM and copies the packed sheet for the sprite decoder
+to unpack. Equipment icons are stored in the gaps between sprite strips, so the load brackets itself
+with a save/restore of that region — and the VRAM stride constant that save/restore uses is itself
+read *through* the defeat-speech table (a retail data overlap reproduced literally; editing that
+table changes the stride). Around the same load, a parking mechanism stashes the game's
+`.additional` code overlay (which backs supplies, dojo, world-map and town screens) into four spare
+VRAM rects at boot and fetches it back before every state that runs that code. `CreateUnit` has two
+entry points: `CreateUnitInNextSlot` takes the first free unit slot, `CreateUnitInLastSlot` forces
+the top slot (used to guarantee Leena's slot during her setup). The portrait objects —
+`Objf008_BattlePortrait`, `Objf413_MsgBoxPortrait` (with separate mouth/eye speaking/blinking
+sub-machines), `Objf447_UnitPortrait`, `Objf575_StatusPortrait` — share one idiom: search the
+pending-portraits list for the wanted id (falling back to slot 0), take the palette from the portrait
+CLUT-id table, and aim the loaded portrait cell at the right screen rect. `MsgBox_ShowForSprite` /
+`MsgBox_SetPortrait` / `MsgBox_Close` drive the upper and lower dialogue windows, anchored to
+whichever sprite is speaking. Defeat speech is table-driven and not universal: it is disabled on the
+attract-mode demo map and limited to party members on the Trial maps.
 
 ## Summary — what is real vs cosmetic
 

@@ -49,6 +49,18 @@ though the C function is the same as `137`'s hit variant. FX1 drivers own the
 completion handshake — they raise `gSignal3` when the presentation is done; children
 never do.
 
+`Objf132_EngulfUnit` itself hides the real sprite, draws two fading overlay copies,
+surrounds the unit with an elemental ring of particles, pops the damage number, then
+either restores the sprite (indices 132/136/140/799 — the spell was survived) or
+stretch-fades it away (134/138/142/800 — the unit was slain). The elements are flame
+(132/134), lightning (136/138, and the 799/800 pair — Delta Mirage's target/defeat
+entry), and explosion (140/142); Evil Stream's TARGET/slot-2 slots spawn the flame pair
+with a red palette instead of a distinct handler. The matching emitters
+(`Objf133`/`137`/`141`) each spawn 30 orbiting particles, one of `Objf801`/`802`/`803`
+(flame / explosion / lightning animation) per particle. `Objf119_RadialFxSprite` is the
+general-purpose orbiting burst particle behind several effects, with a selectable
+animation (impact/explosion/puff/sparkle/flame/lightning/orb).
+
 ## The retail table
 
 Generated from the retail binary (`gSpellsEx` + `gSpellNames`); handler file locations

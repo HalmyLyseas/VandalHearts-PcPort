@@ -77,10 +77,9 @@ def group(work):
             e = {"id": i, "fields": fields}
             if kind == "items":
                 e["shop_desc_same_as_desc"] = fields["desc"]["en"] == fields["shop_desc"]["en"]
-                # The SAME item carries two English names -- the shop/field one and the equip/status
-                # one -- and retail does not always keep them equal ("Nova P." vs "N. Prism",
-                # "Grt.Axe" vs "Grt.axe"). Flagged so a translator sees it instead of translating one
-                # window and silently leaving the other in English.
+                # The same item carries two English names -- shop/field and equip/status -- and
+                # retail does not always keep them equal ("Nova P." vs "N. Prism"). Flagged so a
+                # translator sees it instead of leaving one window in English.
                 if fields["name"]["en"] and fields["equip_name"]["en"]:
                     e["name_forms_differ"] = fields["name"]["en"] != fields["equip_name"]["en"]
             if tactical:
@@ -102,10 +101,9 @@ def group(work):
                "count": len(men), "entries": men}, os.path.join(out, "menus.json"))
     report.append(("menus", len(men), 0, 0))
 
-    # classes: grouped BY NAME, not by index. gClassAdvancementNames is a strict subset of
-    # gUnitTypeNames (every one of its 17 names appears there) but at DIFFERENT indices, so an
-    # index-aligned grouping would not line them up. One edit here keeps the status panel and the
-    # dojo consistent; the budget is the tighter of the two records.
+    # classes: grouped by name, not index. gClassAdvancementNames is a strict subset of
+    # gUnitTypeNames (every one of its 17 names appears there) at different indices, so one edit
+    # here keeps the status panel and dojo consistent; the budget is the tighter of the two records.
     seen = {}
     for table, width in (("gUnitTypeNames", 10), ("gClassAdvancementNames", 16)):
         for e in tables[table]["entries"]:

@@ -1,22 +1,6 @@
-/* Map 13's bridge demolition and Map 15's pirate-ship boarding battle.
- *
- * Map 13: Map13_RemoveBridgeSection/Map13_ExplodeBridgeTile edit the tile models and throw
- * OBJF_EXPLODING_TILE debris (Objf653, maps/map_33.c). Objf361_..._Scene and
- * Objf288_..._Battle are the two drivers SetupMapExtras() picks between via InEventScene();
- * Objf085_Map13_ExplosionPillar is their stacked vertical burst of OBJF_EXPLOSION sprites.
- *
- * Map 15: SetupMapExtras() calls Map15_RaisePlank for the two boarding planks in battle.
- * Objf089_Map15_Scn17_Cinematic (spawned by EVDATA17.DAT) stages the ship-approach cutscene
- * and spawns the rest: Objf299_Map15_Ocean, which hides the map's own water tiles and draws
- * a tiled open-ocean plane instead (Map15_RenderOceanChunk + Map15_GetChunkBrightness);
- * Objf364_Map15_Plank; and Objf086_Map15_HullSplash. Objf755_Map15_PirateStandIn is an
- * empty stub EVDATA17 spawns as a placeholder for pirate sprites.
- *
- * Also here, not map-specific: the water sprites Objf297_SplashDroplets /
- * Objf298_SplashWithDroplets (also used by Objf653_ExplodingTile and spells/shared_fx.c), and
- * SnapCameraLookAt/EaseCameraLookAt, the look-at camera pair shared with
- * Objf673_Map32_Scn63_Cinematic. The embedded MapTileModel literals are plain boxes;
- * anything more complex should be #include'd from assets/ instead. */
+/* Map 13's bridge demolition and Map 15's pirate-ship boarding cutscene/battle, plus the shared
+ * splash sprites (Objf297/298) and the Snap/EaseCameraLookAt camera pair. The embedded
+ * MapTileModel literals are plain boxes; anything more complex belongs in assets/. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

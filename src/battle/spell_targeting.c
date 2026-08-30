@@ -1,21 +1,6 @@
-/* Player-side spell targeting (segment 0x12dcc): one object, Objf027_TargetingSpell.
- *
- * Spawned by the unit action menu (Objf003_BattleActions, battle/field.c) once the player
- * has picked a spell into gCurrentSpell. It walks the cursor through the two grids the
- * spell data asks for: states 1-2 paint the cast range (PopulateCastingGrid onto grid 0)
- * and track the cursor, state 3 validates the picked cell against gSpells[].targeting
- * (enemy / ally / enemy group / ally group / free cell), states 4-6 repeat the pass for
- * area spells -- the fieldSize footprint on grid 1, re-validated over the yellow grid.
- * Confirm -> state 100: close the spell window, clear both grids and hand off to
- * OBJF_UNIT_CASTING (Objf028, battle/executors.c) at the caster's tile; cancel -> state 99.
- *
- * The caller is driven purely through gSignal2: 1 = cancelled, 2 = committed, 99 = the
- * casting executor finished, so this object can retire. The attack twin is
- * Objf015_TargetingAttack (battle/executors.c), same grid + gSignal2 protocol.
- *
- * State 5 re-enters state 3's case 6 body through a goto (TargetingType6_80022da4) rather
- * than a state change -- retail control flow, kept as-is. Targeting types 2 and 5 are bare
- * returns (no retail spell appears to use them). */
+/* Player-side spell targeting (segment 0x12dcc): Objf027_TargetingSpell walks the cursor over the
+ * cast-range grid (0) and, for area spells, the fieldSize footprint (grid 1), then hands off to
+ * OBJF_UNIT_CASTING. gSignal2 to the caller: 1 cancelled, 2 committed, 99 executor finished. */
 #include "common.h"
 #include "object.h"
 #include "battle.h"

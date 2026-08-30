@@ -413,27 +413,8 @@ typedef enum AnimIdx {
    ANIM_ATTACKING_FAR_END_F = 29
 } AnimIdx;
 
-/*typedef enum SpriteBoxIdx {
-   SPRITE_BOX_0 = 0,
-   SPRITE_BOX_1 = 1,
-   SPRITE_BOX_2 = 2,
-   SPRITE_BOX_3 = 3,
-   SPRITE_BOX_4 = 4,
-   SPRITE_BOX_5 = 5,
-   SPRITE_BOX_6 = 6,
-   SPRITE_BOX_7 = 7,
-   SPRITE_BOX_8 = 8,
-   SPRITE_BOX_9 = 9,
-   SPRITE_BOX_10 = 10,
-   SPRITE_BOX_11 = 11,
-   SPRITE_BOX_12 = 12,
-   SPRITE_BOX_13 = 13,
-   SPRITE_BOX_14 = 14,
-   SPRITE_BOX_15 = 15,
-   SPRITE_BOX_16 = 16,
-   SPRITE_BOX_17 = 17,
-   SPRITE_BOX_18 = 18
-} SpriteBoxIdx;*/
+/* Object.boxIdx (s16, e.g. include/object.h:0x34) takes values 0..18; no named constants exist
+ * for them. */
 
 typedef enum GpuCode {
    GPU_CODE_SEMI_TRANS = 0x02,
@@ -707,15 +688,9 @@ extern s16 gSpriteStripTPageIds[50];
 extern s16 gSpriteStripUnitIds[23];
 extern s16 gSceneSpriteStripUnitIds[105][20];
 extern u8 **gSpriteStripAnimSets[25];
-/* [UNIT_DB_CT] (144) is the real hardware size, but SetupSprites (src/states/game_setup.c:1073) indexes
- * this with gSpriteStripUnitIds[i], and the decomp already carried a `//?: Won't this read
- * out-of-bounds of gUnitAnimSets?` comment at that line. The index ceiling is set by DATA:
- * gSceneSpriteStripUnitIds' shipped table (byte-identical in both regions) carries ids up to 488,
- * so the stray reads land well past the table on hardware too (benign there -- adjacent statics
- * read as garbage pointers the renderer never uses). The PC port's safety widening ([489], sized
- * from an exhaustive scan of that table) lives in the US tree's include/graphics.h, which is the
- * header the PC build stages for BOTH regions; the declaration below keeps the true hardware size
- * for the matching build. */
+/* SetupSprites indexes this with gSpriteStripUnitIds[i], whose shipped values run up to 488 --
+ * past this array's real [UNIT_DB_CT] (144) size, benign on hardware (adjacent statics read as
+ * garbage pointers the renderer never uses). See docs/pc-port/data-segment.md, "gUnitAnimSets". */
 extern u8 **gUnitAnimSets[UNIT_DB_CT];
 extern u8 gUnitClutIds[492];
 
@@ -735,18 +710,9 @@ extern u8 gGfxSubTextures[GFX_CT][4]; // (x, y, w, h)
 // extern u16 gTPageIds[4][32];
 extern s16 gTPageIds[128];
 
-// ?: Going off of the loop at {@addr 0x8005cd94}, this should
-// have 128 elements, but the last few bytes ({@addr 0x8014014c})
-// are used in a completely unrelated manner: {@addr 800c471c}
-//
-// CONFIRMED 2026-07-21, and the "?" can be resolved: the original really does write 128 entries
-// and really does overrun. SetupGfx (src/states/game_setup.c:1712) runs `for i<8 { for k<16 }` = 128
-// s16 writes from 0x80140054, i.e. through 0x80140153 -- straight over `s_cdSyncStatus`
-// (0x8014014c, an s32) and the 4-byte gap before gPortraitOverlayOffsets (0x80140154). It is a
-// genuine out-of-bounds write in the retail game, benign only by luck: src/core/audio.c always does
-// `s_cdSyncStatus = CdSync(1, buf);` immediately before every read of it (core/audio.c:473 vs 475/479),
-// so the clobbered value is never observed. Found by an AddressSanitizer sweep,
-// which flagged it on every SetupGfx call.
+// SetupGfx's `for i<8 { for k<16 }` loop writes 128 s16 entries, overrunning this array's 124
+// into `s_cdSyncStatus` (harmless -- always reassigned before its next read).
+// See docs/memory-safety.md, "AddressSanitizer".
 extern s16 gClutIds[124];
 
 extern PortraitOverlayOffsets gPortraitOverlayOffsetsDb[692];
@@ -783,10 +749,6 @@ static inline s16 GetCamRotY() { return gCameraRotation.vy; }
 static inline s16 GetCamDir() { return gCameraRotation.vy >> 10; }
 static inline u16 GetCamRotY_U() { return gCameraRotation.vy; }
 
-/*static inline void SetCamPosX(s32 value) { gCameraPos.vx = value; }
-static inline void SetCamPosY(s32 value) { gCameraPos.vy = value; }
-static inline void SetCamPosZ(s32 value) { gCameraPos.vz = value; }
-static inline void SetCamRotY(s32 value) { gCameraRotation.vy = value; }*/
 
 static inline void OffsetCamPosX(s32 value) { gCameraPos.vx = GetCamPosX() + value; }
 static inline void OffsetCamPosY(s32 value) { gCameraPos.vy = GetCamPosY() + value; }

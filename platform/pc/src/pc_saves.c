@@ -1,4 +1,4 @@
-/* Stage-3 (1.2b) save management -- file-level card archiving. See pc_saves.h for the design. */
+/* Save management: file-level card archiving. See docs/gameplay-additions.md, "Save-file internals". */
 #include "pc_saves.h"
 #include "pc_platform.h"   /* PC_SaveDir */
 #include <stdio.h>
@@ -29,10 +29,9 @@
 #define PATH_MAX 4096
 #endif
 
-/* The game's fixed card file (core/card.c: "bu00:<id>"), region-derived (exchange/102 P2):
- * "BASLUS-00447VH" US / "BISLPM-86007VH" JP. One shared saves/ dir stays safe: every archive
- * name, listing filter, and restore check below is prefixed with this id, so the two regions'
- * cards and backups can coexist without any cross-region restore being possible. */
+/* The game's fixed card file (core/card.c: "bu00:<id>") is region-derived: "BASLUS-00447VH" US /
+ * "BISLPM-86007VH" JP. One shared saves/ dir stays safe: every archive name, listing filter and
+ * restore check below carries this prefix, so no cross-region restore is possible. */
 #define ACTIVE_CARD    VH_ACTIVE_CARD_NAME
 #define ARCHIVE_SUBDIR ".archive"         /* dot-prefixed => invisible to the game's firstfile() scan   */
 
@@ -144,18 +143,9 @@ static void formatLabel(const char *file, char *out, size_t cap) {
         snprintf(out, cap, "%.*s", (int)cap - 1, s);   /* truncation of odd filenames is intended */
 }
 
-/* Bytes of CardFileData_Header (card.h) that precede the listing in every card file: magic[2] +
- * type + blockCount + sjisName[64] + padding[28] + clut[32] + icon1[128] + icon2[128] = 384 on the
- * US card; the JAPANESE card appends a third icon frame (icon3[128]) for 512. The game writes the
- * listing at offset + sizeof(header) (core/card.c: Card_WriteFile FileSeek). No pointers in the
- * header, so these sizes are width-independent.
- *
- * The header itself cannot tell the two apart: the icon-frame type byte is 0x12 (two frames) on
- * BOTH cards -- KCET's JP build stores icon3 without bumping it. So the layout is PROBED: the
- * listing's own CRC32 is tried at 384, then 512 (a false positive is a ~2^-32 accident). This
- * keeps the parser region-blind -- a JP card inspected from a US session (hand-moved file) still
- * reads correctly, matching the one-shared-saves-dir posture above. (2026-08-22: INSPECT said
- * "INVALID BACKUP" for every JP card because 384 was hardcoded.) */
+/* Bytes of CardFileData_Header (card.h) before the listing: 384 on the US card, 512 on the JP card
+ * (an appended icon3[128]). The icon-frame type byte is 0x12 on BOTH, so the layout is PROBED via
+ * the listing's CRC32 at 384 then 512. See docs/gameplay-additions.md, "Save-file internals". */
 #define CARD_HEADER_SIZE_US 384
 #define CARD_HEADER_SIZE_JP 512
 
@@ -243,12 +233,9 @@ int PC_SaveReadCard(const char *file, PC_SaveCard *out) {
         if (!out->occupied[i]) continue;
         for (j = 0; j < 39 && cap[j]; j++) {
             unsigned char c = cap[j];
-            /* The JAPANESE game writes its captions in full-width SJIS ("１章１節　Ｌ５　０：１０");
-             * the overlay's 5x7 font is caps-only ASCII, so fold: full-width digits/letters/space/
-             * colon to their ASCII forms, 章 (chapter) -> '-', 節 (section) -> dropped, giving e.g.
-             * "1-1 L5 0:10". A byte-wise filter here used to shred these into stray letters (the
-             * SJIS trail bytes are ASCII-range). US cards -- and US saves converted to JP -- carry
-             * plain ASCII captions and take the else branch unchanged. */
+            /* JP captions are full-width SJIS ("１章１節　Ｌ５　０：１０"); the overlay font is caps-only
+             * ASCII, so fold digits/letters/space/colon to ASCII, 章 -> '-', drop 節 => "1-1 L5 0:10".
+             * (SJIS trail bytes are ASCII-range, so a byte-wise filter would shred the pairs.) */
             if ((c >= 0x81 && c <= 0x9f) || (c >= 0xe0 && c <= 0xef)) {
                 unsigned int pair;
                 unsigned char c2 = cap[j + 1];

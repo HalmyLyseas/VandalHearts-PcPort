@@ -1,9 +1,6 @@
-/* Dark Fire (Objf122/188) and Roman Fire FX1 (Objf080/081 -- FX2/FX3 live in
- * spells_avalanche's range), dispatched via gSpellsEx (see spells/casting_main.c), plus
- * the shared explosion/flame/smoke anim tables the family uses (gSparkleAnimData_800ff38c
- * and friends are also read by Salamander and Dynamo Hum handlers, so they stay global).
- * Objf291 (chest impact) is a stray kept by address contiguity. Objf_Unk_80080924 and the
- * two func_800* helpers are not referenced at all and keep their address names. */
+/* Dark Fire (Objf122/188) and Roman Fire FX1 (Objf080/081), dispatched via gSpellsEx
+ * (docs/decomp/spell-fx-dispatch.md), plus the family's explosion/flame/smoke anim tables --
+ * global because Salamander and Dynamo Hum read them too. Objf291 (chest impact) is a stray. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

@@ -1,19 +1,13 @@
-/* Tavern town location (SAKABA): gossip NPCs + one scripted scene per chapter.
- * No unit/roster logic lives here.
- *
- * Entry: core/main.c STATE_TAVERN -> State_Tavern() picks the background by townState and
- * spawns Objf576_Tavern, a per-chapter state machine indexed by gState.tavernVisit
- * (the tavern visit number 0..12): state2 0 opens the Talk/Leave menu, 1-3 run the
- * gossip loop (choice -> Tavern_StartQueuedGossip -> Tavern_FinishGossip; needSpeak[]
- * tracks which of the four NPCs still has news), and once all have spoken state2 4
- * plays the chapter's scripted scene; leaving advances gState.townState -- the tavern
- * visit is what moves the plot between battles.
- *
- * The first helpers (ShowTownMsgBoxDual/Solo, HideTownMsgBox, SetTownMsgBoxText,
- * SetupTownMsgBox) are the SHARED town-dialogue window kit, also used by world/town.c and
- * world/dojo.c: windows 0x41/0x42 = upper box, 0x43/0x44 = lower box, slid on/off screen
- * rather than closed; SetTownMsgBoxText's layout arg selects MsgBox type 3..6 (upper /
- * lower / centered solo / upper-alt). Tavern_* helpers are local to this file. */
+/* Tavern town location (SAKABA): gossip NPCs plus one scripted scene per chapter. No
+ * unit/roster logic lives here. */
+
+/* Entry: core/main.c STATE_TAVERN -> State_Tavern() spawns Objf576_Tavern, a per-chapter state
+ * machine indexed by gState.tavernVisit (visit 0..12): state2 0 opens the Talk/Leave menu, 1-3 run
+ * the gossip loop, and once all NPCs have spoken state2 4 plays the chapter's scripted scene. */
+
+/* ShowTownMsgBoxDual/Solo, HideTownMsgBox, SetTownMsgBoxText, SetupTownMsgBox are the shared
+ * town-dialogue window kit also used by world/town.c and world/dojo.c: windows 0x41/0x42 = upper
+ * box, 0x43/0x44 = lower box, slid on/off screen rather than closed. Tavern_* helpers are local. */
 #include "common.h"
 #include "state.h"
 #include "units.h"

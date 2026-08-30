@@ -123,12 +123,16 @@ of the header* — fixed via the force-included `pc_forward_decls.h`. (Audit cor
 undeclared-but-called functions, exactly 3 return a pointer; all now declared.)
 
 **5. An out-of-bounds read whose overrun lands differently at 64-bit.** `sText_FileLoadCaptions`
-(`src/states/main_menu.c:147`) is a 3-entry array read with `i < numChoices` where `numChoices == 4` for the
-file-load menu. At 32-bit the 4th read hit harmless adjacent static data; at 64-bit it reads 8 bytes
-past onto something else → title-screen "Load" SIGSEGV. *Fix:* a `PC_PORT`-gated 4th `""` entry (the
-real array is 4 wide — adjacent `slotOccupied[4]` confirms — so empty draws nothing, matching what
-32-bit did by accident). ⚠️ **This class is not width-dependent *code*** — the index is simply wrong;
-only the *consequence* changes with pointer size. This is the class the ASan sweep exists for.
+(`src/states/main_menu.c:147`, and identically `jp/src/states/main_menu.c`) is a 3-entry array read with
+`i < numChoices` where `numChoices == 4` for the file-load menu. At 32-bit the 4th read hit harmless
+adjacent static data; at 64-bit it reads 8 bytes past onto something else → title-screen "Load"
+SIGSEGV. The array is genuinely 4 entries wide in retail — the title-screen Load path reads index 3,
+"In-battle save" (its JP text in the Japanese tree) — but the decomp's C-initializer-count inference
+declared it with only 3 entries. *Fix:* a `PC_PORT`-gated 4th initializer restoring that "In-battle
+save" caption in both trees (the real array is 4 wide — adjacent `slotOccupied[4]` confirms — the
+matching build keeps the 3-entry array). ⚠️ **This class is not width-dependent *code*** — the index
+is simply wrong; only the *consequence* changes with pointer size. This is the class the ASan sweep
+exists for.
 
 **6. A truncated struct copy.** `CopyObject` (`src/core/graphics.c:610`) copied a hard-coded **24 u32 words
 = 96 bytes = the 32-bit `sizeof(Object)`**. On 64-bit the union's pointers grow, so fields past them —

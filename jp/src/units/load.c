@@ -1,24 +1,6 @@
-/* Battle/field odds and ends: VRAM asset shuffling plus shared predicates (segment
- * 0x27dd4).
- *
- * LoadUnits walks the 144 UNIT_xx.DAT files (each supplying 6 consecutive sub-unit ids)
- * and, for every id present in gCurrentUnitSet, uploads that unit's 0x3000-byte sprite
- * strip to its VRAM slot and copies the still-packed sheet into gUnitDataPtr for the
- * decoder in units/roster.c. Equipment icons live in the gaps between the strips, so the
- * load is bracketed by SaveItemIcons/RestoreItemIcons -- whose VRAM stride constant is
- * read THROUGH the defeat-speech table (*(s16 *)&sUnitsWithDefeatSpeech[8], a retail data
- * overlap reproduced literally; editing that table changes the stride).
- *
- * The overlay parking pair (see their comments): the .additional code segment (supplies,
- * dojo, world map, town at 0x801e4690) is stashed into four spare VRAM rects at boot and
- * fetched back before every state that runs that code (title, scene setup, card load,
- * battle ender).
- *
- * The rest are one-liner predicates polled from elsewhere: PressedCircleOrX (+ twin),
- * ConsumeMsgBoxPagePause and MsgBox_IsFinished (the message-box handshake the
- * town/dojo/tavern/supplies machines advance on), HasDefeatSpeech (table-driven; off on
- * the demo map, party-only on the Trials maps), UnitIsRocky (rubble instead of blood) and
- * IsSpriteOutsideVisibleRange (the map-bounds cull). */
+/* Battle/field odds and ends (segment 0x27dd4): LoadUnits (each unit's 0x3000-byte sprite strip
+ * into VRAM, bracketed by SaveItemIcons/RestoreItemIcons, whose stride is read THROUGH
+ * sUnitsWithDefeatSpeech[8] -- a retail data overlap), overlay parking, and shared predicates. */
 #include "common.h"
 #include "object.h"
 #include "battle.h"

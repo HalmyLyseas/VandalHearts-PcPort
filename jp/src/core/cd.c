@@ -840,13 +840,9 @@ void LoadCdFile(s32 cdfIdx, s32 showLoadingScreen) {
       while (GetCdFileLoadStatus() != 0) {
          ContinueLoadingCdFile();
 #ifdef PC_PORT
-         /* JP retail spins here WITHOUT VSync -- fine on hardware, where the sequencer runs off
-          * a timer interrupt, but the port drives its SEQ tick + SPU render pump from VSync():
-          * the tight spin starved audio for the whole simulated read window, audibly cutting
-          * town music on every sub-area load (shop/tavern/dojo). The US build's own version of
-          * this loop ADDS exactly this VSync(0) (src/core/cd.c) -- Konami's localization-era
-          * change -- so the gated line reproduces shipped US behaviour, not an invention.
-          * Diagnosed 2026-08-21 via VH_SEQ_LOG tick-gap timestamps + VH_CD_LOG read clusters. */
+         /* JP retail spins here without VSync (fine on hardware: the sequencer runs off a timer
+          * interrupt), but the port pumps its SEQ tick + SPU render from VSync(), so the spin starves
+          * audio for the whole simulated read and cuts town music. The US build's loop has this VSync(0). */
          VSync(0);
 #endif
       }
@@ -1202,10 +1198,9 @@ void Movie_Finish(void) {
 }
 
 #ifdef PC_PORT
-/* Overlay RETURN TO TITLE: tear down an in-flight movie exactly like the START skip (mute
- * serial A, Movie_Finish -- whose CdlPause the PC backend uses to close the frame overlay /
- * HD video / subtitles). No-op when no stream is armed. Same gated twin as the US tree
- * (src/core/cd.c), where the full rationale lives. */
+/* Overlay RETURN TO TITLE (pc_balance.c): tear down an in-flight movie exactly like the START skip
+ * (movie_state.c case 11: mute serial A, Movie_Finish, whose CdlPause closes the PC frame overlay /
+ * HD video / subtitles), else the stream runs on and its transition clobbers the jump. No-op if unarmed. */
 void Movie_AbortForReturnToTitle(void) {
    extern void SsSetSerialVol(char, short, short);   /* PsyQ libsnd; cd.c doesn't include it */
    if (sMovieSectorHeader == NULL) return;

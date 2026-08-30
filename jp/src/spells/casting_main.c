@@ -1,16 +1,6 @@
-/* Spell casting effects, part 1 of the FX corpus (segment 0x60c38).
- *
- * Mostly _FX1 handlers: the "main" casting visual each spell plays at the caster/target,
- * dispatched data-driven through gSpellsEx[spellId][SPELL_EX_OBJF_MAIN/TARGET/DEFEAT]
- * (see battle/executors.c) -- there is deliberately no static spawn site for these. The
- * retail gSpellsEx data is the authoritative handler->spell map and was used to verify
- * every name in this file. Sub-objects (rays, rocks, glyphs, swirl strokes) are spawned
- * by their _FX1 driver and named <Spell>_<Thing>.
- *
- * Confirmed-unused handlers (in gObjFunctionPointers but referenced by no spell's
- * gSpellsEx triple and no code path): the spiked-ball toss pair (Objf182/183), the
- * explosion-strike pair (Objf186/187), and the single-target Magic Arrow (Objf190) --
- * cut content, kept byte-exact, suffixed _Unused. */
+/* Spell casting effects, mostly _FX1 handlers: the main casting visual each spell plays at the
+ * caster/target, dispatched data-driven through gSpellsEx with no static spawn site
+ * (docs/decomp/spell-fx-dispatch.md). Handlers suffixed _Unused are cut content. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

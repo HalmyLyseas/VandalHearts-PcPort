@@ -1,18 +1,6 @@
-/* Movie subtitle cue engine (langpack F3) -- see pc_movie_subs.h for the model.
- *
- * File format (dev override VH_MOVIE_SUBS; line-based so the parser stays trivial and the
- * files stay hand-editable -- language packs carry the same cues as the binary K_CUES
- * section built by tools/langpack/lang_build.py):
- *
- *   VHCUES 1
- *   lba 21618                      <- hex, matches hdpacks/videos/<lba>.mp4 naming
- *   cue 92 121 0 195 320 45        <- startFrame endFrame x y w h (runtime frameNo, native px)
- *   text Sostegaria...             <- 1..PC_SUBS_MAX_LINES per cue
- *   end
- *
- * Unknown lines are ignored (forward compatibility). A file whose lba does not match the
- * opening movie simply stays unloaded -- the movie plays with its burned-in text, which is
- * also the no-langpack behaviour by design. */
+/* Movie subtitle cue engine -- see pc_movie_subs.h for the model. Cues come from the language pack's
+ * K_CUES section, or the VH_MOVIE_SUBS dev override (a line-based VHCUES text file, or a directory
+ * of <lba hex>.txt). Format + semantics: docs/pc-port/subsystems/mdec.md, "Movie subtitles". */
 #include "pc_movie_subs.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,10 +73,9 @@ static void subsLoad(const char *path, int baseLBA) {
     fprintf(stderr, "PC_MovieSubs: %d cues loaded for movie %x\n", s_cueCount, (unsigned)baseLBA);
 }
 
-/* Parse the pack's K_CUES blob (see lang_build.py build_cues for the layout):
- * u32 movieCount; per movie u32 lba + u32 cueCount; per cue u32 start,end; u16 x,y,w,h;
- * u8 lineCount; per line u8 len + UTF-8 bytes. Every count and offset is hostile until checked;
- * a malformed record aborts the parse with a note rather than trusting what remains. */
+/* Parse the pack's K_CUES blob (lang_build.py build_cues): u32 movieCount; per movie u32 lba, u32
+ * cueCount; per cue u32 start,end; u16 x,y,w,h; u8 lineCount; per line u8 len + UTF-8 bytes. Every
+ * count and offset is hostile until checked; a malformed record aborts the parse with a note. */
 static unsigned PackRdU32(const unsigned char *p) {
     return (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
 }

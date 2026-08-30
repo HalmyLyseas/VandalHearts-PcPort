@@ -1,28 +1,6 @@
-/* The battle-unit actor, plus the message-box front end, the sprite-motion helpers, and
- * the event-entity setup calls it shares with events/entities.c.
- *
- * MsgBox_ShowForSprite / MsgBox_SetPortrait / MsgBox_Close drive the upper (0x41/0x42) and
- * lower (0x43/0x44) dialogue windows, the tail anchored to a speaking sprite, and the
- * Objf413 portrait from units/roster.c.
- *
- * Objf014_BattleUnit (~1300 lines) is one object per unit on the map, paired with the
- * unit's sprite. obj->state selects the action, obj->state2 the step: 0 spawn, 1 idle +
- * player-controlled movement, 2 move, 5/9/10 struck and blocking, 6 spell casting, 8 melee
- * and 12 ranged attack, 15 high step, 16 level up, 7/13/17/18/19 the death variants
- * (TallySlainUnit, blood or rock spurt), 20 defeat speech. It sets the sprite's animIdx
- * from OBJ.animSet[animIdx + facingFront] and hands off to battle/executors.c through
- * gSignal2/3/4.
- *
- * Motion helpers: UpdateUnitSpriteOrientation (facing from camera rotation),
- * UpdateUnitSpriteMovement (walk, or jump-and-crouch on uneven terrain),
- * UpdateAirmanUnitSpriteMovement (flyers rise, cross, descend),
- * StepEntitySpriteTowardDest (the event-entity variant). Objf412_EventCamera eases the
- * camera toward gState.eventCameraRot and gState.focus / eventCameraPan.
- *
- * Event entities: SetupEventEntity[_SingleSet] binds one script from
- * gEvtEntityDataPointers plus two sprite strips to a new Objf409 (the interpreter itself
- * lives in events/entities.c); ReserveSprite MoveImages one 48x48 cell into a strip slot
- * (both called from events/scene_loaders.c). */
+/* The battle-unit actor Objf014_BattleUnit (one object per unit; obj->state = action, obj->state2
+ * = step; hands off to battle/executors.c via gSignal2/3/4), the MsgBox_* dialogue front end,
+ * sprite-motion helpers, Objf412_EventCamera, and event-entity setup shared with events/entities.c. */
 #include "common.h"
 #include "object.h"
 #include "window.h"
@@ -65,11 +43,9 @@ void MsgBox_SetPortrait(s16 portraitId, u8 lower) {
    for (i = 0; i < OBJ_DATA_CT; i++) {
       if (obj1->functionIndex == OBJF_MSGBOX_PORTRAIT && obj1->d.objf413.flipped == lower) {
 #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): the portrait's face/speak/blink sprite pointers can be NULL
-          * (a portrait with no speak/blink sub-sprite). These are NULL writes to functionIndex
-          * (@0x8); the 2.2 fault handler discarded them, so guard each write -- bit-identical to
-          * the validated build (the write had no observable effect on a NULL sprite anyway).
-          * NULL sites: MsgBox_SetPortrait +0x4f/0x5b/0x67. See exchange/56. */
+         /* The portrait's face/speak/blink sprite pointers can be NULL (a portrait with no speak/
+          * blink sub-sprite); the write through NULL has no observable effect on PSX, so guard each
+          * one. NULL sites: MsgBox_SetPortrait +0x4f/0x5b/0x67. */
          if (obj1->d.objf413.faceSprite) obj1->d.objf413.faceSprite->functionIndex = OBJF_NULL;
          if (obj1->d.objf413.speakSprite) obj1->d.objf413.speakSprite->functionIndex = OBJF_NULL;
          if (obj1->d.objf413.blinkSprite) obj1->d.objf413.blinkSprite->functionIndex = OBJF_NULL;
@@ -1156,12 +1132,8 @@ void Objf014_BattleUnit(Object *obj) {
          if (--OBJ.timer == 0) {
             PerformAudioCommand(AUDIO_CMD_FADE_OUT_8_1);
             gState.transformFxDone = 1;
-            /*gSignal3 = 1;
-            gSignal4 = 1;
-            sprite->functionIndex = OBJF_NULL;
-            obj->functionIndex = OBJF_NULL;
-            unit->idx = 0;*/
-            //?
+            /* Disabled here: gSignal3 = gSignal4 = 1, retire the sprite and this object, unit->idx = 0
+             * (purpose unclear; the goto target performs the teardown). */
             goto LAB_8004ec50;
          }
          break;
@@ -1336,10 +1308,9 @@ void Objf014_BattleUnit(Object *obj) {
    }
    animSet = OBJ.animSet;
 #ifdef PC_PORT
-   /* Debug-menu warp guard (2026-08-22, gdb first-chance at this line): a warped-into battle
-    * spawns units whose sprite-strip decode never ran, so OBJ.animSet is still NULL (the pool's
-    * acquisition memset) and indexing it faults. Same NULL-animSet class as the cutscene-entity
-    * fixes; skip this unit's visual update instead of dying. Unreachable in normal play. */
+   /* Debug-menu warp guard: a warped-into battle spawns units whose sprite-strip decode never ran,
+    * so OBJ.animSet is still NULL (the pool's acquisition memset) and indexing it faults. Skip this
+    * unit's visual update instead; unreachable in normal play. */
    if (animSet == NULL) {
       return;
    }
@@ -1840,10 +1811,9 @@ void ReserveSprite(u8 srcIdxWithinSheet, u8 dstStripIdx, u8 dstSubIdx) {
 
    srcIdxWithinSheet -= 1;
 #ifdef PC_PORT
-   /* spriteOffsets has 24 entries; retail indexes it with the raw event argument. An out-of-range
-    * sprite id (0 -> this u8 underflows to 255, or >24) reads past the array, producing a garbage
-    * srcRect that makes MoveImage walk off VRAM. Harmless stack garbage on PSX (coords stay inside the
-    * 1MB framebuffer); a wild s_vram access on PC. Skip the reserve for an out-of-range id. */
+   /* spriteOffsets has 24 entries and retail indexes it with the raw event argument; an out-of-range
+    * id (0 underflows this u8 to 255, or >24) reads a garbage srcRect that makes MoveImage walk off
+    * VRAM -- harmless inside the PSX's 1MB framebuffer, a wild s_vram access on PC. Skip it. */
    if (srcIdxWithinSheet >= 24)
       return;
 #endif

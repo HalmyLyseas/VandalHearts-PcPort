@@ -46,15 +46,9 @@ KROMDAT = os.environ.get("VH_KROM_SOURCE",
 OUT = os.environ.get("VH_GENERATED_OUT", os.path.join(PC_DIR, "src", "pc_kanji_font.c"))
 
 GLYPH_BYTES = 30
-# Region switch (exchange/102 P3): the US game draws only alphanumerics/punctuation through
-# Krom2RawAdd, so the US build keeps its audited 209-glyph subset (unchanged output). The JP
-# game draws its ENTIRE text repertoire through the BIOS font, so the JP build embeds the whole
-# ROM region KROMDAT carries: charset 2 (524 glyphs -- SJIS rows 0x81-0x84: punctuation, digits,
-# latin, kana, greek, cyrillic, box drawing) + charset 3 (2965 glyphs -- all JIS level-1 kanji,
-# SJIS 0x889F..0x9872), contiguous exactly as in the BIOS at 0xBFC66000 (psx-spx kernelbios.md
-# "BIOS Character Sets"). 524*30 + 2965*30 = 104670 = KROMDAT.BIN's size (bar one stray byte),
-# which is itself the proof KROMDAT is precisely charsets 2+3. Level-2 kanji are NOT in the ROM:
-# Krom2RawAdd returns -1 and the game's own gCustomGlyphs fallback runs, as on hardware.
+# Region switch: the US build keeps its audited 209-glyph subset; the JP build embeds the whole
+# ROM region KROMDAT carries (charset 2 + charset 3). See docs/language-packs.md, "The krom
+# extension". Level-2 kanji are not in the ROM: Krom2RawAdd returns -1 and gCustomGlyphs runs.
 REGION = os.environ.get("VH_REGION", "us")
 NUM_GLYPHS = {"us": 209, "jp": 524 + 2965}[REGION]   # us: 0..208 (through lowercase 'z')
 # The generated region is invariant across the supported KROMDAT/Japanese BIOS inputs. Checking

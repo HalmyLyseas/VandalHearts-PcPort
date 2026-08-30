@@ -10,9 +10,9 @@
 #include "battle.h"
 
 #ifdef PC_FEAT
-/* Stage-3 1.3 (GAP 3): in Tactical, the promoted Vandal Heart no longer opens the all-spells/all-items
- * "god" spell menu -- the 5 guards below neutralise the `weapon == V_HEART_2` term so Ash falls to his
- * real gSpellLists kit. Normal mode keeps the retail god-path. pc_balance.c owns gTacticalMode. */
+/* Tactical prevents the promoted Vandal Heart from opening the all-spells/all-items "god" spell
+ * menu: the guards below neutralise the weapon == V_HEART_2 term so Ash falls back to his real
+ * spell list. See docs/tactical-mode.md, "Vandalier — reined in". */
 extern int gTacticalMode;
 #endif
 
@@ -1362,8 +1362,7 @@ void SlideWindowTo(s32 windowId, s16 x, s16 y) {
 #undef OBJF
 #define OBJF 004
 void Objf004_005_408_Window(Object *obj) {
-   // TODO: todo_x2c, todo_x30 (highlight location)
-   // obj->state3: effectState
+   // TODO: todo_x2c, todo_x30 (highlight location); obj->state3: effectState
    // obj->x3: destX
    // obj->y3: destY
    Object *window;

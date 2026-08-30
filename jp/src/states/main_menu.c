@@ -10,7 +10,7 @@
 extern void DrawText(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 color, u8 *text);
 
 #ifdef PC_FEAT
-/* Stage-3 1.3 (GAP 4): adopt a loaded save's mode from its card-header marker before applying it. */
+/* Adopts a loaded save's mode from its card-header marker before applying it. */
 extern void PC_AdoptSaveMode(void);
 #endif
 
@@ -96,11 +96,9 @@ static s8 *sText_FileSaveCaptions[] = {
 };
 
 #ifdef PERMUTER
-/* PC build only (exchange/103 A2): [29] so the implicit NUL lives INSIDE the object.
- * Reading it is not a behaviour change -- on hardware the byte at +28 is a real 0x00
- * (SLPM_860.07 @0x801042f4, objdump-verified), which is exactly what the widened array
- * now holds. It only stops strcpy()/DrawText() from walking off the end of the C object,
- * which ASan reports as a global-buffer-overflow. The matching build keeps [28]. */
+/* PC build only: [29] so the implicit NUL lives inside the object. Reading it is not a behavior
+ * change -- hardware's byte at +28 is a real 0x00 (SLPM_860.07 @0x801042f4) -- it only stops
+ * strcpy()/DrawText() walking off the C object. See docs/memory-safety.md, "AddressSanitizer". */
 static s8 sEmptyFileCaption[29] = "\x81\x40\x81\x40\x81\x40\x81\x40\x81\x40\x96\xa2\x8e\x67\x97\x70\x81\x40\x81\x40\x81\x40\x81\x40\x81\x40\x81\x40";
 #else
 static s8 sEmptyFileCaption[28] = "\x81\x40\x81\x40\x81\x40\x81\x40\x81\x40\x96\xa2\x8e\x67\x97\x70\x81\x40\x81\x40\x81\x40\x81\x40\x81\x40\x81\x40"; // 　　　　　未使用　　　　　　 (28B exact fit, no NUL — terminated by the next symbol's zero byte)
@@ -164,11 +162,9 @@ static s8 *sText_FileLoadCaptions[] = {
     "",
     "",
 #ifdef PC_PORT
-    /* PC_PORT: FOURTH entry -- this array is read with `i < numChoices` and numChoices is 4
-     * for the title-screen Load path, so index 3 IS read; with 3 entries the -m64 read runs
-     * off the end and DrawSjisText dereferences garbage. Same gated fix as the US tree
-     * (src/states/main_menu.c, verified there against the byte-exact binary: entry [3] is the
-     * first string of the neighbouring "unused" static -- here コンティニューロード). */
+    /* This array is genuinely 4 wide (the title-screen Load path reads index 3); with 3 entries
+     * the read runs off the end and DrawSjisText dereferences garbage at 64-bit. See
+     * docs/width-bugs.md, "Found only by building and running". */
     "\x83\x52\x83\x93\x83\x65\x83\x42\x83\x6a\x83\x85\x81\x5b\x83\x8d\x81\x5b\x83\x68",
 #endif
 };

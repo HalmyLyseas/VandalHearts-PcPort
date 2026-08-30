@@ -1,28 +1,6 @@
-/* Unit roster bookkeeping, unit-sprite lookups, number formatting, and the portrait
- * objects (segment 0x2d078).
- *
- * Roster: ClearUnits and CreateUnit with its two entry points -- CreateUnitInNextSlot
- * takes the first free gUnits slot, CreateUnitInLastSlot forces the top slot
- * (states/game_setup.c uses it for Leena) -- initialising per-unit variance and boost fields.
- *
- * Sprite lookups, used tree-wide: GetUnitSpriteAtPosition (the gMapUnits grid ->
- * gUnits[].sprite hop nearly every fx_* unit starts from), FindUnitSpriteByNameIdx,
- * FindUnitSpriteByType (UNREFERENCED in retail), GetUnitSpriteVramRect (source rect for
- * the sprite-copy effects), and StartUnitSpritesDecoder, which re-arms the shared decoder
- * object over one strip's packed sheet.
- *
- * Four SaveRestore* static pairs (damage, hp percentages, hp triple, screen position) are
- * a one-slot mailbox: battle/executors.c and ui/window.c stash values that
- * Objf032_033_DisplayDamage reads back a frame later. IntToLeftPaddedGlyphs[2] (fixed 3
- * digits; _2 uses the damage gauge's alternate digit font) and IntToGlyphs render numbers
- * into glyph strips.
- *
- * Handlers: Objf032_033_DisplayDamage (floating damage number + hp bar) and four portrait
- * objects -- Objf008_BattlePortrait, Objf413_MsgBoxPortrait (mouth/eye overlays with
- * speaking/blinking sub-machines), Objf447_UnitPortrait with its Objf448 wrapper (448 is
- * dispatched by nothing in retail), and Objf575_StatusPortrait. All share one idiom:
- * search gState.portraitsToLoad for the portrait id (slot 0 fallback), take the clut from
- * gPortraitClutIds, aim GFX_PORTRAIT_A/B_FACE at the right 48x48 cell. */
+/* Unit roster bookkeeping (ClearUnits, CreateUnit*), the unit-sprite lookups used tree-wide
+ * (GetUnitSpriteAtPosition, FindUnitSprite*, StartUnitSpritesDecoder), number-to-glyph formatting,
+ * Objf032_033_DisplayDamage and the four portrait objects (segment 0x2d078). */
 #include "common.h"
 #include "object.h"
 #include "state.h"
@@ -92,10 +70,9 @@ void StartUnitSpritesDecoder(u8 stripIdx) {
 
    stripIdx -= 2;
 #ifdef PC_PORT
-   /* Debug-menu warp guard (2026-08-22, gdb: clicking a ghost-scene unit decoded a strip with a
-    * garbage stripIdx): both tables are [20], so an out-of-range index double-derefs into a
-    * garbage base pointer and the RLE decoder walks off a page. Don't arm the decoder -- the
-    * unit simply stays undrawn. Unreachable in normal play. */
+   /* Debug-menu warp guard: both tables are [20], so a garbage stripIdx (a ghost-scene unit)
+    * double-derefs into a garbage base pointer and the RLE decoder walks off a page. Leave the
+    * decoder unarmed; the unit simply stays undrawn. Unreachable in normal play. */
    if (stripIdx >= 20 || (u32)gUnitSetEncodedSpriteDataIdx[stripIdx] >= 20u ||
        gEncodedUnitSpriteData[gUnitSetEncodedSpriteDataIdx[stripIdx]] == NULL) {
       return;

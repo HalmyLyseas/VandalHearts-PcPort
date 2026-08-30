@@ -15,13 +15,6 @@
 #define DEG(x) ((s32)((x) / 360.0 * 4096))
 #define CV(x) ((s32)((x)*256))
 
-// #define ANGLE_0_DEGREES 0
-// #define ANGLE_45_DEGREES 0x200
-// #define ANGLE_90_DEGREES 0x400
-// #define ANGLE_180_DEGREES 0x800
-// #define ANGLE_270_DEGREES 0xc00
-// #define ANGLE_360_DEGREES 0x1000
-
 #define ANGLE_SOUTH 0
 #define ANGLE_WEST 0x400
 #define ANGLE_NORTH 0x800

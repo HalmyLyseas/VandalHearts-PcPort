@@ -102,15 +102,9 @@ static u8 gCustomGlyphs[27][30] = {
    {0x00, 0x80, 0x00, 0x80, 0x3f, 0xfe, 0x20, 0x40, 0xa0, 0x80, 0x67, 0xfc, 0x24, 0x44, 0x27, 0xfc, 0x64, 0x44, 0xa7, 0xfc, 0x21, 0x20, 0x22, 0x20, 0x4f, 0xfe, 0x40, 0x20, 0x80, 0x20},
 };
 
-/* world/dojo.c sets `OBJ.partyIdx = 100` as a "no selection yet" sentinel, then does
- * `gStringTable[32] = gStringTable[OBJ.partyIdx];` -- reading index 100 of this 100-entry table
- * for the one frame before a real party index is assigned. On hardware that reads the shade
- * tables (0x801036c0, immediately after gStringTable's 400 bytes) reinterpreted as a string
- * pointer; the game never displays string 32 on that frame, so the garbage read is harmless.
- *
- * PERMUTER/PC_PORT: 101 entries, not 100 -- same gated widening as the US tree (that sentinel
- * read is a real OOB on PC, found there by the ASAN sweep). The extra entry is implicitly NULL
- * and the matching build below keeps exactly the 100 real entries, so nothing shifts. */
+/* PERMUTER: 101 entries, not 100 -- world/dojo.c sets `OBJ.partyIdx = 100` as a "no selection
+ * yet" sentinel and reads `gStringTable[OBJ.partyIdx]` for one frame (hardware reads the shade
+ * tables after it). The extra entry is NULL; see docs/memory-safety.md, "How the port handles them". */
 #ifdef PC_PORT
 /* The native port reconstructs these PSX-address pointers from the user's executable
  * (gen_string_table.py, JP mode), then installs host pointers from a constructor. */
@@ -162,10 +156,8 @@ s32 DecodeLineOfText(u8 *src, u8 *dst) {
 
    while (1) {
 #ifdef PC_PORT
-      /* Corrupt-input bound (2026-08-21, JP debug-menu event-map warp, gdb first-chance trace):
-       * with UNLOADED scratch data there is no CR/LF terminator, and the decode marched ~4.7KB
-       * past the caller's 1KB stack buffer into the guard page -- smearing the whole stack on
-       * the way (the "no dump, no core" crash). Real lines are <100 bytes; 1000 stays inside
+      /* Corrupt-input bound: unloaded scratch data has no CR/LF terminator, and an unbounded decode
+       * marches past the caller's 1KB stack buffer. Real lines are <100 bytes; 1000 stays inside
        * LoadText's buffer[1024] incl. the "\n\0" tail. LoadText treats a capped line as END. */
       if (n >= 1000) {
          break;
@@ -210,10 +202,9 @@ void LoadText(s32 cdf, u8 *pText, u8 **textPointers) {
 
 #ifdef PC_PORT
       if (n >= 1000) {
-         /* Capped decode = corrupt/unloaded text data (see DecodeLineOfText). Don't just stop:
-          * leaving textPointers[] unfilled hands consumers garbage pointers that can sit at a
-          * page edge and fault inside the renderers (2026-08-22, debug-menu warp, 2nd gdb
-          * trace). Point every entry at a safe empty string instead, so draws render nothing. */
+         /* Capped decode = corrupt/unloaded text data (see DecodeLineOfText). Leaving textPointers[]
+          * unfilled would hand consumers garbage pointers that can fault inside the renderers, so
+          * point every entry at a safe empty string and draws render nothing. */
          pText[0] = '\0';
          for (n = 1; n <= 100; n++) {
             textPointers[n] = pText;
@@ -873,9 +864,8 @@ void DrawSjisText_Internal(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s
 
    while (1) {
 #ifdef PC_PORT
-      /* Unterminated-input bound (2026-08-22, debug-menu warp, gdb first-chance in this loop):
-       * a garbage string walked ~60 glyphs past the screen edge and off a mapped page. Real
-       * draws are far below 4096 glyph/control steps per call; bail instead. */
+      /* Unterminated-input bound: a garbage string would walk glyphs past the screen edge and off
+       * a mapped page. Real draws are far below 4096 glyph/control steps per call; bail instead. */
       if (++guardSteps > 4096) {
          return;
       }

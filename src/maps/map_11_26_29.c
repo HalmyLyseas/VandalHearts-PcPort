@@ -1,18 +1,6 @@
-/* The castle drawbridge, shared by Map 11, Map 26 and Map 29.
- *
- * One handler: Objf362_DrawbridgeButton, spawned by SetupMapExtras() on all three maps. It
- * picks its position, hinge axis, texture set and OBJ.battleNum (mapNum - 9) from
- * gState.mapNum, then draws the raised bridge as two extra tile models -- this file's two
- * embedded MapTileModel boxes, retextured per map -- rotated about the hinge every frame.
- * When the lever cutaway sets mapState 2 (Objf399_Map11, Objf347_Map26, Objf352_Map29) it
- * pans the camera, drops the bridge with a bounce, kicks up OBJF_DUST_CLOUD_SPAWNER puffs,
- * calls the matching MapNN_LowerDrawbridge(), and sets mapState 3 so the lever handler can
- * ease the camera back.
- *
- * Map11/Map26/Map29_LowerDrawbridge() are the instant versions: they lower the six deck
- * tiles, retexture them and make the terrain walkable; state 0 applies them on reload.
- * The three maps differ only in tile coordinates, hinge orientation and textures -- the
- * geometry, camera and audio choreography is one code path. */
+/* The castle drawbridge shared by Maps 11, 26 and 29: Objf362_DrawbridgeButton draws the raised
+ * bridge as two extra tile models and drops it when the lever cutaway sets mapState 2;
+ * MapNN_LowerDrawbridge() are the instant versions applied on reload. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

@@ -105,8 +105,10 @@ baseline — see [memory-safety.md](memory-safety.md) for why, and why the 32-bi
 as an A/B reference. Both build systems run the mid-build data-segment generator; see
 [pc-port/data-segment.md](pc-port/data-segment.md).
 
-**Optimization.** Both build systems default to `-O0 -g` (unoptimized, for debugging). The internal-
-resolution rasterizer (1.5) needs optimization to hold the frame cap, so build with `-O2` for anything
+### Optimization
+
+Both build systems default to `-O0 -g` (unoptimized, for debugging). The internal-resolution
+rasterizer needs optimization to hold the frame cap, so build with `-O2` for anything
 perf-sensitive: `make link CC="cc -O2"` or `cmake … -DCMAKE_C_FLAGS=-O2`. The **release packaging
 (`make-release.sh`) always builds `-O2`** on both platforms, so shipped binaries are optimized.
 This split is deliberate policy, not drift: dev builds stay `-O0` for exact breakpoints and readable
@@ -137,6 +139,119 @@ cmake -S . -B build_ubsan -DVH_SANITIZE="-fsanitize=bounds -fno-omit-frame-point
 
 AddressSanitizer must be **32-bit** here: at 64-bit its shadow memory collides with the `0x80000000`
 PSX-RAM arena the port reserves. UBSan has no shadow, so it works at 64-bit.
+
+### How the port build works
+
+Both build systems implement the same recipe; the Makefile is the reference and `CMakeLists.txt`
+mirrors it group by group. `tools/check_build_parity.sh` (run by the release script) proves the two
+source lists still name every `platform/pc/src/*.c`; a file present in only one list breaks only the
+platform that uses the other system, so add new backend files to **both**.
+
+#### The header-staging tree
+
+Game sources are compiled with `-I<build>/include_stage`, a tree of symlinks, instead of
+`-I../../include`. GCC resolves a quoted `#include "PsyQ/x.h"` relative to the *including file's own
+directory* before it consults any `-I` path, and the project headers under `include/` include the
+PsyQ headers that way — so with a plain `-I` the real (gitignored, proprietary) Sony headers in
+`include/PsyQ/` would always win over the clean-room ones in `platform/pc/include/PsyQ/`. The staging
+tree links every project header in individually and points its `PsyQ/` entry at the clean-room set,
+which has the same effect as replacing `include/PsyQ/` without touching the decomp tree. The tree is
+rebuilt on every build (Makefile `stage:`; CMake at configure time — reconfigure after adding a header).
+Backend files that read game structs (`libetc.c`, `libsnd.c`, `pc_balance.c`, `pc_overlay.c`, the
+`pc_*_data.c` reconstructions) compile through the same staged tree.
+
+#### Game-source compile flags
+
+The decompiled game source is 1996 C and compiles under a fixed profile (`GAME_C_FLAGS` / the CMake
+per-source properties):
+
+| Flag | Why |
+|---|---|
+| `-std=gnu89` | the tolerant C89/K&R semantics of the period compiler; implicit declarations are a hard error under GCC 14's default standard |
+| `-fno-builtin-csqrt` | the game's own `csqrt(int)` (a GTE symbol) collides with glibc's complex-number builtin |
+| `-DPERMUTER` | makes `include/include_asm.h` turn `INCLUDE_ASM`/`INCLUDE_RODATA` into no-ops instead of raw MIPS `__asm__` directives — the escape hatch the decomp already provides for building off-MIPS |
+| `-D'asm(x)='` | neutralises the two `register T v asm("reg")` binding hints (decomp artifacts preserving retail codegen); the separate `__asm__` token is untouched |
+| `-I<project root>` | resolves the sources' quoted `#include "assets/NNNNNNNN.inc"` lines |
+| `-include pc_forward_decls.h` | two functions are called before their definition with a return type an implicit `int` forward reference cannot match |
+| `-DPC_PORT`, `-DPC_FEAT`, `-DVH_REGION_*` | the port gates; defined only here, never by the matching build |
+
+CMake folds `-D'asm(x)='` and the `-include` into one force-included prelude
+(`include/cmake_game_prelude.h`): per-source CMake options drop function-like macros and de-duplicate
+repeated `-include` flags, so a single `-include` is the only reliable form.
+Under CMake, `set_source_files_properties(... COMPILE_OPTIONS ...)` *overwrites* the property, so
+the `PORT_WARN` append for backend files must come after every per-file profile is set, or it is
+silently dropped.
+
+**Warning policy.** Game sources compile with `GAME_WARN`, which silences their known-benign 1996-C
+warning classes (K&R declarations vs prototypes, PSX pointer-width idioms). Port code compiles with
+`PORT_WARN` (`-Wall -Wextra`) and must stay warning-clean — a new warning there is signal. Keep the two
+sets apart. `PORT_WARN` also carries the region define, so every backend rule sees `VH_REGION_*` and
+`pc_platform.h` can never silently default to US values in a JP build.
+
+#### Header dependency tracking
+
+Every compile passes `-MMD -MP`, and the Makefile's final line `-include`s the emitted `.d` files as
+extra prerequisites. Without this a rule depends only on its `.c`, so a header edit rebuilds nothing
+and the build "succeeds" while still containing the old code. `-MP` adds phony targets for the headers
+so a deleted or renamed header does not wedge the build. Compiler *flags* are not tracked by either
+build system, which is why the release builds from clean (see [releasing.md](releasing.md)).
+
+A GNU Make trap that bit the debug-flag rules: a **second** target-specific `+=` for the same target
+appends to the *global* value and drops the first, so two `$(BUILD_DIR)/src/core/object.o: GAME_C_FLAGS
++= …` lines silently lose one set of defines. Put every define for one object on a single line.
+
+#### Region source selection
+
+`REGION=us` (default) compiles `../../src`; `REGION=jp` compiles into `build-jp/` from the `jp/` tree.
+The TUs listed in `platform/pc/shared_tus.txt` are byte-identical between the trees once the PC gate
+blocks are stripped, so **both** regions compile them from the US tree and every gated fix lands once;
+the JP build takes the remaining TUs from `jp/src`. Of the headers, four genuinely differ:
+`audio.h`/`card.h`/`units.h` are staged from `jp/include` as-is (they need no gates), and `field.h`
+from `platform/pc/include/region-jp/field.h`, a hand-merged copy that keeps the US gate blocks.
+`make check-shared` (`tools/check_shared.py`) proves the shared set is still identical; a file that
+diverges must leave `shared_tus.txt` and compile per region. The JP retail binary carries two names
+for one address (`DrawSjisText`/`DrawText`, `MsgBox_IsFinished`/`ConsumeMsgBoxPagePause`), satisfied
+at link time with `--defsym`.
+
+The language-pack engine is US-only (it is built on the US ASCII text path); the JP core links
+`pc_lang_stub.c`, the engine's documented no-pack behaviour, in its place. The JP build also
+regenerates every data reconstruction (`pc_battle_data.c`, `pc_kanji_font.c`, …) from `SLPM_860.07`
+into its build tree with the region-parametric generators; the `src/` copies are the US originals.
+The JP kanji font is the full charset-2+3 ROM set (3489 glyphs) because the JP game draws its whole
+text repertoire through `Krom2RawAdd`; the US build embeds only the 209-glyph subset it uses.
+
+#### The unified binary
+
+`make unified` builds both region cores with `UNIFIED=1` into their own build directories (the flags
+differ, and stale objects are a real hazard), partial-links each region's entire object set into one
+relocatable blob (`ld -r`), renames every **defined** external symbol with a `us_`/`jp_` prefix
+(`objcopy --redefine-syms`), and links both blobs under `src/pc_region_main.c`. Weak and common
+symbols must be renamed too: a tentative definition left unrenamed would silently merge across the two
+blobs. On COFF the `.refptr.*` thunks are filtered from the rename (`tools/prefix_blob.py`). `UNIFIED`
+compiles out `pc_bootstrap.c`'s bootstrap constructors; `pc_region_main.c` calls those pieces
+explicitly after classifying the disc. Only one core executes per process; the other blob's data-init
+constructors run harmlessly on their own renamed globals.
+
+#### The data-segment generator's width
+
+`tools/build_data_segment.py` probes real `sizeof()` values to slice the data segment out of the PSX
+ELF, so it must run at the same pointer width as the build: every pointer-containing struct changes
+size (`Object` is 96 bytes at `-m32`, 160 at `-m64`), and a mismatch does not fail — it silently emits
+wrongly-sized objects. The Makefile passes its own `$(M32)` as `VH_TARGET_MARCH` and `VH_BUILD_DIR`
+so 32- and 64-bit trees coexist. Under CMake `VH_TARGET_MARCH` is omitted (the generator uses the
+native width of `VH_CC`), and environment variables are assembled into a list so that only non-empty
+ones are passed: `cmake -E env NAME=` with an empty value makes CMake treat the next token as the
+command, which stops the generator from ever running. Every `-l` on the generator's probe link must
+resolve — `ld: cannot find -lXXX` aborts the probe before any "undefined reference" line is emitted,
+and the generator then produces an *empty* data segment; hence the per-platform library names
+(`-lGL`/`-lopengl32`, `-lopenal`/`-lOpenAL32`, the static-libav `-L` prefix on Windows).
+
+#### Debug build flags
+
+Per-file `PC_DEBUG_*` hooks (`AI_LOG=1`, `SPRITE_LOG=1`, `NO_FADE=1`, …) are listed in
+[`platform/pc/OPTIONS.md`](../platform/pc/OPTIONS.md). The `PC_DEBUG_UI_LOG` and `PC_DEBUG_SPRITE_LOG`
+probes are compiled in unconditionally and gate themselves at runtime on `VH_*` variables, so there is
+no compile-time switch to forget. The matching build never defines any of them.
 
 ---
 

@@ -1,18 +1,6 @@
-# Vandal Hearts — native PC port build (Stage 2.4 cross-platform).
-#
-# This replaces platform/pc/Makefile for the PC-port build ONLY. The matching-decomp build
-# (top-level Makefile, `make check`, the mipsel PSX toolchain) is entirely separate and untouched.
-#
-# Faithful translation of the Makefile: same per-file flag groups, the same symlink staging tree
-# (so quoted `#include "PsyQ/x.h"` resolves to our clean-room headers, not the real Sony ones), and
-# the same mid-build data-segment generator (compile objects -> link-probe for undefined symbols ->
-# generate generated_data.c -> compile -> final link). See exchange/58 and the Makefile's own
-# comments for why each piece exists.
-#
-# Linux is validated first; Windows (MinGW-w64) and macOS (Apple Silicon) toolchain files build on
-# this. Windows note: Win64 is LLP64 (`long` is 32-bit) vs Linux LP64 (`long` is 64-bit) — harmless
-# here because Stage 2.3 already mapped PSX `long`->`int` throughout the PC layer, so no struct
-# depends on `long` being pointer-sized.
+# Vandal Hearts — native PC port build, the CMake twin of platform/pc/Makefile (same per-file
+# flag groups, staging tree and mid-build data-segment generator; the Makefile is the reference).
+# The matching-decomp build is separate. See docs/building.md, "How the port build works".
 
 cmake_minimum_required(VERSION 3.16)
 project(vandalhearts_pc C)
@@ -23,12 +11,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)       # -g, matching the Makefile's default
 endif()
 
-# Sanitizer flags (Stage 2.3/2.4 memory-debug). Empty by default; e.g.
-#   cmake -B build_ubsan -DVH_SANITIZE="-fsanitize=bounds -fno-omit-frame-pointer"
-# Applied to every compile, the generated_data.c compile, the link, AND the generator's probe link
-# (via VH_SAN) so its instrumented objects link. This is the CMake equivalent of the Makefile's
-# `make ubsan`. (32-bit ASan -- `make asan32` -- stays in the Makefile: it needs a 32-bit toolchain
-# and the ASan sweep is already complete; UBSan at 64-bit is the remaining planned sanitizer run.)
+# Sanitizer flags, e.g. -DVH_SANITIZE="-fsanitize=bounds -fno-omit-frame-pointer" (the twin of
+# `make ubsan`; 32-bit ASan stays in the Makefile). Applied to every compile, the link AND the
+# generator's probe link (via VH_SAN) so its instrumented objects link.
 set(VH_SANITIZE "" CACHE STRING "Sanitizer flags, e.g. -fsanitize=bounds -fno-omit-frame-pointer")
 separate_arguments(VH_SAN_LIST NATIVE_COMMAND "${VH_SANITIZE}")
 
@@ -36,11 +21,9 @@ set(PC_DIR       ${CMAKE_CURRENT_SOURCE_DIR})
 set(PROJECT_ROOT ${PC_DIR}/../..)
 set(SRC_DIR      ${PROJECT_ROOT}/src)
 
-# ---- REGION (exchange/102/104, mirrors the Makefile) ------------------------------------------
-# VH_REGION=us|jp selects the game-code tree; VH_UNIFIED_CORE=ON compiles this core for the P5
-# unified binary (pc_bootstrap.c's bootstrap constructors compile out); VH_BLOB=ON produces the
-# prefix-renamed relocatable core (core_<region>.o) instead of an executable; VH_UNIFIED_CORES
-# builds the FINAL unified exe from two such blobs + pc_region_main.c.
+# ---- REGION (mirrors the Makefile) ------------------------------------------------------------
+# VH_REGION=us|jp selects the game-code tree; VH_UNIFIED_CORE=ON compiles this core for the
+# unified binary. See docs/building.md, "The unified binary".
 set(VH_REGION "us" CACHE STRING "Game region core: us or jp")
 option(VH_UNIFIED_CORE "Compile for the unified binary (VH_UNIFIED: explicit bootstrap)" OFF)
 option(VH_BLOB "Produce the prefix-renamed core_<region>.o instead of an executable" OFF)
@@ -49,7 +32,7 @@ if(VH_REGION STREQUAL "jp")
     set(GAME_ROOT ${PROJECT_ROOT}/jp)
     set(PSX_BASENAME SLPM_860.07)
     set(REGION_DEF VH_REGION_JP)
-    set(GAME_DEFS "PERMUTER;PC_PORT;PC_FEAT;VH_REGION_JP")  # full PC_FEAT since exchange/105
+    set(GAME_DEFS "PERMUTER;PC_PORT;PC_FEAT;VH_REGION_JP")  # the JP core carries the full PC_FEAT set
 else()
     set(GAME_ROOT ${PROJECT_ROOT})
     set(PSX_BASENAME SLUS_004.47)
@@ -82,9 +65,9 @@ foreach(_h ${_stage_hdrs})
     file(CREATE_LINK ${_h} ${STAGE_DIR}/${_hn} SYMBOLIC)
 endforeach()
 if(VH_REGION STREQUAL "jp")
-    # Shared-HEADER rule (exchange/102 §4): 11 headers stay the US gate-carrying copies staged
-    # above; the 4 genuinely-different ones come from jp/include (field.h via the hand-merged
-    # region-jp variant that keeps the US gate blocks).
+    # Shared-header rule: 11 headers stay the US gate-carrying copies staged above; the 4
+    # genuinely different ones come from jp/include (field.h via the hand-merged region-jp
+    # variant that keeps the US gate blocks). docs/building.md, "Region source selection".
     foreach(_rh audio.h card.h units.h)
         file(CREATE_LINK ${GAME_ROOT}/include/${_rh} ${STAGE_DIR}/${_rh} SYMBOLIC)
     endforeach()
@@ -134,18 +117,16 @@ if(APPLE)
     find_library(SDL2_GEN_LIB NAMES SDL2 SDL2-2.0 REQUIRED)
 endif()
 
-# libwebp: STANDARD HD-pack dependency (1.6). .webp replacements are ~7x smaller than raw .hdi (a full
-# background pack is ~20MB vs ~150MB), so it ships on by default. -DVH_WEBP=OFF builds without it (the
-# engine's `#ifdef VH_HD_WEBP` falls back to loading only raw .hdi packs). Mirrors the Makefile's NO_WEBP.
+# libwebp: standard HD-pack dependency (.webp is ~7x smaller than raw .hdi). -DVH_WEBP=OFF builds
+# without it; the engine's `#ifdef VH_HD_WEBP` then loads only raw .hdi packs. Mirrors NO_WEBP.
 option(VH_WEBP "libwebp HD-pack support (.webp replacements)" ON)
 if(VH_WEBP)
     find_library(WEBP_LIB NAMES webp REQUIRED)
     find_path(WEBP_INCLUDE_DIR webp/decode.h)
 endif()
 
-# libav (ffmpeg): STANDARD HD-pack dependency (1.6 HD FMVs). Decodes the H.264 .mp4 movies that replace
-# the STR FMVs. On by default; -DVH_HDVIDEO=OFF keeps the native MDEC movie path (engine `#ifdef
-# VH_HD_VIDEO`). Mirrors the Makefile's NO_HDVIDEO.
+# libav (ffmpeg): standard HD-pack dependency (H.264 .mp4 movies replacing the STR FMVs).
+# -DVH_HDVIDEO=OFF keeps the native MDEC path (engine `#ifdef VH_HD_VIDEO`). Mirrors NO_HDVIDEO.
 option(VH_HDVIDEO "libav HD FMV support (.mp4 replacements)" ON)
 if(VH_HDVIDEO)
     find_library(AVFORMAT_LIB NAMES avformat REQUIRED)
@@ -157,8 +138,8 @@ endif()
 
 # ---- source lists -----------------------------------------------------------------------------
 if(NOT VH_UNIFIED_CORES)   # normal / blob modes; the unified-final link skips to the executable
-# Inventory from the region's real tree; shared TUs (shared_tus.txt) always compile from the US
-# tree so gated fixes land once (exchange/102 §4); the rest from the region tree.
+# Inventory from the region's own tree; shared TUs (shared_tus.txt) always compile from the US
+# tree so gated fixes land once; the rest from the region tree.
 file(GLOB _game_inventory RELATIVE ${GAME_ROOT}/src CONFIGURE_DEPENDS
      ${GAME_ROOT}/src/*.c ${GAME_ROOT}/src/*/*.c)
 set(GAME_SRCS "")
@@ -223,14 +204,13 @@ if(APPLE)
          "-Wno-incompatible-library-redeclaration")
 endif()
 
-# ---- GENERATED game/BIOS-derived data files (gitignored; regenerated at build) ----------------
-# Reconstruct copyrighted content (Konami UI text, PS1 BIOS kanji glyphs) from the user's OWN copy
-# (byte-exact build/SLUS_004.47 + PsyQ KROMDAT.BIN, both already required), so the source tree ships
-# no copyrighted data. Mirrors the Makefile's gen rules. See exchange/60.
+# GENERATED game/BIOS-derived data files (gitignored): reconstruct copyrighted content (Konami UI
+# text, PS1 BIOS kanji glyphs) from the user's own byte-exact executable + PsyQ KROMDAT.BIN, so
+# the source tree ships none of it. Mirrors the Makefile's gen rules.
 set(GENERATED_DATA_C pc_kanji_font pc_spell_descriptions pc_item_descriptions pc_evt_entities pc_string_table)
 if(VH_REGION STREQUAL "jp")
     # The JP core regenerates ALL reconstructions from SLPM_860.07 (the src/ copies are the US
-    # originals); the generators are region-parametric (exchange/102 P1).
+    # originals); the generators are region-parametric.
     list(APPEND GENERATED_DATA_C pc_battle_data pc_unit_anim_data pc_sprite_box_quads pc_event_anim_data)
 endif()
 foreach(_g ${GENERATED_DATA_C})
@@ -296,11 +276,8 @@ if(VH_SAN_LIST)
 endif()
 
 # -- game sources (../../src/*.c): the GAME_C_FLAGS profile --------------------------------------
-# -D defines go through COMPILE_DEFINITIONS (CMake quotes the function-like `asm(x)=` correctly;
-# passing it as a raw -D option tokenises the parens). Everything else is COMPILE_OPTIONS.
-# The Makefile's `-D'asm(x)='` + `-include pc_forward_decls.h` are folded into ONE force-include
-# prelude (cmake_game_prelude.h), because CMake per-source options drop function-like macros and
-# de-duplicate repeated `-include` flags -- so a single `-include` is the only reliable form here.
+# Folded into one force-included prelude (cmake_game_prelude.h) rather than repeated -include
+# flags. See docs/building.md, "Game-source compile flags".
 foreach(_g ${GAME_SRCS})
     if(VH_REGION STREQUAL "jp")
         # jp/assets holds ALL its own .inc/.bin extractions (incl. the 14 same-named ones that
@@ -324,12 +301,9 @@ endif()
 # Always-on runtime-gated probes (Makefile: UNCONDITIONAL, self-gating at runtime).
 set_property(SOURCE ${SRC_DIR}/ui/window.c ${SRC_DIR}/core/object.c ${SRC_DIR}/states/main_menu.c
              APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_UI_LOG)
-# PC_DEBUG_PATH_STEP: diagnostic-only travel-cost/path OOB probe (src/battle/path_grids.c). It root-caused
-# the gTravelAscentCost/DescentCost overrun (now fixed by widening those tables) and the residual
-# reports are the confirmed-benign map-boundary reads -- so it's off by default (pure console noise
-# for players). Re-enable by uncommenting to re-investigate path/travel logic. The probe code stays
-# in-tree, #ifdef-gated; the matching build never defines it (byte-exact unaffected either way).
-# set_property(SOURCE ${SRC_DIR}/battle/path_grids.c APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_PATH_STEP)
+# PC_DEBUG_PATH_STEP (src/battle/path_grids.c) is a diagnostic-only path probe, off by default:
+# its remaining reports are benign map-boundary reads. Re-enable with a set_property(SOURCE ...
+# APPEND PROPERTY COMPILE_DEFINITIONS PC_DEBUG_PATH_STEP) line here (mirrors the Makefile).
 
 # -- backend files with special profiles --------------------------------------------------------
 foreach(_e libetc pc_diag pc_battle_speed)   # pc_diag/pc_battle_speed: extracted from libetc.c, same profile
@@ -353,24 +327,23 @@ foreach(_d ${DATA_PERM})
         INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 endforeach()
 
-# pc_balance.c is backend LOGIC (the Tactical Mode balance patcher), not data, but it reads game
-# structs/globals, so it needs the same gnu89+PERMUTER+stage profile as DATA_PERM (matches the Makefile
-# rule at Makefile:396-397). It lives in the foreach source list above; this sets its compile profile.
+# pc_balance.c is backend logic (the Tactical Mode balance patcher) that reads game structs and
+# globals, so it needs the same gnu89+PERMUTER+stage profile as DATA_PERM (matches the Makefile).
 set_source_files_properties(${PC_DIR}/src/pc_balance.c PROPERTIES
     COMPILE_DEFINITIONS "PERMUTER"
     COMPILE_OPTIONS "-std=gnu89"
     INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 
-# pc_overlay.c gained the RETURN TO TITLE action (moved from pc_balance.c 2026-08-22), which
-# rewrites engine state -- same staged profile as pc_balance.c (matches the Makefile rule).
+# pc_overlay.c's RETURN TO TITLE action rewrites engine state, so it takes the same staged
+# profile as pc_balance.c (matches the Makefile rule).
 set_source_files_properties(${PC_DIR}/src/pc_overlay.c PROPERTIES
     COMPILE_DEFINITIONS "PERMUTER"
     COMPILE_OPTIONS "-std=gnu89"
     INCLUDE_DIRECTORIES "${STAGE_DIR};${PC_DIR}/include")
 
-# -- warning policy on PORT code (the same 18 stems the Makefile treats as backend) ---------------
+# -- warning policy on PORT code (the stems the Makefile treats as backend) -----------------------
 # MUST come after every set_source_files_properties above: that call OVERWRITES COMPILE_OPTIONS,
-# so these appends would otherwise be silently clobbered (bit pc_balance/libgte on first attempt).
+# so these appends would otherwise be silently clobbered.
 foreach(_b ${BACKEND_PLAIN} libetc pc_diag pc_battle_speed libsnd libgte pc_gpu_window pc_balance)
     vh_source_path(_port_source "${_b}")
     set_property(SOURCE ${_port_source} APPEND PROPERTY COMPILE_OPTIONS "${PORT_WARN}")
@@ -380,20 +353,8 @@ foreach(_b libetc libsnd pc_balance pc_overlay)   # compile through the staged g
 endforeach()
 
 # ---- data-segment generator (mid-build) -------------------------------------------------------
-# Runs after the objects compile; link-probes them for undefined symbols and emits generated_data.c.
-#
-# Env vars are built into a list so that ONLY non-empty ones are passed: `cmake -E env NAME=`
-# (empty value) makes cmake treat the following token as the command to execute ("permission
-# denied"), which silently stopped the generator from ever running. VH_TARGET_MARCH is omitted
-# entirely (generator falls back to native width via VH_CC -- correct for x86-64 Linux/Win and
-# ARM64 macOS alike); VH_SAN is appended only when a sanitizer is configured.
-# OpenGL link name differs by platform: -lGL on Linux, -lopengl32 (the Win32 ICD loader) on Windows.
-# The generator only link-PROBES for undefined symbols, but a lib it cannot find (`ld: cannot find
-# -lGL`) can abort the probe before the undefined-ref lines are emitted, so give it the right name.
-# Library link names differ by platform, and EVERY -l here must resolve: a `ld: cannot find -lXXX`
-# aborts the probe link before any "undefined reference" line is emitted, so the generator would
-# see 0 undefined symbols and produce an empty data segment. OpenGL: -lGL (Linux) / -lopengl32
-# (Win32 ICD loader). OpenAL: -lopenal (Linux) / -lOpenAL32 (MinGW import lib libOpenAL32.dll.a).
+# Link-probes the compiled objects for undefined symbols and emits generated_data.c.
+# See docs/building.md, "The data-segment generator's width".
 if(WIN32)
     set(_GEN_MINGW_SEARCH "")
     if(VH_MINGW_PREFIX)
@@ -418,8 +379,8 @@ else()
     set(_GEN_AL_LIB "-lopenal")
     set(_GEN_SDL_LIB "-lSDL2")
 endif()
-# libgpu.o references WebPDecodeRGBA/WebPFree (under VH_HD_WEBP); the probe link must resolve them so they
-# don't pollute the undefined-symbol list the generator harvests.
+# pc_hdpack.o references WebPDecodeRGBA/WebPFree (under VH_HD_WEBP); the probe link must resolve
+# them so they don't pollute the undefined-symbol list the generator harvests.
 set(_GEN_WEBP_LIB "")
 if(VH_WEBP)
     if(APPLE)
@@ -438,11 +399,9 @@ if(VH_HDVIDEO)
         set(_GEN_AV_LIBS "-lavformat -lavcodec -lavutil -lswscale")
     endif()
     if(WIN32)
-        # The generator's undefined-symbol PROBE link (VH_LINK_LIBS) runs the cross linker directly. The
-        # STATIC libav lives outside the default MinGW lib path, so without -L<prefix>/lib the probe link
-        # HARD-fails on "cannot find -lavformat" -- it then prints no "undefined reference" lines, and the
-        # generator emits an EMPTY data segment (every game global then undefined at the real link). Add the
-        # search path (+ -lbcrypt for avutil's RNG); dependency order avformat->avcodec->swscale->avutil.
+        # The STATIC libav lives outside the default MinGW lib path: without -L<prefix>/lib the probe
+        # link hard-fails on "cannot find -lavformat" and the generator emits an EMPTY data segment.
+        # + -lbcrypt for avutil's RNG; dependency order avformat->avcodec->swscale->avutil.
         set(_ff "${VH_MINGW_FFMPEG}")
         if(NOT _ff)
             set(_ff "$ENV{VH_MINGW_FFMPEG}")
@@ -480,10 +439,9 @@ if(WIN32)
     # add_compile_options), so it needs the same MinGW compat shim force-included, or it hits the
     # u_char/u_short errors inside those headers.
     list(APPEND GEN_ENV "VH_EXTRA_CFLAGS=-include ${PC_DIR}/include/pc_win_compat.h")
-    # Cross-compile: the sizeof probe is compiled AND RUN to read struct sizes, so it must build for
-    # the HOST (Linux), not the MinGW target -- a .exe probe cannot execute here. gcc gives the same
-    # pointer-free sizes as the Win64 target. Without this the probe .exe never runs and every symbol
-    # is left undefined -> the final link fails.
+    # The sizeof probe is compiled AND RUN, so it must build for the HOST, not the MinGW target
+    # (a .exe cannot execute here); gcc gives the same pointer-free sizes as Win64. Without this
+    # every symbol is left undefined and the final link fails.
     list(APPEND GEN_ENV "VH_HOST_CC=gcc")
 endif()
 add_custom_command(
@@ -509,9 +467,9 @@ endif()   # NOT VH_UNIFIED_CORES (source lists / objects / generators)
 
 # ---- final executable (or region-core blob) ---------------------------------------------------
 if(VH_BLOB)
-    # P5 unified core: partial-link this region's ENTIRE object set and prefix-rename every
-    # defined external (incl. weak+common; COFF .refptr thunks re-keyed per blob --
-    # tools/prefix_blob.py has the COMDAT-dedup hazard story).
+    # Unified core: partial-link this region's ENTIRE object set and prefix-rename every defined
+    # external (incl. weak+common; COFF .refptr thunks re-keyed per blob -- see
+    # tools/prefix_blob.py for the COMDAT-dedup hazard).
     add_library(vh_gen_obj OBJECT ${GENERATED_C})
     target_compile_definitions(vh_gen_obj PRIVATE ${REGION_DEF})
     foreach(_t NM OBJCOPY OBJDUMP LINKER)   # some toolchains leave these unset; fall back to PATH names
@@ -540,7 +498,7 @@ if(VH_BLOB)
         COMMENT "Partial-linking + prefix-renaming region core ${VH_REGION}")
     add_custom_target(vh_core ALL DEPENDS ${CMAKE_BINARY_DIR}/core_${VH_REGION}.o)
 elseif(VH_UNIFIED_CORES)
-    # P5 final link: the shared layer + both prefixed cores. All platform link logic below
+    # Unified final link: the shared layer + both prefixed cores. All platform link logic below
     # (libs, -mconsole, DLL bundling) applies to this target exactly as to the normal exe.
     add_executable(vandalhearts_pc ${PC_DIR}/src/pc_region_main.c ${VH_UNIFIED_CORES})
     set_source_files_properties(${PC_DIR}/src/pc_region_main.c PROPERTIES
@@ -548,7 +506,7 @@ elseif(VH_UNIFIED_CORES)
 else()
 add_executable(vandalhearts_pc $<TARGET_OBJECTS:vh_objs> ${GENERATED_C})
 if(VH_REGION STREQUAL "jp")
-    # The JP binary carries these two names for one address (exchange/102 §3).
+    # The JP binary carries these two names for one address each (see the Makefile).
     target_link_options(vandalhearts_pc PRIVATE
         "LINKER:--defsym,DrawSjisText=DrawText"
         "LINKER:--defsym,MsgBox_IsFinished=ConsumeMsgBoxPagePause")
@@ -564,10 +522,9 @@ if(VH_WEBP)
 endif()
 if(VH_HDVIDEO)
     if(WIN32)
-        # The Windows build links a STATIC libav (the shippable form -- see tools/build-ffmpeg-static.sh;
-        # point CMake at it with -DCMAKE_PREFIX_PATH=<prefix>). Static archives resolve left-to-right, and
-        # the four libs cross-reference, so wrap them in a link group (order-independent). +bcrypt for
-        # avutil's BCryptGenRandom. On a shared libav these flags are harmless.
+        # The Windows build links a STATIC libav (tools/build-ffmpeg-static.sh). The four archives
+        # cross-reference, so they go in a link group; +bcrypt for avutil's BCryptGenRandom. Harmless
+        # on a shared libav. See docs/cross-platform.md, "Toolchain".
         target_link_libraries(vandalhearts_pc PRIVATE
             -Wl,--start-group ${AVFORMAT_LIB} ${AVCODEC_LIB} ${SWSCALE_LIB} ${AVUTIL_LIB} -Wl,--end-group
             bcrypt)
@@ -584,20 +541,14 @@ if(WIN32)
     # SDL renames main->SDL_main via SDL_main.h wherever SDL.h is included (pc_gpu_window.c); the
     # real entry point is the game's own main() in src/core/main.c, so tell SDL to keep its hands off.
     target_compile_definitions(vandalhearts_pc PRIVATE SDL_MAIN_HANDLED)
-    # Force the CONSOLE subsystem for bring-up/validation: SDL2's cmake target adds -mwindows (GUI),
-    # which hides the game's stderr bootstrap/diagnostic prints (disc mount, window open, errors).
-    # A console launch shows them; the SDL game window still opens either way. Switch back to GUI
-    # (drop this / use -mwindows) for the clean end-user release once the Windows run is validated.
+    # CONSOLE subsystem: SDL2's cmake target adds -mwindows (GUI), which hides the game's stderr
+    # diagnostics (disc mount, window open, errors). The SDL game window opens either way;
+    # -mwindows would give a console-free end-user launch.
     target_link_options(vandalhearts_pc PRIVATE -mconsole -Wl,--no-insert-timestamp)
 
-    # Bundle the runtime DLLs next to the .exe so it runs on a stock Windows box (no MSYS on PATH).
-    # SDL2/OpenAL are genuine third-party deps; the rest are the MinGW GCC runtime that they (and our
-    # own code) link against and are NOT Windows system DLLs, so they must ship too:
-    #   libwinpthread-1  pthreads (our audio-streaming threads)
-    #   libgcc_s_seh-1   GCC unwinder/runtime
-    #   libstdc++-6      C++ runtime (OpenAL-soft is C++)
-    #   libssp-0         stack-protector runtime (-fstack-protector)
-    # The UCRT (api-ms-win-crt-*) and OPENGL32/KERNEL32 are OS components on Win10+ and need no bundling.
+    # Bundle the runtime DLLs next to the .exe so it runs on a stock Windows box: SDL2/OpenAL plus
+    # the MinGW GCC runtime (winpthread, gcc_s_seh, stdc++ for OpenAL-soft, ssp), none of which are
+    # OS DLLs. The UCRT and OPENGL32/KERNEL32 are. See docs/cross-platform.md, "The distributable".
     set(_MINGW_RUNTIME_DIRS /usr/${MINGW_TARGET}/bin
         ${VH_MINGW_ROOT}/${MINGW_TARGET}/bin ${VH_MINGW_ROOT}/${MINGW_TARGET}/lib
         ${VH_MINGW_ROOT}/mingw/bin ${VH_MINGW_ROOT}/mingw/lib)
@@ -623,9 +574,9 @@ if(WIN32)
                 COMMENT "Bundling ${_dll} next to the .exe")
         endif()
     endforeach()
-    # libwebp (1.6 HD pack) + its sharpyuv split-out. Only the core decode lib is needed (NOT the
-    # webpdecoder/demux/mux siblings), and the SONAME digit varies by distro (Arch: libwebp.dll; Debian:
-    # libwebp-7.dll) -- so match "libwebp.dll" and "libwebp-<n>.dll" but not "libwebpdecoder.dll" etc.
+    # libwebp + its sharpyuv split-out. Only the core decode lib is needed (NOT the webpdecoder/
+    # demux/mux siblings), and the SONAME digit varies by distro (libwebp.dll vs libwebp-7.dll),
+    # so match "libwebp.dll" and "libwebp-<n>.dll" but not "libwebpdecoder.dll".
     if(VH_WEBP)
         set(_WEBP_DLLS)
         foreach(_runtime_dir ${_MINGW_RUNTIME_DIRS})
@@ -640,11 +591,9 @@ if(WIN32)
                 COMMENT "Bundling ${_wd} next to the .exe")
         endforeach()
     endif()
-    # libav (ffmpeg) for HD FMV decode. The core decode DLLs are avformat/avcodec/avutil/swscale (+
-    # swresample). ffmpeg has many transitive codec deps, but H.264 decode + mp4 demux + yuv->rgb only
-    # pull a subset; the SONAME suffix varies (avcodec-62.dll / libavcodec.dll). GLOB the av*/sw* set and
-    # copy what the MinGW package ships. NOTE: verify the full runtime DLL set once mingw-w64-ffmpeg is
-    # installed and a Windows release is built (a missing transitive dep shows as a load error at launch).
+    # libav DLLs, only present with a SHARED libav (the release links it statically and ships none).
+    # The SONAME suffix varies (avcodec-62.dll / libavcodec.dll), so GLOB the av*/sw* set; a missing
+    # transitive codec DLL shows as a load error at launch.
     if(VH_HDVIDEO)
         set(_AV_DLLS)
         foreach(_runtime_dir ${_MINGW_RUNTIME_DIRS})

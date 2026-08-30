@@ -1,20 +1,6 @@
-/* Map 33's collapsing lava-pit platform, plus the shared exploding-tile debris object.
- *
- * The platform is five tiles in a plus shape. Map33_Save/RestorePlatform stash and
- * reinstate their tile models through gScratch1_801317c0, and Map33_LowerPlatform() drops
- * them N steps at once for reloads. Objf651_Map33_LavaPitPlatform (spawned by
- * SetupMapExtras()) is the driver: each time Objf553_EvaluateMap33_SlayDeathDevs bumps gState.mapState
- * it focuses the camera on the unit standing there and spawns one more drop.
- *
- * Objf750_751_Map33_LowerPlatform performs that drop, one handler at two indices: as 751 it
- * grabs the unit sprite standing on the platform; as the scene-65 variant 750 it uses the
- * entity sprite the event script handed it. It rocks the saved tile copies with a sine
- * wobble while re-rendering a clone of the rider's sprite, then commits one 16-unit step.
- *
- * Objf653_ExplodingTile (OBJF_EXPLODING_TILE) is unrelated to Map 33 and lives here only by
- * address adjacency: the generic tumbling-tile debris used by Map 13's bridge and Map 35's.
- * It arcs a rotating copy of a tile model, bounces it, trails OBJF_EXPLOSION, and either
- * settles or -- on water -- throws an OBJF_SPLASH_WITH_DROPLETS and drifts downstream. */
+/* Map 33's collapsing lava-pit platform (five tiles saved/restored through gScratch1_801317c0,
+ * dropped one 16-unit step per mapState bump) and, by address adjacency, Objf653_ExplodingTile,
+ * the tumbling-tile debris used by Map 13's and Map 35's bridges. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

@@ -1,13 +1,6 @@
-/*
- * PC-backend replacement for the PSX SDK's gtemac.h GTE composite macros.
- *
- * Clean-room reimplementation, scoped to only what core/graphics.c actually calls
- * (per exchange/02-phase-c-interface-contract.md): gte_NormalColorCol and
- * gte_OuterProduct0. Like the real header, these are built by composing the
- * raw primitive macros -- here, the ones declared in
- * platform/pc/include/inline_gte.h, which must be included first (core/graphics.c
- * already does this, matching the real project's own include order).
- */
+/* Clean-room PC replacement for the PSX SDK gtemac.h, scoped to what core/graphics.c calls.
+ * Composed from the primitive macros in platform/pc/include/inline_gte.h, which must be included
+ * first (core/graphics.c does, matching the real include order). */
 #ifndef PLATFORM_PC_PSYQ_GTEMAC_H
 #define PLATFORM_PC_PSYQ_GTEMAC_H
 

@@ -1,7 +1,6 @@
 # Game TUs byte-identical between src/ and jp/src/ after stripping PC gates + comments.
-# These compile from ../../src for BOTH regions (gated fixes/features land once).
-# Verified by tools/check_shared.py (make check-shared); a diverging file must be
-# removed here and compiled per-region instead. Established 2026-08-19, exchange/102 §4.
+# These compile from ../../src for both regions (gated fixes/features land once), verified
+# by tools/check_shared.py (make check-shared); a diverging file must instead be removed.
 battle/ai.c
 battle/evaluators.c
 battle/item_reveal.c

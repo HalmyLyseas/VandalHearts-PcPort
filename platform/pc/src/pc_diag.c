@@ -1,9 +1,7 @@
 #define _GNU_SOURCE 1   /* dladdr (PC_DiagSpellFxLog's symbol resolution) */
-/* pc_diag.c -- the port's env-gated diagnostics, extracted verbatim from libetc.c (which had
- * become the dumping ground for every investigation logger). Nothing here runs unless its VH_*
- * env var is set; the per-tick rows are driven from VSync() via PC_DiagVSyncRows(), and the
- * VH_SMOKE boot harness + VH_FRAME_TIME/VH_FPS_LOG meters via the other hooks (pc_etc_internal.h).
- * The frame column in every CSV is VSync(-1) -- the same vblank counter the old inline code read. */
+/* pc_diag.c -- the port's env-gated diagnostics: every VH_*-gated logger and meter for
+ * inspecting live game state. Nothing runs unless its env var is set; per-tick CSV rows are
+ * driven from VSync() via PC_DiagVSyncRows() (VSync(-1) is the frame column throughout). */
 #include <SDL2/SDL.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -16,32 +14,20 @@
 #include "pc_platform.h"
 #include "pc_etc_internal.h"
 
-/* Diagnostic FPS logging (2026-07-12, investigating whether VSync(2) during
- * battle actually halves the real display-update rate, or whether real
- * hardware's positive-mode VSync() means something other than "block for
- * mode frame-durations"). Counts real VSync() *calls* (once per UpdateEngine()
- * call, i.e. once per real logic tick / display swap) separately from the
- * inner mode-driven wait loop, and prints calls-per-real-second once a
- * second to stderr, tagged with the mode last seen. */
+/* Diagnostic FPS logging (VH_FPS_LOG=1): counts real VSync() *calls* (once per UpdateEngine()
+ * tick / display swap), separately from the inner mode-driven wait loop, and prints
+ * calls-per-real-second to stderr, tagged with the last VSync mode seen. */
 static Uint32 s_fpsWindowStart = 0;
 static int s_fpsWindowCalls = 0;
 static int s_fpsLastMode = -2;
 
-/* Camera-target full-watch-log (2026-07-12, exchange/20-camera-viewport-coordinates.md).
- * Mirrors exchange/21-camera-target-full-watch-log.lua's BizHawk capture field-for-field so
- * the two CSVs are diffable at matching game-state checkpoints (bmFuncIdx/bmState/bmState2),
- * not by raw frame number -- the two builds' frame counts never lined up 1:1 (see
- * feedback-02.md's timing table), but the BattleMgr state machine is the same code on both
- * platforms and gives a reliable alignment anchor. Logs every VSync() call (one row per real
- * logic tick), matching the "dense capture, not sampled" methodology now standard for this
- * project (see the phase-c-pc-port skill's "BizHawk as ground truth" section).
- *
- * One deliberate column difference from the Lua script: BizHawk's `targetAddr` is a raw PS1
- * KUSEG address, meaningless as a cross-platform value -- our own process's pointer values are
- * just as meaningless to a human reader. Logging the target's own gObjectArray index instead
- * (targetObjIdx) keeps the column comparable in spirit (identifies WHICH object is the target)
- * without a nonsensical raw-address diff; targetX/Y/Z remain real, directly diffable
- * coordinate values either way. */
+/* Camera-target full-watch-log (VH_CAM_LOG=1): mirrors a BizHawk RAM-watch capture field-for-field
+ * so the two CSVs diff at matching game-state checkpoints (bmFuncIdx/bmState/bmState2) rather than
+ * by raw frame number -- the BattleMgr state machine is common code on both platforms. */
+
+/* One deliberate column difference: a raw PS1 address is meaningless as a cross-platform value,
+ * so this logs the target's own gObjectArray index (targetObjIdx) instead -- identifies WHICH
+ * object is the target without a nonsensical address diff; targetX/Y/Z stay real coordinates. */
 static FILE *s_camTraceFile = NULL;
 
 static s32 FindCameraObjIdx(s16 *outFuncIdx) {
@@ -63,7 +49,7 @@ static s32 ObjPtrToIdx(struct Object *p) {
     return (s32)d;
 }
 
-/* feedback-14 follow-up: per-sprite pipeline log. Enabled by VH_SPRITE_LOG env var. */
+/* Per-sprite pipeline log, enabled by VH_SPRITE_LOG. */
 static FILE *s_spriteFateFile = NULL;
 void PC_DebugSpriteLog(int tileX, int tileZ, int winX, int winZ, int mapSX, int mapSZ,
                        int culled, int gfxIdx, int sx, int sy, int otz, int otIdx) {
@@ -93,8 +79,7 @@ void PC_DebugSpriteLog(int tileX, int tileZ, int winX, int winZ, int mapSX, int 
 
 /* Per event-entity anim-set probe (build SPRITE_LOG=1, enable VH_SPRITE_LOG). Dumps each event
  * entity's baseAnimSet/altAnimSet pointer, the animSet actually used, animIdx, facing, animData,
- * and resulting gfxIdx + tile -- to find a prop entity spawned with the WRONG (character) anim-set.
- * Deduped per object slot: only writes a row when that slot's gfxIdx changes, so volume stays low. */
+ * and resulting gfxIdx + tile. Deduped per object slot: only writes a row on a gfxIdx change. */
 static FILE *s_evtEntFile = NULL;
 void PC_DebugEvtEntityLog(int objIdx, int tileX, int tileZ, const void *base, const void *alt,
                           const void *cur, int animIdx, int facing, const void *animData,
@@ -123,11 +108,9 @@ void PC_DebugEvtEntityLog(int objIdx, int tileX, int tileZ, const void *base, co
     fflush(s_evtEntFile);
 }
 
-/* AI spell-target scoring log (build with AI_LOG=1, enable at runtime with VH_AI_LOG). One line per
- * candidate target a caster's AI scored in AI_ScoreSpellTargets; the highest SCORE is the target it picks.
- * Shows the term breakdown so a "wrong" choice is explainable -- especially the type-matchup term
- * ADV = -gAdvantage[caster.advantage][target.advantage] (your mage->armor / ranged->flyer doctrine).
- * A high raw gAdvantage means a poor matchup, so it SUBTRACTS from the score (less-preferred). */
+/* AI spell-target scoring log (build AI_LOG=1, enable VH_AI_LOG). One line per candidate target
+ * scored in AI_ScoreSpellTargets; highest SCORE wins. ADV = -gAdvantage[caster.advantage]
+ * [target.advantage]: a high raw gAdvantage is a poor matchup, so it SUBTRACTS from the score. */
 static FILE *s_aiLogFile = NULL;
 void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
                          int tgtName, int tgtClass, int tgtAdv, int tgtLvl, int tgtHpFrac,
@@ -151,11 +134,9 @@ void PC_DebugAiTargetLog(int casterName, int casterAdv, int casterLvl,
     fflush(s_aiLogFile);
 }
 
-/* bugreport-03 (DEATHANGEL caster never casts): dumps the AI's top-level spell decision in
- * Objf570_AI_ChooseAction case 0 -- every input that can force the melee branch (state 1) plus the state it
- * actually chose. `state` 1 = melee/move only (OBJF_AI_PLAN_ATTACK), 2/4 = cast (OBJF_AI_PLAN_SPELL_CAST).
- * The two zeroing inputs to watch: spells[]==SPELL_NULL, and mp < gSpells[spell].mpCost (which
- * zeroes spellEffectA/B and drops the AI to state 1 even for a fully-equipped caster). */
+/* Dumps the AI's top-level spell decision in Objf570_AI_ChooseAction case 0: every input that can
+ * force the melee branch (state 1) vs cast (state 2/4), plus the chosen state. Zeroing inputs:
+ * spells[]==SPELL_NULL, mp < gSpells[spell].mpCost. */
 static FILE *s_aiDecFile = NULL;
 void PC_DebugAiDecisionLog(int name, int cls, int team, int lvl, int mp, int maxMp,
                            int spell0, int spell1, int cost0, int cost1,
@@ -176,11 +157,12 @@ void PC_DebugAiDecisionLog(int name, int cls, int team, int lvl, int mp, int max
 }
 
 /* Dumps the game state-machine fields for freeze diagnosis (called from the SIGUSR1 handler in
- * pc_bootstrap.c). A "freeze" where the frame loop keeps ticking = a state stuck waiting on a
- * condition; these fields say which state/scene/map it's stuck in so we know where to look. */
-/* bugreport (epilogue ocarina silent): log every PerformAudioCommand so we can see whether the
- * ending's PLAY_XA(102) == 0x366 is ever issued (trigger fired) vs never reaching the audio layer.
- * Decodes the 0x?00 opcode nibble for readability. Build AUDIO_CMD_LOG=1, enable VH_AUDIO_LOG. */
+ * pc_bootstrap.c). A "freeze" where the frame loop keeps ticking is a state stuck waiting on a
+ * condition; these fields say which state/scene/map it is stuck in. */
+
+/* Logs every PerformAudioCommand, decoding the 0x?00 opcode nibble for readability, so a missing
+ * audio trigger is distinguishable from one that fired but never reached the audio layer. Build
+ * AUDIO_CMD_LOG=1, enable VH_AUDIO_LOG. */
 void PC_DebugAudioCmdLog(int cmd, int enabled) {
     static int en = -1;
     static FILE *f = NULL;
@@ -211,9 +193,9 @@ void PC_DumpGameState(int fd) {
     fflush(stderr);
 }
 
-/* feedback-11 follow-up: mirror BizHawk's RAM Watch on our own window. Called from libgpu.c
- * right before the present, so the label matches the frame being shown. Rendered by
- * pc_gpu_window.c only when VH_CAM_OSD is set. */
+/* On-screen camera readout, mirroring a RAM-watch style overlay. Called from libgpu.c right
+ * before the present, so the label matches the frame being shown. Rendered by pc_gpu_window.c
+ * only when VH_CAM_OSD is set. */
 void PC_UpdateCamOsd(void) {
     snprintf(g_camOsdText, sizeof(g_camOsdText), "PIT:%d YAW:%d X:%d Z:%d FRD:%d",
              gCameraRotation.vx, gCameraRotation.vy, gCameraPos.vx, gCameraPos.vz,
@@ -231,23 +213,15 @@ static void LogCameraTraceRow(void) {
                 "frame,primary,bmFuncIdx,bmState,bmState2,"
                 "camPosX,camPosY,camPosZ,camRotX,camRotY,camZoomZ,"
                 "camObjIdx,camObjFuncIdx,camObjState,targetObjIdx,targetX,targetY,targetZ,"
-                /* 30-fresh-look-deterministic-camera-hypothesis.md: winOrigin[X/Z] is the
-                 * actual render-window origin (gMapViewOriginX/2C, src/battle/field.c:193), the
-                 * derived quantity the terrain-window + sprite-cull both key off; camDirQuad is
-                 * the yaw quadrant RenderField selects (src/core/graphics.c:1178). startCur[X/Z/Y]
-                 * is gMapCursorStartingPos[mapNum] as read at RUNTIME on this build -- confirms
-                 * the (byte-exact-static) table isn't being misread through a port stride/endian
-                 * bug. These are what make the pre-AI frame-0 diff decisive. */
-                /* 30-* (a): fieldRenderDisabled (gState) = field draws only when 0 -- the
-                 * "first non-loading frame" un-blank moment; fadeLevel = gScreenFade's Objf795
-                 * fade level (255=black .. 0=full brightness), the fade-in ramp. Together these
-                 * pin the exact frame the scene becomes visible to the concurrent camPos, so we
-                 * can state same-run whether our field un-blanks while the camera is still parked
-                 * at (-32,-32) or already mid-pan. -1 fadeLevel = no active gScreenFade object. */
+                /* winOriginX/Z is the render-window origin (gMapViewOriginX/Z) the terrain window
+                 * and sprite key off; camDirQuad is the yaw quadrant RenderField selects;
+                 * startCurX/Z/Y is gMapCursorStartingPos[mapNum] read at runtime. */
+
+                /* fieldRenderDisabled (gState) is 0 only once the field actually draws -- the un-
+                 * blank moment; fadeLevel is gScreenFade's Objf795 fade level (255=black..0=full
+                 * brightness), the fade-in ramp. -1 fadeLevel means no active gScreenFade object. */
                 "winOriginX,winOriginZ,camDirQuad,startCurX,startCurZ,startCurY,"
-                /* live map cursor = the AI-turn camera-focus target CenterCamera eases toward
-                 * (battle/field.c:190); pairs with 43-camera-focus-easein-trace.lua's mapCursorX/Z
-                 * so both platforms carry the ease-in target for the iteration-vs-gate diff. */
+                /* live map cursor is the AI-turn camera-focus target CenterCamera eases toward. */
                 "mapCursorX,mapCursorZ,"
                 "fieldRenderDisabled,fadeLevel\n");
     }
@@ -304,14 +278,9 @@ static void LogCameraTraceRow(void) {
     fflush(s_camTraceFile);
 }
 
-/* AI-decision-chain trace (timing topic, Finding #1: the "unit active -> blue movement overlay"
- * early-gate). The overlay (gShowBlueMovementGrid=1, set in Objf013_BattleMgr state 7.2) can't fire
- * until BattleMgr STATE 6 exits, and state 6 blocks on `gAiPlanReady != 0` (battle/field.c:3202),
- * which is set only when the AI-decision object chain finishes (Objf570_AI_ChooseAction -> Objf40x/Objf589,
- * battle/ai.c:278 case 99, via the gAiPlanDone hand-off). On hardware state 6 lasts ~108 frames; on our build
- * ~18 -> the AI chain completes ~6x faster and the overlay shows early (mid camera-pan). This logs the
- * chain's live state so we can see EXACTLY which sub-state exits early. Env-gated (VH_AI_LOG); reads
- * only game RAM (no src/ changes, matching build untouched). Pairs with 43-camera-focus-easein. */
+/* AI-decision-chain trace (VH_AI_LOG): logs BattleMgr's AI decision chain (Objf570_AI_ChooseAction
+ * -> Objf40x/Objf589) that gates the blue movement overlay. See docs/pc-port/subsystems/kernel.md,
+ * "The AI throttle". */
 extern u8 gAiPlanReady; /* BattleMgr state-6 release flag (battle.h) */
 extern u8 gAiPlanDone; /* Objf570 sub-object hand-off flag (battle/ai.c) */
 extern int g_aiVisitCount[8]; /* cumulative GetRCnt visits per AI range (libkernel.c); for calibration */
@@ -365,14 +334,9 @@ static void LogAiChainRow(void) {
     fflush(s_aiChainFile);
 }
 
-/* rand()-seed full-watch-log (2026-07-12, exchange/20-camera-viewport-coordinates.md's "ROOT
- * CAUSE FOUND" section). Mirrors the camera trace's dense, every-tick, state-anchored capture
- * style, but for the shared PS1-BIOS-LCG rand() state (platform/pc/src/libkernel.c's
- * s_randSeed, exposed via GetRandSeedForDebug() to avoid changing that variable's linkage for
- * anything else) -- to directly confirm/deny whether libcd.c's CD-seek-jitter simulation
- * desyncs it from real hardware's stream (found empirically at RAM address 0x80009010 via
- * exchange/24-find-rand-seed-address.lua's LCG-signature scan; mirrored here as
- * exchange/25-rand-seed-full-watch-log.lua). */
+/* rand()-seed full-watch-log (VH_RAND_LOG): mirrors the camera trace's dense, per-tick, state-
+ * anchored capture style for the shared PS1-BIOS-LCG rand() state, to diff against a hardware
+ * capture and catch any divergence in the shared RNG stream. */
 extern u32 GetRandSeedForDebug(void);
 static FILE *s_randTraceFile = NULL;
 
@@ -390,14 +354,9 @@ static void LogRandSeedRow(void) {
     fflush(s_randTraceFile);
 }
 
-/* Camera-matrix / view-Z (OTZ) baseline mirror (exchange/31-camera-matrix-otz-baseline.lua).
- * Writes the exact same columns as the BizHawk baseline so the two CSVs diff directly, to
- * localize why our terrain OTZ (= avg view-Z) runs high enough (>=406) that core/graphics.c's
- * distance-darkening saturates terrain to black. Read at the same per-frame point as the
- * BizHawk end-of-frame read, so gCameraMatrix.t[] is equally "post-render stale" on both sides
- * (the reliable comparands are the inputs gCameraRotation/gCameraZoom/gMapScale/enableMapScaling
- * and the rotation submatrix m[][]; align rows by matched pose, not frame number). Env-gated
- * (VH_MTX_LOG) so normal runs are unaffected. */
+/* Camera-matrix / terrain-OTZ baseline mirror (VH_MTX_LOG): writes the same columns as a BizHawk
+ * capture so the two CSVs diff directly on gCameraMatrix.t[] and the rotation submatrix, read at
+ * the same post-render point on both sides; align rows by matched camera pose, not frame number. */
 static FILE *s_mtxTraceFile = NULL;
 
 static void LogCameraMatrixRow(void) {
@@ -433,15 +392,9 @@ static void LogCameraMatrixRow(void) {
     fflush(s_mtxTraceFile);
 }
 
-/* Terrain OTZ probe (otz-overflow / black-terrain investigation). RenderMapTile /
- * RenderEdgeMapTile (src/core/graphics.c) call PC_DebugTerrainTile once per drawn tile with the
- * post-clamp otz and the final vertex-0 colour. We accumulate per-frame aggregates (tile count,
- * otz min/max/mean, and how many tiles ended fully black -- core/graphics.c's distance-darkening
- * zeroes r0/g0/b0 for otz>=406) and LogTerrainRow() dumps one pose-aligned row per frame. This
- * answers directly whether our terrain otz is really high enough to darken to black at the
- * matched opening pose (camera matrix already confirmed == real hardware). Env-gated
- * (VH_TERRAIN_LOG); the call site itself is a #ifdef PC_DEBUG_TERRAIN_LOG (TERRAIN_LOG=1 build),
- * so the matching build is untouched. */
+/* Terrain OTZ probe (VH_TERRAIN_LOG): RenderMapTile / RenderEdgeMapTile (core/graphics.c) call
+ * PC_DebugTerrainTile per drawn tile with post-clamp otz and vertex-0 colour, accumulating per-frame
+ * min/max/mean otz and black-tile count (distance-darkening zeroes r0/g0/b0 for otz>=406). */
 static FILE *s_terrFile = NULL;
 static int s_terrCount = 0, s_terrBlack = 0, s_terrOtzSum = 0;
 static int s_terrOtzMin = 0x7fffffff, s_terrOtzMax = 0;
@@ -489,12 +442,9 @@ static void LogTerrainRow(void) {
     s_terrOtzMin = 0x7fffffff; s_terrOtzMax = 0;
 }
 
-/* AVSZ sprite-path probe (thread: which routine draws the opening characters?). AddObjPrim4
- * (core/object.c) uses RotAverage4 => AVSZ otz (= sz3/4-ish), so its sprites interleave with terrain,
- * unlike the raw-sz3 RenderUnitSprite path. If the demo-opening characters are drawn here, their
- * otz/otIdx will land in the terrain band; if AddObjPrim4 isn't called during the opening, our
- * build is missing the intro path entirely. Env-gated (VH_OBJPRIM4_LOG); the call site is
- * PC_DEBUG_SPRITE_LOG (SPRITE_LOG=1 build) so the matching build is untouched. */
+/* AVSZ sprite-path probe (VH_OBJPRIM4_LOG): AddObjPrim4 (core/object.c) uses RotAverage4 for an
+ * AVSZ otz (approx sz3/4), so its sprites interleave with terrain, unlike the raw-sz3
+ * RenderUnitSprite path; logs gfx/otz/otIdx/screen-pos for every AddObjPrim4 call. */
 static FILE *s_op4File = NULL;
 
 void PC_DebugObjPrim4Log(int gfx, int otz, int otIdx, int sx, int sy, int otOfs) {
@@ -512,12 +462,9 @@ void PC_DebugObjPrim4Log(int gfx, int otz, int otIdx, int sx, int sy, int otOfs)
     fflush(s_op4File);
 }
 
-/* Opaque-sprite gfx diagnostic (casting-blob investigation). core/object.c's AddObjPrim* variants take
- * the OPAQUE branch (poly->tpage = gGfxTPageIds[gfx]) when d.sprite.semiTrans==0; the blob is a mesh
- * of those, some resolving to tpage 0x0000 (gGfxTPageIds[gfx]==0 -> samples framebuffer page 0). This
- * logs gfx + resolved tpage + owning effect functionIndex + screen pos, so we can (a) filter by the
- * blob's screen location to read its gfx, and (b) find which gfx's gGfxTPageIds is 0 and why. Env-gated
- * VH_OPAQUE_GFX_LOG; call site is #ifdef PC_DEBUG_SPRITE_LOG so the matching build is untouched. */
+/* Opaque-sprite gfx diagnostic (VH_OPAQUE_GFX_LOG): core/object.c's AddObjPrim* variants take the
+ * OPAQUE branch (poly->tpage = gGfxTPageIds[gfx]) when d.sprite.semiTrans==0; logs gfx + resolved
+ * tpage + owning functionIndex + screen pos, so a tpage of 0 traces back to its gfx. */
 static FILE *s_opgFile = NULL;
 void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy) {
     static int enabled = -1;
@@ -532,12 +479,9 @@ void PC_DebugOpaqueGfx(int gfx, int tpage, int fn, int sx, int sy) {
     fflush(s_opgFile);
 }
 
-/* Terrain projection diagnostic (terrain-collapse / pull-to-center investigation). RenderMapTile
- * calls this with a tile's 4 input model vertices right after the 4 corners are projected; we read
- * back what each corner projected to from the GTE ring (PC_GteProjEntry) plus H/OFX/OFY, so we can
- * compute the exact spread SX-OFX = (n*IR1)>>16 = H*IR1/SZ3 and see whether H, SZ3, or IR is
- * collapsing the spread toward the centre. One tile per frame (first RenderMapTile call), env-gated
- * (VH_TERRAINPROJ_LOG); the call site is #ifdef PC_DEBUG_TERRAIN_LOG so the matching build is untouched. */
+/* Terrain projection diagnostic (VH_TERRAINPROJ_LOG, one tile/frame): RenderMapTile calls this with
+ * a tile's 4 input vertices right after projection; reads back each corner from the GTE ring
+ * (PC_GteProjEntry) plus H/OFX/OFY so SX-OFX = H*IR1/SZ3 is fully reconstructable. */
 static FILE *s_tprojFile = NULL;
 
 void PC_DebugTerrainProjLog(int v0x, int v0y, int v0z, int v1x, int v1y, int v1z,
@@ -581,12 +525,9 @@ void PC_DebugTerrainProjLog(int v0x, int v0y, int v0z, int v1x, int v1y, int v1z
     fflush(s_tprojFile);
 }
 
-/* Full projected sprite-quad log (flip-vs-occlusion investigation). RenderUnitSprite calls this
- * right after RotTransPers4 sets the 4 quad corners, for every DRAWN unit sprite (past the otIdx
- * gate). With all 4 corners we can read the actual quad geometry: whether the "top-half crop" is a
- * well-formed quad occluded by terrain vs a malformed/degenerate quad; whether the "flip" is a
- * corner-X-order reversal; and whether both correlate with the same otz(=SZ3) threshold. Env-gated
- * (VH_SPRITE_QUAD_LOG); call site is #ifdef PC_DEBUG_SPRITE_LOG (SPRITE_LOG=1 build). */
+/* Full projected sprite-quad log (VH_SPRITE_QUAD_LOG): RenderUnitSprite calls this right after
+ * RotTransPers4 sets the 4 quad corners, for every DRAWN unit sprite -- the corners fully reconstruct
+ * the quad: a well-formed occluded crop vs a malformed quad, a corner-X-order flip. */
 static FILE *s_squadFile = NULL;
 
 void PC_DebugSpriteQuadLog(int gfx, int otz, int otIdx, int facingLeft,
@@ -599,10 +540,9 @@ void PC_DebugSpriteQuadLog(int gfx, int otz, int otIdx, int facingLeft,
     if (s_squadFile == NULL) {
         s_squadFile = fopen("vh_sprite_quad.csv", "w");
         if (s_squadFile == NULL) return;
-        /* pitch/yaw = gCameraRotation.vx/vy; facingLeft is driven ENTIRELY by
-         * dir = ((yaw + direction + coords0z) & 0xfff) >> 10; facingLeft = !(dir==0||dir==1).
-         * Logging the three raw inputs lets us reconstruct facingLeft and diff it against
-         * BizHawk at a matched pose (see 41-sprite-orientation-baseline.lua). */
+        /* pitch/yaw = gCameraRotation.vx/vy; facingLeft is driven entirely by dir = ((yaw +
+         * direction + coords0z) & 0xfff) >> 10; facingLeft = !(dir==0||dir==1). Logging the three
+         * raw inputs makes facingLeft reconstructable against a matched hardware pose. */
         fprintf(s_squadFile, "frame,pitch,yaw,gfx,otz,otIdx,facingLeft,direction,coords0z,facingFront,"
                             "tileX,tileZ,x0,y0,x1,y1,x2,y2,x3,y3");
         { int c; for (c = 0; c < 4; c++)
@@ -625,10 +565,9 @@ void PC_DebugSpriteQuadLog(int gfx, int otz, int otIdx, int facingLeft,
     fflush(s_squadFile);
 }
 
-/* VH_FRAME_TIME=1: split each VSync-to-VSync interval into WORK (logic + GTE + raster + present =
- * time from the previous VSync's return to this call) vs IDLE (this call's pacing delay). Mean
- * over 120 frames, tagged with the VSync mode + current battle speed. Complement of
- * VH_RASTER_TIME / VH_PRESENT_TIME: work - raster - present = game-side cost. */
+/* VH_FRAME_TIME=1: splits each VSync-to-VSync interval into WORK (logic + GTE + raster + present,
+ * since the previous VSync return) vs IDLE (this call's pacing delay). Mean over 120 frames, tagged
+ * with VSync mode + battle speed; complement of VH_RASTER_TIME / VH_PRESENT_TIME. */
 static int s_ftOn = -1; static double s_ftWork, s_ftIdle; static unsigned s_ftN;
 static double FtNowMs(void) {
     return (double)SDL_GetPerformanceCounter() * 1000.0 / (double)SDL_GetPerformanceFrequency();
@@ -641,15 +580,8 @@ static double FtNowMs(void) {
 void PC_DiagFrameEntry(int mode) {
     static double lastEntry, idleSum; static int lastMode;
     double now;
-    /* Dev-only test aid (exchange/102 P2 evaluation, user-requested): VH_DEBUG_MENU=1 turns
-     * the title screen into the retail JP debug-menu hub -- idle ~1.5s at the title and
-     * Objf414's menu opens (battle-map warp, scene-select Objf584), replacing the gdb-forced
-     * state flips used during bring-up. Waits until the title has been VISIBLE for 90 idle
-     * frames (secondary==2, state3 counting), so window assets/backdrop are always loaded --
-     * the same settle rule that fixed the probe's render race. Off by default; documented in
-     * OPTIONS.md since 2.0.0 (with the warp-state / unsupported-saves caveats).
-     * BOTH regions since exchange/107 (2026-08-22): the US build carries the translated
-     * scene selector + restored hub states, PC_FEAT-gated in the game trees. */
+    /* Dev-only test aid: VH_DEBUG_MENU=1 turns the title screen into the retail JP debug-menu hub. See
+     * docs/pc-port/subsystems/kernel.md, "Gotchas / notes". */
     {
         static int s_dbgMenu = -1;
         if (s_dbgMenu < 0) { const char *e = getenv("VH_DEBUG_MENU"); s_dbgMenu = (e && atoi(e) != 0) ? 1 : 0; }
@@ -703,10 +635,9 @@ unsigned int PC_SmokePadHold(void) {
     return 0;
 }
 
-/* VH_SMOKE boot harness, VSync half (tools/regress/smoke_boot.sh): exit 0 the moment the title
- * screen is reached -- proving the whole boot chain (data-segment constructors, disc mount, MDEC
- * logo movie, SPU/XA init, font, rasterizer) ran; exit 1 on timeout with the stuck state. Runs
- * headless under SDL_VIDEODRIVER=dummy (window-less present is already a no-op). */
+/* VH_SMOKE boot harness, VSync half: exit 0 the moment the title screen is reached, proving the
+ * whole boot chain (data-segment constructors, disc mount, MDEC logo, SPU/XA init, font,
+ * rasterizer) ran; exit 1 on timeout with the stuck state. Headless under SDL_VIDEODRIVER=dummy. */
 void PC_SmokeFrame(void) {
     static int smoke = -1; static unsigned smokeFrames;
     if (smoke < 0) { const char *e = getenv("VH_SMOKE"); smoke = e && atoi(e) != 0; }
@@ -752,13 +683,9 @@ void PC_DiagFps(int mode) {
     }
 }
 
-/* Witness-pass logger (decomp-improvement track): one line per gSpellsEx FX dispatch.
- * Compiled into battle/executors.c only under `make link SPELLFX_LOG=1`; runtime-gated on
- * VH_SPELLFX_LOG. Writes vh_spellfx_log.txt and echoes to stderr. The handler NAME is
- * resolved from the live function pointer via dladdr (the port links -rdynamic), so the
- * log shows exactly which Objf* symbol ran -- a cast-everything Vandalier session then
- * validates every table-derived FX name in-game. On Windows (no dladdr) the index alone
- * is logged. */
+/* Logs one line per gSpellsEx FX dispatch (build SPELLFX_LOG=1, enable VH_SPELLFX_LOG) to
+ * vh_spellfx_log.txt and stderr; the handler NAME is resolved from the live function pointer via
+ * dladdr (the port links -rdynamic). On Windows (no dladdr) the index alone is logged. */
 #ifndef _WIN32
 #include <dlfcn.h>
 #endif

@@ -1,11 +1,6 @@
-/*
- * PC-backend replacement for the PSX SDK's sys/file.h open-flag constants.
- * Clean-room: the real header's underlying FREAD/FWRITE/FCREAT bit values
- * aren't reproduced anywhere in this project's tree (not needed -- these
- * flags are never serialized or compared against a hardcoded value, only
- * used symbolically by core/card.c), so this defines its own consistent bit
- * assignment rather than guessing Sony's.
- */
+/* PC-backend replacement for the PSX SDK's sys/file.h open-flag constants. Clean-room: core/card.c
+ * only uses these symbolically (never serialized or compared against a constant), so this defines
+ * its own consistent bit assignment rather than reproducing Sony's. */
 #ifndef PLATFORM_PC_PSYQ_SYS_FILE_H
 #define PLATFORM_PC_PSYQ_SYS_FILE_H
 

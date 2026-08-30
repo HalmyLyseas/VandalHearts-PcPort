@@ -48,9 +48,8 @@ void main(void) {
    while (1) {
 #ifdef PC_PORT
       /* Overlay RETURN TO TITLE is deferred to here -- the only point where no game code is
-       * mid-frame -- so the state flip can't race a live loader (see pc_balance.c). Must run
-       * BEFORE UpdateState: the title state's entry then resets leftover objects before
-       * Obj_Execute can run one. */
+       * mid-frame -- so the state flip can't race a live loader (see pc_balance.c). Must run BEFORE
+       * UpdateState: the title state's entry resets leftover objects before Obj_Execute runs one. */
       { extern void PC_ApplyReturnToTitle(void); PC_ApplyReturnToTitle(); }
 #endif
       UpdateState();
@@ -454,14 +453,9 @@ void State_EventScene(void) {
 }
 
 #ifdef PC_FEAT
-/* exchange/107: the JP build's development jump-to-anywhere selector (three paged families --
- * events 0-94, world-map positions, towns), ported from jp/src/core/main.c with the SJIS page
- * literals translated to ASCII (the US font carries only 209 glyphs -- kanji don't exist on
- * this disc). Logic is UNCHANGED from the JP original; town pages use the same "#NN"
- * string-table escapes, which resolve to the US localization's own town names. Reached from
- * the retail debug menu's SELECT B entry (states/debug_menu.c, same gate); the menu itself
- * remains dev-only via VH_DEBUG_MENU=1 (pc_diag.c). US retail ships slot 584 as an empty stub
- * (the #else). */
+/* The JP build's development jump-to-anywhere selector (events 0-94, world-map positions, towns),
+ * carried over from jp/src/core/main.c with the SJIS page literals as ASCII (this disc's font has no
+ * kanji); logic unchanged. Reached from the debug menu's SELECT B entry (VH_DEBUG_MENU=1). */
 void Objf584_DebugSceneSelect(Object *obj) {
    switch (obj->state) {
    case 0:

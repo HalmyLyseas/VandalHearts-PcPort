@@ -50,11 +50,9 @@ static u8 sDefenseDownStr[] = "\x96\x68\x8c\xe4\x97\xcd\n"
                               "\x81\x7c\x81\x40\x81\x40";
 
 #ifdef PERMUTER
-/* PC build only (exchange/103 A3): the copy loops below move a FIXED 13 bytes, but the JP
- * string is only 11 chars + NUL = 12 -- shorter than the US text the loop was sized for.
- * [13] makes that 13th byte part of the object; it reads 0x00, which is exactly what
- * hardware has at +12 (SLPM_860.07 @0x801f8b88, objdump-verified). Matching build
- * keeps the implicit size. */
+/* PC build only: the copy loops below move a fixed 13 bytes, but the JP string is only 11 chars +
+ * NUL = 12, shorter than the loop's US-sized length. [13] makes the 13th byte part of the object;
+ * it reads 0x00, matching hardware's byte at +12 (SLPM_860.07 @0x801f8b88). */
 static u8 sIncompatibleStr[13] = "\x91\x95\x94\xf5\n"      /* 装備\n    */
                                  "\x81\x40\x95\x73\x89\xc2"; /* 　不可  */
 #else
@@ -992,10 +990,9 @@ void Objf406_ShopOrDepot(Object *obj) {
             SlideWindowTo(0x3d, 350, 170);
          }
          #ifdef PC_PORT
-         /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit
-          * slot (partyIdx2 still -1) -- harmless garbage on PSX (overwritten by the i >= 13
-          * branch below), a wild read on PC. Skip when invalid; that branch sets the
-          * portrait to 0 in exactly that case. Same gated guard as the US tree. */
+         /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot
+          * (partyIdx2 still -1); harmless on PSX (the i >= 13 branch below overwrites it) but a
+          * wild index on a host. Skip the read when invalid; that branch sets 0 anyway. */
          if (OBJ.partyIdx2 >= 0)
             gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
          #else
@@ -1414,10 +1411,9 @@ void Objf406_ShopOrDepot(Object *obj) {
          OBJ.partyIdx2 = i;
       }
       #ifdef PC_PORT
-      /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit
-       * slot (partyIdx2 still -1) -- harmless garbage on PSX (overwritten by the i >= 13
-       * branch below), a wild read on PC. Skip when invalid; that branch sets the
-       * portrait to 0 in exactly that case. Same gated guard as the US tree. */
+      /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot
+       * (partyIdx2 still -1); harmless on PSX (the i >= 13 branch below overwrites it) but a
+       * wild index on a host. Skip the read when invalid; that branch sets 0 anyway. */
       if (OBJ.partyIdx2 >= 0)
          gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
       #else
@@ -1788,10 +1784,9 @@ void Objf406_ShopOrDepot(Object *obj) {
          OBJ.partyIdx2 = i;
       }
       #ifdef PC_PORT
-      /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit
-       * slot (partyIdx2 still -1) -- harmless garbage on PSX (overwritten by the i >= 13
-       * branch below), a wild read on PC. Skip when invalid; that branch sets the
-       * portrait to 0 in exactly that case. Same gated guard as the US tree. */
+      /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot
+       * (partyIdx2 still -1); harmless on PSX (the i >= 13 branch below overwrites it) but a
+       * wild index on a host. Skip the read when invalid; that branch sets 0 anyway. */
       if (OBJ.partyIdx2 >= 0)
          gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
       #else
@@ -2067,10 +2062,9 @@ void Objf406_ShopOrDepot(Object *obj) {
             SlideWindowTo(0x3d, 350, 170);
          }
          #ifdef PC_PORT
-         /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit
-          * slot (partyIdx2 still -1) -- harmless garbage on PSX (overwritten by the i >= 13
-          * branch below), a wild read on PC. Skip when invalid; that branch sets the
-          * portrait to 0 in exactly that case. Same gated guard as the US tree. */
+         /* Retail reads gUnits[-1] when the first highlighted target is a convoy/non-unit slot
+          * (partyIdx2 still -1); harmless on PSX (the i >= 13 branch below overwrites it) but a
+          * wild index on a host. Skip the read when invalid; that branch sets 0 anyway. */
          if (OBJ.partyIdx2 >= 0)
             gState.unitListPortraitId = gUnitPortraitIds[gUnits[OBJ.partyIdx2].unitId];
          #else

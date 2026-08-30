@@ -5,12 +5,7 @@
 #include "state.h"
 #include "card.h"
 
-/*typedef struct MapObject {
-   s16 objf;
-   s16 z;
-   s16 x;
-   s16 param; // Item for chests, gfx for trees
-} MapObject;*/
+/* MapObject: {objf, z, x, param} -- param is the item for chests, the gfx index for trees. */
 
 typedef s16 MapObject[4];
 

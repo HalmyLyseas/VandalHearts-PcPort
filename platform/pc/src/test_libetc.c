@@ -1,8 +1,6 @@
-/* Standalone proof-of-concept: exercises the PC libetc.h backend directly,
- * without pulling in the rest of the game (proves the swap mechanism and
- * the implementation's runtime behavior in isolation). Not part of the
- * real game build -- delete once the interface is wired into the actual
- * game loop. */
+/* Standalone proof-of-concept: exercises the PC libetc.h backend directly, without pulling in the
+ * rest of the game, to check the implementation's runtime behavior in isolation. Not part of the
+ * game build. */
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include "PsyQ/libetc.h"

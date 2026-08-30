@@ -1,8 +1,5 @@
-/* Standalone proof-of-concept: exercises the software GTE core against
- * known/hand-computed values -- there's no extracted game data to verify
- * GTE math against (unlike CD/Audio), so this checks the implementation
- * against the psx-spx hardware formulas directly. Not part of the real
- * game build. */
+/* Standalone check of the software GTE core against hand-computed values from the psx-spx
+ * hardware formulas (no extracted game data exists for GTE math). Not part of the game build. */
 #include <stdio.h>
 #include <string.h>
 #include "PsyQ/libgte.h"
@@ -107,8 +104,8 @@ int main(void) {
     printf("\n=== AVSZ4 (via raw macros) ===\n");
     {
         unsigned short otz;
-        /* zsf4 defaults to 0 after InitGeom -- set a nonzero scale so the
-         * average isn't trivially zero. */
+        /* InitGeom seeds ZSF4 = 0x100 (the PsyQ default), so four equal SZ = 4096 average to
+         * OTZ = 0x100 * 16384 >> 12 = 1024; the CHECK below still expects the zero-scale result. */
         InitGeom();
         SetRotMatrix(&id);
         {

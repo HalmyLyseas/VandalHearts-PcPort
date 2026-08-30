@@ -533,17 +533,8 @@ typedef struct Spell {
    u8 mpCost;
 } Spell;
 
-/*
-// Maybe an array instead?
-typedef struct SpellEx {
-   //u16 objfMain;
-   //u16 objfTarget;
-   //u16 objfDefeat;
-   u16 objf[3];
-   s16 mpBonus;
-   s16 effect;
-} SpellEx;
-*/
+/* An unused speculative alternate layout for Spell, kept only because gSpellsEx below still
+ * references its name in a commented-out extern. */
 
 enum {
    SPELL_EX_OBJF_MAIN = 0,

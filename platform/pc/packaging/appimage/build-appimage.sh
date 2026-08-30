@@ -1,25 +1,10 @@
 #!/usr/bin/env bash
-#
-# Build a self-contained VandalHearts-x86_64.AppImage from an already-built binary.
-#
+# Builds a self-contained VandalHearts-x86_64.AppImage from an already-built binary.
 #   ./build-appimage.sh [path/to/vandalhearts_pc]
-#
-# Default binary: platform/pc/build/vandalhearts_pc (the `make link` / CMake 64-bit output).
-#
-# Two-tool pipeline, each doing exactly one job (far more predictable than linuxdeploy's
-# bundled --output appimage plugin chain):
-#   1. linuxdeploy  -- populate AppDir: copy the exe, bundle SDL2/OpenAL + their PRIVATE deps,
-#                      fix rpaths, drop in the .desktop + icon, generate AppRun. Its curated
-#                      exclude-list deliberately leaves glibc / libGL / libstdc++ to the host.
-#   2. appimagetool -- pack the finished AppDir into a single squashfs .AppImage.
-#
-# APPIMAGE_EXTRACT_AND_RUN=1 lets both tools run even where FUSE is unavailable.
-#
-# NOTE ON GLIBC BASELINE: this bundles nothing from glibc, so the resulting AppImage still
-# requires the HOST's glibc >= the build machine's. Built on bleeding-edge Arch it will refuse
-# to start on older distros ("GLIBC_2.XX not found"). For a broadly-portable release, run this
-# INSIDE an old-glibc environment (e.g. an Ubuntu 20.04 = glibc 2.31 container) against a binary
-# compiled there. See docs/cross-platform.md.
+# Default: platform/pc/build/vandalhearts_pc. See docs/cross-platform.md, "Building a release".
+
+# This bundles nothing from glibc, so the AppImage requires the host's glibc to be at least
+# the build machine's. See docs/cross-platform.md, "Runtime requirements (the glibc floor)".
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

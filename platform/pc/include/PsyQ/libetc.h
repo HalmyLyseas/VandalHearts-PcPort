@@ -1,14 +1,6 @@
-/*
- * PC-backend replacement for the PSX SDK's libetc.h pad/vsync interface.
- *
- * Clean-room reimplementation: only the function signatures and controller
- * bit values are reproduced here (these are functional facts dictated by
- * the PS1 controller protocol and this project's own call sites, not
- * copyrightable expression) -- no text from Sony's original header. Scope
- * is intentionally limited to what the game's source and include/common.h
- * actually use (per exchange/02-phase-c-interface-contract.md); extend if
- * a future file needs more of the real libetc.h surface.
- */
+/* PC-backend replacement for the PSX SDK's libetc.h pad/vsync interface: a clean-room
+ * reimplementation. Only the function signatures and controller bit values are reproduced
+ * (functional facts dictated by the PS1 controller protocol, not copyrightable expression). */
 #ifndef PLATFORM_PC_PSYQ_LIBETC_H
 #define PLATFORM_PC_PSYQ_LIBETC_H
 

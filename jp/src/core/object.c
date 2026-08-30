@@ -174,10 +174,9 @@ void Obj_Execute(void) {
    for (i = 0; i < OBJ_DATA_CT; i++, obj++) {
       if (obj->functionIndex != OBJF_NULL) {
 #ifdef PC_PORT
-         /* Debug-menu warp guard (2026-08-22, gdb: wild jump into sUnitAnimDataBlob from this
-          * dispatch): a warped scene leaves stale objects whose functionIndex is out of the
-          * 804-entry table, so the indexed load fetched a pointer from adjacent DATA and jumped
-          * into it. Clear the slot instead of dispatching. Unreachable in normal play. */
+         /* Debug-menu warp guard: a warped scene leaves stale objects whose functionIndex is
+          * outside the 804-entry table, and the indexed load would fetch a pointer from adjacent
+          * DATA and jump into it. Clear the slot instead. Unreachable in normal play. */
          if ((u32)obj->functionIndex >= (u32)(sizeof(gObjFunctionPointers) / sizeof(gObjFunctionPointers[0]))) {
             obj->functionIndex = OBJF_NULL;
             continue;
@@ -214,12 +213,9 @@ void Obj_ResetAll(void) {
 }
 
 #ifdef PC_PORT
-/* Pool exhausted: retail returns NULL and every caller stores fields through it unchecked -- on
- * PSX those writes land in low kernel RAM and the "object" simply never executes; on PC a NULL
- * write is a fatal SIGSEGV (seen live 2026-08-22 on US: overlay RETURN TO TITLE mid-demo-event-
- * load overflowed the pool). A static sacrificial Object reproduces the hardware OUTCOME -- the
- * writes are absorbed, the object is not in gObjectArray so it never runs -- without the
- * kernel-corruption roulette. Same gated fix as the US tree (src/core/object.c). */
+/* Pool exhausted: retail returns NULL and callers store through it unchecked (on PSX the writes
+ * land in low kernel RAM and the object never runs; on PC they are a fatal SIGSEGV). A static
+ * sacrificial Object absorbs the writes, is never in gObjectArray, and is re-zeroed per handout. */
 static Object s_objPoolOverflow;
 static Object *Obj_PoolOverflow(void) {
    memset(&s_objPoolOverflow, 0, sizeof(s_objPoolOverflow));
@@ -235,12 +231,9 @@ Object *Obj_GetUnused(void) {
    for (i = 20; i < OBJ_DATA_CT; i++, p++) {
       if (p->functionIndex == OBJF_NULL) {
 #ifdef PC_PORT
-         /* PC_PORT: this zeroes Object words 2..23 -- everything from `functionIndex` to the
-          * end of the struct, preserving `vec` (words 0..1). The literal word count is
-          * 32-bit-only: the `d` union holds pointers, so sizeof(Object) GROWS under -m64 and
-          * words 2..23 stop short, leaving the union tail uninitialised -- silent corruption.
-          * memset derives the range from the struct itself: width-independent, same
-          * semantics. Same gated fix as the US tree (src/core/object.c). */
+         /* Zeroes everything from `functionIndex` to the end of the struct, preserving `vec`. The
+          * retail 22-word count is 32-bit-only (the `d` union holds pointers, so sizeof(Object)
+          * grows on LP64); the memset derives the range from the struct. See docs/width-bugs.md. */
          memset(&p->functionIndex, 0,
                 sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
 #else
@@ -284,12 +277,9 @@ Object *Obj_GetFirstUnused(void) {
    for (i = 0; i < OBJ_DATA_CT; i++, p++) {
       if (p->functionIndex == OBJF_NULL) {
 #ifdef PC_PORT
-         /* PC_PORT: this zeroes Object words 2..23 -- everything from `functionIndex` to the
-          * end of the struct, preserving `vec` (words 0..1). The literal word count is
-          * 32-bit-only: the `d` union holds pointers, so sizeof(Object) GROWS under -m64 and
-          * words 2..23 stop short, leaving the union tail uninitialised -- silent corruption.
-          * memset derives the range from the struct itself: width-independent, same
-          * semantics. Same gated fix as the US tree (src/core/object.c). */
+         /* Zeroes everything from `functionIndex` to the end of the struct, preserving `vec`. The
+          * retail 22-word count is 32-bit-only (the `d` union holds pointers, so sizeof(Object)
+          * grows on LP64); the memset derives the range from the struct. See docs/width-bugs.md. */
          memset(&p->functionIndex, 0,
                 sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
 #else
@@ -336,12 +326,9 @@ Object *Obj_GetLastUnusedSkippingTail(s32 tailEntriesToSkip) {
    for (i = 0; i < (OBJ_DATA_CT - 20) - tailEntriesToSkip; i++, p--) {
       if (p->functionIndex == OBJF_NULL) {
 #ifdef PC_PORT
-         /* PC_PORT: this zeroes Object words 2..23 -- everything from `functionIndex` to the
-          * end of the struct, preserving `vec` (words 0..1). The literal word count is
-          * 32-bit-only: the `d` union holds pointers, so sizeof(Object) GROWS under -m64 and
-          * words 2..23 stop short, leaving the union tail uninitialised -- silent corruption.
-          * memset derives the range from the struct itself: width-independent, same
-          * semantics. Same gated fix as the US tree (src/core/object.c). */
+         /* Zeroes everything from `functionIndex` to the end of the struct, preserving `vec`. The
+          * retail 22-word count is 32-bit-only (the `d` union holds pointers, so sizeof(Object)
+          * grows on LP64); the memset derives the range from the struct. See docs/width-bugs.md. */
          memset(&p->functionIndex, 0,
                 sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
 #else
@@ -1375,10 +1362,9 @@ void UpdateObjAnimation(Object *obj) {
    animData = (s16 *)obj->d.sprite.animData;
 
 #ifdef PC_PORT
-   /* PC_PORT: obj->d.sprite.animData can be NULL (uninitialised sprite). PSX read 0 through
-    * NULL; redirect NULL to an all-zero table so every animData[] index yields 0 -- the
-    * delay/idx + terminator logic caps animDataIdx small, so size-16 can never be
-    * over-indexed. Same gated guard class as the US tree (src/core/object.c). */
+   /* obj->d.sprite.animData can be NULL (uninitialised sprite); PSX reads 0 through NULL, so
+    * redirect NULL to an all-zero table. The delay/idx + terminator logic caps animDataIdx small,
+    * so a size-16 table is never over-indexed. See docs/memory-safety.md, "The three console-isms". */
    {
       static const s16 s_nullAnim[16] = {0};
       if (animData == NULL) animData = (s16 *)s_nullAnim;
@@ -1434,10 +1420,9 @@ void UpdateMultisizeObjAnimation(Object *obj) {
    animData = (s16 *)obj->d.sprite.animData;
 
 #ifdef PC_PORT
-   /* PC_PORT: obj->d.sprite.animData can be NULL (uninitialised sprite). PSX read 0 through
-    * NULL; redirect NULL to an all-zero table so every animData[] index yields 0 -- the
-    * delay/idx + terminator logic caps animDataIdx small, so size-16 can never be
-    * over-indexed. Same gated guard class as the US tree (src/core/object.c). */
+   /* obj->d.sprite.animData can be NULL (uninitialised sprite); PSX reads 0 through NULL, so
+    * redirect NULL to an all-zero table. The delay/idx + terminator logic caps animDataIdx small,
+    * so a size-16 table is never over-indexed. See docs/memory-safety.md, "The three console-isms". */
    {
       static const s16 s_nullAnim[16] = {0};
       if (animData == NULL) animData = (s16 *)s_nullAnim;
@@ -1491,10 +1476,9 @@ void UpdateUnitSpriteAnimation(Object *obj) {
    s8 *animData = (s8 *)obj->d.sprite.animData;
 
 #ifdef PC_PORT
-   /* PC_PORT: obj->d.sprite.animData can be NULL (uninitialised sprite). PSX read 0 through
-    * NULL; redirect NULL to an all-zero table so every animData[] index yields 0 -- the
-    * delay/idx + terminator logic caps animDataIdx small, so size-16 can never be
-    * over-indexed. Same gated guard class as the US tree (src/core/object.c). */
+   /* obj->d.sprite.animData can be NULL (uninitialised sprite); PSX reads 0 through NULL, so
+    * redirect NULL to an all-zero table. The delay/idx + terminator logic caps animDataIdx small,
+    * so a size-16 table is never over-indexed. See docs/memory-safety.md, "The three console-isms". */
    {
       static const s8 s_nullAnim[16] = {0};
       if (animData == NULL) animData = (s8 *)s_nullAnim;

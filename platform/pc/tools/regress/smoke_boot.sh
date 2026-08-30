@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
-# smoke_boot.sh [path-to-exe] -- headless boot-to-title smoke test (~20-30s).
-#
-# Boots the real game with VH_SMOKE=1: the port exits 0 the moment the title screen is reached,
-# which proves the whole boot chain end-to-end -- data-segment constructors, disc auto-detect +
-# mount, the MDEC logo movie, SPU/XA init, the kanji font, and the rasterizer. Exit 1 = the boot
-# stalled (the failure mode an empty/broken data segment or a bad disc path produces). Runs
-# window-less (SDL dummy video driver; the present path no-ops without a GL context) and with
-# OpenAL's null backend so no audio device is needed -- safe on a headless box or in a container.
-#
-# Needs the same runtime data a normal run does: your own disc image (auto-detected, or set
-# VH_DISC_IMAGE). Run after any change that could affect boot: data-segment/generator changes,
-# backend init order, disc handling, movie/MDEC, SPU init.
+# smoke_boot.sh [path-to-exe] -- headless boot-to-title smoke test (~20-30s). VH_SMOKE=1 makes the port
+# exit 0 the moment the title screen is reached, proving the whole boot chain; exit 1 = the boot stalled.
+# Needs your own disc image (auto-detected, or VH_DISC_IMAGE). Details in README.md.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXE="${1:-$HERE/../../build/vandalhearts_pc}"

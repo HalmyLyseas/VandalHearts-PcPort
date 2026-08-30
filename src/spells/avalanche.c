@@ -1,8 +1,6 @@
-/* Avalanche FX2/FX3 (Objf317_338 rockfall + Objf084 dust cloud; FX1 and the falling rock
- * live in spells/casting_main.c, the stray boulder in spells/faerie.c) plus Roman Fire
- * FX2/FX3 (Objf344_345 -- FX1 is in spells/dark_fire.c) and the Objf339_349 rubble
- * spawner. Dispatched via gSpellsEx (see spells/casting_main.c). Noop_8008bca8 is an
- * unreferenced zero-arg stub kept for byte/ordering exactness. */
+/* Avalanche FX2/FX3 (Objf317_338 rockfall, Objf084 dust cloud), Roman Fire FX2/FX3
+ * (Objf344_345) and the Objf339_349 rubble spawner, all dispatched via gSpellsEx
+ * (docs/decomp/spell-fx-dispatch.md); the other pieces of both spells sit in sibling files. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

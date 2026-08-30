@@ -111,6 +111,30 @@ Blocking opcodes are marked ⏸.
 | `0x7a` | set message text, variant 2 (box 1) |
 | `99` | end of script — the entity parks (no case matches; the sprite keeps rendering) |
 
+## Map data files (`M_*.PRS`)
+
+Map geometry ships compressed as `M_*.PRS` files, decoded by `UnpackMapFileData`
+(`src/maps/unpack.c`). One control byte supplies eight mode bits, each selecting either a
+literal byte or one of three back-reference forms: a 10-bit absolute index into the
+dictionary, a 4-bit relative distance, or a run of up to 70 literals. The dictionary is a
+1 KB ring (primed with a write cursor starting at 990) that lives in the PS1's fast RAM at
+`0x1f800000` — see [memory-safety.md](../memory-safety.md) for how the port's US and
+Japanese trees handle that hardware address differently. `ProcessMapFileData` reads the
+4-byte length header and unpacks into `gMapDataPtr`; `LoadMap`
+(`src/states/game_setup.c`) is the only caller.
+
+`src/maps/unpack.c` also owns two small map-scenery handlers reached through event opcodes
+`0x52`/`0x53`: `Objf683_AdjustFaceElevation` and `Objf684_SlidingFace` both index a
+76-entry sliding-face table by `obj->state2` and move one tile-model face's elevation —
+the first in a single step, the second a few units per frame.
+
+From roughly its midpoint, the rest of the file is data: dozens of byte arrays in the
+unit-sprite animation format — `s8` (frameIdx, delay) pairs closed by a zero pair, plus
+5-byte records (opcodes `0x3b`/`0x3c`) carrying a per-frame position offset — gathered into
+the game's animation-set table. Entries come in front/back pairs because animation is
+indexed `animSet[animIdx + facingFront]`; `src/events/scene_loaders.c` passes these as
+event entities' base/alt animation sets.
+
 ## The `0x1d` spawn census
 
 Opcode `0x1d` is the escape hatch: it spawns **any** object by raw `gObjFunctionPointers`

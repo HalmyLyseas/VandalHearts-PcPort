@@ -174,10 +174,9 @@ void Obj_Execute(void) {
    for (i = 0; i < OBJ_DATA_CT; i++, obj++) {
       if (obj->functionIndex != OBJF_NULL) {
 #ifdef PC_PORT
-         /* Debug-menu warp guard (2026-08-22, gdb: wild jump into sUnitAnimDataBlob from this
-          * dispatch): a warped scene leaves stale objects whose functionIndex is out of the
-          * 804-entry table, so the indexed load fetched a pointer from adjacent DATA and jumped
-          * into it. Clear the slot instead of dispatching. Unreachable in normal play. */
+         /* Debug-menu warp guard: a warped scene leaves stale objects whose functionIndex is
+          * outside the 804-entry table, and the indexed load would fetch a pointer from adjacent
+          * DATA and jump into it. Clear the slot instead. Unreachable in normal play. */
          if ((u32)obj->functionIndex >= (u32)(sizeof(gObjFunctionPointers) / sizeof(gObjFunctionPointers[0]))) {
             obj->functionIndex = OBJF_NULL;
             continue;
@@ -214,12 +213,9 @@ void Obj_ResetAll(void) {
 }
 
 #ifdef PC_PORT
-/* Pool exhausted: retail returns NULL and every caller stores fields through it unchecked -- on
- * PSX those writes land in low kernel RAM and the "object" simply never executes; on PC a NULL
- * write is a fatal SIGSEGV (seen live 2026-08-22: overlay RETURN TO TITLE mid-demo-event-load
- * overflowed the pool, crash in SetupEventEntity). A static sacrificial Object reproduces the
- * hardware OUTCOME -- the writes are absorbed, the object is not in gObjectArray so it never
- * runs -- without the kernel-corruption roulette. Re-zeroed per handout like a real slot. */
+/* Pool exhausted: retail returns NULL and callers store through it unchecked (on PSX the writes
+ * land in low kernel RAM and the object never runs; on PC they are a fatal SIGSEGV). A static
+ * sacrificial Object absorbs the writes, is never in gObjectArray, and is re-zeroed per handout. */
 static Object s_objPoolOverflow;
 static Object *Obj_PoolOverflow(void) {
    memset(&s_objPoolOverflow, 0, sizeof(s_objPoolOverflow));
@@ -235,13 +231,9 @@ Object *Obj_GetUnused(void) {
    for (i = 20; i < OBJ_DATA_CT; i++, p++) {
       if (p->functionIndex == OBJF_NULL) {
 #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): this zeroes Object words 2..23 -- i.e. everything from
-          * `functionIndex` to the end of the struct, deliberately preserving `vec` (words 0..1).
-          * The literal word count is 32-bit-only: the `d` union holds a pointer
-          * (Object_Sprite.animData), so sizeof(Object) GROWS under -m64 and words 2..23 would
-          * stop short, leaving the tail of the union uninitialised -- a silent-corruption bug,
-          * not a crash. Expressed as a memset the range is derived from the struct itself, so it
-          * is pointer-width independent and keeps exactly the same semantics. */
+         /* Zeroes everything from `functionIndex` to the end of the struct, preserving `vec`. The
+          * retail 22-word count is 32-bit-only (the `d` union holds pointers, so sizeof(Object)
+          * grows on LP64); the memset derives the range from the struct. See docs/width-bugs.md. */
          memset(&p->functionIndex, 0,
                 sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
 #else
@@ -285,13 +277,9 @@ Object *Obj_GetFirstUnused(void) {
    for (i = 0; i < OBJ_DATA_CT; i++, p++) {
       if (p->functionIndex == OBJF_NULL) {
 #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): this zeroes Object words 2..23 -- i.e. everything from
-          * `functionIndex` to the end of the struct, deliberately preserving `vec` (words 0..1).
-          * The literal word count is 32-bit-only: the `d` union holds a pointer
-          * (Object_Sprite.animData), so sizeof(Object) GROWS under -m64 and words 2..23 would
-          * stop short, leaving the tail of the union uninitialised -- a silent-corruption bug,
-          * not a crash. Expressed as a memset the range is derived from the struct itself, so it
-          * is pointer-width independent and keeps exactly the same semantics. */
+         /* Zeroes everything from `functionIndex` to the end of the struct, preserving `vec`. The
+          * retail 22-word count is 32-bit-only (the `d` union holds pointers, so sizeof(Object)
+          * grows on LP64); the memset derives the range from the struct. See docs/width-bugs.md. */
          memset(&p->functionIndex, 0,
                 sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
 #else
@@ -338,13 +326,9 @@ Object *Obj_GetLastUnusedSkippingTail(s32 tailEntriesToSkip) {
    for (i = 0; i < (OBJ_DATA_CT - 20) - tailEntriesToSkip; i++, p--) {
       if (p->functionIndex == OBJF_NULL) {
 #ifdef PC_PORT
-         /* PC_PORT (Stage 2.3): this zeroes Object words 2..23 -- i.e. everything from
-          * `functionIndex` to the end of the struct, deliberately preserving `vec` (words 0..1).
-          * The literal word count is 32-bit-only: the `d` union holds a pointer
-          * (Object_Sprite.animData), so sizeof(Object) GROWS under -m64 and words 2..23 would
-          * stop short, leaving the tail of the union uninitialised -- a silent-corruption bug,
-          * not a crash. Expressed as a memset the range is derived from the struct itself, so it
-          * is pointer-width independent and keeps exactly the same semantics. */
+         /* Zeroes everything from `functionIndex` to the end of the struct, preserving `vec`. The
+          * retail 22-word count is 32-bit-only (the `d` union holds pointers, so sizeof(Object)
+          * grows on LP64); the memset derives the range from the struct. See docs/width-bugs.md. */
          memset(&p->functionIndex, 0,
                 sizeof(*p) - (unsigned long)((char *)&p->functionIndex - (char *)p));
 #else
@@ -1184,9 +1168,9 @@ void AddObjPrim2(u32 *ot, Object *obj) {
    s32 gfx;
 
 #ifdef PC_DEBUG_UI_LOG
-   /* Stage 2.3 (-m64 UI-invisibility probe): record EVERY call, including the ones the `hidden`
-    * test below rejects -- "never drawn" and "drawn off-screen" look identical on screen but are
-    * different bugs. See PC_DebugUiLog in pc_bootstrap.c. */
+   /* UI-invisibility probe: record EVERY call, including the ones the `hidden` test below rejects
+    * -- "never drawn" and "drawn off-screen" look identical on screen but are different bugs.
+    * See PC_DebugUiLog in pc_bootstrap.c. */
    { extern void PC_DebugUiLog(const char *, int, int, int, int, int, int, int, int);
      PC_DebugUiLog("prim2", obj->functionIndex, obj->d.sprite2.hidden, obj->d.sprite2.gfxIdx,
                    obj->d.sprite2.otOfs, obj->d.sprite2.coords[0].x, obj->d.sprite2.coords[0].y,
@@ -1451,12 +1435,9 @@ void UpdateObjAnimation(Object *obj) {
    animData = (s16 *)obj->d.sprite.animData;
 
 #ifdef PC_PORT
-   /* PC_PORT (Stage 2.3): obj->d.sprite.animData can be NULL (uninitialised sprite).
-    * PSX / the 2.2 fault handler read 0 through NULL; redirect a NULL table to an
-    * all-zero table so every animData[] index yields 0 -- bit-identical to the handler's
-    * per-read zeroing (the s8 delay/idx + terminator logic then caps animDataIdx small,
-    * so a size-16 zero table can never be over-indexed). Portable replacement for the
-    * x86-32 fault decoder. NULL sites: core/object.c:1342/1343/1368. See exchange/56. */
+   /* obj->d.sprite.animData can be NULL (uninitialised sprite); PSX reads 0 through NULL, so
+    * redirect NULL to an all-zero table. The delay/idx + terminator logic caps animDataIdx small,
+    * so a size-16 table is never over-indexed. See docs/memory-safety.md, "The three console-isms". */
    {
       static const s16 s_nullAnim[16] = {0};
       if (animData == NULL) animData = (s16 *)s_nullAnim;
@@ -1558,12 +1539,9 @@ void UpdateUnitSpriteAnimation(Object *obj) {
    s8 *animData = (s8 *)obj->d.sprite.animData;
 
 #ifdef PC_PORT
-   /* PC_PORT (Stage 2.3): obj->d.sprite.animData can be NULL (uninitialised unit sprite --
-    * same class as the gEvtEntities data-gen gap). PSX / the 2.2 fault handler read 0
-    * through NULL; redirect NULL to an all-zero table so every animData[] index yields 0,
-    * bit-identical to the handler's per-read zeroing (s8 delay/idx + the >=0x3b / 0-terminator
-    * logic caps animDataIdx small, so size-16 can't be over-indexed). NULL sites:
-    * core/object.c:1437/1449/1507/1516. See exchange/56. */
+   /* obj->d.sprite.animData can be NULL (uninitialised sprite); PSX reads 0 through NULL, so
+    * redirect NULL to an all-zero table. The delay/idx + terminator logic caps animDataIdx small,
+    * so a size-16 table is never over-indexed. See docs/memory-safety.md, "The three console-isms". */
    {
       static const s8 s_nullAnim[16] = {0};
       if (animData == NULL) animData = (s8 *)s_nullAnim;

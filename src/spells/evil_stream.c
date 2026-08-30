@@ -1,8 +1,6 @@
-/* Evil Stream spell effects: the skull-swarm FX2/FX3 (Objf307_324, Objf379 rock; FX1 is
- * in spells/casting_main.c) plus EvilStream_RenderSkull. Dispatched via gSpellsEx (see
- * spells/casting_main.c). Objf325/326 are cut content (no spell, event, or code
- * dispatches them): a CLUT-cycling fade tick and a rising red-sparkle pillar built from
- * Evil Stream's exact asset set. */
+/* Evil Stream skull-swarm FX2/FX3 (Objf307_324, Objf379 rock; FX1 is in casting_main.c) and
+ * EvilStream_RenderSkull, dispatched via gSpellsEx (docs/decomp/spell-fx-dispatch.md).
+ * Objf325/326 (a CLUT-cycling fade tick, a rising red-sparkle pillar) are cut content. */
 #include "common.h"
 #include "object.h"
 #include "graphics.h"

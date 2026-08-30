@@ -10,7 +10,7 @@ Prints only hunks with genuine differences and a REAL HUNKS count.
 still the only whole-TU proof — data sections and never-flagged
 functions can still differ).
 
-RULES (the battle/field lesson, 2026-08-16): a -/+ pair may be
+RULES (from real battle/field relocation-noise cases): a -/+ pair may be
 cancelled as relocation noise ONLY if it carries a reloc:
   - identical text, or
   - same shape AND a memory op (lw/sw/lh/sh/lb/sb/lbu/lhu/lwl/lwr/swl/swr)

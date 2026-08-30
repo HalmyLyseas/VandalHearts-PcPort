@@ -45,6 +45,16 @@ not readability (see [docs/architecture.md](docs/architecture.md#how-the-port-av
   release cycle so far has caught a Windows-only break this way.
 - Bounded string functions only (`snprintf`, not `sprintf`/`strcpy`).
 
+## Comment conventions (whole tree)
+
+Comments are written for a developer who has **no project history**: present tense, what the code
+does now and why, at most **3 consecutive lines**. Anything longer belongs in [`docs/`](docs/) with
+a one-line pointer from the code. Comments never reference dates, release/stage numbers, local-only
+folders (`exchange/`, scratch paths), reviews, or "previously/used to" narration — git history holds
+that. `make check-comments` (in `platform/pc/`: `tools/comment_hygiene.py` plus
+`tools/check_doc_pointers.py`, which verifies every `See docs/x.md, "Heading"` pointer resolves)
+scans every tracked file and fails on a violation; run it before a PR, it takes a second.
+
 ## Building and testing
 
 [docs/building.md](docs/building.md) covers both builds. Quick version for the port:

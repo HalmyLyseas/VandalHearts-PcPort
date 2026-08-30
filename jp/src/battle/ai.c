@@ -1,25 +1,6 @@
-/* Enemy/ally battle AI (segment 0x560f8 region).
- *
- * Flow: the battle manager (battle/field.c, enemy-turn state 5) spawns
- * Objf570_AI_ChooseAction on the acting unit's tile. 570 picks a plan from the unit's
- * spells, MP, class and HP (plus per-map specials: map 21 = retreat-only, Leena/map 26 =
- * escape-point movement) and spawns one planner:
- *   Objf402_AI_PlanSpellCast  -- damage or support spell: builds movement grids, spawns
- *                                Objf400 (spell value grid) + Objf401 (enemy proximity),
- *                                then searches every reachable cell x castable cell for
- *                                the best (move, target) pair.
- *   Objf403_AI_PlanAttack     -- physical attack: same shape, per-target scoring in
- *                                AI_ScoreAttackOption (facing/back-attack bonus, path
- *                                cost, elevation, archer kiting, Leena priority).
- *   Objf404_AI_PlanRetreat    -- reposition away from enemies onto preferred terrain
- *                                (also the self-heal positioning step).
- *   Objf589_AI_MoveToEscapePoint -- scripted goal cells (map 39) or the map edge.
- * Planners publish: gX/gZ_801233d8 (move destination), gTargetX/Z_80123414 (action
- * target), gAiActionType (0 move/wait + optional facing, 1 attack, 2 cast), then raise
- * gAiPlanDone; 570 finishes and raises gAiPlanReady for the battle manager.
- *
- * All planners yield on IsLagging() (GetRCnt(RCntCNT1) > 450) so the AI spreads its grid
- * sweeps across frames. */
+/* Enemy/ally battle AI (segment 0x560f8): Objf570_AI_ChooseAction picks a plan and spawns one
+ * planner (Objf402 spell, 403 attack, 404 retreat, 589 escape point) that publishes the move/target
+ * cells and gAiActionType, then raises gAiPlanDone. See docs/game-mechanics/ai-decision-making.md. */
 #include "common.h"
 #include "object.h"
 #include "field.h"

@@ -1,11 +1,6 @@
-/*
- * Stage-3 in-game options overlay -- model/state. PC-side, backend-level (zero src/ changes), opened
- * by the SELECT+START chord, works everywhere, no pause. See pc_overlay.c for the design.
- *
- * Screens: MAIN (settings list) -> SAVES (save-management browser) -> CONFIRM (Yes/No / 3-way).
- * The pad filter (libetc.c) forwards one button edge at a time via PC_OverlayInput(); the renderer
- * (pc_gpu_window.c) reads the accessors below and paints the current screen.
- */
+/* In-game options overlay: model + state (PC-side, opened by SELECT+START, no pause). The pad filter
+ * (libetc.c) forwards one button edge at a time via PC_OverlayInput(); the renderer (pc_gpu_window.c)
+ * reads the accessors below. See docs/gameplay-additions.md, "Overlay internals". */
 #ifndef PLATFORM_PC_OVERLAY_H
 #define PLATFORM_PC_OVERLAY_H
 
@@ -34,7 +29,7 @@ int  PC_OverlayItemDisabled(int i); /* 1 => greyed/inactive */
 /* SAVES screen -- the archive browser. */
 int  PC_OverlaySaveCount(void);
 int  PC_OverlaySaveSelected(void);
-const char *PC_OverlaySaveLabel(int i);   /* row i's display label ("2026-07-25 15:30"), or NULL */
+const char *PC_OverlaySaveLabel(int i);   /* row i's display label ("YYYY-MM-DD HH:MM"), or NULL */
 int  PC_OverlaySaveActive(int i);         /* 1 if row i is byte-identical to the current card */
 int  PC_OverlaySaveHasActive(void);       /* 1 if there is an active card to back up */
 const char *PC_OverlaySaveStatus(void);   /* most recent save operation result, or empty */

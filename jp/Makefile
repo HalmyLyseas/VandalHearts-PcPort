@@ -32,7 +32,7 @@ MASPSX    := $(PYTHON) $(TOOLS_DIR)/maspsx/maspsx.py --expand-div --aspsx-versio
 
 # Per-file compiler overrides (from the US build — the JP build uses the SAME toolchain/flags).
 # Small-data threshold -G0 (nothing routes to .sdata) for the text/font/menu files; core/audio also
-# uses the older cc1 v2.5.7 at -O2. Applied to BOTH the .c.s (cc1) and .c.o (maspsx GP_OPT) steps.
+# uses the older cc1_v257 frontend at -O2. Applied to BOTH the .c.s (cc1) and .c.o (maspsx GP_OPT) steps.
 build/src/core/audio.c.s: CC := cc1_v257_decompals
 build/src/core/audio.c.s: OPT_FLAGS := -O2
 build/src/core/audio.c.s: GP_OPT := -G0

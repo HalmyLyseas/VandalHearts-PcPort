@@ -1,17 +1,12 @@
-/* pc_raster.c -- the software GPU: framebuffers (native VRAM + G2 hi-res) and rasterization.
- * Extracted verbatim from libgpu.c, which keeps the PsyQ API surface + the OT walker and calls in
- * here per primitive (seams: pc_gpu_internal.h). Contents: BGR555 pixel helpers, the G1 PSX-accurate
- * fixed-point DDA (VH_ACCURATE, default) + the legacy barycentric fallback, texture sampling with
- * the GP0(E2h) texture window, G2 internal-resolution supersampling (VH_INTERNAL_SCALE) with the
- * per-frame hi-res display list, and the P1 persistent worker pool that rasterizes it in bands.
- * PERF: the whole per-pixel hot path (dda_span -> SampleTexture -> PutPixel -> blend) lives in this
- * single TU on the owned static s_vram/s_hires buffers, so the split changes no inlining. */
+/* pc_raster.c -- the software GPU: native BGR555 VRAM, the hi-res supersampling buffer, the PSX-accurate
+ * fixed-point DDA (VH_ACCURATE) with its legacy barycentric fallback, texture sampling and the banded
+ * worker pool. Called per primitive by libgpu.c's DrawOTag. See docs/pc-port/subsystems/gpu.md. */
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>     /* P1 step 2b: band-parallel hi-res rasterization (winpthreads on MinGW) */
+#include <pthread.h>     /* band-parallel hi-res rasterization (winpthreads on MinGW) */
 
 #include "PsyQ/libgpu.h"
 #include "pc_platform.h"
@@ -23,14 +18,9 @@
 
 static unsigned short s_vram[VRAM_H][VRAM_W];
 
-/* ---- G2: internal-resolution supersampling (VH_INTERNAL_SCALE) --------------------------------
- * Each primitive is rasterized a SECOND time into an S-times-larger colour buffer (s_hires) with its
- * geometry scaled by S but UVs left native, so the DDA samples the native-res texture once PER HI-RES
- * PIXEL -- coverage and texture both at S x the density. s_vram stays native and byte-identical (all
- * readback / blend / effect behaviour unchanged); present() blits s_hires when S>1. Bulk VRAM writes
- * that bypass the rasterizer (ClearImage/LoadImage/MoveImage) are mirrored in as SxS nearest blocks.
- * Backend-only, default OFF (S=1); VH_INTERNAL_SCALE=N or the options overlay ("INTERNAL RES") set it,
- * live and persisted. `g_vhInternalScale` is the overlay-facing setting (see pc_platform.h). */
+/* ---- Internal-resolution supersampling (VH_INTERNAL_SCALE): each primitive is rasterized a second
+ * time into s_hires with geometry scaled by S and UVs native; s_vram stays native and authoritative.
+ * `g_vhInternalScale` is the overlay-facing setting. See gpu.md, "Internal-resolution supersampling". */
 #define HIRES_MAXSCALE 4
 int g_vhInternalScale = -1;              /* 1 (off) .. HIRES_MAXSCALE; -1 = unresolved (env not read yet) */
 static unsigned short *s_hires = NULL;   /* allocated at HIRES_MAXSCALE so the scale can change live */
@@ -46,15 +36,9 @@ static int InternalScale(void) {
     return g_vhInternalScale;
 }
 
-/* Does this run want the hi-res shadow pass at all? Scale > 1 always; scale 1 ONLY when the
- * selected language pack ships localized backgrounds (F2) -- they are sampled exclusively in this
- * pass, and a translated title card must not silently depend on a graphics setting. Both inputs
- * are process-lifetime (env/ini + the pack dir resolved once), so the answer never changes
- * mid-run. At S==1 every hires-only sampling tweak is already gated `S > 1` (re-centre, crust
- * bias, U==256 clamp), so the shadow pass produces pixel-identical output to the native pass
- * except inside a replaced region -- 1x without a pack stays native-faithful by construction.
- * The HD pack deliberately does NOT arm this: its backgrounds remain a >= 2x feature (see the
- * matching scale-1 guard in pc_hdpack.c's HdFindTriRegion). */
+/* The hi-res shadow pass runs at scale > 1, and at scale 1 only when the language pack ships localized
+ * backgrounds (sampled exclusively in this pass). Both inputs are process-lifetime, so the answer never
+ * changes mid-run. HD packs stay >= 2x. See gpu.md, "Internal-resolution supersampling". */
 static int HiresWanted(void) {
     return InternalScale() > 1 || PC_LangBgDir() != NULL;
 }
@@ -144,18 +128,16 @@ static const signed char DITHER4[4][4] = {
     { -3,  1, -4,  0 },
     {  3, -1,  2, -2 },
 };
-/* Legacy-renderer pack (VH_ACCURATE=0): the legacy barycentric path packs straight, without dither.
- * (The old VH_DITHER prototype dither on this path was superseded by the accurate G1 dither and removed.) */
+/* Legacy-renderer pack (VH_ACCURATE=0): the barycentric path packs straight, without dither; x,y are
+ * accepted only for signature parity with PackColorG1Front. */
 static unsigned short PackColorDither(int r, int g, int b, int x, int y) {
     (void)x; (void)y;
     return PackColor(r, g, b);   /* PackColor clamps to [0,255] then truncates to 5-bit */
 }
 
-/* G1 (1.5) PSX-accurate rasterization: UV round-to-nearest, front-colour dither, 5-bit blargg blend.
- * Validated against a DuckStation VRAM oracle (platform/pc/tools/raster_harness): 27.17 -> 4.96 mean
- * abs-diff, 96.4% pixel-exact. **Default ON** (the preferred, hardware-faithful look) -- set
- * VH_ACCURATE=0 (vandalhearts.ini or env) to fall back to the legacy renderer (advanced users only).
- * Runtime gate (not #ifdef) so the harness can A/B one binary: pass VH_ACCURATE=0 for the legacy path. */
+/* PSX-accurate rasterization: UV at the integer pixel position, front-colour dither, 5-bit blend.
+ * Default ON; VH_ACCURATE=0 (ini or env) selects the legacy renderer. A runtime gate rather than an
+ * #ifdef so one binary can A/B both paths. See docs/pc-port/subsystems/gpu.md, "PSX-accurate DDA". */
 static int AccurateEnabled(void) {
     static int e = -1;
     if (e < 0) {
@@ -165,19 +147,17 @@ static int AccurateEnabled(void) {
     return e;
 }
 
-/* Rule 4 (gotcha #4): the GPU dithers the FRONT colour in the 24->15 truncation (BEFORE any
- * semi-transparency blend), on modulated/untextured polygons only, matrix indexed [y&3][x&3].
- * Same DITHER4 offsets as DuckStation's DITHER_MATRIX; PackColor's clamp-then->>3 reproduces the
- * hardware dither LUT (clamp((v+off)>>3,0,31)). The blend result itself is written un-dithered. */
+/* The GPU dithers the FRONT colour in the 24->15 truncation, before any semi-transparency blend, on
+ * modulated/untextured polygons only, matrix indexed [y&3][x&3]; PackColor's clamp-then->>3 reproduces
+ * the hardware LUT clamp((v+off)>>3, 0, 31). The blend result itself is written un-dithered. */
 static unsigned short PackColorG1Front(int r, int g, int b, int x, int y) {
     int d = DITHER4[y & 3][x & 3];
     return PackColor(r + d, g + d, b + d);
 }
 
-/* Rule 5 (gotcha #5): the GPU's semi-transparency is blargg's parallel 5-bit BGR555 bit-math on
- * the packed front/back halfwords (per-channel 5-bit add/sub with saturation), not the 8-bit
- * per-channel blend we used to unpack/blend/repack. Ported verbatim from DuckStation's ShadePixel.
- * `fg` carries bit15 set (this is a blending pixel); for untextured polys bit15 is cleared after. */
+/* Semi-transparency as the hardware does it: parallel 5-bit bit-math on the packed BGR555 halfwords
+ * (per-channel add/sub with saturation), per DuckStation's ShadePixel. `fg` arrives with bit15 set;
+ * for untextured polys bit15 is cleared afterwards. */
 static unsigned short BlendG1(unsigned fg, unsigned bg, int abr, int textured) {
     unsigned color = 0;
     switch (abr) {
@@ -240,7 +220,7 @@ static void WritePixel(unsigned short *px, int x, int y, unsigned short c, int a
 }
 
 static void PutPixel(const RenderCtx *rc, int x, int y, unsigned short c, int abr, int semiTrans, int textured) {
-    if (rc->target) {                      /* G2: write the supersampled target (coords already scaled) */
+    if (rc->target) {                      /* write the supersampled target (coords already scaled) */
         int W = VRAM_W * rc->scale, H = VRAM_H * rc->scale;
         if (x < 0 || x >= W || y < 0 || y >= H) return;
         WritePixel(&s_hires[(size_t)y * W + x], x, y, c, abr, semiTrans, textured);
@@ -285,16 +265,9 @@ static unsigned short SampleTexture(const RenderCtx *rc, int tpage, int clut, in
 /* ---- triangle rasterizer (flat or textured, affine UV, no perspective) -- */
 
 
-/* ===================== VH_DDA (experimental): fixed-point integer triangle DDA =====================
- * Faithful port of DuckStation's Mednafen rasterizer (external/duckstation gpu_sw_rasterizer.inl:
- * DrawTriangle / DrawTrianglePart / DrawSpan / UVStepper). Unlike our barycentric FillTriangle -- which
- * samples COVERAGE at the pixel centre (x+0.5,y+0.5) but UV at the corner (x,y) -- the DDA evaluates
- * BOTH at the pixel's INTEGER position in 64-bit fixed point (edges) + 24-frac-bit UV, so there is no
- * centre/corner mismatch: the source of our tile-edge seams AND the opaque-UV extrapolation (fuzzy
- * stones / fragmented water). Per-pixel shading (texture sample, modulate, dither, blend) stays ours.
- * This IS the VH_ACCURATE (default) rasterizer -- validated 99.99% (cutscene) / 99.84% (battle 6-1)
- * pixel-exact vs DuckStation's VRAM oracle, multi-scene + in-game. VH_ACCURATE=0 falls back to the
- * legacy barycentric FillTriangle below (centre-sample, floor UV, no dither). */
+/* ===== PSX-accurate fixed-point integer triangle DDA (the VH_ACCURATE default) =====
+ * Port of DuckStation's Mednafen-derived rasterizer: edges in 32.32 fixed point, UVs with 24 fraction
+ * bits, both evaluated at the pixel's INTEGER position. See gpu.md, "PSX-accurate DDA". */
 #define DDA_ASHIFT 12
 #define DDA_APOST  12
 typedef struct { unsigned u, v; } DdaUV;
@@ -305,7 +278,7 @@ typedef struct {
     int clipL, clipR, clipT, clipB;   /* inclusive drawing area */
     DdaUVStep step;
     const RenderCtx *rc;              /* per-pass state: dither, texture window, target/scale (P1) */
-    /* HD-pack replace (1.6): resolved ONCE per triangle in FillTriangleDDA. hdPx==NULL -> no replacement,
+    /* HD-pack replace: resolved ONCE per triangle in FillTriangleDDA. hdPx==NULL -> no replacement,
      * per-pixel path is unchanged. Scale is precomputed to a fixed-point multiply (no per-pixel divide). */
     const unsigned short *hdPx; int hdW, hdH;       /* HD image, PRE-PACKED to 16-bit texels (0=transparent) + dims */
     int hdTpX, hdTpY, hdPpw, hdRx, hdRy, hdRw, hdRh; /* hoisted VRAM-word mapping constants + region rect */
@@ -332,8 +305,8 @@ static void dda_stepy_n(DdaUV *s, const DdaUVStep *st, int n) {
     s->u += (unsigned)((int)st->dudy * n); s->v += (unsigned)((int)st->dvdy * n);
 }
 
-/* HD asset-replacement (1.6 HD pack) lives in pc_hdpack.c -- LoadImage and the DDA below are its
- * hooks (HdPack_OnLoad / HdFindTriRegion / HdMaybeDump; seams in pc_gpu_internal.h). */
+/* HD asset replacement lives in pc_hdpack.c -- LoadImage and the DDA below are its hooks
+ * (HdPack_OnLoad / HdFindTriRegion / HdMaybeDump; seams in pc_gpu_internal.h). */
 
 static void dda_span(const DdaCtx *cx, int y, int x_start, int x_bound, DdaUV uv) {
     int width = x_bound - x_start;         /* fill [x_start, x_bound): left-inclusive, right-exclusive */
@@ -413,24 +386,23 @@ static void dda_part(const DdaCtx *cx, const DdaPart *tp, DdaUV origin) {
 
 static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, int r, int g, int bcol,
                             int textured, int tpage, int clut, int semiTrans, int abr, int flat2d) {
-    /* G2: when rasterizing into the hires target, scale geometry (vertices/offset/clip) by S but keep
-     * UVs native. The DDA's own UV-step math then advances the native texture at 1/S the rate across the
-     * S-times-wider span, i.e. one native-texture sample per hi-res pixel -- coverage AND texture at Sx
-     * density (this is the sharp, per-hires-pixel path; the native pass, rc->target=0, uses S=1). */
+    /* Hi-res target: scale geometry (vertices/offset/clip) by S but keep UVs native, so the DDA's UV
+     * step advances the native texture at 1/S per hi-res pixel -- coverage AND texture sampled at Sx
+     * density. The native pass (rc->target == 0) uses S = 1. */
     int S = rc->target ? rc->scale : 1;
     int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int vx[3], vy[3], vu[3], vv[3], i;
-    HdRegion *hdReg = NULL;   /* 1.6 HD pack: replaced region this triangle samples (resolved below) */
+    HdRegion *hdReg = NULL;   /* HD pack: replaced region this triangle samples (resolved below) */
     RVert rv[3]; rv[0] = ra; rv[1] = rb; rv[2] = rvc;
     for (i = 0; i < 3; i++) {
         vx[i] = (int)lround(rv[i].x) * S + ox; vy[i] = (int)lround(rv[i].y) * S + oy;
         vu[i] = (int)lround(rv[i].u);          vv[i] = (int)lround(rv[i].v);
     }
-    if (textured && HdRegionCount()) {   /* 1.6 HD pack: per-triangle UV bbox -> dump reference and/or resolve replaced region */
+    if (textured && HdRegionCount()) {   /* HD pack: per-triangle UV bbox -> dump reference and/or resolve replaced region */
         int uMn = vu[0], uMx = vu[0], vMn = vv[0], vMx = vv[0], k;
         for (k = 1; k < 3; k++) { if (vu[k]<uMn)uMn=vu[k]; if (vu[k]>uMx)uMx=vu[k]; if (vv[k]<vMn)vMn=vv[k]; if (vv[k]>vMx)vMx=vv[k]; }
         if (HdDumpDir())                    HdMaybeDump(tpage, clut, uMn, uMx, vMn, vMx);
-        if (rc->target && HdReplaceCount() && HdAnyActive()) hdReg = HdFindTriRegion(tpage, uMn, uMx, vMn, vMx);  /* F2: HD pack OR langpack bg */
+        if (rc->target && HdReplaceCount() && HdAnyActive()) hdReg = HdFindTriRegion(tpage, uMn, uMx, vMn, vMx);  /* HD pack OR langpack bg */
         {   /* VH_HD_TRACE: log each UNIQUE (tpage,clut) that gets HD-replaced -> reveals which prims are
              * wrongly matched (battle overlays/effects) vs the real background, to pick a discriminator. */
             static int tr = -1; if (tr < 0) tr = getenv("VH_HD_TRACE") ? 1 : 0;
@@ -448,18 +420,9 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
             }
         }
     }
-    /* `flat2d` (from the whole quad, via FillQuad): the prim projects to an axis-aligned screen
-     * RECTANGLE (UI window / text glyph / billboard sprite). It scopes the "crust for free" +0.5-texel
-     * bias below -- applied to perspective tiles (lands sampling on the interior, off the dark border
-     * crust) but NOT to axis-aligned unit-mapped UI (there it shifts the sample half a texel and
-     * doubles/drops columns -- the 2D "vertical lines"). Decided per-QUAD so both triangles agree;
-     * a per-triangle decision splits one quad's halves and leaves a diagonal seam. */
-    /* G2 seam fix (hires pass only): a full 256-wide/tall texture's EXCLUSIVE right/bottom edge sits at
-     * U/V==256, which the 32-bit UV fixed point can't hold (256<<24 overflows to 0), so the finer hires
-     * sampling tips the last pixel to texel 0 instead of the real edge texel 255 -- a dark seam on
-     * full-page background sprites. Clamp that exact edge to 255. Only single-page sprites (u0+w==256)
-     * have a vertex precisely at 256; tiled sprites (U past 256) wrap correctly via the natural overflow
-     * and never have a 256 vertex, so they're untouched. Native pass (S==1) never reaches U==256. */
+    /* `flat2d` (decided per quad in FillQuad so both triangles agree) scopes the hi-res crust-free bias
+     * below. The hi-res pass also clamps a U/V of exactly 256 (a full-page sprite's exclusive edge) to
+     * 255: 256<<24 overflows the 32-bit UV to 0 and would tip the last pixel to texel 0 (a dark seam). */
     if (S > 1) {
         for (i = 0; i < 3; i++) {
             if (vu[i] == 256) vu[i] = 255;
@@ -533,21 +496,9 @@ static void FillTriangleDDA(const RenderCtx *rc, RVert ra, RVert rb, RVert rvc, 
         dda_stepx_n(&origin, &cx.step, -vx[tl]);
         dda_stepy_n(&origin, &cx.step, -vy[tl]);
         if (S > 1) {
-            /* Sample at hi-res PIXEL centres, not native-pixel centres. dda_uv_init seeds +0.5 texel
-             * (right for the native grid); at Sx with a ~1:1 texture that lands the sub-samples exactly
-             * on texel boundaries (0.5,1.0,1.5,... at S=2), where fixed-point floor drops/duplicates
-             * whole columns -- text/UI vertical strokes vanish or shift (the x2-vs-x4 phase difference).
-             * Re-centre to the hi-res pixel: +0.5*(du/dx + du/dy) per axis. For MINIFIED textures
-             * (terrain, >1 texel/pixel) this equals the +0.5 texel seed -> no change; for ~1:1 it becomes
-             * +0.5/S texel, giving each source texel S evenly-spaced samples. Hi-res pass only. */
-            /* "Crust for free": for perspective prims (!flat2d) we do NOT subtract the half-texel, which
-             * shifts the hi-res sample +0.5 texel so tile edges land on the interior texel instead of the
-             * dark border "crust" -- reproducing exactly what the legacy renderer does, removing the
-             * tile-seam grid (and the compass "dotted lines") with NO softening, keeping the hardware
-             * dither. Validated offline vs the real lava texture (gray-crust 598 -> 0, full detail kept).
-             * Axis-aligned 2D UI/text (flat2d) keeps centre-sampling, so the bias never shifts glyph/
-             * border columns (that shift was the 2D "vertical lines"). Decided per-quad in FillQuad so a
-             * quad's two triangles always agree (a per-triangle split leaves a diagonal seam). */
+            /* Re-centre sampling on the hi-res pixel: +0.5*(du/dx + du/dy) per axis, minus the +0.5
+             * texel seed for axis-aligned 2D (flat2d) so glyph/border columns never shift. Perspective
+             * prims keep the +0.5 texel ("crust-free"). See gpu.md, "Crust-free tile sampling". */
             int half = flat2d ? (1 << (DDA_ASHIFT + DDA_APOST - 1)) : 0;
             origin.u += (unsigned)((((int)cx.step.dudx + (int)cx.step.dudy) / 2) - half);
             origin.v += (unsigned)((((int)cx.step.dvdx + (int)cx.step.dvdy) / 2) - half);
@@ -566,7 +517,7 @@ static void FillTriangle(const RenderCtx *rc, RVert a, RVert b, RVert c, int r, 
      * position, VRAM-faithful to DuckStation. The barycentric path below is only the VH_ACCURATE=0
      * legacy fallback (centre-sample coverage, floor UV, no dither). */
     if (AccurateEnabled()) { FillTriangleDDA(rc, a, b, c, r, g, bcol, textured, tpage, clut, semiTrans, abr, flat2d); return; }
-    int S = rc->target ? rc->scale : 1;   /* G2: scale geometry by S, keep UVs native */
+    int S = rc->target ? rc->scale : 1;   /* scale geometry by S, keep UVs native */
     int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int minX, maxX, minY, maxY;
     int x, y;
@@ -616,12 +567,9 @@ static void FillTriangle(const RenderCtx *rc, RVert a, RVert b, RVert c, int r, 
 
 void FillQuad(const RenderCtx *rc, RVert v0, RVert v1, RVert v2, RVert v3, int r, int g, int b,
                       int textured, int tpage, int clut, int semiTrans, int abr) {
-    /* psx-spx: "Quads are internally processed as two triangles, the first
-     * consisting of vertices 1,2,3, and the second of vertices 2,3,4." */
-    /* flat2d: does the whole quad project to an axis-aligned screen rectangle (UI/text/sprite)?
-     * i.e. its 4 vertices span exactly two distinct X and two distinct Y (rounded) screen coords.
-     * A perspective world tile is a diamond/parallelogram (>=3 distinct in one axis). Decided ONCE
-     * here so both triangles share it -- see the "crust for free" bias in FillTriangleDDA. */
+    /* psx-spx: quads are two triangles, vertices 1,2,3 then 2,3,4. `flat2d` = the quad projects to an
+     * axis-aligned screen rectangle (its rounded vertices span exactly two X and two Y values); a
+     * perspective tile is a parallelogram. Decided once here so both triangles share it. */
     int qx0 = (int)lround(v0.x), qx1 = (int)lround(v1.x), qx2 = (int)lround(v2.x), qx3 = (int)lround(v3.x);
     int qy0 = (int)lround(v0.y), qy1 = (int)lround(v1.y), qy2 = (int)lround(v2.y), qy3 = (int)lround(v3.y);
     int ndx = 1 + (qx1!=qx0) + ((qx2!=qx0)&&(qx2!=qx1)) + ((qx3!=qx0)&&(qx3!=qx1)&&(qx3!=qx2));
@@ -634,7 +582,7 @@ void FillQuad(const RenderCtx *rc, RVert v0, RVert v1, RVert v2, RVert v3, int r
 /* TILE's rect fill, subject to the current drawing offset/clip (it's a
  * regular render primitive, walked from the OT like any other). */
 void FillRect(const RenderCtx *rc, int x0, int y0, int w, int h, int r, int g, int b) {
-    int S = rc->target ? rc->scale : 1;   /* G2: scale geometry by S into the hires target */
+    int S = rc->target ? rc->scale : 1;   /* scale geometry by S into the hi-res target */
     int ox = rc->ofsX * S, oy = rc->ofsY * S;
     int x, y;
     int minX = x0 * S + ox, minY = y0 * S + oy, maxX = minX + w * S, maxY = minY + h * S;
@@ -659,14 +607,12 @@ void FillRectRaw(int x0, int y0, int w, int h, int r, int g, int b) {
     for (y = y0; y < y0 + h && y < VRAM_H; y++)
         for (x = x0; x < x0 + w && x < VRAM_W; x++)
             if (x >= 0 && y >= 0) s_vram[y][x] = c;
-    HiresMirrorRect(x0, y0, w, h);   /* G2: keep hires FB in sync (ClearImage / quick fill) */
+    HiresMirrorRect(x0, y0, w, h);   /* keep the hi-res FB in sync (ClearImage / quick fill) */
 }
 
-/* ---- P1 step 2: deferred hi-res pass via a per-frame display list -------------------------------
- * Instead of drawing each hi-res primitive inline during the OT walk, DrawOTag APPENDS it here (with a
- * self-contained RenderCtx snapshot), then rasterizes the whole list AFTER the single-threaded native
- * walk. Because the list is flat + read-only, it can be rasterized by N per-band worker threads (each
- * clipped to a scanline band => disjoint hi-res pixels, lock-free). Reused across frames (count reset). */
+/* ---- Deferred hi-res pass via a per-frame display list: DrawOTag APPENDS each hi-res primitive here
+ * (with a self-contained RenderCtx snapshot) and the whole list is rasterized after the native walk.
+ * Flat and read-only, so N per-band worker threads consume it lock-free. Reused across frames. */
 typedef struct {
     int kind;                 /* 0 = quad (F4/FT4/SPRT), 1 = rect (TILE) */
     RVert v[4];               /* quad vertices */
@@ -717,10 +663,9 @@ static void HiresRasterizeBand(int clipY, int clipH) {
     }
 }
 
-/* P1 step 2b: rasterize the hi-res list across N worker threads, each owning a scanline band of the
- * drawing area. Bands write DISJOINT hi-res rows -> lock-free; the list is read-only. VH_RASTER_THREADS
- * overrides the count (default = online CPUs, capped). Falls back to single-threaded for a tiny list or
- * one thread. All lazy statics in the fill path are already warm here (the native pass ran first). */
+/* Rasterize the hi-res list across N worker threads, each owning a scanline band of the drawing area:
+ * bands write DISJOINT rows and the list is read-only, so no locking. VH_RASTER_THREADS overrides the
+ * count (default = online CPUs, capped). A tiny list or one thread falls back to single-threaded. */
 #define HIRES_MAX_THREADS 32
 typedef struct { int clipY, clipH; } HiresBand;
 
@@ -737,10 +682,9 @@ static int HiresThreadCount(void) {
     return n;
 }
 
-/* PERF (1.6): PERSISTENT worker pool. Threads are created ONCE and reused every hi-res frame, driven by
- * a generation counter -- no per-frame pthread_create/join (that overhead was a few % of a 60fps budget,
- * paid on every HD frame). Bands write disjoint hi-res rows -> lock-free rasterization; the mutex/condvars
- * only gate the start/finish handshake. Idle workers (band clipH==0) complete instantly. */
+/* PERSISTENT worker pool: threads are created ONCE and reused every hi-res frame, driven by a generation
+ * counter (per-frame pthread_create/join costs a few % of a 60 fps budget). Band writes are disjoint, so
+ * the mutex/condvars only gate the start/finish handshake. Idle workers (band clipH==0) finish instantly. */
 static struct {
     int inited, nworkers;
     pthread_t th[HIRES_MAX_THREADS];
@@ -779,11 +723,10 @@ static void HiresPoolInit(int nworkers) {
 
 void HiresRasterizeThreaded(int clipY, int clipH) {
     int nth = HiresThreadCount();
-    if (!s_hprimCount) return;   /* the walker used to skip the call for an empty list */
+    if (!s_hprimCount) return;   /* nothing appended this frame */
     /* Thread when the frame is heavy. Primitive COUNT is a poor proxy: a fullscreen HD-replaced
-     * background is one primitive but millions of expensive per-pixel samples, so the count guard
-     * (meant to skip trivial frames) would wrongly single-thread it -> also thread whenever an HD
-     * replacement is loaded (1.6 HD pack). Cheap non-HD frames keep the single-thread fast path. */
+     * background is one primitive but millions of expensive per-pixel samples, so also thread whenever
+     * an HD replacement is loaded. Cheap non-HD frames keep the single-thread fast path. */
     if (nth <= 1 || clipH < nth * 2 || (s_hprimCount < 64 && HdReplaceCount() == 0)) { HiresRasterizeBand(clipY, clipH); return; }
     (void)AccurateEnabled();                          /* warm the lazy cache before the parallel section */
     if (!s_hpool.inited) HiresPoolInit(nth - 1);      /* nth-1 workers; the main thread does one band too */
@@ -855,16 +798,15 @@ static void PC_MaybeDumpHires(int x, int y, int w, int h) {
 /* ---- walker-facing wrappers (pc_gpu_internal.h) ------------------------------------------------ */
 
 int HiresActive(void) { return HiresWanted() && s_hires != NULL; }
-void HiresFrameReset(void) { s_hprimCount = 0; }   /* P1: reset the per-frame hi-res display list */
+void HiresFrameReset(void) { s_hprimCount = 0; }   /* reset the per-frame hi-res display list */
 
-/* Present the supersampled display region (was DrawOTag's hires-present branch; native units). */
+/* Present the supersampled display region (native units). */
 void HiresPresent(int dispX, int dispY, int dispW, int dispH) {
     int S = InternalScale(), W = VRAM_W * S;
     int dx = dispX * S, dy = dispY * S, dw = dispW * S, dh = dispH * S;
-    /* Edge-clamp: the last presented hi-res column/row is a dead zone -- no primitive's scaled span
-     * quite reaches it, so it retains stale previous-frame content (a flickery 1px strip at the
-     * right/bottom edge). It is the 2nd sub-pixel of the same native edge pixel as its neighbour, so
-     * replicate the neighbour (correct-within-pixel, cheap). */
+    /* Edge-clamp: no primitive's scaled span quite reaches the last presented hi-res column/row, so it
+     * retains stale previous-frame content (a flickery 1 px strip). It is the second sub-pixel of the
+     * same native edge pixel as its neighbour, so replicate the neighbour. */
     {
         int i, lastx = dx + dw - 1, lasty = dy + dh - 1;
         for (i = dy; i < dy + dh; i++) s_hires[(size_t)i * W + lastx] = s_hires[(size_t)i * W + lastx - 1];

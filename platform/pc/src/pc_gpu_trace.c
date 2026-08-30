@@ -1,19 +1,6 @@
-/* pc_gpu_trace.c -- GPU trace record / replay (regression harness, post-1.6 "3a").
- * Extracted verbatim from libgpu.c (the code accreted there because it hooks the walker; the
- * subsystem itself is a harness, not GPU emulation). Seams with libgpu.c: pc_gpu_internal.h.
- *
- * Record (VH_GPU_RECORD=<file> [VH_GPU_RECORD_FRAMES=N, default 400]): serialize, in call order,
- * everything that mutates the rasterizer's state -- VRAM uploads/blits/clears, PutDrawEnv, and
- * every primitive the DrawOTag walker dispatches (raw struct bytes; state prims like DR_MODE are
- * primitives too, so mode/texture-window changes replay in order). 'Z' marks each DrawOTag end.
- *
- * Replay (VH_GPU_REPLAY=<file>, handled in pc_bootstrap before the game starts): feed the ops back
- * through the very same entry points -- recorded prims are copied to an arena, chained with real
- * OT tokens, and handed to DrawOTag itself -- so the full production raster pipeline runs with no
- * game, no disc, no window, fully deterministically. After every frame the 1MB VRAM is FNV-hashed;
- * the combined hash is the regression signature (tools/regress/raster_check.sh records a boot
- * trace once, stores the signature, and re-verifies it on demand). Traces contain game-derived
- * texture data -> they live under build/ (gitignored), never in the repo. */
+/* pc_gpu_trace.c -- GPU trace record (VH_GPU_RECORD) / replay (VH_GPU_REPLAY) for the regression
+ * harness: every rasterizer-state mutation is serialized in call order and replayed through the real
+ * entry points; the FNV hash of VRAM after each frame is the signature. See tools/regress/README.md. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +24,9 @@ static u32 TrcPrimSize(int type) {
     default: return 0;                     /* unknown = the walker skips it too */
     }
 }
+/* Record layout: "VHT1", then <op:1><na:4><a><nb:4><b> records. Ops: L LoadImage(RECT, pixels),
+ * M MoveImage(RECT, xy), C ClearImage(RECT, rgb), E PutDrawEnv(DRAWENV), P walked primitive (type,
+ * raw struct bytes -- DR_MODE included, so mode changes replay in order), Z DrawOTag end. */
 void TrcWrite(char op, const void *a, u32 na, const void *b, u32 nb) {
     if (s_trcState != 1) return;
     fputc(op, s_trcF);
@@ -107,11 +97,9 @@ int PC_GpuReplayTrace(const char *path) {
         fprintf(stderr, "[replay] '%s' is not a VHT1 GPU trace\n", path); fclose(f); return 2;
     }
     s_trcReplaying = 1; s_trcState = 0;
-    /* Bench knobs: VH_INTERNAL_SCALE engages the hi-res pass (the game normally sets it in GpuInit,
-     * which replay mode skips); VH_RASTER_THREADS is read by the pool as usual. Timing accumulates
-     * DrawOTag wall time ONLY -- hashing (which can dwarf rasterization at scale 4) stays outside.
-     * VH_GPU_REPLAY_HASH_HIRES=1 folds the hi-res buffer into the signature (slow; for verifying an
-     * optimization bit-identical, not for timing). */
+    /* Bench knobs: VH_INTERNAL_SCALE engages the hi-res pass (GpuInit, which replay skips, normally
+     * sets it); VH_RASTER_THREADS is read by the pool as usual. Timing covers DrawOTag wall time ONLY;
+     * VH_GPU_REPLAY_HASH_HIRES=1 folds the (slow to hash) hi-res buffer into the signature. */
     { const char *e = getenv("VH_INTERNAL_SCALE"); if (e && atoi(e) > 1) PC_GpuSetInternalScale(atoi(e)); }
     hashHires = getenv("VH_GPU_REPLAY_HASH_HIRES") != NULL;
     for (;;) {

@@ -1,8 +1,6 @@
-/* Standalone proof-of-concept: reads the real JOU sound set (gCdFiles
- * CDF_SD_JOU_VH/VB in src/core/cd.c, LBA 0x23b3 / 0x23af) through our own CD
- * backend, feeds it through SsVabOpenHeadSticky/SsVabTransBodyPartly, and
- * verifies both the VAG decoder's output directly and that OpenAL actually
- * received a correctly-sized buffer. Not part of the real game build. */
+/* Standalone check, not part of the game build: reads the JOU sound set (gCdFiles CDF_SD_JOU_VH/VB,
+ * LBA 0x23b3 / 0x23af) through the CD backend, feeds it to SsVabOpenHeadSticky/TransBodyPartly,
+ * and verifies the VAG decoder's output and that OpenAL received a correctly-sized buffer. */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,9 +57,8 @@ int main(int argc, char **argv) {
     if (!ReadCdFile(0x23af, 4, vb)) { fprintf(stderr, "VB read failed\n"); return 1; }
     printf("Read JOU.VH (%zu bytes) and JOU.VB (%zu bytes) via CdControl+CdRead\n", sizeof(vh), sizeof(vb));
 
-    /* Direct decoder check: VAG #1 is the first real sample, size 240
-     * bytes per the size table at VH offset 2592 (see the audio step
-     * file), starting at body offset 0. */
+    /* Direct decoder check: VAG #1 is the first real sample, 240 bytes per the size table at
+     * VH offset 2592, starting at body offset 0. */
     short *pcm;
     int n = LibSnd_DecodeVagForTest(vb, 240, &pcm);
     int expectedSamples = (240 / 16) * 28;

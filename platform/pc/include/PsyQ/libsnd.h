@@ -1,16 +1,6 @@
-/*
- * PC-backend replacement for the PSX SDK's libsnd.h sequencer/VAB interface.
- *
- * Clean-room reimplementation: only signatures and mode constants (public,
- * standard facts, not Sony's header text) -- no text from Sony's original
- * header. Scope covers only what the game's source actually calls (per
- * exchange/02-phase-c-interface-contract.md).
- *
- * SsSeqOpen/Play/Stop/Close/SetVol (full sequence/song playback -- a real
- * MIDI-like interpreter for a proprietary format) are declared but not yet
- * implemented; see libsnd.c and the checkpoint doc's Audio step file for
- * why this is deferred as a separate, substantial piece of work.
- */
+/* PC-backend replacement for the PSX SDK's libsnd.h sequencer/VAB interface. Clean-room: only the
+ * signatures and mode constants the game calls, no text from Sony's header. Implemented in
+ * platform/pc/src/libsnd.c; see docs/pc-port/subsystems/spu.md. */
 #ifndef PLATFORM_PC_PSYQ_LIBSND_H
 #define PLATFORM_PC_PSYQ_LIBSND_H
 

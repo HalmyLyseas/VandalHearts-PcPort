@@ -1,16 +1,6 @@
-/*
- * PC-only startup glue: mounts the disc image and opens the game window
- * before the real game code's own main() (src/core/main.c) runs. Real hardware
- * never needs an equivalent step -- the disc is physically in the drive
- * and the TV is always displaying VRAM at boot, so there's no PSX API call
- * this could hook into; it has to run before main() via some mechanism
- * outside game source.
- *
- * Uses __attribute__((constructor)), the same mechanism already
- * established in build/generated_data.c for the extracted data-segment
- * initializers -- constructors run before main() with zero changes to any
- * real project file.
- */
+/* PC-only startup glue: mounts the disc image and opens the game window before the game's own
+ * main() (src/core/main.c) runs, using __attribute__((constructor)) since real hardware needs no
+ * such step. See docs/pc-port/bootstrap.md, "Constructor order". */
 #define _GNU_SOURCE           /* REG_EIP/REG_EAX greg indices in <ucontext.h> (see NULL-read fixup) */
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,10 +10,9 @@
 #include <dirent.h>           /* opendir/readdir -- disc-image auto-detect (portable; MinGW provides it) */
 
 #if defined(_WIN32)
-/* Windows (MinGW-w64, Stage 2.4): Win32 replaces the POSIX facilities used below -- VirtualAlloc for
- * the fixed PSX RAM ranges, VirtualProtect (over the PE sections) for the .rodata remap. There is no
- * POSIX signal/backtrace/mmap path here. Windows does not implement low-address instruction
- * emulation; it depends on source-level PC_PORT guards, and any remaining path will crash. */
+/* Windows (MinGW-w64): VirtualAlloc reserves the fixed PSX RAM ranges and VirtualProtect (over the
+ * PE sections) remaps .rodata; there is no POSIX signal/backtrace/mmap path and no low-address
+ * instruction emulation -- Windows relies on source-level PC_PORT guards. */
 #include <windows.h>          /* VirtualAlloc, VirtualProtect, GetModuleHandle, PE headers, GetModuleFileNameA */
 #else
 #include <unistd.h>
@@ -47,76 +36,30 @@
 #define SCREEN_WIDTH 320  /* matches include/common.h's SCREEN_WIDTH/HEIGHT */
 #define SCREEN_HEIGHT 240
 
-/* PS1 games are statically linked with no dynamic allocator -- some already-
- * decompiled code (verified byte-exact, e.g. src/core/cd.c's gSoundSets table)
- * bakes literal fixed RAM addresses straight into C source as scratch
- * buffers (`(void *)0x80140878`), matching the original's real, fixed
- * 2MB memory map. On a 64-bit host those numeric values aren't valid
- * addresses at all. Reserving the real PS1 KUSEG RAM range (0x80000000,
- * 2MB) as real, writable memory in our own process makes every such
- * literal a valid buffer again, exactly like on real hardware -- found via
- * a real crash (fread() into gSoundSets[0].bufferPtr, PID coredump
- * backtrace), not a hypothetical. Confirmed only 8 such literals exist
- * (grep across all of src/), none aliasing a real named symbol -- they're
- * anonymous scratch space, so this doesn't need to coexist with our own
- * generated globals at matching offsets, just be valid memory. Uses
- * MAP_FIXED_NOREPLACE (fails loudly instead of silently clobbering an
- * existing mapping) since this is a PIE binary and the exact address isn't
- * guaranteed free. */
+/* Decompiled code bakes literal PS1 RAM addresses in as scratch buffers (e.g. src/core/cd.c's
+ * gSoundSets, `(void *)0x80140878`); reserving the real 2MB KUSEG range makes each one valid memory.
+ * See docs/pc-port/bootstrap.md, "Reserving the PSX RAM ranges". */
 #define PSX_RAM_BASE ((void *)0x80000000UL)
 #define PSX_RAM_SIZE (2 * 1024 * 1024)
 
-/* Real PS1 Scratchpad RAM (psx-spx iomap.md: "1F800000h 400h Scratchpad (1K Fast RAM)
- * (Data Cache mapped to fixed address)") -- a second, separate fixed-address region from
- * the main 2MB KUSEG RAM above, used by already-decompiled code as fast temp/dictionary
- * space (src/maps/unpack.c's UnpackMapFileData: `pCache = (u8 *)0x1f800000;`, indexed up
- * to `cacheOfs & 0x3ff`, i.e. the full real 1KB). Found via a real SIGSEGV once battle-map
- * loading was actually reached (UnpackMapFileData writing through this unmapped address),
- * not a hypothetical -- the original 8-literal audit for PSX_RAM_BASE only covered addresses
- * inside the main RAM range and missed this one since it's a different, smaller region
- * entirely. */
+/* PS1 Scratchpad RAM (psx-spx iomap.md: 1F800000h, 400h bytes of "fast RAM") -- a second fixed
+ * region, used by src/maps/unpack.c's UnpackMapFileData as a 1KB dictionary
+ * (`pCache = (u8 *)0x1f800000`, indexed up to `cacheOfs & 0x3ff`). */
 #define PSX_SCRATCHPAD_BASE ((void *)0x1f800000UL)
 #define PSX_SCRATCHPAD_SIZE 0x400
 
-/* Real PS1 hardware has NO memory protection: KUSEG (0x00000000) and KSEG0
- * (0x80000000) are documented mirrors of the exact same physical 2MB RAM
- * (psx-spx memorymap.md), just with different CPU caching behavior -- not
- * two different memories, and "address 0" isn't special or reserved the way
- * it is on a modern OS with virtual memory. This means a transient NULL
- * pointer dereference in already-decompiled game code (confirmed real via a
- * live BizHawk RAM trace against the actual retail game, not a
- * hypothetical: src/battle/field.c's Objf013_BattleMgr reads
- * `unitSprite->x1.n` while `unitSprite` is genuinely 0x00000000 for a few
- * frames right after the demo battle's manager object is created, before a
- * later state assigns it a real value -- see
- * exchange/12-phase-c-bootstrap.md's "Current, unresolved puzzle" section
- * and exchange/13-bizhawk-ram-watch.md for the full derivation) is
- * completely harmless on real hardware: it just reads a few garbage-but-
- * valid bytes from the start of RAM for one frame. On our port, address 0
- * is a true unmapped NULL page, so the exact same code is a guaranteed
- * SIGSEGV.
- *
- * Reserving this range the same way as PSX_RAM_BASE/PSX_SCRATCHPAD_BASE
- * above closes that gap -- but mapping literal address 0 hits a real OS
- * security boundary most of those other two never touch: Linux's
- * `vm.mmap_min_addr` (this system: 65536) blocks unprivileged processes
- * from mapping anything below that address, specifically to make
- * NULL-pointer-dereference bugs in OTHER software harder to exploit. This
- * process needs CAP_SYS_RAWIO to bypass it -- see `make setcap` in this
- * directory's Makefile. Deliberately non-fatal if the capability isn't
- * present: the game runs fine without it right up until a real code path
- * actually needs this range, so warn and continue rather than refusing to
- * start. */
+/* On PS1, KUSEG address 0 mirrors the same 2MB RAM as 0x80000000 (psx-spx memorymap.md), so a
+ * transient NULL dereference (e.g. field.c's BattleMgr reading `unitSprite->x1` a frame early) is
+ * harmless there. Address 0 is NOT mapped here (Linux vm.mmap_min_addr); see docs/memory-safety.md. */
 #define PSX_NULL_MIRROR_BASE ((void *)0x00000000UL)
 #define PSX_NULL_MIRROR_SIZE PSX_RAM_SIZE
 
 #if !defined(__APPLE__)
 static int ReservePsxMemory(void *base, size_t size, const char *label) {
 #if defined(_WIN32)
-    /* Win32 has no mmap: VirtualAlloc the fixed low address directly. On Win64 these PSX ranges
-     * (0x1f800000, 0x80000000) sit in the low 2GB of a 128TB user space and are normally free; if
-     * one is taken, VirtualAlloc returns a different/NULL address and we warn + continue, matching
-     * the POSIX branch's non-fatal behaviour. */
+    /* Win32 has no mmap: VirtualAlloc the fixed low address directly. Both PSX ranges sit in the
+     * low 2GB of Win64's user space and are normally free; if one is taken, VirtualAlloc returns
+     * NULL or a different address and this warns + continues, like the POSIX branch. */
     void *p = VirtualAlloc(base, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (p == NULL || p != base) {
         fprintf(stderr, "PC_Bootstrap: could not reserve %s at %p (%s) -- "
@@ -140,11 +83,8 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
     }
     fprintf(stderr, "PC_Bootstrap: reserved %s at %p (%zu bytes)\n", label, p, size);
 #ifdef __SANITIZE_ADDRESS__
-    /* ASAN's shadow memory doesn't know about a raw mmap() done outside
-     * its own allocator hooks -- without this, every write into this
-     * (perfectly valid) region reports as an "unknown-crash" false
-     * positive. Debug-build-only concern, never affects the real
-     * binary. */
+    /* ASan's shadow memory doesn't cover a raw mmap() outside its allocator hooks -- without this,
+     * every write into this valid region reports as an "unknown-crash" false positive. */
     void __asan_unpoison_memory_region(void *, size_t);
     __asan_unpoison_memory_region(p, size);
 #endif
@@ -156,8 +96,8 @@ static int ReservePsxMemory(void *base, size_t size, const char *label) {
 #ifndef VH_UNIFIED
 __attribute__((constructor))
 #endif
-/* Non-static since the P5 unified binary: pc_region_main.c calls the (prefixed) pieces
- * explicitly, in the same order the constructors run here -- see exchange/104 policy. */
+/* Non-static: the unified binary's pc_region_main.c calls the (prefix-renamed) pieces explicitly,
+ * in the same order the constructors run here. */
 void PC_ReservePsxRam(void) {
 #if defined(__APPLE__)
     /* arm64 Mach-O reserves the low 4GiB. PC_PORT call sites use host-backed work buffers. */
@@ -170,19 +110,9 @@ void PC_ReservePsxRam(void) {
      * PC_PORT guards and will report then terminate on an unknown low-address access. */
 }
 
-/* The default disc path used to be a plain relative literal
- * ("../../../game/..."), which only resolved correctly when launched from
- * one specific working directory (platform/pc/). Running the built binary
- * the natural way -- `cd build && ./vandalhearts_pc`, one directory deeper
- * -- silently mounted the wrong path and left the game running with no
- * disc data at all (every CdRead fails, nothing ever renders): a real,
- * reported failure, not a hypothetical. /proc/self/exe gives the
- * executable's own real location regardless of the caller's cwd, so the
- * default is anchored to that instead: build/vandalhearts_pc's own
- * directory, four levels up to the repo layout's game/ sibling. */
-/* Stage 2.4: the running executable's absolute path, per-OS. Returns 1 on success. Forward slashes
- * in the CONSTRUCTED path below work on all three (Win32 accepts '/'), but the RETURNED exe path may
- * use '\' on Windows, so the caller strips either separator. */
+/* The running executable's absolute path, per-OS, so the default disc path is anchored to the
+ * binary rather than the caller's cwd. Returns 1 on success. The RETURNED path may use '\' on
+ * Windows, so the caller strips either separator; constructed paths use '/' (Win32 accepts it). */
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -214,14 +144,9 @@ static int PC_GetExeDir(char *out, size_t outSize) {
     return 1;
 }
 
-/* The directory where the *end user's* files live (disc image, vandalhearts.ini). VH_DEPLOY_DIR is
- * an explicit override used by native packages whose signed/read-only executable lives somewhere
- * different from user-owned config, saves, and game data (notably a macOS .app bundle). Normally
- * this is just the executable's own directory (PC_GetExeDir). But under an AppImage it runs from
- * a read-only squashfs mounted at /tmp/.mount_XXXX/usr/bin -- the user can't drop their disc there.
- * The AppImage runtime exports $APPIMAGE = the absolute path of the .AppImage file itself, so its
- * dirname is where the user actually keeps things. Prefer that when present; otherwise fall back to
- * the exe dir. Harmless on Windows/native Linux (env var simply unset). Returns 1 on success. */
+/* Where the end user's files live (disc, vandalhearts.ini); returns 1 on success. VH_DEPLOY_DIR
+ * overrides (packages whose read-only executable lives apart from user data, e.g. a macOS .app);
+ * else dirname($APPIMAGE) under an AppImage (the squashfs mount is read-only); else the exe dir. */
 int PC_GetDeployDir(char *out, size_t outSize) {
     const char *deploy = getenv("VH_DEPLOY_DIR");
     const char *appimage = getenv("APPIMAGE");   /* set only when running as an AppImage */
@@ -245,13 +170,9 @@ int PC_GetDeployDir(char *out, size_t outSize) {
 #define PC_Setenv(k, v) setenv((k), (v), 1)
 #endif
 
-/* Stage 2.4 QoL: load <exedir>/vandalhearts.ini so end users configure the game by editing a file
- * instead of setting environment variables. Format is plain `KEY=VALUE`, one per line; INI
- * [section] headers and ';' / '#' comment lines are ignored (sections are cosmetic -- keys are the
- * VH_* names directly). Precedence is env var > .ini > built-in default: a KEY already present in
- * the real environment is NOT overridden, so scripts/power users still win, and the file only fills
- * in what's unset. Runs at constructor priority 101 -- before PC_ReservePsxRam and
- * the window/audio init (VH_SCALE, ...) read anything. Absent file => silently all-defaults. */
+/* Load <deploydir>/vandalhearts.ini: plain `KEY=VALUE` lines, [section] headers and ;/# comments
+ * ignored. Precedence is env var > ini > default (a key already in the environment is never
+ * overridden). Constructor priority 101: runs before anything reads VH_*. Absent file = defaults. */
 #ifndef VH_UNIFIED
 __attribute__((constructor(101)))
 #endif
@@ -290,10 +211,9 @@ void PC_LoadIniConfig(void) {
     fclose(f);
 }
 
-/* Does `line` set (or comment out) `key`? Matches "KEY=", ";KEY=", "# KEY =", etc. -- an optional
- * leading comment marker, then the key, optional ws, '='. On a match, *inlineCmt (if non-NULL) is set
- * to the ';'/'#' inline-comment tail on that line (past the '='), or NULL if there is none, so the
- * rewrite can preserve the human-readable note (e.g. "; horizontal (rotate direction)"). */
+/* Does `line` set (or comment out) `key`? Matches "KEY=", ";KEY=", "# KEY =": an optional leading
+ * comment marker, the key, optional ws, '='. On a match, *inlineCmt (if non-NULL) receives the
+ * ';'/'#' inline-comment tail past the '=' (or NULL) so a rewrite can preserve the note. */
 static int PC_IniLineIsKey(const char *line, const char *key, const char **inlineCmt) {
     const char *p = line;
     size_t klen = strlen(key);
@@ -351,14 +271,9 @@ static void PC_IniWriteKeyLine(FILE *out, const char *key, const char *value, co
     fputc('\n', out);
 }
 
-/* See pc_platform.h. Surgical single-key ini write; keeps the file otherwise byte-for-byte.
- *
- * Two passes over the (tiny) file so the three cases stay unambiguous and never fight each other:
- *   1. key already present (active or commented, in any section) -> replace that line in place,
- *      preserving its inline comment. Highest priority, so a stray value is never duplicated.
- *   2. key absent but its [section] exists -> insert the line at the END of that section (before the
- *      next header, or at EOF), so it joins the existing section rather than spawning a new one.
- *   3. neither -> append a fresh [section] header + the line (also the from-scratch/no-file case). */
+/* See pc_platform.h. Surgical single-key ini write keeping the file otherwise byte-for-byte: key
+ * present -> replace in place; only its [section] present -> insert at its end; neither -> append.
+ * See docs/pc-port/bootstrap.md, "Writing a setting back to `vandalhearts.ini`". */
 int PC_SaveIniConfig(const char *section, const char *key, const char *value) {
     char dir[PATH_MAX], iniPath[PATH_MAX + 32], tmpPath[PATH_MAX + 40], line[512], hdr[128];
     FILE *in, *out;
@@ -428,10 +343,9 @@ static int HasBinExt(const char *name) {
     return e[0] == '.' && (e[1]|0x20) == 'b' && (e[2]|0x20) == 'i' && (e[3]|0x20) == 'n';
 }
 
-/* Validate a discovery candidate before choosing it. Multi-track dumps commonly contain several .bin
- * files; only the data track has the executable header at THIS REGION's boot LBA (VH_REGION_BOOT_LBA,
- * pc_platform.h: 23 US/Asia, 15200 JP), user-data offset 24. A folder holding both regions' dumps
- * therefore auto-picks this build's own disc. */
+/* Validate a discovery candidate: only the data track of a multi-track dump has the PS-X EXE header
+ * at THIS region's boot LBA (VH_REGION_BOOT_LBA: 23 US/Asia, 15200 JP; sector data at byte 24), so
+ * a folder holding both regions' dumps auto-picks this build's own disc. */
 static int HasVandalHeartsBoot(const char *path) {
     enum { RAW_SECTOR_SIZE = 2352, DATA_OFFSET = 24 };
     unsigned char magic[8];
@@ -467,13 +381,9 @@ static int FirstBinInDir(const char *dir, char *out, size_t outSize) {
     return 0;
 }
 
-/* Locate the disc image with NO configuration needed for the common cases (Stage 2.4 QoL). Anchored
- * to the executable's own directory (via PC_GetExePath, cwd-independent), tried in order:
- *   1. a `game/` folder next to the .exe holding a valid *.bin -- the recommended portable-binary layout;
- *   2. a *.bin sitting directly beside the .exe;
- *   3. the dev repo layout (game/ four levels up from platform/pc/build*).
- * VH_DISC_IMAGE (checked by the caller) still overrides all of this. Whatever this returns, a failed
- * mount prints the path + a hint, so a wrong guess is self-explanatory rather than silent. */
+/* Locate the disc image with no configuration for the common cases, anchored to the deploy dir
+ * (cwd-independent): 1. a `game/` folder there; 2. a *.bin directly there; 3. the dev repo layout.
+ * VH_DISC_IMAGE (checked by the caller) overrides; a failed mount prints the path tried. */
 static const char *DefaultDiscPath(void) {
     static char path[PATH_MAX + 64];
     char deployDir[PATH_MAX], exeDir[PATH_MAX], cand[PATH_MAX + 16];
@@ -493,13 +403,9 @@ static const char *DefaultDiscPath(void) {
     return path;
 }
 
-/* Diagnostics (PC-only): dump the current call stack + game state to stderr. Used two ways:
- *   - SIGUSR1 (`kill -USR1 <pid>`): sample a running/hung process without gdb/ptrace (the setcap
- *     binary makes those awkward), then keep running -- for "freeze" (state-stall) diagnosis.
- *   - SIGSEGV/SIGBUS: dump on a real crash before dying, so the window doesn't just vanish -- the
- *     backtrace (+ symbol names, linked -rdynamic) + gState point at where it crashed.
- * addr2line -e the binary on any bare addresses. (POSIX-only: backtrace()/signals. Windows relies on
- * source-level PC_PORT guards + the debugger, so this diagnostics path is compiled out there.) */
+/* Diagnostics (POSIX only; Windows relies on PC_PORT guards + a debugger): dump the call stack and
+ * game state to stderr. SIGUSR1 samples a running/frozen process without ptrace and continues;
+ * SIGSEGV/SIGBUS dumps before dying. Linked -rdynamic so backtrace() carries symbol names. */
 #if !defined(_WIN32)
 static void PC_DumpDiag(const char *tag) {
     void *frames[64];
@@ -511,24 +417,14 @@ static void PC_DumpDiag(const char *tag) {
 static void PC_SigUsr1(int sig) { (void)sig; PC_DumpDiag("\n*** SIGUSR1: call stack (frozen?) ***\n"); }
 #endif /* !_WIN32 */
 
-/* ---- NULL-read fixup (Stage 2.2): make a transient PSX-style NULL/low-address access survive on a
- * native Linux i386 host instead of needing the CAP_SYS_RAWIO low-page mapping. On PSX, address 0
- * (KUSEG) is real 2MB RAM, so game code that transiently dereferences a not-yet-assigned pointer
- * just reads garbage for a frame; on a host, address 0 faults. Rather than map address 0 (privileged,
- * and impossible on Windows/macOS), we catch the fault, emulate the access as reading 0 (identical to
- * what the old MAP_ANONYMOUS zero page returned) or discarding the store, step over the instruction,
- * log the site once, and continue. Un-guarded sites therefore no longer crash -- they surface in
- * vh_null_reads.log so they can be given an explicit source-level guard later. Currently native
- * Linux x86-32 (-m32) only: Darwin's ucontext layout and arm64/x86-64 instructions are not decoded,
- * and Windows has no POSIX signal path. (The old privileged low-page-mapping fallback was retired;
- * nothing runs privileged.) */
+/* ---- NULL-read fixup: on PS1, address 0 is real RAM, so a transient dereference of a not-yet-
+ * assigned pointer reads garbage; on a host it faults. Native Linux i386 emulates the access, logs
+ * the site once, and resumes. See docs/pc-port/bootstrap.md, "Handler mechanics". */
 
 #if defined(__i386__) && !defined(_WIN32)
-/* Decode the memory-access instruction at `ip` (the faulting one). Returns its length and, for a
- * load, the destination greg index + width to zero; for a store, isWrite=1 (nothing to zero, just
- * skip). Returns 0 for forms we don't handle yet (caller then crashes with diagnostics so this can be
- * extended). Covers what gcc -O0 emits for struct-field loads/stores: mov / movzx / movsx, with the
- * operand-size prefix and full ModRM/SIB/disp addressing. */
+/* Decode the faulting memory-access instruction at `ip`. Returns its length and, for a load, the
+ * destination greg + width to zero; for a store, isWrite=1. Returns 0 for unhandled forms (the caller
+ * then crashes with diagnostics). Covers gcc -O0's mov/movzx/movsx with 0x66 prefix + ModRM/SIB/disp. */
 static int VhDecodeMemAccess(const unsigned char *ip, int *outIsWrite, int *outGreg, int *outBytes, int *outHigh) {
     int i = 0, opsize = 4, has0F = 0;
     for (;;) {                                   /* prefixes */
@@ -614,25 +510,18 @@ static void PC_LogNullRead(void *ip, uintptr_t fault, int isWrite) {
 }
 #endif /* __i386__ -- PC_LogNullRead */
 
-/* Stage 2.3: available on x86-64 as well as x86-32. `REG_ERR` and the page-fault error-code
- * layout are identical on both -- bit 1 set means the access was a write. This must NOT be
- * gated to __i386__ along with the NULL instruction decoder: the .rodata fixup below depends
- * on it and is still required under -m64 (the game mutates string literals in place). Windows is
- * excluded: it has no ucontext_t/mprotect fault path -- the startup PE-section remap (below)
- * makes .rodata writable there without any on-fault handler. */
+/* REG_ERR and the page-fault error-code layout are identical on x86-32 and x86-64 (bit 1 = write).
+ * Deliberately NOT gated to __i386__ with the NULL decoder: the .rodata retry below depends on it
+ * under -m64 too (the game mutates string literals in place). Windows has no ucontext/mprotect path. */
 #if (defined(__i386__) || defined(__x86_64__)) && !defined(__APPLE__)
 #define PC_HAVE_WRITE_FAULT_INFO 1
 static int PC_IsWriteFault(void *ucv) {   /* x86 page-fault error code bit 1 == write */
     return (((ucontext_t *)ucv)->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
 }
 
-/* Lazily make the page containing `addr` writable, to satisfy a write to the executable's read-only
- * .rodata -- the game mutates string literals in place (e.g. ShowExpDialog writing the EXP digits
- * into "You got     "), harmless on PSX where all RAM is writable, a SIGSEGV on a host. This replaces
- * the old startup PC_MakeRodataWritable() that parsed /proc/self/maps and remapped ALL rodata RW:
- * this is portable (no /proc), on-demand (only pages actually written), and logs each site. Returns
- * 1 if the page is now writable (retry the store) or 0 if mprotect refused it (a genuine wild write
- * -> crash). Dedups by page, which also guards against an infinite retry loop. */
+/* Lazily make the page containing `addr` writable: the game mutates string literals in place (e.g.
+ * ShowExpDialog writing EXP digits into "You got     "), a SIGSEGV on a host. On-demand safety net
+ * behind the startup remap; logs each site. Returns 1 to retry the store, 0 (dedup by page) to crash. */
 static int PC_MakePageWritable(uintptr_t addr) {
     static uintptr_t seen[128];
     static int seenCount = 0;
@@ -680,9 +569,9 @@ static void PC_WriteHex(const char *label, uintptr_t v) {
 static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
     uintptr_t fault = (uintptr_t)(si ? si->si_addr : 0);
     if (s_crashHandlerActive) {
-        /* A fault INSIDE the handler (e.g. backtrace() walking a corrupted stack). Leave a
-         * breadcrumb -- before this wrote nothing and _exit'd, so a trashed-stack crash died
-         * with NO output AND NO core (2026-08-21, JP debug-menu event-map index 12). */
+        /* A fault INSIDE the handler (e.g. backtrace() walking a corrupted stack): leave a
+         * breadcrumb, then _exit -- otherwise a trashed-stack crash dies with no output and no
+         * core. */
         static const char msg[] = "\n*** CRASH: handler re-fault (stack likely corrupt) -- dying "
                                   "without a core; run under gdb for the first-chance trace ***\n";
         ssize_t w = write(2, msg, sizeof(msg) - 1); (void)w;
@@ -722,13 +611,8 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
 #endif /* __i386__ -- NULL instruction-decode fixup ends here */
 
     /* Write to the executable's read-only .rodata (in-place string-literal mutation): make the page
-     * writable and retry the store -- no instruction decode needed, and no /proc (see above).
-     *
-     * Stage 2.3: this is OUTSIDE the __i386__ gate on purpose. It used to sit inside it, which
-     * meant the -m64 build would have silently lost the .rodata fixup and hard-crashed on the
-     * first string-literal mutation (ShowExpDialog writing EXP digits into a literal -- the one
-     * fault still present in vh_null_reads.log after the Step-A guard pass). Unlike the NULL
-     * decoder, nothing here is 32-bit-specific: si_addr + the x86 write bit + mprotect. */
+     * writable and retry the store. Outside the __i386__ gate on purpose -- the -m64 build needs
+     * this too, and nothing here is 32-bit-specific (si_addr + the x86 write bit + mprotect). */
 #if defined(PC_HAVE_WRITE_FAULT_INFO)
     if (ucv && fault >= PSX_NULL_MIRROR_SIZE && PC_IsWriteFault(ucv) && PC_MakePageWritable(fault)) {
         s_crashHandlerActive = 0;
@@ -740,23 +624,9 @@ static void PC_SigCrash(int sig, siginfo_t *si, void *ucv) {
 }
 #endif /* !_WIN32 -- POSIX diagnostics + NULL/rodata on-fault handlers */
 
-/* ---- startup .rodata RW remap (Stage 2.4, cross-platform) -------------------------------------
- *
- * The game mutates read-only string literals in place (e.g. ShowExpDialog writes the EXP digits
- * into "You got     "), harmless on PSX where all RAM is writable. Two mechanisms have existed:
- * an old startup remap that parsed /proc/self/maps (Linux-only), and the on-demand
- * PC_MakePageWritable() fault path above. The fault path is not portable: it needs a POSIX SIGSEGV
- * handler (not Windows) and the x86 page-fault write bit (not ARM/Apple Silicon).
- *
- * So the running path is made signal/arch-free again, portably this time: at startup, make the
- * executable's read-only DATA segments writable. No /proc, no signals, no instruction decode. The
- * on-fault path stays as an x86 safety net for anything a platform's remap misses. Per-platform:
- *   - Linux: dl_iterate_phdr -> mprotect each PF_R-only PT_LOAD of the main program.
- *   - Windows (MinGW): PE section walk of the main module -> VirtualProtect each read-only,
- *     non-executable initialized-data section (.rdata) to PAGE_READWRITE.
- *   - macOS: dyld segment/section walk + mprotect.
- * Best-effort: failures are non-fatal (the on-fault path or a later crash will surface a real
- * problem); success just means string-literal writes never fault. */
+/* ---- startup .rodata RW remap: the game mutates string literals in place (harmless on PSX), so
+ * each OS makes the executable's read-only DATA segments writable up front (no signals, no /proc).
+ * See docs/pc-port/bootstrap.md, "Making read-only data writable". */
 #if defined(__linux__)
 #include <link.h>   /* dl_iterate_phdr, ElfW, PT_LOAD, PF_* */
 static int PC_RodataPhdrCb(struct dl_phdr_info *info, size_t size, void *unused) {
@@ -862,10 +732,9 @@ static void PC_MakeRodataWritable(void) {
 }
 #endif
 
-/* Fatal startup error the user can actually act on (wrong/missing disc). Prints to stderr (visible
- * in a console launch) AND, on Windows, pops a message box so double-click users -- who have no
- * console -- still see it. `path` is the disc path we tried, appended so it's clear what was wrong.
- * Then exits: booting on into a blank window / garbage would only confuse. */
+/* Fatal startup error the user can act on (wrong/missing disc): stderr plus a message box for
+ * double-click users with no console, then exit -- booting into a blank window would only confuse.
+ * `path` is the disc path tried. */
 void PC_FatalDiscError(const char *title, const char *body, const char *path) {   /* non-static: libcd.c's corruption guards use it (pc_platform.h) */
     fprintf(stderr, "\n*** %s ***\n%s\nDisc path tried: %s\n", title, body, path);
 #if defined(_WIN32)
@@ -876,9 +745,8 @@ void PC_FatalDiscError(const char *title, const char *body, const char *path) { 
     }
 #else
     {   /* Linux: a desktop (double-click) AppImage launch has no terminal, so without a dialog the
-         * app just opens and closes -- the user never sees why (caught in the 1.6.2 validation).
-         * SDL's message box works before SDL_Init and no-ops harmlessly under the headless dummy
-         * driver (the regress harness), where stderr above is the channel anyway. */
+         * app just opens and closes. SDL's message box works before SDL_Init and no-ops under the
+         * headless dummy driver (the regress harness), where stderr above is the channel anyway. */
         char full[4096];
         snprintf(full, sizeof(full), "%s\n\nDisc path tried:\n%s", body, path);
         PC_ShowErrorBox(title, full);
@@ -887,11 +755,9 @@ void PC_FatalDiscError(const char *title, const char *body, const char *path) { 
     exit(1);
 }
 
-/* The per-region bootstrap tail (P5, exchange/104): everything after config/arena --
- * replay hook, rodata remap, signal handlers, disc mount + guards, window init. In the
- * single-region builds the constructor below runs it with path discovery; the unified
- * binary's pc_region_main.c calls the chosen region's (prefixed) copy with an explicit,
- * already-classified path. */
+/* The per-region bootstrap tail: everything after config/arena -- replay hook, rodata remap, signal
+ * handlers, disc mount + guards, window init. Single-region builds run it from the constructor
+ * below with path discovery; the unified pc_region_main.c passes an already-classified path. */
 void PC_BootstrapRegion(const char *discPathArg) {
     /* GPU-trace replay mode (regression harness): feed a recorded trace straight through the
      * rasterizer and print the deterministic VRAM signature -- no game, no disc, no window.
@@ -935,9 +801,9 @@ void PC_BootstrapRegion(const char *discPathArg) {
             "to the executable (or right beside it), or set the disc path via VH_DISC_IMAGE "
             "in vandalhearts.ini (or the environment).", discPath);
     }
-    /* Corruption guard 1/3 (post-1.6.1, from a real user report): a raw .bin is a whole number of
-     * 2352-byte sectors, and an interrupted copy/download almost never is. Catching it here turns a
-     * silent boot hang (the loader retrying garbage forever) into an error the user can act on. */
+    /* Corruption guard: a raw .bin is a whole number of 2352-byte sectors, and an interrupted
+     * copy/download almost never is. Catching it here turns a silent boot hang (the loader retrying
+     * garbage forever) into an error the user can act on. */
     {
         long long sz = PC_CdImageBytes();
         if (sz > 0 && (sz % 2352) != 0) {
@@ -949,9 +815,9 @@ void PC_BootstrapRegion(const char *discPathArg) {
         }
     }
     if (!PC_CdDiscSignatureOk()) {
-        /* No boot exe at THIS region's LBA. Most likely user error now that two region builds
-         * exist: a valid Vandal Hearts disc of the OTHER region. Classify (the classifier
-         * probes both layouts) so the message names what was actually supplied. */
+        /* No boot exe at THIS region's LBA. Most likely a valid Vandal Hearts disc of the OTHER
+         * region: classify (the classifier probes both layouts) so the message names what was
+         * actually supplied. */
         PC_DiscRelease rel = PC_CdDiscRelease();
         if (rel == VH_DISC_JAPAN) {
             PC_FatalDiscError("Vandal Hearts - wrong region disc",
@@ -973,10 +839,9 @@ void PC_BootstrapRegion(const char *discPathArg) {
             "or a .cue/.iso file.", discPath);
     }
     {
-        /* Name the mounted release. USA/Asia share one master (both run on the US build);
-         * Japan is its own build (the jp/ tree). An unrecognized PS-X EXE disc that still
-         * carries this region's boot signature boots (the signature above is the hard gate)
-         * but is flagged. */
+        /* Name the mounted release. USA/Asia share one master (both run on the US build); Japan is
+         * its own build (the jp/ tree). An unrecognized PS-X EXE disc that still carries this
+         * region's boot signature boots (the signature above is the hard gate) but is flagged. */
         PC_DiscRelease rel = PC_CdDiscRelease();
         const char *relName = rel == VH_DISC_USA   ? "USA (SLUS-00447)"
                             : rel == VH_DISC_ASIA  ? "Asia (SCPS-45183)"
@@ -997,8 +862,8 @@ void PC_BootstrapRegion(const char *discPathArg) {
         int ww = SCREEN_WIDTH, wh = SCREEN_HEIGHT, sc = 1;
         int isc = g_vhInternalScale > 0 ? g_vhInternalScale : 1;
         PC_GpuGetWindowSize(&ww, &wh, &sc);
-        /* Report all three distinct resolutions accurately: the fullscreen/windowed presentation, the
-         * native (logical) framebuffer, and -- when G2 supersampling is on -- the internal render size. */
+        /* Report all three distinct resolutions: the fullscreen/windowed presentation, the native
+         * (logical) framebuffer, and -- when supersampling is on -- the internal render size. */
         if (g_vhFullscreen)
             fprintf(stderr, "PC_Bootstrap: opened a fullscreen window (native %dx%d",
                     SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -1017,13 +882,9 @@ __attribute__((constructor))
 static void PC_Bootstrap(void) { PC_BootstrapRegion(NULL); }
 #endif
 
-/* ---- Stage 2.3 UI-visibility probe (PC_DEBUG_UI_LOG) ------------------------------------
- * The -m64 build renders terrain, sprites and the damage-number correctly but drops the Vandal
- * Hearts logo, the compass and every textbox. Windows never call AddPrim themselves -- they
- * compose into VRAM and spawn child sprite objects that AddObjPrim2 draws. This logs both ends
- * so one run distinguishes "the window object never runs" from "it runs but its child sprites
- * are hidden / off-screen / at a bad OT index". Enabled with VH_UI_LOG=1; the hooks that call it
- * are PC_DEBUG_UI_LOG-gated and compile out of the matching build entirely. */
+/* ---- UI-visibility probe (PC_DEBUG_UI_LOG): windows never call AddPrim themselves -- they compose
+ * into VRAM and spawn child sprite objects that AddObjPrim2 draws -- so this logs both ends to tell
+ * "window object never runs" from "child sprites hidden/off-screen/bad OT index". VH_UI_LOG=1. */
 void PC_DebugUiLog(const char *tag, int a, int b, int c, int d, int e, int f, int g, int h) {
     static FILE *fp = NULL;
     static int enabled = -1, lines = 0;

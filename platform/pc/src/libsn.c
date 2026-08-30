@@ -1,9 +1,5 @@
-/*
- * PC backend for PsyQ/libsn.h's PCcreat/PClseek/PCwrite/PCclose -- real
- * local file I/O, standing in for the original "write to the connected
- * dev PC over the debug link" workflow. See libsn.h for why this is a
- * real implementation rather than a stub.
- */
+/* PC backend for PsyQ/libsn.h's PCcreat/PClseek/PCwrite/PCclose -- real local file I/O, standing in
+ * for the original "write to the connected dev PC over the debug link" workflow. */
 #include <fcntl.h>
 #include <unistd.h>
 

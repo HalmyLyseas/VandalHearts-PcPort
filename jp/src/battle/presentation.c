@@ -1,14 +1,6 @@
-/* Battle presentation objects (segment 0x11604): the level-up jingle/stats object, the
- * impact bounce-zoom, the two battle cameras, the event zoom, the end-of-move direction
- * chooser and its direction-arrow renderer.
- *
- * Cameras: Objf017_AttackCamera is the attack close-up -- swoop onto the actor (zoom 250,
- * pitch 33.75deg), hold while the strike plays (gSignal5 handshake with the action
- * executor in battle/executors.c), then restore the saved camera. Objf026_588_FocusCamera is
- * the general-purpose focus/follow camera used by spell FX and events: callers hand it a
- * target sprite, a vantage type (0-3 -> the GetBestViewOfTarget* variants in core/graphics.c)
- * and an optional zoom; the 588 table slot is the same handler with a wider default zoom
- * (350). */
+/* Battle presentation objects (segment 0x11604): level-up jingle/stats, impact bounce-zoom, the
+ * attack close-up camera Objf017 (gSignal5 handshake with battle/executors.c), the focus/follow
+ * camera Objf026_588 (vantage 0-3 -> GetBestViewOfTarget*; 588 = wider default zoom 350). */
 #include "common.h"
 #include "object.h"
 #include "audio.h"
@@ -180,10 +172,9 @@ void Objf017_AttackCamera(Object *obj) {
    sprite = OBJ.sprite;
 
 #ifdef PC_PORT
-   /* PC_PORT: OBJ.sprite can be NULL here (crashed the JP attract demo battle on map 8 at
-    * the case-0 GetBestViewOf* calls). All uses are reads (z1/x1/y1); redirect NULL to a
-    * zero Object so every field reads 0, bit-identical to PSX's read-through-NULL --
-    * the same read-0 mirror as Objf018_MoveCamera's gated guard below. */
+   /* OBJ.sprite can be NULL here (the attract-demo battle on map 8 reaches the case-0
+    * GetBestViewOf* calls with none). All uses are reads (z1/x1/y1); redirect NULL to a zero
+    * Object so every field reads 0, as PSX does through NULL. See docs/memory-safety.md. */
    {
       static const Object s_nullObj = {0};
       if (sprite == NULL) sprite = (Object *)&s_nullObj;
@@ -297,10 +288,9 @@ void Objf026_588_FocusCamera(Object *obj) {
    target = OBJ.target;
 
 #ifdef PC_PORT
-   /* PC_PORT: OBJ.target (the followed unit's sprite) can be NULL when the camera targets
-    * an empty/vacated tile. PSX read 0 through NULL; target is read-only here, so redirect
-    * NULL to a zero Object -- every field then reads 0 (read-0, NOT skip: the camera still
-    * eases toward origin). Same gated guard as the US tree (src/battle/presentation.c). */
+   /* OBJ.target (the followed unit's sprite) is NULL when the camera targets an empty tile. PSX
+    * reads 0 through NULL; target is read-only here, so redirect NULL to a zero Object (read-0,
+    * NOT skip: the camera still eases toward origin). See docs/memory-safety.md. */
    {
       static const Object s_nullObj = {0};
       if (target == NULL) target = (Object *)&s_nullObj;

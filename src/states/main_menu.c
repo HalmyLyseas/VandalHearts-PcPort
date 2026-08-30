@@ -7,10 +7,9 @@
 #include "cd_files.h"
 
 #ifdef PC_FEAT
-/* Language packs (platform/pc/src/pc_lang.c): text held in the sText_* arrays below cannot be wrapped at the
- * array itself -- a static initializer needs a compile-time constant. It is wrapped where the array
- * is READ instead: PC_LangStr hashes whatever string it is handed at run time, so one wrap covers
- * every entry in every array. Transparent in the matching build. */
+/* Text held in the sText_* arrays below can't be wrapped at the array itself -- a static
+ * initializer needs a compile-time constant -- so it's wrapped where it's READ instead: PC_LangStr
+ * (platform/pc/src/pc_lang.c) hashes the string at run time; transparent in the matching build. */
 extern u8 *PC_LangStr(const char *lit);
 #define PC_LANGSTR(s) ((u8 *)PC_LangStr((const char *)(s)))
 
@@ -25,12 +24,9 @@ static s32 CapSame(const u8 *a, const char *b) {
 
 static u8 s_capBuf[40];
 
-/* The save-slot caption is stored in the card file as ENGLISH ("Chap. 1 Sct. 1  L5    0:06", built
- * by core/card.c's Card_UpdateCaption). We translate it HERE, at DISPLAY time, by recomposing it from the
- * pack's labels + the same numbers -- so the save file stays language-neutral (portable, and read
- * correctly under any pack or none, and every existing save is fixed retroactively). Non-caption
- * text and the Empty / In-battle-save captions fall through to the normal content-hash lookup. The
- * numbers sit at the fixed offsets the retail template uses. */
+/* The save-slot caption is stored in the card file as English (built by core/card.c's
+ * Card_UpdateCaption) and translated here at display time by recomposing it from the pack's labels
+ * plus the stored numbers. See docs/language-packs.md, "What a pack covers". */
 static u8 *TranslateCaption(u8 *stored) {
    if (stored[0] == 'C' && stored[1] == 'h' && stored[2] == 'a' && stored[3] == 'p' &&
        stored[4] == '.') {
@@ -71,7 +67,7 @@ static u8 *TranslateCaption(u8 *stored) {
 extern void DrawText(s32 x, s32 y, s32 maxCharsPerLine, s32 lineSpacing, s32 color, u8 *text);
 
 #ifdef PC_FEAT
-/* Stage-3 1.3 (GAP 4): adopt a loaded save's mode from its card-header marker before applying it. */
+/* Adopts a loaded save's mode from its card-header marker before applying it. */
 extern void PC_AdoptSaveMode(void);
 #endif
 
@@ -216,26 +212,9 @@ static s8 *sText_FileLoadCaptions[] = {
     "",
     "",
 #ifdef PC_PORT
-    /* PC_PORT (Stage 2.3): FOURTH entry. This array is read with `i < numChoices`, and
-     * numChoices is 4 for OBJF_FILE_LOAD_MENU / _DEBUG / _IBS / _DEFEAT (only the _343/_367
-     * variants use 3) -- the title-screen Load path goes through OBJF_FILE_LOAD_MENU
-     * (src/core/card.c:112), so index 3 IS read. The neighbouring `if (i < 4 && ...)` and
-     * `slotOccupied[4]` both say the original array is 4 wide; the decomp inferred 3 from its
-     * initializer count.
-     *
-     * With only 3 entries the read runs off the end: at -m32 it fetched 4 bytes of adjacent
-     * static data that happened to be harmless, at -m64 it fetches 8 and DrawText_Internal
-     * SIGSEGVs dereferencing it.
-     *
-     * The value is "In-battle save", confirmed from the byte-exact binary: sText_FileLoadCaptions
-     * is at 0x801023bc and the pointer at [3] (0x801023c8) is 0x800158b0 = "In-battle save".
-     * The decomp attributed that word to the *next* static, sText_InBattleSaveOrBattleStart --
-     * which is declared but referenced by nothing (hence its "Unused" comment). Both readings
-     * emit identical bytes, so the match is unaffected either way; this one is correct because
-     * the array is genuinely indexed at 3. Slot 4 is the in-battle save, which is also why the
-     * fill loop above is `i < 3` and CardFileData_Listing only carries captions[3][40]: the
-     * card supplies the 3 regular-save captions, slot 4's caption is a constant.
-     * Gated, so the matching build keeps its 3-entry layout. */
+    /* This array is genuinely 4 wide (the retail Load path reads index 3, "In-battle save"); the
+     * decomp's initializer-count inference undersizes it to 3, an out-of-bounds read that only
+     * faults at 64-bit. See docs/width-bugs.md, "Found only by building and running". */
     "In-battle save",
 #endif
 };
