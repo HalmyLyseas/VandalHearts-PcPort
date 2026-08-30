@@ -33,6 +33,7 @@ static struct {
     int   rgbStride;
     int   vidStream;
     int   w, h;
+    enum AVPixelFormat pixFmt;   /* geometry the sws/rgb buffer above are currently sized/built for */
     int   cur;               /* index of the frame currently in `rgb` (-1 = none) */
     int   eof;               /* decoder fully drained */
     int   open;
@@ -74,6 +75,7 @@ int PC_HdVideoOpen(const char *path) {
     V.rgb = (unsigned char *)malloc((size_t)V.rgbStride * V.h);
     V.sws = sws_getContext(V.w, V.h, V.dec->pix_fmt, V.w, V.h, AV_PIX_FMT_RGB24,
                            SWS_BILINEAR, NULL, NULL, NULL);
+    V.pixFmt = V.dec->pix_fmt;
     if (!V.frame || !V.pkt || !V.rgb || !V.sws)             { hdv_free_all(); return 0; }
     V.cur = -1; V.eof = 0; V.open = 1;
     if (PC_Verbose()) fprintf(stderr, "[HDvideo] open %s (%dx%d)\n", path, V.w, V.h);
@@ -85,10 +87,34 @@ static int hdv_decode_next(void) {
     for (;;) {
         int r = avcodec_receive_frame(V.dec, V.frame);
         if (r == 0) {
-            unsigned char *dst[1] = { V.rgb };
-            int stride[1] = { V.rgbStride };
-            sws_scale(V.sws, (const unsigned char *const *)V.frame->data, V.frame->linesize,
-                      0, V.h, dst, stride);
+            /* A later SPS/PPS can change width/height/pixel format mid-stream (codex 1.2) --
+             * recreate the scaler + output buffer for the new geometry rather than scaling
+             * into a context/buffer still sized for the old one. Keep the same 8192 cap as
+             * open time; a geometry too large to honor ends the video, keeping the last frame. */
+            if (V.frame->width != V.w || V.frame->height != V.h || V.frame->format != V.pixFmt) {
+                int nw = V.frame->width, nh = V.frame->height;
+                unsigned char *nrgb;
+                struct SwsContext *nsws;
+                if (nw <= 0 || nh <= 0 || nw > 8192 || nh > 8192) { V.eof = 1; return 0; }
+                /* Build the new converter before touching V.rgb: a failure here must leave the
+                 * kept last frame (V.rgb sized by the old V.w/V.h) fully intact. */
+                nsws = sws_getContext(nw, nh, (enum AVPixelFormat)V.frame->format, nw, nh,
+                                      AV_PIX_FMT_RGB24, SWS_BILINEAR, NULL, NULL, NULL);
+                if (!nsws) { V.eof = 1; return 0; }
+                nrgb = (unsigned char *)realloc(V.rgb, (size_t)nw * 3 * (size_t)nh);
+                if (!nrgb) { sws_freeContext(nsws); V.eof = 1; return 0; }
+                V.rgb = nrgb;
+                if (V.sws) sws_freeContext(V.sws);
+                V.sws = nsws;
+                V.w = nw; V.h = nh; V.rgbStride = nw * 3;
+                V.pixFmt = (enum AVPixelFormat)V.frame->format;
+            }
+            {
+                unsigned char *dst[1] = { V.rgb };
+                int stride[1] = { V.rgbStride };
+                sws_scale(V.sws, (const unsigned char *const *)V.frame->data, V.frame->linesize,
+                          0, V.h, dst, stride);
+            }
             V.cur++;
             return 1;
         }

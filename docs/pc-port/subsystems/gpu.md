@@ -149,6 +149,11 @@ the caller decides where to `LoadImage`), matching the real API's two usage
 patterns in the game (`LoadFullscreenImage` with its own rect, and `world/dojo.c`
 slicing one TIM with pointer arithmetic).
 
+`LoadImage`/`StoreImage` clip both VRAM edges (not just the upper bound) so a
+garbage destination rect can never index before `vram[]`, and `ParseTimSection`
+rejects an implausible section size or rect (leaving `ReadTIM`'s `prect`
+NULL/zero-size) instead of parsing off into memory outside the TIM buffer.
+
 ### Presentation
 
 The game renders a native **320×240** frame. `PC_GpuPresent`

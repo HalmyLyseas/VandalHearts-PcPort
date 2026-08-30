@@ -191,10 +191,18 @@ int LoadImage(RECT *rect, unsigned int *p) {
      * re-upload (LoadFWD runs per scene) re-applies for free. No-op without a pack. */
     PC_LangPatchFwdUpload(rect->x, rect->y, rect->w, rect->h, src);
     if (rect->w > 0 && rect->h > 0) TrcWrite('L', rect, 8, src, (u32)(rect->w * rect->h * 2));
-    for (y = 0; y < rect->h; y++)
-        for (x = 0; x < rect->w; x++)
-            if (rect->y + y < VRAM_H && rect->x + x < VRAM_W)
+    /* Clip to both VRAM edges, like MoveImage: a garbage RECT (e.g. from a malformed TIM,
+     * see ParseTimSection) can carry a negative x/y, which would pass the upper-bound check
+     * alone and write before vram[]. */
+    {
+        int x0 = rect->x < 0 ? -rect->x : 0;
+        int y0 = rect->y < 0 ? -rect->y : 0;
+        int x1 = rect->x + rect->w > VRAM_W ? VRAM_W - rect->x : rect->w;
+        int y1 = rect->y + rect->h > VRAM_H ? VRAM_H - rect->y : rect->h;
+        for (y = y0; y < y1; y++)
+            for (x = x0; x < x1; x++)
                 vram[rect->y + y][rect->x + x] = src[y * rect->w + x];
+    }
     HiresMirrorRect(rect->x, rect->y, rect->w, rect->h);   /* G2: keep hires FB in sync (backgrounds) */
     if (!TrcReplaying()) HdPack_OnLoad(rect, src);         /* 1.6 HD pack: hash + replace/dump (env-gated) */
     return 0;
@@ -204,9 +212,15 @@ int StoreImage(RECT *rect, unsigned int *p) {
     unsigned short *dst = (unsigned short *)p;
     unsigned short (*vram)[VRAM_W] = PC_GpuVram();
     int x, y;
+    /* Clip the vram read to both edges (see LoadImage); pixels outside the clipped range
+     * still get a destination write of 0, matching the original upper-bound-only fill. */
+    int x0 = rect->x < 0 ? -rect->x : 0;
+    int y0 = rect->y < 0 ? -rect->y : 0;
+    int x1 = rect->x + rect->w > VRAM_W ? VRAM_W - rect->x : rect->w;
+    int y1 = rect->y + rect->h > VRAM_H ? VRAM_H - rect->y : rect->h;
     for (y = 0; y < rect->h; y++)
         for (x = 0; x < rect->w; x++)
-            dst[y * rect->w + x] = (rect->y + y < VRAM_H && rect->x + x < VRAM_W)
+            dst[y * rect->w + x] = (y >= y0 && y < y1 && x >= x0 && x < x1)
                                         ? vram[rect->y + y][rect->x + x] : 0;
     return 0;
 }
@@ -676,42 +690,65 @@ int OpenTIM(unsigned int *addr) {
     return 0;
 }
 
+/* Plausibility bounds on a section header (codex 1.3): a garbage size or rect -- e.g. from a
+ * corrupt/modified TIM on the disc image -- must not walk the cursor off into memory outside
+ * the file buffer, nor hand the caller an implausible upload rect. Real sections are at least
+ * the 12-byte header, word-aligned, comfortably under this project's largest legitimate
+ * section, and target a rect that fits inside the 1024x512 VRAM this port models. Returns NULL
+ * (leaving outRect/outData untouched) on rejection; retail sections never trip this. */
 static unsigned int *ParseTimSection(unsigned int *sec, RECT *outRect, unsigned int **outData) {
-    unsigned int destCoord = sec[1];
-    unsigned int whWord = sec[2];
+    unsigned int size = sec[0];
+    unsigned int destCoord, whWord;
     RECT r;
+
+    if (size < 12 || size > 0x20000 || (size & 3)) return NULL;
+
+    destCoord = sec[1];
+    whWord = sec[2];
     r.x = (short)(destCoord & 0xFFFF);
     r.y = (short)(destCoord >> 16);
     r.w = (short)(whWord & 0xFFFF);
     r.h = (short)(whWord >> 16);
+    if (r.x < 0 || r.y < 0 || r.x > 1023 || r.y > 511 || r.w < 1 || r.h < 1 ||
+        r.x + r.w > 1024 || r.y + r.h > 512)
+        return NULL;
+
     if (outRect) *outRect = r;
     if (outData) *outData = &sec[3];
-    return sec + (sec[0] / sizeof(unsigned int));
+    return sec + (size / sizeof(unsigned int));
 }
 
 TIM_IMAGE *ReadTIM(TIM_IMAGE *t) {
     unsigned int *cursor = s_openTimBase;
     unsigned int mode;
+    static RECT s_zeroRect = { 0, 0, 0, 0 };
 
     cursor++; /* skip the 4-byte magic+version+reserved word */
     mode = *cursor++;
     t->mode = mode;
+    t->crect = NULL;
+    t->caddr = NULL;
+    t->prect = NULL;
+    t->paddr = NULL;
 
     if (mode & 8) {
         static RECT s_clutRect;
         static unsigned int *s_clutAddr;
-        cursor = ParseTimSection(cursor, &s_clutRect, &s_clutAddr);
+        unsigned int *next = ParseTimSection(cursor, &s_clutRect, &s_clutAddr);
+        /* A malformed CLUT header leaves no reliable offset for the pixel section either --
+         * stop here rather than parse into garbage, matching real ReadTIM's "return 0 on
+         * failure" contract that core/screen_effects.c and world/dojo.c already check. */
+        if (!next) { t->prect = &s_zeroRect; return NULL; }
+        cursor = next;
         t->crect = &s_clutRect;
         t->caddr = s_clutAddr;
-    } else {
-        t->crect = NULL;
-        t->caddr = NULL;
     }
 
     {
         static RECT s_pixRect;
         static unsigned int *s_pixAddr;
-        ParseTimSection(cursor, &s_pixRect, &s_pixAddr);
+        unsigned int *next = ParseTimSection(cursor, &s_pixRect, &s_pixAddr);
+        if (!next) { t->prect = &s_zeroRect; return NULL; }
         t->prect = &s_pixRect;
         t->paddr = s_pixAddr;
     }
