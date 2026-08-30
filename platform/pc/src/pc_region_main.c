@@ -16,6 +16,8 @@ extern void us_main(void);
 /* JP core. */
 extern void jp_PC_BootstrapRegion(const char *discPath);
 extern void jp_main(void);
+/* Same dialog the single-region bootstrap shows for a missing disc (pc_bootstrap.c). */
+extern void us_PC_FatalDiscError(const char *title, const char *body, const char *path);
 
 #define RAW_SECTOR 2352
 #define DATA_OFF 24
@@ -110,6 +112,9 @@ int main(void) {
     Region pick = R_NONE;
     const char *pickPath = NULL;
     int pickSlot = -1;
+    int forcedNotRecognized = 0;         /* VH_DISC_IMAGE was set but ClassifyDisc rejected it */
+    char forcedPath[4200] = "";
+    char searchedDir[4200] = "(unknown)"; /* the game/ folder the scan looked in, for the dialog */
 
     /* 1. Regression-harness replay: no disc, no region, exits when done. */
     { const char *rp = getenv("VH_GPU_REPLAY");
@@ -121,14 +126,25 @@ int main(void) {
     us_PC_LoadIniConfig();
     us_PC_ReservePsxRam();
 
+    /* The game/ folder the scan looks in -- computed once, reused as the "Disc path tried" in the
+     * no-disc dialog below regardless of which branch of step 3 actually ran. */
+    { char dir[4096];
+      if (us_PC_GetDeployDir(dir, sizeof(dir)))
+          snprintf(searchedDir, sizeof(searchedDir), "%s/game", dir);
+    }
+
     /* 3. Find candidate discs. VH_DISC_IMAGE pins the path but is still classified. */
     { const char *forced = getenv("VH_DISC_IMAGE");
       if (forced && *forced) {
           char id[16];
           int slot = (ClassifyDisc(forced, id) != R_NONE) ? DiscSlot(id) : -1;
           if (slot >= 0) snprintf(s_discPath[slot], sizeof(s_discPath[slot]), "%s", forced);
-          else fprintf(stderr, "PC_RegionMain: VH_DISC_IMAGE '%s' is not a recognized "
-                               "Vandal Hearts disc\n", forced);
+          else {
+              fprintf(stderr, "PC_RegionMain: VH_DISC_IMAGE '%s' is not a recognized "
+                              "Vandal Hearts disc\n", forced);
+              forcedNotRecognized = 1;
+              snprintf(forcedPath, sizeof(forcedPath), "%s", forced);
+          }
       } else {
           char dir[4096], sub[4200];
           if (us_PC_GetDeployDir(dir, sizeof(dir))) {
@@ -181,16 +197,21 @@ int main(void) {
     }
 
     if (pick == R_NONE) {
-        fprintf(stderr,
-            "\n*** Vandal Hearts - no usable disc image found ***\n"
-            "%s\n"
+        /* Same dialog + stderr channel the single-region bootstrap uses (PC_FatalDiscError) --
+         * a double-click launch with no console must explain itself, not just close. */
+        char body[4400];
+        int n = snprintf(body, sizeof(body), "%s\n"
             "Put your Vandal Hearts .bin -- USA (SLUS-00447), Asia (SCPS-45183) or "
             "Japan (SLPM-86007) -- in a \"game\" folder next to the executable (or right "
-            "beside it), or set VH_DISC_IMAGE in vandalhearts.ini.\n",
+            "beside it), or set VH_DISC_IMAGE in vandalhearts.ini.",
             (want && (want[0]|0x20) == 'j') ? "VH_REGION=jp is set but no Japanese disc was found." :
             (want && (want[0]|0x20) == 'u') ? "VH_REGION=us is set but no USA/Asia disc was found." :
                                               "No recognized disc image was found.");
-        exit(1);
+        if (forcedNotRecognized && n > 0 && (size_t)n < sizeof(body))
+            snprintf(body + n, sizeof(body) - (size_t)n,
+                "\n\nVH_DISC_IMAGE '%s' is set but is not a recognized Vandal Hearts disc.",
+                forcedPath);
+        us_PC_FatalDiscError("Vandal Hearts - no disc image found", body, searchedDir);
     }
 
     fprintf(stderr, "PC_RegionMain: region %s ('%s')\n", pick == R_JP ? "JAPAN" : "USA/ASIA",
