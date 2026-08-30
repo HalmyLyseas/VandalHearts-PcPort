@@ -45,6 +45,11 @@ int HdReplaceCount(void) { return s_hdReplaceN; }
  * the failure must be explained, not silent). */
 #define HD_GAME_ID VH_HD_GAME_ID
 #define HD_PATH    1024
+/* Replacement-image budget, checked from header dims before any pixel decode: the sharpest
+ * shipped pack (8x) tops out at 2560x1920, so this is generous headroom, not a real limit --
+ * it exists to stop an oversize/hostile file forcing a multi-GB allocation. */
+#define HD_MAX_SIDE    8192
+#define HD_MAX_PIXELS  (32 * 1024 * 1024)
 extern int PC_GetDeployDir(char *out, size_t outSize);   /* pc_bootstrap.c (exe dir, or AppImage dir) */
 extern int g_vhHdPack;         /* runtime on/off toggle, owned by pc_gpu_window.c; the overlay binds it.
                                 * 0 until a valid pack is detected (HdDetect sets it: persisted VH_HDPACK, or
@@ -190,23 +195,28 @@ static HdRegion *HdFind(unsigned long long h) {
 }
 #ifdef VH_HD_WEBP
 #include <webp/decode.h>
-/* Decode <dir>/<hash>.webp to RGBA8 (WebPDecodeRGBA already emits R,G,B,A byte order = our px layout).
+/* Decode <dir>/<hash>.webp to RGBA8 (WebPDecodeRGBAInto emits R,G,B,A byte order = our px layout).
  * WebP is ~7x smaller than PNG for these backgrounds; decode happens once at scene load, never per frame. */
 static unsigned int *HdLoadWebp(const char *dir, unsigned long long h, int *ow, int *oh) {
-    char path[HD_PATH + 64]; FILE *f; long sz; unsigned char *buf; unsigned int *px = NULL; int w, hh; uint8_t *rgba;
+    char path[HD_PATH + 64]; FILE *f; long sz; unsigned char *buf; unsigned int *px = NULL; int w, hh;
     snprintf(path, sizeof(path), "%s/%016llx.webp", dir, h);
     f = fopen(path, "rb"); if (!f) return NULL;
     fseek(f, 0, SEEK_END); sz = ftell(f); fseek(f, 0, SEEK_SET);
     if (sz <= 0) { fclose(f); return NULL; }
     buf = (unsigned char *)malloc((size_t)sz);
-    if (buf && fread(buf, 1, (size_t)sz, f) == (size_t)sz) {
-        rgba = WebPDecodeRGBA(buf, (size_t)sz, &w, &hh);
-        if (rgba) {
-            if (w > 0 && hh > 0 && w <= 16384 && hh <= 16384) {
-                px = (unsigned int *)malloc((size_t)w * hh * 4);
-                if (px) { memcpy(px, rgba, (size_t)w * hh * 4); *ow = w; *oh = hh; }
-            }
-            WebPFree(rgba);
+    /* Budget from the header BEFORE decoding -- WebPGetInfo only reads the container, so a tiny
+     * solid-colour file cannot force a huge WebPDecodeRGBA allocation. */
+    if (buf && fread(buf, 1, (size_t)sz, f) == (size_t)sz &&
+        WebPGetInfo(buf, (size_t)sz, &w, &hh) &&
+        w > 0 && hh > 0 && w <= HD_MAX_SIDE && hh <= HD_MAX_SIDE &&
+        (long long)w * hh <= HD_MAX_PIXELS) {
+        px = (unsigned int *)malloc((size_t)w * hh * 4);
+        if (px) {
+            /* Decode straight into our own buffer -- no WebPDecodeRGBA + memcpy + WebPFree copy. */
+            if (WebPDecodeRGBAInto(buf, (size_t)sz, (uint8_t *)px, (size_t)w * hh * 4, w * 4))
+                { *ow = w; *oh = hh; }
+            else
+                { free(px); px = NULL; }
         }
     }
     free(buf); fclose(f);
@@ -220,7 +230,8 @@ static unsigned int *HdLoadHdi(const char *dir, unsigned long long h, int *ow, i
     if (fread(hd, 1, 12, f) != 12 || memcmp(hd, "HDI1", 4) != 0) { fclose(f); return NULL; }
     w  = hd[4] | hd[5] << 8 | hd[6] << 16 | hd[7] << 24;
     hh = hd[8] | hd[9] << 8 | hd[10] << 16 | hd[11] << 24;
-    if (w <= 0 || hh <= 0 || w > 16384 || hh > 16384) { fclose(f); return NULL; }
+    if (w <= 0 || hh <= 0 || w > HD_MAX_SIDE || hh > HD_MAX_SIDE ||
+        (long long)w * hh > HD_MAX_PIXELS) { fclose(f); return NULL; }
     n = (size_t)w * hh; px = (unsigned int *)malloc(n * 4);
     if (!px) { fclose(f); return NULL; }
     if (fread(px, 4, n, f) != n) { free(px); fclose(f); return NULL; }

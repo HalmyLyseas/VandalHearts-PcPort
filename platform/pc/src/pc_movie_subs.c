@@ -38,13 +38,14 @@ static void subsFree(void) {
 static void subsLoad(const char *path, int baseLBA) {
     FILE *f = fopen(path, "r");
     char line[PC_SUBS_MAX_TEXT + 16];
-    int cap = 0, count = 0, fileLBA = -1, inCue = 0;
+    int cap = 0, count = 0, fileLBA = -1, inCue = 0, lineNo = 0;
     PC_MovieCue *cues = NULL;    /* local until the whole file checks out: no partial parse can */
     PC_MovieCue cur;             /* ever leak into (or out of) the rendering globals            */
     if (!f) { fprintf(stderr, "PC_MovieSubs: cannot open %s\n", path); return; }
     memset(&cur, 0, sizeof(cur));
     while (fgets(line, sizeof(line), f)) {
         size_t n = strlen(line);
+        lineNo++;
         while (n && (line[n-1] == '\n' || line[n-1] == '\r')) line[--n] = '\0';
         if (strncmp(line, "lba ", 4) == 0) {
             fileLBA = (int)strtol(line + 4, NULL, 16);
@@ -54,6 +55,17 @@ static void subsLoad(const char *path, int baseLBA) {
             inCue = sscanf(line + 4, "%d %d %d %d %d %d",
                            &cur.startFrame, &cur.endFrame,
                            &cur.x, &cur.y, &cur.w, &cur.h) == 6;
+            /* Hostile-until-checked, same stance as the binary K_CUES parser below: a rect */
+            /* outside the 320x240 frame or a backwards frame range rejects the whole file. */
+            if (inCue && (cur.x < 0 || cur.x >= 320 || cur.y < 0 || cur.y >= 240 ||
+                          cur.w < 1 || cur.w > 320 - cur.x || cur.h < 1 || cur.h > 240 - cur.y ||
+                          cur.startFrame < 0 || cur.startFrame > cur.endFrame)) {
+                fprintf(stderr, "PC_MovieSubs: %s:%d: cue geometry out of bounds -- file rejected\n",
+                        path, lineNo);
+                fclose(f);
+                free(cues);
+                return;
+            }
         } else if (inCue && strncmp(line, "text ", 5) == 0) {
             if (cur.lineCount < PC_SUBS_MAX_LINES) {
                 size_t sl = strlen(line + 5);          /* explicit bounded copy: truncation is */
