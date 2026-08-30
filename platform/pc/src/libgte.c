@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include "PsyQ/libgte.h"
 
@@ -136,9 +137,9 @@ static void TransformOne(short vx, short vy, short vz) {
     int mac1, mac2, mac3;
     unsigned int n;
 
-    mac1 = (g.tr[0] * 4096L + g.rt.m[0][0] * vx + g.rt.m[0][1] * vy + g.rt.m[0][2] * vz) >> 12;
-    mac2 = (g.tr[1] * 4096L + g.rt.m[1][0] * vx + g.rt.m[1][1] * vy + g.rt.m[1][2] * vz) >> 12;
-    mac3 = (g.tr[2] * 4096L + g.rt.m[2][0] * vx + g.rt.m[2][1] * vy + g.rt.m[2][2] * vz) >> 12;
+    mac1 = (int)(((int64_t)g.tr[0] * 4096 + g.rt.m[0][0] * vx + g.rt.m[0][1] * vy + g.rt.m[0][2] * vz) >> 12);
+    mac2 = (int)(((int64_t)g.tr[1] * 4096 + g.rt.m[1][0] * vx + g.rt.m[1][1] * vy + g.rt.m[1][2] * vz) >> 12);
+    mac3 = (int)(((int64_t)g.tr[2] * 4096 + g.rt.m[2][0] * vx + g.rt.m[2][1] * vy + g.rt.m[2][2] * vz) >> 12);
 
     g.mac1 = mac1; g.mac2 = mac2; g.mac3 = mac3;
     g.ir1 = (short)Sat16(mac1, 0);
@@ -237,10 +238,12 @@ void PC_GTE_LoadOPV2(void *v) {
 }
 
 void PC_GTE_RTPS(void) {
+    g.flag = 0;
     TransformOne(g.v0.vx, g.v0.vy, g.v0.vz);
 }
 
 void PC_GTE_RTPT(void) {
+    g.flag = 0;
     TransformOne(g.v0.vx, g.v0.vy, g.v0.vz);
     TransformOne(g.v1.vx, g.v1.vy, g.v1.vz);
     TransformOne(g.v2.vx, g.v2.vy, g.v2.vz);
@@ -278,9 +281,9 @@ void PC_GTE_NCCS(void) {
     m3 = (g.light.m[2][0] * g.v0.vx + g.light.m[2][1] * g.v0.vy + g.light.m[2][2] * g.v0.vz) >> 12;
     g.ir1 = (short)Sat16(m1, 0); g.ir2 = (short)Sat16(m2, 0); g.ir3 = (short)Sat16(m3, 0);
 
-    m1 = (g.bk[0] * 4096L + g.colorMat.m[0][0] * g.ir1 + g.colorMat.m[0][1] * g.ir2 + g.colorMat.m[0][2] * g.ir3) >> 12;
-    m2 = (g.bk[1] * 4096L + g.colorMat.m[1][0] * g.ir1 + g.colorMat.m[1][1] * g.ir2 + g.colorMat.m[1][2] * g.ir3) >> 12;
-    m3 = (g.bk[2] * 4096L + g.colorMat.m[2][0] * g.ir1 + g.colorMat.m[2][1] * g.ir2 + g.colorMat.m[2][2] * g.ir3) >> 12;
+    m1 = (int)(((int64_t)g.bk[0] * 4096 + g.colorMat.m[0][0] * g.ir1 + g.colorMat.m[0][1] * g.ir2 + g.colorMat.m[0][2] * g.ir3) >> 12);
+    m2 = (int)(((int64_t)g.bk[1] * 4096 + g.colorMat.m[1][0] * g.ir1 + g.colorMat.m[1][1] * g.ir2 + g.colorMat.m[1][2] * g.ir3) >> 12);
+    m3 = (int)(((int64_t)g.bk[2] * 4096 + g.colorMat.m[2][0] * g.ir1 + g.colorMat.m[2][1] * g.ir2 + g.colorMat.m[2][2] * g.ir3) >> 12);
     g.ir1 = (short)Sat16(m1, 0); g.ir2 = (short)Sat16(m2, 0); g.ir3 = (short)Sat16(m3, 0);
 
     m1 = ((int)g.rgbc.r * g.ir1) << 4;
@@ -540,9 +543,11 @@ MATRIX *ScaleMatrix(MATRIX *m, VECTOR *v) {
 }
 
 void RotTrans(SVECTOR *v0, VECTOR *v1, int *flag) {
-    int mac1 = (g.tr[0] * 4096L + g.rt.m[0][0] * v0->vx + g.rt.m[0][1] * v0->vy + g.rt.m[0][2] * v0->vz) >> 12;
-    int mac2 = (g.tr[1] * 4096L + g.rt.m[1][0] * v0->vx + g.rt.m[1][1] * v0->vy + g.rt.m[1][2] * v0->vz) >> 12;
-    int mac3 = (g.tr[2] * 4096L + g.rt.m[2][0] * v0->vx + g.rt.m[2][1] * v0->vy + g.rt.m[2][2] * v0->vz) >> 12;
+    int mac1, mac2, mac3;
+    g.flag = 0;
+    mac1 = (int)(((int64_t)g.tr[0] * 4096 + g.rt.m[0][0] * v0->vx + g.rt.m[0][1] * v0->vy + g.rt.m[0][2] * v0->vz) >> 12);
+    mac2 = (int)(((int64_t)g.tr[1] * 4096 + g.rt.m[1][0] * v0->vx + g.rt.m[1][1] * v0->vy + g.rt.m[1][2] * v0->vz) >> 12);
+    mac3 = (int)(((int64_t)g.tr[2] * 4096 + g.rt.m[2][0] * v0->vx + g.rt.m[2][1] * v0->vy + g.rt.m[2][2] * v0->vz) >> 12);
     v1->vx = mac1; v1->vy = mac2; v1->vz = mac3;
     if (flag) *flag = (int)g.flag;
 }
@@ -552,6 +557,7 @@ static int PackSXY(int x, int y) {
 }
 
 int RotTransPers(SVECTOR *v0, int *sxy, int *p, int *flag) {
+    g.flag = 0;
     PC_GTE_LoadV0(v0);
     TransformOne(g.v0.vx, g.v0.vy, g.v0.vz);
     if (sxy) *sxy = PackSXY(g.sxy2[0], g.sxy2[1]);
@@ -566,6 +572,7 @@ int RotTransPers(SVECTOR *v0, int *sxy, int *p, int *flag) {
 int RotTransPers4(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3,
                     int *sxy0, int *sxy1, int *sxy2, int *sxy3,
                     int *p, int *flag) {
+    g.flag = 0;
     PC_GTE_LoadV3(v0, v1, v2);
     PC_GTE_RTPT();
     if (sxy0) *sxy0 = PackSXY(g.sxy0[0], g.sxy0[1]);

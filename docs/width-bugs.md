@@ -185,6 +185,17 @@ instance (and one non-crash cousin: an `mtime` stored in `long`, wrong past 2038
 everywhere the PSX had 32, 64-bit for host quantities", and bare `long` means **both, depending on
 OS**.
 
+**12. GTE wide intermediates collapse to 32-bit under MinGW.** `libgte.c`'s `TransformOne`, `NCCS`,
+and `RotTrans` compute `g.tr[n] * 4096L + …` / `g.bk[n] * 4096L + …` before shifting right by 12 —
+`long` is 64-bit on Linux (LP64) but 32-bit on Windows (LLP64), so the same source wraps at 2³¹ on
+Windows whenever `|tr|`/`|bk|` exceeds ~524,287 or the sum passes 2³¹, while Linux computes the
+correct 44-bit-faithful result. Nine sites (three each). No report has surfaced — the game's
+translations stay small in practice — but the two shipped binaries compute different geometry in
+principle. *Fix (`libgte.c`):* replace `4096L` with an explicit `(int64_t)…` intermediate at all
+nine sites, shifting in 64-bit before narrowing back to `int`; behavior on Linux is unchanged
+(`raster_check.sh` stays byte-identical). *Found by:* independent review, not an observed crash —
+unlike #11, no failure had yet surfaced on a real Windows run.
+
 ## The recurring lessons
 
 Distilled from the whole 2.3 effort — these are the transferable ones:
