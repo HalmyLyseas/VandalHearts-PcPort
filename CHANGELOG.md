@@ -69,8 +69,8 @@ or deliberately modified disc image or add-on file to reach:
 ### Compatibility
 
 - Saves, `vandalhearts.ini` and language packs all keep working untouched.
-- **HD packs are unchanged since 2.0.0** — keep the one you already have, or download it from the
-  [2.0.0 release page](https://github.com/HalmyLyseas/VandalHearts-PcPort/releases/tag/v2.0.0).
+- **HD packs are unchanged since 2.0.0** — keep the one you already have, or download the same
+  packs again from this release.
 
 ## [2.0.0] — One executable, three regions
 

@@ -44,6 +44,71 @@ else
 fi
 rm -rf "$PC_DIR/dist/release/v9.9.9-test"
 
+# These call the real script in publish mode, but VH_RELEASE_DRY_RUN stops after input and
+# correctness guards: no build, gh invocation, or network access is possible. Publishing must
+# carry both supported HD packs even for a one-platform artifact release.
+run_publish_dry() {   # run_publish_dry <log> [make-release flags...]
+    local out="$1"
+    shift
+    VH_RELEASE_DRY_RUN=1 "$RELEASE" v9.9.8-hdguard "$@" >"$out" 2>&1
+}
+
+echo "== case 2a: publish requires an explicit --hdpack even when the environment has one =="
+mkdir -p "$TMP/valid-env/SLUS-00447" "$TMP/valid-env/SLPM-86007"
+echo '{}' > "$TMP/valid-env/SLUS-00447/manifest.json"
+echo '{}' > "$TMP/valid-env/SLPM-86007/manifest.json"
+if VH_HDPACK_DIR="$TMP/valid-env" run_publish_dry "$TMP/no_explicit_hdpack.log" --windows-only; then
+    fail "publish accepted VH_HDPACK_DIR without explicit --hdpack"
+else
+    grep -q 'publishing requires --hdpack=' "$TMP/no_explicit_hdpack.log" \
+        && pass "publish rejects missing explicit --hdpack" \
+        || fail "missing --hdpack was rejected for the wrong reason: $(tail -5 "$TMP/no_explicit_hdpack.log")"
+fi
+
+echo "== case 2b: publish rejects a source missing either supported pack =="
+mkdir -p "$TMP/us-only/SLUS-00447"
+echo '{}' > "$TMP/us-only/SLUS-00447/manifest.json"
+if run_publish_dry "$TMP/missing_jp.log" --linux-only --hdpack="$TMP/us-only"; then
+    fail "publish accepted a HD-pack root missing SLPM-86007"
+else
+    grep -q 'exactly the SLUS-00447 and SLPM-86007' "$TMP/missing_jp.log" \
+        && pass "publish rejects a root missing SLPM-86007 (also under --linux-only)" \
+        || fail "missing SLPM-86007 was rejected for the wrong reason: $(tail -5 "$TMP/missing_jp.log")"
+fi
+mkdir -p "$TMP/jp-only/SLPM-86007"
+echo '{}' > "$TMP/jp-only/SLPM-86007/manifest.json"
+if run_publish_dry "$TMP/missing_us.log" --windows-only --hdpack="$TMP/jp-only"; then
+    fail "publish accepted a HD-pack root missing SLUS-00447"
+else
+    grep -q 'exactly the SLUS-00447 and SLPM-86007' "$TMP/missing_us.log" \
+        && pass "publish rejects a root missing SLUS-00447 (also under --windows-only)" \
+        || fail "missing SLUS-00447 was rejected for the wrong reason: $(tail -5 "$TMP/missing_us.log")"
+fi
+
+echo "== case 2c: publish rejects an extra per-game manifest =="
+mkdir -p "$TMP/three-packs/SLUS-00447" "$TMP/three-packs/SLPM-86007" "$TMP/three-packs/OTHER-00000"
+for d in "$TMP/three-packs"/*; do echo '{}' > "$d/manifest.json"; done
+if run_publish_dry "$TMP/extra_pack.log" --hdpack="$TMP/three-packs"; then
+    fail "publish accepted an unsupported third HD-pack manifest"
+else
+    grep -q 'exactly the SLUS-00447 and SLPM-86007' "$TMP/extra_pack.log" \
+        && pass "publish rejects an extra per-game manifest" \
+        || fail "extra manifest was rejected for the wrong reason: $(tail -5 "$TMP/extra_pack.log")"
+fi
+
+echo "== case 2d: a valid pair is accepted in publish mode without builds or network =="
+if run_publish_dry "$TMP/valid_pair.log" --windows-only --hdpack="$TMP/valid-env"; then
+    if grep -q 'dry run: guards passed, stopping before any build' "$TMP/valid_pair.log" \
+       && ! grep -q 'Publishing GitHub release\|gh release create' "$TMP/valid_pair.log"; then
+        pass "valid explicit pair passes publish preflight under --windows-only without build/network"
+    else
+        fail "valid pair did not stop at the dry-run boundary: $(tail -5 "$TMP/valid_pair.log")"
+    fi
+else
+    fail "valid explicit HD-pack pair should pass publish preflight: $(tail -5 "$TMP/valid_pair.log")"
+fi
+rm -rf "$PC_DIR/dist/release/v9.9.8-hdguard"
+
 # Pull the hdpack packaging block (two functions + the dispatch if) verbatim out of the real
 # script, so cases 3 and 4 exercise the actual packaging logic, not a reimplementation of it.
 HDPACK_BLOCK="$(sed -n '/^HDPACK_ROWS=()/,/^fi$/p' "$RELEASE")"

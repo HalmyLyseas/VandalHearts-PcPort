@@ -80,18 +80,17 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
 - [ ] Both packaged binaries are the **unified** build (all supported discs; the script's
       Windows path runs `build-unified-win.sh`, the Linux path `make unified` from clean) — boot
       each against a US **and** a JP disc.
-- [ ] With `--hdpack=<hdpacks root>`: the script packages one zip per `<game-id>/manifest.json`
-      subfolder it finds (`VandalHearts-<tag>-hdpack-<GAME-ID>.zip`, holding `hdpacks/<game-id>/…`)
-      — the release notes' Downloads table lists exactly the zips this run produced, never a fixed
-      guess. The pre-2.0 flat layout (a root `manifest.json`, no per-game subfolder) still packages
-      as a single `…-hdpack.zip` with a deprecation warning. A symlink inside the pack pointing
+- [ ] A real publish **must** pass `--hdpack=<hdpacks root>` explicitly. That root must contain
+      exactly `SLUS-00447/manifest.json` and `SLPM-86007/manifest.json`; the script then attaches
+      both `VandalHearts-<tag>-hdpack-<GAME-ID>.zip` files, even when the packs are unchanged.
+      This applies equally to `--windows-only` and `--linux-only` publishes so every release page
+      remains a complete download location. `VH_HDPACK_DIR` is accepted for staging but cannot
+      replace the explicit publish argument. A `--no-publish` stage build remains permissive for
+      build/regression work.
+- [ ] The pre-2.0 flat layout (a root `manifest.json`, no per-game subfolder) is accepted only for
+      `--no-publish` staging, with a deprecation warning. A symlink inside any pack pointing
       outside it is refused rather than dereferenced into the asset. The pack art is
-      metadata-stripped (PII scan below covers it). Re-upload the packs on every release (users
-      download from the latest release page, not old ones).
-- [ ] **No pack packaged this run?** Pass `--hdpack-note="<text>"` — when no `--hdpack` zip was
-      produced, the Downloads table gets one standing row (`| Optional | HD packs | <text> |`)
-      instead of silently omitting HD packs. Used when a release's packs are unchanged, e.g.
-      `--hdpack-note="Unchanged since 2.0.0 -- download the 2.0.0 release's hdpack zips"`.
+      metadata-stripped (PII scan below covers it).
 
 ## 4. Publication hygiene (public repo)
 
@@ -104,7 +103,7 @@ platform/pc/packaging/make-release.sh vX.Y.Z --no-publish [--hdpack=<assembled h
 ## 5. Publish
 
 ```sh
-platform/pc/packaging/make-release.sh vX.Y.Z [--hdpack=<dir>]   # tags HEAD, uploads, notes from CHANGELOG
+platform/pc/packaging/make-release.sh vX.Y.Z --hdpack=<assembled-hdpacks-root>   # tags HEAD, uploads, both HD packs, notes from CHANGELOG
 ```
 
 - [ ] Tag == pushed `master` HEAD; assets all present with `SHA256SUMS.txt`; release-notes images

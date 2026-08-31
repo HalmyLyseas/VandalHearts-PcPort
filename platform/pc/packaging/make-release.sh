@@ -25,15 +25,13 @@ TAG="${1:-}"
 shift || true
 DO_WIN=1 DO_LINUX=1 PUBLISH=1 CONTAINER="vh-deb12"
 HDPACK_SRC="${VH_HDPACK_DIR:-}"      # optional assembled hdpacks/ folder -> extra release asset
-HDPACK_NOTE=""
+HDPACK_ARG_SEEN=0
 for a in "$@"; do case "$a" in
   --windows-only) DO_LINUX=0 ;;
   --linux-only)   DO_WIN=0 ;;
   --no-publish)   PUBLISH=0 ;;
   --container=*)  CONTAINER="${a#*=}" ;;
-  --hdpack=*)     HDPACK_SRC="${a#*=}" ;;
-  --hdpack-note=*) HDPACK_NOTE="${a#*=}" ;;   # release-specific suffix for the Downloads-table row
-                                              # (e.g. "Unchanged since last release -- keep yours.")
+  --hdpack=*)     HDPACK_SRC="${a#*=}"; HDPACK_ARG_SEEN=1 ;;
   *) echo "unknown flag: $a" >&2; exit 2 ;;
 esac; done
 
@@ -45,6 +43,39 @@ INI="$PC_DIR/vandalhearts.ini"
 
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# Publishing always attaches both current HD packs, even when unchanged.
+# Staging (--no-publish) remains permissive for release and regression builds.
+# VH_HDPACK_DIR is staging-only; publication needs an explicit --hdpack= audit trail.
+require_publish_hdpacks() {
+    local gid
+    local -a expected=(SLUS-00447 SLPM-86007) found_ids=()
+
+    [ "$HDPACK_ARG_SEEN" = 1 ] || die "publishing requires --hdpack=<assembled hdpacks root> with SLUS-00447 and SLPM-86007"
+    [ -d "$HDPACK_SRC" ] || die "--hdpack: '$HDPACK_SRC' is not a directory"
+    [ ! -f "$HDPACK_SRC/manifest.json" ] || die "publishing requires the per-game HD-pack layout, not a legacy root manifest.json"
+
+    for gid in "$HDPACK_SRC"/*/; do
+        [ -f "${gid}manifest.json" ] || continue
+        found_ids+=("$(basename "$gid")")
+    done
+    [ "${#found_ids[@]}" -eq "${#expected[@]}" ] \
+        || die "publishing requires exactly the SLUS-00447 and SLPM-86007 HD-pack manifests (found: ${found_ids[*]:-none})"
+    for gid in "${expected[@]}"; do
+        [ -f "$HDPACK_SRC/$gid/manifest.json" ] \
+            || die "publishing requires HD-pack manifest $gid/manifest.json"
+    done
+    for gid in "${found_ids[@]}"; do
+        case " $gid " in
+            " SLUS-00447 "|" SLPM-86007 ") ;;
+            *) die "publishing accepts only SLUS-00447 and SLPM-86007 HD-pack manifests (found: $gid)" ;;
+        esac
+    done
+}
+
+if [ "$PUBLISH" = 1 ]; then
+    require_publish_hdpacks
+fi
 
 # Belt-and-braces on top of the tag regex above: refuse to rm -rf anything the tag validation
 # didn't actually keep inside dist/release/.
@@ -185,8 +216,8 @@ log "Manual: building the Player Manual PDF"
     || die "manual build failed (pandoc + chromium needed -- see tools/build-manual.sh)"
 
 # ---- optional HD pack (a SEPARATE release asset, not embedded in any binary) -------------------
-# --hdpack=<dir> (or VH_HDPACK_DIR): an assembled hdpacks/ root -- per-game <game-id>/manifest.json subfolders (docs/hd-pack.md) or the legacy flat layout (root manifest.json, US only).
-# Art is supplied finished and metadata-stripped (see NOTICE); one zip per game id, or one legacy zip.
+# --hdpack=<dir> (or VH_HDPACK_DIR for staging) is a per-game or legacy HD-pack root.
+# Publishing was preflighted above; art is metadata-stripped (see NOTICE).
 HDPACK_ROWS=()   # "zipname|game-id" per zip actually produced, for the notes table below
 hdpack_symlink_guard() {   # refuse a symlink under $1 whose real target escapes $1
     local root="$1" real link target
@@ -290,11 +321,6 @@ for row in "${HDPACK_ROWS[@]+"${HDPACK_ROWS[@]}"}"; do
     printf '| Optional | `%s` | HD backgrounds + movies. Unzip so `hdpacks/` sits beside the executable. Loaded on %s. |\n' \
         "$zipname" "$label" >> "$NOTES"
 done
-# No zip was packaged this run (unchanged pack, or none built) -- fall back to a single
-# standing-row note via --hdpack-note instead of leaving the table silent about HD packs.
-if [ "${#HDPACK_ROWS[@]}" -eq 0 ] && [ -n "$HDPACK_NOTE" ]; then
-    printf '| Optional | HD packs | %s |\n' "$HDPACK_NOTE" >> "$NOTES"
-fi
 cat >> "$NOTES" <<NOTE
 
 Config: edit \`vandalhearts.ini\` next to the executable (window scale, audio, etc.).
