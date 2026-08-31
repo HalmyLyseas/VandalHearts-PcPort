@@ -16,10 +16,16 @@ the retail game.
   up used to open a window and close it again with no explanation. It now shows a dialog
   explaining what it looked for and where to put your disc `.bin`, on top of the existing console
   message.
-- **Escape asks before quitting.** Pressing Escape now opens a confirmation ("QUIT THE GAME?")
-  with **NO** selected by default, so an accidental press can't lose unsaved progress — the
-  same confirm the overlay's RETURN TO TITLE uses. The window's close button still quits
-  immediately, as before.
+
+  ![The missing-disc dialog explains which releases are supported and where to put the disc image](https://raw.githubusercontent.com/HalmyLyseas/VandalHearts-PcPort/master/docs/images/features-2.1.0-Missing-Bin-File.png)
+
+- **Escape asks before quitting.** Once a game is underway, pressing Escape now opens a
+  confirmation ("QUIT THE GAME?") with **NO** selected by default, so an accidental press can't
+  lose unsaved progress — the same confirm the overlay's RETURN TO TITLE uses. At the title screen
+  and during its logo/title-attract videos, Escape quits immediately because no run is active. The
+  window's close button also still quits immediately, as before.
+
+  ![The in-game quit confirmation warns that unsaved progress will be lost and selects No by default](https://raw.githubusercontent.com/HalmyLyseas/VandalHearts-PcPort/master/docs/images/features-2.1.0-Exit-Confirmation.png)
 
 ### Fixed
 
